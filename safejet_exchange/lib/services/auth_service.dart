@@ -22,7 +22,6 @@ class AuthService {
 
       if (response.statusCode == 200) {
         if (data['requires2FA'] == true) {
-          // Store temp token for 2FA
           await storage.write(key: 'tempToken', value: data['tempToken']);
           return {'requires2FA': true};
         }
@@ -34,16 +33,16 @@ class AuthService {
 
         return data;
       } else {
+        // If email is not verified, store the user ID for verification
+        if (data['message']?.contains('verify your email') == true) {
+          await storage.write(key: 'pendingUserId', value: data['userId']);
+        }
+        
         final errorMessage = data['message'] ?? 'Login failed';
-        print('Login error: $errorMessage'); // For debugging
         throw errorMessage;
       }
     } catch (e) {
-      print('Login error details: $e'); // For debugging
-      if (e is String) {
-        throw e;
-      }
-      throw 'Network error. Please check your connection.';
+      rethrow;
     }
   }
 
@@ -80,26 +79,36 @@ class AuthService {
     final data = json.decode(response.body);
 
     if (response.statusCode == 201 || response.statusCode == 200) {
+      // Store tokens
       await storage.write(key: 'accessToken', value: data['accessToken']);
       await storage.write(key: 'refreshToken', value: data['refreshToken']);
       await storage.write(key: 'user', value: json.encode(data['user']));
+      // Store userId for verification
+      await storage.write(key: 'pendingUserId', value: data['user']['id']);
       return data;
     } else {
-      throw Exception(data['message'] ?? 'Registration failed');
+      throw data['message'] ?? 'Registration failed';
     }
   }
 
   Future<Map<String, dynamic>> verifyEmail(String code) async {
-    final token = await storage.read(key: 'accessToken');
-    
     try {
+      // Try to get userId from both registration and login flows
+      final userId = await storage.read(key: 'pendingUserId');
+      final accessToken = await storage.read(key: 'accessToken');
+
+      if (userId == null && accessToken == null) {
+        throw 'Session expired. Please try logging in again.';
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/verify-email'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          if (accessToken != null) 'Authorization': 'Bearer $accessToken',
         },
         body: json.encode({
+          'userId': userId,
           'code': code,
         }),
       );
@@ -107,20 +116,18 @@ class AuthService {
       final data = json.decode(response.body);
 
       if (response.statusCode == 200) {
+        // Update tokens
+        await storage.write(key: 'accessToken', value: data['accessToken']);
+        await storage.write(key: 'refreshToken', value: data['refreshToken']);
+        await storage.write(key: 'user', value: json.encode(data['user']));
+        // Clean up
+        await storage.delete(key: 'pendingUserId');
         return data;
       } else {
-        // Make sure we're throwing the actual error message from the backend
-        final errorMessage = data['message'] ?? 'Email verification failed';
-        print('Backend error: $errorMessage'); // For debugging
-        throw errorMessage;
+        throw data['message'] ?? 'Email verification failed';
       }
     } catch (e) {
-      print('Error details: $e'); // For debugging
-      if (e is String) {
-        throw e;
-      }
-      // If it's a network error or other type of error
-      throw 'Network error. Please check your connection.';
+      rethrow;
     }
   }
 

@@ -106,7 +106,6 @@ export class AuthService {
   async login(loginDto: LoginDto, req: Request): Promise<LoginResponseDto> {
     const { email, password } = loginDto;
 
-    // Find user
     const user = await this.userRepository.findOne({
       where: { email },
     });
@@ -115,16 +114,17 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check if email is verified
     if (!user.emailVerified) {
-      throw new UnauthorizedException('Please verify your email before logging in');
+      throw new UnauthorizedException({
+        message: 'Please verify your email before logging in',
+        userId: user.id
+      });
     }
 
     // If 2FA is enabled, return a temporary token
@@ -163,7 +163,8 @@ export class AuthService {
     };
   }
 
-  async verifyEmail(userId: string, verifyEmailDto: VerifyEmailDto) {
+  async verifyEmail(verifyEmailDto: VerifyEmailDto) {
+    const { userId, code } = verifyEmailDto;
     const user = await this.userRepository.findOne({ where: { id: userId } });
     
     if (!user) {
@@ -183,7 +184,7 @@ export class AuthService {
     }
 
     const isCodeValid = await bcrypt.compare(
-      verifyEmailDto.code,
+      code,
       user.verificationCode,
     );
 
@@ -199,7 +200,14 @@ export class AuthService {
     // Send welcome email after successful verification
     await this.emailService.sendWelcomeEmail(user.email, user.email.split('@')[0]);
 
-    return { message: 'Email verified successfully' };
+    // Generate tokens for automatic login after verification
+    const tokens = await this.generateTokens(user);
+
+    return {
+      message: 'Email verified successfully',
+      ...tokens,
+      user,
+    };
   }
 
   private async generateTokens(user: User) {

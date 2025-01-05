@@ -101,7 +101,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.verifyEmail(code);
+      final response = await authProvider.verifyEmail(code);
 
       if (!mounted) return;
 
@@ -136,11 +136,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
         return;
       }
 
-      // Show success animation before navigation
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Row(
-            children: const [
+            children: [
               Icon(Icons.check_circle_outline, color: Colors.white),
               SizedBox(width: 8),
               Text('Email verified successfully!'),
@@ -151,12 +151,12 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
         ),
       );
 
-      // Add a small delay for the success animation
+      // Add a small delay for the success message to be visible
       await Future.delayed(const Duration(milliseconds: 1500));
 
       if (!mounted) return;
 
-      // Navigate with fade transition
+      // Navigate to home screen and remove all previous routes
       Navigator.of(context).pushAndRemoveUntil(
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
@@ -171,12 +171,17 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
       if (!mounted) return;
       _playShakeAnimation();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Row(
             children: [
-              Icon(Icons.error_outline, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Something went wrong. Please try again.'),
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  e.toString(),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
             ],
           ),
           backgroundColor: SafeJetColors.error,

@@ -31,12 +31,10 @@ export class AuthController {
   }
 
   @Post('verify-email')
-  @UseGuards(JwtAuthGuard)
-  verifyEmail(
-    @GetUser() user: User,
+  async verifyEmail(
     @Body() verifyEmailDto: VerifyEmailDto,
   ) {
-    return this.authService.verifyEmail(user.id, verifyEmailDto);
+    return this.authService.verifyEmail(verifyEmailDto);
   }
 
   @Throttle({ default: { limit: 5, ttl: 300 } })

@@ -71,20 +71,22 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> verifyEmail(String code) async {
+  Future<Map<String, dynamic>> verifyEmail(String code) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _authService.verifyEmail(code);
+      final response = await _authService.verifyEmail(code);
+      _isLoggedIn = true;
       _isLoading = false;
       notifyListeners();
+      return response;
     } catch (e) {
-      print('Provider error: $e'); // For debugging
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+      rethrow;
     }
   }
 
