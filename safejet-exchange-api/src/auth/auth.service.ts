@@ -17,6 +17,7 @@ import { Verify2FADto } from './dto/verify-2fa.dto';
 import * as crypto from 'crypto';
 import { Disable2FADto } from './dto/disable-2fa.dto';
 import { DisableCodeType } from './dto/disable-2fa.dto';
+import { LoginResponseDto } from './dto/login-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -71,7 +72,7 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto) {
+  async login(loginDto: LoginDto): Promise<LoginResponseDto> {
     const { email, password } = loginDto;
 
     // Find user
@@ -95,7 +96,28 @@ export class AuthService {
       throw new UnauthorizedException('Please verify your email before logging in');
     }
 
-    // Generate tokens
+    // If 2FA is enabled, return a temporary token
+    if (user.twoFactorEnabled) {
+      const tempToken = await this.jwtService.signAsync(
+        { 
+          sub: user.id, 
+          email: user.email,
+          temp: true 
+        },
+        { expiresIn: '5m' }, // Short-lived token for 2FA
+      );
+
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+        },
+        requires2FA: true,
+        tempToken,
+      };
+    }
+
+    // If 2FA is not enabled, generate regular tokens
     const tokens = await this.generateTokens(user);
 
     return {
@@ -309,11 +331,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid 2FA code');
     }
 
-    // Generate tokens
+    // Generate full access tokens after successful 2FA
     const tokens = await this.generateTokens(user);
 
     return {
       message: '2FA verification successful',
+      user,
       ...tokens,
     };
   }
