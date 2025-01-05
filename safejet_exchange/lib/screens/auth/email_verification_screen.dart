@@ -193,14 +193,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
-                FadeInLeft(
-                  duration: const Duration(milliseconds: 600),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
                 const SizedBox(height: 40),
                 FadeInDown(
                   duration: const Duration(milliseconds: 800),
