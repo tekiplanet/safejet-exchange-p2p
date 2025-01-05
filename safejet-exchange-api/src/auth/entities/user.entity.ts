@@ -23,9 +23,6 @@ export class User {
   @Column({ default: 0 })
   verificationLevel: number;
 
-  @Column({ default: false })
-  is2FAEnabled: boolean;
-
   @Column({ nullable: true })
   verificationCode: string;
 
@@ -37,6 +34,15 @@ export class User {
 
   @Column({ nullable: true })
   passwordResetExpires: Date;
+
+  @Column({ nullable: true })
+  twoFactorSecret: string;
+
+  @Column({ default: false })
+  twoFactorEnabled: boolean;
+
+  @Column({ nullable: true })
+  twoFactorBackupCodes: string;
 
   @CreateDateColumn()
   createdAt: Date;

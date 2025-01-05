@@ -10,6 +10,11 @@ import { EmailService } from '../email/email.service';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import * as speakeasy from 'speakeasy';
+import * as QRCode from 'qrcode';
+import { Enable2FADto } from './dto/enable-2fa.dto';
+import { Verify2FADto } from './dto/verify-2fa.dto';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -197,5 +202,105 @@ export class AuthService {
     await this.emailService.sendPasswordChangedEmail(email);
 
     return { message: 'Password has been reset successfully' };
+  }
+
+  async generate2FASecret(userId: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException('2FA is already enabled');
+    }
+
+    // Generate secret
+    const secret = speakeasy.generateSecret({
+      name: `SafeJet Exchange (${user.email})`,
+    });
+
+    // Save secret temporarily
+    user.twoFactorSecret = secret.base32;
+    await this.userRepository.save(user);
+
+    // Generate QR code
+    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url);
+
+    return {
+      secret: secret.base32,
+      qrCode: qrCodeUrl,
+    };
+  }
+
+  async enable2FA(userId: string, enable2FADto: Enable2FADto) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    
+    if (!user || !user.twoFactorSecret) {
+      throw new BadRequestException('Please generate 2FA secret first');
+    }
+
+    // Verify the code
+    const isValid = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: enable2FADto.code,
+    });
+
+    if (!isValid) {
+      throw new BadRequestException('Invalid 2FA code');
+    }
+
+    // Generate backup codes
+    const backupCodes = this.generateBackupCodes();
+    user.twoFactorBackupCodes = await bcrypt.hash(
+      JSON.stringify(backupCodes),
+      10,
+    );
+    user.twoFactorEnabled = true;
+    await this.userRepository.save(user);
+
+    // Send email notification
+    await this.emailService.send2FAEnabledEmail(user.email);
+
+    return {
+      message: '2FA enabled successfully',
+      backupCodes,
+    };
+  }
+
+  private generateBackupCodes(): string[] {
+    const codes = [];
+    for (let i = 0; i < 8; i++) {
+      codes.push(crypto.randomBytes(4).toString('hex'));
+    }
+    return codes;
+  }
+
+  async verify2FA(verify2FADto: Verify2FADto) {
+    const { email, code } = verify2FADto;
+    const user = await this.userRepository.findOne({ where: { email } });
+
+    if (!user || !user.twoFactorEnabled) {
+      throw new BadRequestException('2FA is not enabled for this user');
+    }
+
+    const isValid = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: code,
+    });
+
+    if (!isValid) {
+      throw new UnauthorizedException('Invalid 2FA code');
+    }
+
+    // Generate tokens
+    const tokens = await this.generateTokens(user);
+
+    return {
+      message: '2FA verification successful',
+      ...tokens,
+    };
   }
 } 

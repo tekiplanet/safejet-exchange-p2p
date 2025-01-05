@@ -56,4 +56,13 @@ export class EmailService {
       html: this.emailTemplatesService.passwordChangedEmail(),
     });
   }
+
+  async send2FAEnabledEmail(email: string) {
+    await this.transporter.sendMail({
+      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      to: email,
+      subject: '2FA Enabled - SafeJet Exchange',
+      html: this.emailTemplatesService.twoFactorEnabledEmail(),
+    });
+  }
 } 

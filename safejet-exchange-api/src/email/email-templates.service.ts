@@ -129,4 +129,25 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  twoFactorEnabledEmail(isDark = true) {
+    const content = `
+      <h1>Two-Factor Authentication Enabled 🔒</h1>
+      <p>2FA has been successfully enabled on your account. Your account is now more secure!</p>
+      
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Important Security Tips</h2>
+        <ul>
+          <li>Keep your backup codes in a safe place</li>
+          <li>Don't share your 2FA codes with anyone</li>
+          <li>Set up a backup authenticator app if possible</li>
+        </ul>
+      </div>
+
+      <p>If you didn't enable 2FA, please contact our support team immediately:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 } 

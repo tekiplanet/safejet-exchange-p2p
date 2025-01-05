@@ -9,6 +9,8 @@ import { User } from './entities/user.entity';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Enable2FADto } from './dto/enable-2fa.dto';
+import { Verify2FADto } from './dto/verify-2fa.dto';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -44,5 +46,25 @@ export class AuthController {
   @Post('reset-password')
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Get('2fa/generate')
+  @UseGuards(JwtAuthGuard)
+  generate2FASecret(@GetUser() user: User) {
+    return this.authService.generate2FASecret(user.id);
+  }
+
+  @Post('2fa/enable')
+  @UseGuards(JwtAuthGuard)
+  enable2FA(
+    @GetUser() user: User,
+    @Body() enable2FADto: Enable2FADto,
+  ) {
+    return this.authService.enable2FA(user.id, enable2FADto);
+  }
+
+  @Post('2fa/verify')
+  verify2FA(@Body() verify2FADto: Verify2FADto) {
+    return this.authService.verify2FA(verify2FADto);
   }
 } 
