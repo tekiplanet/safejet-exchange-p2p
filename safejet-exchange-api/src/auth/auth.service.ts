@@ -176,11 +176,11 @@ export class AuthService {
     }
 
     if (!user.verificationCode || !user.verificationCodeExpires) {
-      throw new BadRequestException('Verification code has expired. Please request a new one.');
+      throw new BadRequestException('Invalid or expired verification code.');
     }
 
     if (new Date() > user.verificationCodeExpires) {
-      throw new BadRequestException('Verification code has expired. Please request a new one.');
+      throw new BadRequestException('Invalid or expired verification code.');
     }
 
     const isCodeValid = await bcrypt.compare(
