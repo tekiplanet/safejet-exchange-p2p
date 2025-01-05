@@ -81,19 +81,6 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
     final code = _controllers.map((c) => c.text).join();
     if (code.length != 6) {
       _playShakeAnimation();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.error_outline, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Please enter all 6 digits'),
-            ],
-          ),
-          backgroundColor: SafeJetColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
       return;
     }
 
@@ -102,74 +89,48 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final response = await authProvider.verifyEmail(code);
+      print('Verification Response: $response');
 
       if (!mounted) return;
 
-      if (authProvider.error != null) {
-        _playShakeAnimation();
-        
-        // Clear the input fields on error
-        for (var controller in _controllers) {
-          controller.clear();
-        }
-        _focusNodes[0].requestFocus();
-
+      // Check if verification was successful
+      if (response['status'] == 'success') {
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    authProvider.error!,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
+                Icon(Icons.check_circle_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Email verified successfully!'),
               ],
             ),
-            backgroundColor: SafeJetColors.error,
+            backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
           ),
         );
-        return;
+
+        // Navigate after a brief delay
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
       }
-
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Email verified successfully!'),
-            ],
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      // Add a small delay for the success message to be visible
-      await Future.delayed(const Duration(milliseconds: 1500));
-
-      if (!mounted) return;
-
-      // Navigate to home screen and remove all previous routes
-      Navigator.of(context).pushAndRemoveUntil(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
-        (route) => false,
-      );
     } catch (e) {
+      // Only handle actual errors
+      print('Verification Error: $e');
       if (!mounted) return;
       _playShakeAnimation();
+      
+      // Clear inputs on error
+      for (var controller in _controllers) {
+        controller.clear();
+      }
+      _focusNodes[0].requestFocus();
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(

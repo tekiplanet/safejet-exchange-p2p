@@ -93,7 +93,6 @@ class AuthService {
 
   Future<Map<String, dynamic>> verifyEmail(String code) async {
     try {
-      // Try to get userId from both registration and login flows
       final userId = await storage.read(key: 'pendingUserId');
       final accessToken = await storage.read(key: 'accessToken');
 
@@ -114,19 +113,23 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
+      print('Backend Response: $data');
 
       if (response.statusCode == 200) {
-        // Update tokens
+        // Store tokens
         await storage.write(key: 'accessToken', value: data['accessToken']);
         await storage.write(key: 'refreshToken', value: data['refreshToken']);
         await storage.write(key: 'user', value: json.encode(data['user']));
-        // Clean up
         await storage.delete(key: 'pendingUserId');
         return data;
-      } else {
-        throw data['message'] ?? 'Email verification failed';
       }
+
+      throw data['message'] ?? 'Email verification failed';
     } catch (e) {
+      print('Verification error: $e');
+      if (e.toString().contains('verified successfully')) {
+        return {'status': 'success', 'message': e.toString()};
+      }
       rethrow;
     }
   }

@@ -204,6 +204,7 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     return {
+      status: 'success',
       message: 'Email verified successfully',
       ...tokens,
       user,
