@@ -11,6 +11,8 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Enable2FADto } from './dto/enable-2fa.dto';
 import { Verify2FADto } from './dto/verify-2fa.dto';
+import { Disable2FADto } from './dto/disable-2fa.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -66,5 +68,26 @@ export class AuthController {
   @Post('2fa/verify')
   verify2FA(@Body() verify2FADto: Verify2FADto) {
     return this.authService.verify2FA(verify2FADto);
+  }
+
+  @Post('2fa/disable')
+  @UseGuards(JwtAuthGuard)
+  disable2FA(
+    @GetUser() user: User,
+    @Body() disable2FADto: Disable2FADto,
+  ) {
+    return this.authService.disable2FA(user.id, disable2FADto);
+  }
+
+  @Get('2fa/backup-codes')
+  @UseGuards(JwtAuthGuard)
+  getBackupCodes(@GetUser() user: User) {
+    return this.authService.getBackupCodes(user.id);
+  }
+
+  @Post('resend-verification')
+  @Throttle({ default: { limit: 3, ttl: 300 } })
+  resendVerificationCode(@Body() resendVerificationDto: ResendVerificationDto) {
+    return this.authService.resendVerificationCode(resendVerificationDto.email);
   }
 } 

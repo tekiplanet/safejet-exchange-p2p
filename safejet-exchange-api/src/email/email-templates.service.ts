@@ -150,4 +150,25 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  twoFactorDisabledEmail(isDark = true) {
+    const content = `
+      <h1>Two-Factor Authentication Disabled ⚠️</h1>
+      <p>2FA has been disabled on your account. Your account security is now reduced.</p>
+      
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Security Recommendations</h2>
+        <ul>
+          <li>Consider re-enabling 2FA for better security</li>
+          <li>Make sure you have a strong password</li>
+          <li>Monitor your account for suspicious activity</li>
+        </ul>
+      </div>
+
+      <p>If you didn't disable 2FA, please contact our support team immediately:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 } 

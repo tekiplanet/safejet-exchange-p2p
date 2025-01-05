@@ -65,4 +65,13 @@ export class EmailService {
       html: this.emailTemplatesService.twoFactorEnabledEmail(),
     });
   }
+
+  async send2FADisabledEmail(email: string) {
+    await this.transporter.sendMail({
+      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      to: email,
+      subject: '2FA Disabled - SafeJet Exchange Security Alert',
+      html: this.emailTemplatesService.twoFactorDisabledEmail(),
+    });
+  }
 } 
