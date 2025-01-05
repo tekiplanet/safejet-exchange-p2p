@@ -11,28 +11,28 @@ class AuthProvider with ChangeNotifier {
   bool get isLoggedIn => _isLoggedIn;
   String? get error => _error;
 
-  Future<void> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(String email, String password) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final response = await _authService.login(email, password);
-      
-      if (response['requires2FA'] == true) {
-        // Handle 2FA requirement
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-
       _isLoggedIn = true;
       _isLoading = false;
       notifyListeners();
+      return response;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+      
+      // Check if it's an email verification error
+      if (_error!.contains('verify your email')) {
+        return {'requiresEmailVerification': true};
+      }
+      
+      rethrow;
     }
   }
 
@@ -101,6 +101,25 @@ class AuthProvider with ChangeNotifier {
       _error = e.toString().replaceAll('Exception: ', '');
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> verify2FA(String email, String code) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _authService.verify2FA(email, code);
+      _isLoggedIn = true;
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      print('2FA Provider error: $e'); // For debugging
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
     }
   }
 } 

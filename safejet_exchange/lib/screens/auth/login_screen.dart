@@ -4,6 +4,10 @@ import '../../config/theme/colors.dart';
 import 'registration_screen.dart';
 import 'forgot_password_screen.dart';
 import '../main/home_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:safejet_exchange/providers/auth_provider.dart';
+import 'two_factor_auth_screen.dart';
+import 'email_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -251,20 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
         onPressed: _isLoading
             ? null
             : () async {
-                if (_formKey.currentState!.validate()) {
-                  setState(() => _isLoading = true);
-                  // TODO: Implement actual login logic
-                  await Future.delayed(const Duration(seconds: 2));
-                  if (mounted) {
-                    // Replace the entire navigation stack with the home screen
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => const HomeScreen(),
-                      ),
-                    );
-                  }
-                  setState(() => _isLoading = false);
-                }
+                _login();
               },
         style: ElevatedButton.styleFrom(
           backgroundColor: SafeJetColors.secondaryHighlight,
@@ -342,5 +333,157 @@ class _LoginScreenState extends State<LoginScreen> {
         onPressed: onPressed,
       ),
     );
+  }
+
+  void _login() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final response = await authProvider.login(
+        _emailController.text,
+        _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      // Handle email verification requirement
+      if (response['requiresEmailVerification'] == true) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EmailVerificationScreen(
+              email: _emailController.text,
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (authProvider.error != null) {
+        // Set loading to false before showing error and navigating
+        setState(() => _isLoading = false);
+
+        // Check for email verification error
+        if (authProvider.error!.contains('verify your email')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Please verify your email to continue',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 4),
+            ),
+          );
+
+          // Add a small delay to allow the snackbar to show
+          await Future.delayed(const Duration(milliseconds: 100));
+
+          // Navigate to email verification screen
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EmailVerificationScreen(
+                email: _emailController.text,
+              ),
+            ),
+          );
+          return;
+        }
+
+        // Show other errors
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    authProvider.error!,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: SafeJetColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      // Check if 2FA is required
+      if (response['requires2FA'] == true) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TwoFactorAuthScreen(
+              email: _emailController.text,
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Login successful!'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Navigate to home screen
+      Navigator.pushAndRemoveUntil(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 500),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(e.toString()),
+            ],
+          ),
+          backgroundColor: SafeJetColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 } 

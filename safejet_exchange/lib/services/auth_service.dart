@@ -8,32 +8,42 @@ class AuthService {
   final storage = const FlutterSecureStorage();
 
   Future<Map<String, dynamic>> login(String email, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'email': email,
-        'password': password,
-      }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+          'password': password,
+        }),
+      );
 
-    final data = json.decode(response.body);
+      final data = json.decode(response.body);
 
-    if (response.statusCode == 200) {
-      if (data['requires2FA'] == true) {
-        // Store temp token for 2FA
-        await storage.write(key: 'tempToken', value: data['tempToken']);
-        return {'requires2FA': true};
+      if (response.statusCode == 200) {
+        if (data['requires2FA'] == true) {
+          // Store temp token for 2FA
+          await storage.write(key: 'tempToken', value: data['tempToken']);
+          return {'requires2FA': true};
+        }
+
+        // Store tokens and user data
+        await storage.write(key: 'accessToken', value: data['accessToken']);
+        await storage.write(key: 'refreshToken', value: data['refreshToken']);
+        await storage.write(key: 'user', value: json.encode(data['user']));
+
+        return data;
+      } else {
+        final errorMessage = data['message'] ?? 'Login failed';
+        print('Login error: $errorMessage'); // For debugging
+        throw errorMessage;
       }
-
-      // Store tokens
-      await storage.write(key: 'accessToken', value: data['accessToken']);
-      await storage.write(key: 'refreshToken', value: data['refreshToken']);
-      await storage.write(key: 'user', value: json.encode(data['user']));
-
-      return data;
-    } else {
-      throw Exception(data['message'] ?? 'Login failed');
+    } catch (e) {
+      print('Login error details: $e'); // For debugging
+      if (e is String) {
+        throw e;
+      }
+      throw 'Network error. Please check your connection.';
     }
   }
 
@@ -136,6 +146,48 @@ class AuthService {
         throw e;
       }
       throw 'Failed to resend verification code';
+    }
+  }
+
+  Future<Map<String, dynamic>> verify2FA(String email, String code) async {
+    try {
+      final tempToken = await storage.read(key: 'tempToken');
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/verify-2fa'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $tempToken',
+        },
+        body: json.encode({
+          'email': email,
+          'code': code,
+        }),
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        // Store the new tokens after successful 2FA
+        await storage.write(key: 'accessToken', value: data['accessToken']);
+        await storage.write(key: 'refreshToken', value: data['refreshToken']);
+        await storage.write(key: 'user', value: json.encode(data['user']));
+        
+        // Clean up temp token
+        await storage.delete(key: 'tempToken');
+
+        return data;
+      } else {
+        final errorMessage = data['message'] ?? '2FA verification failed';
+        print('2FA error: $errorMessage'); // For debugging
+        throw errorMessage;
+      }
+    } catch (e) {
+      print('2FA error details: $e'); // For debugging
+      if (e is String) {
+        throw e;
+      }
+      throw 'Network error. Please check your connection.';
     }
   }
 } 

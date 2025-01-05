@@ -68,8 +68,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
       setState(() {
         if (_resendTimer > 0) {
           _resendTimer--;
-        } else {
-          _canResend = true;
+          if (_resendTimer == 0) {
+            _canResend = true;
+          }
         }
       });
       return _resendTimer > 0;
@@ -413,10 +414,24 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
                     
                     if (!mounted) return;
                     
+                    // Clear any existing input
+                    for (var controller in _controllers) {
+                      controller.clear();
+                    }
+                    _focusNodes[0].requestFocus();
+                    
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Verification code sent successfully'),
+                        content: Row(
+                          children: [
+                            Icon(Icons.check_circle_outline, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text('New verification code sent to your email'),
+                          ],
+                        ),
                         backgroundColor: Colors.green,
+                        behavior: SnackBarBehavior.floating,
+                        duration: Duration(seconds: 4),
                       ),
                     );
                     _startResendTimer();
@@ -424,8 +439,21 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Error: ${e.toString()}'),
+                        content: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                e.toString().replaceAll('Exception: ', ''),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
                         backgroundColor: SafeJetColors.error,
+                        behavior: SnackBarBehavior.floating,
+                        duration: const Duration(seconds: 4),
                       ),
                     );
                   } finally {
@@ -433,15 +461,24 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
                   }
                 }
               : null,
-          child: Text(
-            _canResend ? 'Resend' : 'Resend in ${_resendTimer}s',
-            style: TextStyle(
-              color: _canResend
-                  ? SafeJetColors.secondaryHighlight
-                  : Colors.grey[600],
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          child: _isLoading
+              ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(SafeJetColors.secondaryHighlight),
+                  ),
+                )
+              : Text(
+                  _canResend ? 'Resend' : 'Resend in ${_resendTimer}s',
+                  style: TextStyle(
+                    color: _canResend
+                        ? SafeJetColors.secondaryHighlight
+                        : Colors.grey[600],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
         ),
       ],
     );
