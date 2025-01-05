@@ -4,6 +4,7 @@ import '../../config/theme/colors.dart';
 import 'email_verification_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import 'package:country_picker/country_picker.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -23,6 +24,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
   bool _acceptedTerms = false;
+  Country? _selectedCountry;
 
   @override
   void dispose() {
@@ -99,12 +101,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           keyboardType: TextInputType.emailAddress,
                         ),
                         const SizedBox(height: 16),
-                        _buildTextField(
-                          controller: _phoneController,
-                          label: 'Phone Number',
-                          icon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
-                        ),
+                        _buildPhoneField(),
                         const SizedBox(height: 16),
                         _buildTextField(
                           controller: _passwordController,
@@ -275,11 +272,30 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   setState(() => _isLoading = true);
                   try {
                     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    String fullPhoneNumber = '';
+                    String countryCode = '';
+                    String countryName = '';
+
+                    if (_selectedCountry != null) {
+                      String phoneNumber = _phoneController.text;
+                      if (phoneNumber.startsWith('0')) {
+                        phoneNumber = phoneNumber.substring(1);
+                      }
+                      
+                      countryCode = '+${_selectedCountry!.phoneCode}';
+                      countryName = _selectedCountry!.name;
+                      fullPhoneNumber = '$countryCode$phoneNumber';
+                    } else {
+                      fullPhoneNumber = _phoneController.text;
+                    }
+
                     await authProvider.register(
                       _nameController.text,
                       _emailController.text,
-                      _phoneController.text,
+                      fullPhoneNumber,
                       _passwordController.text,
+                      countryCode,
+                      countryName,
                     );
                     
                     if (!mounted) return;
@@ -366,6 +382,85 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneField() {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: SafeJetColors.primaryAccent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: SafeJetColors.primaryAccent.withOpacity(0.2),
+        ),
+      ),
+      child: TextFormField(
+        controller: _phoneController,
+        keyboardType: TextInputType.phone,
+        style: const TextStyle(color: Colors.white, fontSize: 15),
+        decoration: InputDecoration(
+          labelText: 'Phone Number',
+          labelStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+          prefixIcon: GestureDetector(
+            onTap: () {
+              showCountryPicker(
+                context: context,
+                showPhoneCode: true,
+                countryListTheme: CountryListThemeData(
+                  backgroundColor: SafeJetColors.primaryBackground,
+                  textStyle: const TextStyle(color: Colors.white),
+                  searchTextStyle: const TextStyle(color: Colors.white),
+                  bottomSheetHeight: 500,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                  inputDecoration: InputDecoration(
+                    hintText: 'Search country',
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    prefixIcon: const Icon(Icons.search, color: Colors.white),
+                    filled: true,
+                    fillColor: SafeJetColors.primaryAccent.withOpacity(0.1),
+                  ),
+                ),
+                onSelect: (Country country) {
+                  setState(() {
+                    _selectedCountry = country;
+                  });
+                },
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                _selectedCountry?.flagEmoji ?? '🌍',
+                style: const TextStyle(fontSize: 20),
+              ),
+            ),
+          ),
+          prefix: _selectedCountry != null
+              ? Text(
+                  '+${_selectedCountry!.phoneCode} ',
+                  style: const TextStyle(color: Colors.white),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Phone number is required';
+          }
+          if (_selectedCountry == null) {
+            return 'Please select a country';
+          }
+          return null;
+        },
       ),
     );
   }

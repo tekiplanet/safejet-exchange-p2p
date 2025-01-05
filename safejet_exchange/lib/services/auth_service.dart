@@ -46,7 +46,14 @@ class AuthService {
     return token != null;
   }
 
-  Future<Map<String, dynamic>> register(String fullName, String email, String phone, String password) async {
+  Future<Map<String, dynamic>> register(
+    String fullName,
+    String email,
+    String phone,
+    String password,
+    String countryCode,
+    String countryName,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/register'),
       headers: {'Content-Type': 'application/json'},
@@ -55,17 +62,17 @@ class AuthService {
         'email': email,
         'phone': phone,
         'password': password,
+        'countryCode': countryCode,
+        'countryName': countryName,
       }),
     );
 
     final data = json.decode(response.body);
 
     if (response.statusCode == 201 || response.statusCode == 200) {
-      // Store tokens
       await storage.write(key: 'accessToken', value: data['accessToken']);
       await storage.write(key: 'refreshToken', value: data['refreshToken']);
       await storage.write(key: 'user', value: json.encode(data['user']));
-
       return data;
     } else {
       throw Exception(data['message'] ?? 'Registration failed');

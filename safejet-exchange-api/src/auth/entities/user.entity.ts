@@ -47,6 +47,18 @@ export class User {
   @Column()
   fullName: string;
 
+  @Column()
+  countryCode: string;
+
+  @Column()
+  countryName: string;
+
+  @Column()
+  phoneWithoutCode: string;
+
+  @Column({ default: 'USD' })
+  currency: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

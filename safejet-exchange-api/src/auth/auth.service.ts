@@ -36,7 +36,7 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-    const { email, phone, password, fullName } = registerDto;
+    const { email, phone, password, fullName, countryCode: rawCountryCode, countryName } = registerDto;
 
     // Check if user exists
     const existingUser = await this.userRepository.findOne({
@@ -47,13 +47,40 @@ export class AuthService {
       throw new ConflictException('User already exists');
     }
 
+    // Parse phone number safely
+    let phoneWithoutCode = phone;
+    let formattedCountryCode = rawCountryCode;
+
+    if (phone.startsWith('+') && formattedCountryCode) {
+      try {
+        // Remove the exact country code from the phone number
+        phoneWithoutCode = phone.substring(formattedCountryCode.length); // This will remove +234 from +2348166700169
+        
+        // Remove any leading zeros
+        while (phoneWithoutCode.startsWith('0')) {
+          phoneWithoutCode = phoneWithoutCode.substring(1);
+        }
+      } catch (error) {
+        console.error('Error parsing phone number:', error);
+        throw new BadRequestException('Invalid phone number format');
+      }
+    }
+
+    // Validate country code format
+    if (formattedCountryCode && !formattedCountryCode.startsWith('+')) {
+      formattedCountryCode = `+${formattedCountryCode}`;
+    }
+
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user with validated data
     const user = this.userRepository.create({
       email,
       phone,
+      phoneWithoutCode,
+      countryCode: formattedCountryCode || '', // Store with + prefix
+      countryName: countryName || '', // Store country name
       fullName,
       passwordHash,
     });
