@@ -171,15 +171,15 @@ export class AuthService {
     }
 
     if (user.emailVerified) {
-      throw new BadRequestException('Email already verified');
+      throw new BadRequestException('Email is already verified');
     }
 
     if (!user.verificationCode || !user.verificationCodeExpires) {
-      throw new BadRequestException('No verification code found');
+      throw new BadRequestException('Verification code has expired. Please request a new one.');
     }
 
     if (new Date() > user.verificationCodeExpires) {
-      throw new BadRequestException('Verification code expired');
+      throw new BadRequestException('Verification code has expired. Please request a new one.');
     }
 
     const isCodeValid = await bcrypt.compare(
@@ -188,7 +188,7 @@ export class AuthService {
     );
 
     if (!isCodeValid) {
-      throw new BadRequestException('Invalid verification code');
+      throw new BadRequestException('Incorrect verification code. Please try again.');
     }
 
     user.emailVerified = true;

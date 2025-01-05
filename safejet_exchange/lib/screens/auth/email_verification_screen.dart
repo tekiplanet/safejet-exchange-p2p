@@ -1,8 +1,11 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme/colors.dart';
 import '../main/home_screen.dart';
+import '../../providers/auth_provider.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
   final String email;
@@ -16,7 +19,7 @@ class EmailVerificationScreen extends StatefulWidget {
   State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
 }
 
-class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
+class _EmailVerificationScreenState extends State<EmailVerificationScreen> with SingleTickerProviderStateMixin {
   final List<TextEditingController> _controllers = List.generate(
     6,
     (index) => TextEditingController(),
@@ -30,14 +33,21 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   int _resendTimer = 60;
   bool _canResend = false;
 
+  late final AnimationController _shakeController;
+
   @override
   void initState() {
     super.initState();
     _startResendTimer();
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
   }
 
   @override
   void dispose() {
+    _shakeController.dispose();
     for (var controller in _controllers) {
       controller.dispose();
     }
@@ -68,34 +78,131 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
 
   void _verifyCode() async {
     final code = _controllers.map((c) => c.text).join();
-    if (code.length != 6) return;
+    if (code.length != 6) {
+      _playShakeAnimation();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Please enter all 6 digits'),
+            ],
+          ),
+          backgroundColor: SafeJetColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Implement actual verification logic
-      await Future.delayed(const Duration(seconds: 2));
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.verifyEmail(code);
 
       if (!mounted) return;
 
-      // Navigate to home screen on success
+      if (authProvider.error != null) {
+        _playShakeAnimation();
+        
+        // Clear the input fields on error
+        for (var controller in _controllers) {
+          controller.clear();
+        }
+        _focusNodes[0].requestFocus();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    authProvider.error!,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: SafeJetColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
+      // Show success animation before navigation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.check_circle_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Email verified successfully!'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Add a small delay for the success animation
+      await Future.delayed(const Duration(milliseconds: 1500));
+
+      if (!mounted) return;
+
+      // Navigate with fade transition
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (context) => const HomeScreen(),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 500),
         ),
         (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
+      _playShakeAnimation();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Something went wrong. Please try again.'),
+            ],
+          ),
           backgroundColor: SafeJetColors.error,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _playShakeAnimation() {
+    _shakeController.forward(from: 0.0);
+  }
+
+  // Add this helper method to convert error messages
+  String _getUserFriendlyError(String error) {
+    if (error.contains('Invalid verification code')) {
+      return 'Incorrect verification code. Please try again.';
+    }
+    if (error.contains('expired')) {
+      return 'Verification code has expired. Please request a new one.';
+    }
+    if (error.contains('already verified')) {
+      return 'This email is already verified.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 
   @override
@@ -160,11 +267,14 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 const SizedBox(height: 40),
                 FadeInUp(
                   duration: const Duration(milliseconds: 800),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(
-                      6,
-                      (index) => _buildCodeInput(index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: List.generate(
+                        6,
+                        (index) => _buildCodeInput(index),
+                      ),
                     ),
                   ),
                 ),
@@ -189,16 +299,35 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   }
 
   Widget _buildCodeInput(int index) {
-    return Container(
-      width: 50,
-      height: 60,
-      decoration: BoxDecoration(
-        color: SafeJetColors.primaryAccent.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: SafeJetColors.primaryAccent.withOpacity(0.2),
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: _shakeController,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(
+            sin(_shakeController.value * 2 * pi) * 5,
+            0,
+          ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 40,
+            height: 50,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: _focusNodes[index].hasFocus
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.primaryAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _focusNodes[index].hasFocus
+                    ? SafeJetColors.secondaryHighlight
+                    : SafeJetColors.primaryAccent.withOpacity(0.2),
+                width: _focusNodes[index].hasFocus ? 2 : 1,
+              ),
+            ),
+            child: child,
+          ),
+        );
+      },
       child: TextField(
         controller: _controllers[index],
         focusNode: _focusNodes[index],
@@ -276,15 +405,36 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
         ),
         TextButton(
           onPressed: _canResend
-              ? () {
-                  // TODO: Implement resend logic
-                  _startResendTimer();
+              ? () async {
+                  setState(() => _isLoading = true);
+                  try {
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    await authProvider.resendVerificationCode(widget.email);
+                    
+                    if (!mounted) return;
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Verification code sent successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    _startResendTimer();
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: ${e.toString()}'),
+                        backgroundColor: SafeJetColors.error,
+                      ),
+                    );
+                  } finally {
+                    if (mounted) setState(() => _isLoading = false);
+                  }
                 }
               : null,
           child: Text(
-            _canResend
-                ? 'Resend'
-                : 'Resend in ${_resendTimer}s',
+            _canResend ? 'Resend' : 'Resend in ${_resendTimer}s',
             style: TextStyle(
               color: _canResend
                   ? SafeJetColors.secondaryHighlight

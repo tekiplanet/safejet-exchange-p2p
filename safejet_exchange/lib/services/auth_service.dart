@@ -82,41 +82,60 @@ class AuthService {
   Future<Map<String, dynamic>> verifyEmail(String code) async {
     final token = await storage.read(key: 'accessToken');
     
-    final response = await http.post(
-      Uri.parse('$baseUrl/verify-email'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-      body: json.encode({
-        'code': code,
-      }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/verify-email'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'code': code,
+        }),
+      );
 
-    final data = json.decode(response.body);
+      final data = json.decode(response.body);
 
-    if (response.statusCode == 200) {
-      return data;
-    } else {
-      throw Exception(data['message'] ?? 'Email verification failed');
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        // Make sure we're throwing the actual error message from the backend
+        final errorMessage = data['message'] ?? 'Email verification failed';
+        print('Backend error: $errorMessage'); // For debugging
+        throw errorMessage;
+      }
+    } catch (e) {
+      print('Error details: $e'); // For debugging
+      if (e is String) {
+        throw e;
+      }
+      // If it's a network error or other type of error
+      throw 'Network error. Please check your connection.';
     }
   }
 
   Future<Map<String, dynamic>> resendVerificationCode(String email) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/resend-verification'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'email': email,
-      }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/resend-verification'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+        }),
+      );
 
-    final data = json.decode(response.body);
+      final data = json.decode(response.body);
 
-    if (response.statusCode == 200) {
-      return data;
-    } else {
-      throw Exception(data['message'] ?? 'Failed to resend verification code');
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        throw data['message'] ?? 'Failed to resend verification code';
+      }
+    } catch (e) {
+      if (e is String) {
+        throw e;
+      }
+      throw 'Failed to resend verification code';
     }
   }
 } 
