@@ -18,6 +18,8 @@ import * as crypto from 'crypto';
 import { Disable2FADto } from './dto/disable-2fa.dto';
 import { DisableCodeType } from './dto/disable-2fa.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
+import { LoginTrackerService } from './login-tracker.service';
+import { Request } from 'express';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +28,7 @@ export class AuthService {
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
+    private readonly loginTrackerService: LoginTrackerService,
   ) {}
 
   private generateVerificationCode(): string {
@@ -33,7 +36,7 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-    const { email, phone, password } = registerDto;
+    const { email, phone, password, fullName } = registerDto;
 
     // Check if user exists
     const existingUser = await this.userRepository.findOne({
@@ -51,6 +54,7 @@ export class AuthService {
     const user = this.userRepository.create({
       email,
       phone,
+      fullName,
       passwordHash,
     });
 
@@ -72,7 +76,7 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto): Promise<LoginResponseDto> {
+  async login(loginDto: LoginDto, req: Request): Promise<LoginResponseDto> {
     const { email, password } = loginDto;
 
     // Find user
@@ -115,6 +119,12 @@ export class AuthService {
         requires2FA: true,
         tempToken,
       };
+    }
+
+    // If 2FA is not enabled, send login notification immediately
+    if (!user.twoFactorEnabled) {
+      const loginInfo = this.loginTrackerService.getLoginInfo(req);
+      await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
     }
 
     // If 2FA is not enabled, generate regular tokens
@@ -313,7 +323,7 @@ export class AuthService {
     return codes;
   }
 
-  async verify2FA(verify2FADto: Verify2FADto) {
+  async verify2FA(verify2FADto: Verify2FADto, req: Request) {
     const { email, code } = verify2FADto;
     const user = await this.userRepository.findOne({ where: { email } });
 
@@ -333,6 +343,10 @@ export class AuthService {
 
     // Generate full access tokens after successful 2FA
     const tokens = await this.generateTokens(user);
+
+    // Send login notification after successful 2FA
+    const loginInfo = this.loginTrackerService.getLoginInfo(req);
+    await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
 
     return {
       message: '2FA verification successful',

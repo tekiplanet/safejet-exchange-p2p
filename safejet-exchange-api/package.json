@@ -22,7 +22,6 @@
     "migration:generate": "npm run typeorm -- migration:generate -d src/config/typeorm.config.ts",
     "migration:run": "npm run typeorm -- migration:run -d src/config/typeorm.config.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/config/typeorm.config.ts"
-      
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -36,6 +35,7 @@
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "geoip-lite": "^1.4.10",
     "nodemailer": "^6.9.16",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -44,13 +44,15 @@
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
     "speakeasy": "^2.0.0",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.20",
+    "useragent": "^2.3.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
     "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
     "@types/express": "^5.0.0",
+    "@types/geoip-lite": "^1.4.4",
     "@types/jest": "^29.5.2",
     "@types/node": "^20.3.1",
     "@types/nodemailer": "^6.4.17",
@@ -58,6 +60,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/speakeasy": "^2.0.10",
     "@types/supertest": "^6.0.0",
+    "@types/useragent": "^2.3.4",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^8.0.0",

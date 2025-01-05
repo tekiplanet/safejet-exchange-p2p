@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { baseTemplate } from './templates/base.template';
+import { LoginInfoDto } from '../auth/dto/login-info.dto';
 
 @Injectable()
 export class EmailTemplatesService {
@@ -166,6 +167,36 @@ export class EmailTemplatesService {
       </div>
 
       <p>If you didn't disable 2FA, please contact our support team immediately:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  loginNotificationEmail(loginInfo: LoginInfoDto, isDark = true) {
+    const content = `
+      <h1>New Login Detected 🔔</h1>
+      <p>We detected a new login to your SafeJet Exchange account.</p>
+      
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Login Details</h2>
+        <ul>
+          <li>Time: ${loginInfo.timestamp.toLocaleString()}</li>
+          <li>Location: ${loginInfo.location.city || 'Unknown'}, ${loginInfo.location.country || 'Unknown'}</li>
+          <li>Device: ${loginInfo.device.device || 'Unknown'}</li>
+          <li>Browser: ${loginInfo.device.browser || 'Unknown'}</li>
+          <li>Operating System: ${loginInfo.device.os || 'Unknown'}</li>
+          <li>IP Address: ${loginInfo.ip}</li>
+        </ul>
+      </div>
+
+      <p>If this wasn't you, please:</p>
+      <ol>
+        <li>Change your password immediately</li>
+        <li>Enable 2FA if not already enabled</li>
+        <li>Contact our support team</li>
+      </ol>
+
       <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
     `;
 

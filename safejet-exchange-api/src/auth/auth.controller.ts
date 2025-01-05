@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -13,6 +13,7 @@ import { Enable2FADto } from './dto/enable-2fa.dto';
 import { Verify2FADto } from './dto/verify-2fa.dto';
 import { Disable2FADto } from './dto/disable-2fa.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { Request } from 'express';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -25,8 +26,8 @@ export class AuthController {
   }
 
   @Post('login')
-  login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  login(@Body() loginDto: LoginDto, @Req() req: Request) {
+    return this.authService.login(loginDto, req);
   }
 
   @Post('verify-email')
@@ -66,8 +67,8 @@ export class AuthController {
   }
 
   @Post('2fa/verify')
-  verify2FA(@Body() verify2FADto: Verify2FADto) {
-    return this.authService.verify2FA(verify2FADto);
+  verify2FA(@Body() verify2FADto: Verify2FADto, @Req() req: Request) {
+    return this.authService.verify2FA(verify2FADto, req);
   }
 
   @Post('2fa/disable')

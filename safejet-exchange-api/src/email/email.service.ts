@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { EmailTemplatesService } from './email-templates.service';
+import { LoginInfoDto } from '../auth/dto/login-info.dto';
 
 @Injectable()
 export class EmailService {
@@ -72,6 +73,15 @@ export class EmailService {
       to: email,
       subject: '2FA Disabled - SafeJet Exchange Security Alert',
       html: this.emailTemplatesService.twoFactorDisabledEmail(),
+    });
+  }
+
+  async sendLoginNotificationEmail(email: string, loginInfo: LoginInfoDto) {
+    await this.transporter.sendMail({
+      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      to: email,
+      subject: 'New Login Detected - SafeJet Exchange',
+      html: this.emailTemplatesService.loginNotificationEmail(loginInfo),
     });
   }
 } 

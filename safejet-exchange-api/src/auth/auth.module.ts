@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { User } from './entities/user.entity';
 import { EmailModule } from '../email/email.module';
 import { JwtStrategy } from './jwt.strategy';
+import { LoginTrackerService } from './login-tracker.service';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { JwtStrategy } from './jwt.strategy';
   providers: [
     AuthService,
     JwtStrategy,
+    LoginTrackerService,
   ],
   exports: [AuthService],
 })

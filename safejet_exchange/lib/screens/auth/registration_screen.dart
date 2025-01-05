@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import '../../config/theme/colors.dart';
 import 'email_verification_screen.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -16,6 +18,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _phoneController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
@@ -25,6 +28,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -93,6 +97,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           label: 'Email',
                           icon: Icons.email_outlined,
                           keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTextField(
+                          controller: _phoneController,
+                          label: 'Phone Number',
+                          icon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
                         ),
                         const SizedBox(height: 16),
                         _buildTextField(
@@ -263,10 +274,25 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                 if (_formKey.currentState!.validate()) {
                   setState(() => _isLoading = true);
                   try {
-                    // TODO: Implement registration logic
-                    await Future.delayed(const Duration(seconds: 2));
+                    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                    await authProvider.register(
+                      _nameController.text,
+                      _emailController.text,
+                      _phoneController.text,
+                      _passwordController.text,
+                    );
                     
                     if (!mounted) return;
+                    
+                    if (authProvider.error != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(authProvider.error!),
+                          backgroundColor: SafeJetColors.error,
+                        ),
+                      );
+                      return;
+                    }
                     
                     // Navigate to email verification
                     Navigator.push(

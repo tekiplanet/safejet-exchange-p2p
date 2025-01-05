@@ -44,6 +44,9 @@ export class User {
   @Column({ nullable: true })
   twoFactorBackupCodes: string;
 
+  @Column()
+  fullName: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

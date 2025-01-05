@@ -6,9 +6,12 @@ import 'screens/auth/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import './services/service_locator.dart';
+import 'providers/auth_provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await setupServices();
   final prefs = await SharedPreferences.getInstance();
   final themeProvider = ThemeProvider()..init(prefs);
@@ -19,6 +22,7 @@ void main() async {
         ChangeNotifierProvider.value(
           value: themeProvider,
         ),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
       ],
       child: const MyApp(),
     ),
