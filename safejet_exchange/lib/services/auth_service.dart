@@ -19,29 +19,32 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
+      print('Raw Response Status Code: ${response.statusCode}');
+      print('Raw Response Body: ${response.body}');
 
-      if (response.statusCode == 200) {
+      // Accept both 200 and 201 as success
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Handle 2FA case
         if (data['requires2FA'] == true) {
           await storage.write(key: 'tempToken', value: data['tempToken']);
           return {'requires2FA': true};
         }
 
-        // Store tokens and user data
+        // Store tokens and user data for successful login
         await storage.write(key: 'accessToken', value: data['accessToken']);
         await storage.write(key: 'refreshToken', value: data['refreshToken']);
         await storage.write(key: 'user', value: json.encode(data['user']));
 
         return data;
-      } else {
-        // If email is not verified, store the user ID for verification
-        if (data['message']?.contains('verify your email') == true) {
-          await storage.write(key: 'pendingUserId', value: data['userId']);
-        }
-        
-        final errorMessage = data['message'] ?? 'Login failed';
-        throw errorMessage;
       }
+
+      // Handle error responses
+      if (data['message']?.contains('verify your email') == true) {
+        await storage.write(key: 'pendingUserId', value: data['userId']);
+      }
+      throw data['message'] ?? 'Login failed';
     } catch (e) {
+      print('Login error details: $e');
       rethrow;
     }
   }

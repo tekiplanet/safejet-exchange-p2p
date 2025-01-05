@@ -106,6 +106,8 @@ export class AuthService {
   async login(loginDto: LoginDto, req: Request): Promise<LoginResponseDto> {
     const { email, password } = loginDto;
 
+    console.log('Login attempt for:', email); // Debug log
+
     const user = await this.userRepository.findOne({
       where: { email },
     });
@@ -115,52 +117,31 @@ export class AuthService {
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    console.log('Password valid:', isPasswordValid); // Debug log
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (!user.emailVerified) {
-      throw new UnauthorizedException({
-        message: 'Please verify your email before logging in',
-        userId: user.id
-      });
-    }
-
-    // If 2FA is enabled, return a temporary token
-    if (user.twoFactorEnabled) {
-      const tempToken = await this.jwtService.signAsync(
-        { 
-          sub: user.id, 
-          email: user.email,
-          temp: true 
-        },
-        { expiresIn: '5m' }, // Short-lived token for 2FA
-      );
+    // If email is verified, generate tokens and return
+    if (user.emailVerified) {
+      const tokens = await this.generateTokens(user);
+      
+      // Send login notification
+      const loginInfo = this.loginTrackerService.getLoginInfo(req);
+      await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
 
       return {
-        user: {
-          id: user.id,
-          email: user.email,
-        },
-        requires2FA: true,
-        tempToken,
+        user,
+        ...tokens,
       };
     }
 
-    // If 2FA is not enabled, send login notification immediately
-    if (!user.twoFactorEnabled) {
-      const loginInfo = this.loginTrackerService.getLoginInfo(req);
-      await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
-    }
-
-    // If 2FA is not enabled, generate regular tokens
-    const tokens = await this.generateTokens(user);
-
-    return {
-      user,
-      ...tokens,
-    };
+    // If email is not verified, throw error with userId
+    throw new UnauthorizedException({
+      message: 'Please verify your email before logging in',
+      userId: user.id
+    });
   }
 
   async verifyEmail(verifyEmailDto: VerifyEmailDto) {

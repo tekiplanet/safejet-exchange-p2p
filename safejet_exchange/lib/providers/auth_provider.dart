@@ -17,12 +17,20 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print('AuthProvider: Attempting login...');
       final response = await _authService.login(email, password);
-      _isLoggedIn = true;
+      print('AuthProvider: Login response: $response');
+      
+      // Set logged in state if we have tokens
+      if (response['accessToken'] != null) {
+        _isLoggedIn = true;
+      }
+      
       _isLoading = false;
       notifyListeners();
       return response;
     } catch (e) {
+      print('AuthProvider: Login error: $e');
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
