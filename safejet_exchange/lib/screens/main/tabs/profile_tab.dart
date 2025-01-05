@@ -12,9 +12,52 @@ import '../../../screens/settings/two_factor_screen.dart';
 import '../../../screens/settings/identity_verification_screen.dart';
 import '../../../screens/settings/kyc_levels_screen.dart';
 import 'package:animate_do/animate_do.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../screens/auth/login_screen.dart';
 
-class ProfileTab extends StatelessWidget {
+class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
+
+  @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
+  void _handleLogout() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.logout();
+
+      if (!mounted) return;
+
+      // Navigate to login screen and remove all previous routes
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Failed to logout: ${e.toString()}',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: SafeJetColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +392,7 @@ class ProfileTab extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // TODO: Implement sign out
+                    _handleLogout();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: SafeJetColors.error,

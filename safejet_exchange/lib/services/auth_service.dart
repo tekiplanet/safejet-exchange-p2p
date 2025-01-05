@@ -47,7 +47,26 @@ class AuthService {
   }
 
   Future<void> logout() async {
-    await storage.deleteAll();
+    try {
+      final token = await storage.read(key: 'accessToken');
+      
+      // Call backend logout endpoint
+      await http.post(
+        Uri.parse('$baseUrl/logout'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      // Clear all stored data
+      await storage.deleteAll();
+    } catch (e) {
+      print('Logout error: $e');
+      // Still clear local storage even if backend call fails
+      await storage.deleteAll();
+      rethrow;
+    }
   }
 
   Future<bool> isLoggedIn() async {

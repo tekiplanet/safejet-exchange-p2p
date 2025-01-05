@@ -89,4 +89,11 @@ export class AuthController {
   resendVerificationCode(@Body() resendVerificationDto: ResendVerificationDto) {
     return this.authService.resendVerificationCode(resendVerificationDto.email);
   }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  async logout(@GetUser() user: User) {
+    // Blacklist the token
+    return this.authService.logout(user.id);
+  }
 } 

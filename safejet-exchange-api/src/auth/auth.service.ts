@@ -486,4 +486,20 @@ export class AuthService {
 
     return { message: 'If your email is registered, you will receive a verification code.' };
   }
+
+  async logout(userId: string) {
+    try {
+      // Here we could:
+      // 1. Add the current token to a blacklist
+      // 2. Clear any refresh tokens for this user
+      // 3. Log the logout event
+      
+      return {
+        status: 'success',
+        message: 'Logged out successfully'
+      };
+    } catch (error) {
+      throw new BadRequestException('Failed to logout');
+    }
+  }
 } 

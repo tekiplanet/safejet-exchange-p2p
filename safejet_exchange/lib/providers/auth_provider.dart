@@ -37,9 +37,16 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _authService.logout();
-    _isLoggedIn = false;
-    notifyListeners();
+    try {
+      await _authService.logout();
+      _isLoggedIn = false;
+      _error = null;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> checkAuthStatus() async {
