@@ -284,7 +284,7 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         return data;
       }
 
@@ -293,6 +293,10 @@ class AuthService {
       print('Generate 2FA secret error: $e');
       rethrow;
     }
+  }
+
+  Future<void> storeTemp2FASecret(String secret) async {
+    await storage.write(key: 'temp2FASecret', value: secret);
   }
 
   Future<Map<String, dynamic>> enable2FA(String code) async {
@@ -309,7 +313,7 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         return data;
       }
 
@@ -335,7 +339,7 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         return data;
       }
 
@@ -357,7 +361,7 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         return List<String>.from(data['backupCodes']);
       }
 

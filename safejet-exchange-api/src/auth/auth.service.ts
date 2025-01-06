@@ -23,6 +23,8 @@ import { Request } from 'express';
 
 @Injectable()
 export class AuthService {
+  private readonly ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
@@ -303,14 +305,62 @@ export class AuthService {
     };
   }
 
+  private encryptBackupCodes(codes: string[]): string {
+    try {
+      // Generate a 32-byte (256-bit) key from the environment variable
+      const key = crypto.scryptSync(this.ENCRYPTION_KEY, 'salt', 32);
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+      
+      const encrypted = Buffer.concat([
+        cipher.update(JSON.stringify(codes), 'utf8'),
+        cipher.final()
+      ]);
+      
+      const authTag = cipher.getAuthTag();
+      
+      const result = {
+        iv: iv.toString('hex'),
+        data: encrypted.toString('hex'),
+        tag: authTag.toString('hex')
+      };
+      
+      return JSON.stringify(result);
+    } catch (error) {
+      console.error('Encryption error:', error);
+      throw new Error('Failed to encrypt backup codes');
+    }
+  }
+
+  private decryptBackupCodes(encryptedData: string): string[] {
+    try {
+      const { iv, data, tag } = JSON.parse(encryptedData);
+      // Generate the same key for decryption
+      const key = crypto.scryptSync(this.ENCRYPTION_KEY, 'salt', 32);
+      const decipher = crypto.createDecipheriv(
+        'aes-256-gcm',
+        key,
+        Buffer.from(iv, 'hex')
+      );
+      
+      decipher.setAuthTag(Buffer.from(tag, 'hex'));
+      
+      const decrypted = Buffer.concat([
+        decipher.update(Buffer.from(data, 'hex')),
+        decipher.final()
+      ]);
+      
+      return JSON.parse(decrypted.toString('utf8'));
+    } catch (error) {
+      console.error('Decryption error:', error);
+      throw new Error('Failed to decrypt backup codes');
+    }
+  }
+
   async enable2FA(userId: string, enable2FADto: Enable2FADto) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    
-    if (!user || !user.twoFactorSecret) {
-      throw new BadRequestException('Please generate 2FA secret first');
-    }
+    if (!user) throw new NotFoundException('User not found');
 
-    // Verify the code
     const isValid = speakeasy.totp.verify({
       secret: user.twoFactorSecret,
       encoding: 'base32',
@@ -318,26 +368,29 @@ export class AuthService {
     });
 
     if (!isValid) {
-      throw new BadRequestException('Invalid 2FA code');
+      throw new UnauthorizedException('Invalid 2FA code');
     }
 
     // Generate backup codes
     const backupCodes = this.generateBackupCodes();
-    console.log('Generated backup codes:', backupCodes); // For debugging
-
-    // Store backup codes as JSON string
-    user.twoFactorBackupCodes = JSON.stringify(backupCodes);
-    user.twoFactorEnabled = true;
     
-    try {
-      await this.userRepository.save(user);
-      console.log('Saved user with backup codes:', user.twoFactorBackupCodes); // For debugging
-    } catch (error) {
-      console.error('Error saving user:', error);
-      throw new BadRequestException('Failed to enable 2FA');
-    }
+    // Encrypt the backup codes
+    const encryptedData = this.encryptBackupCodes(backupCodes);
+    
+    user.twoFactorEnabled = true;
+    user.twoFactorBackupCodes = encryptedData;
+    
+    await this.userRepository.save(user);
 
-    // Send email notification
+    // Test decryption to verify it worked
+    const decryptedCodes = this.decryptBackupCodes(user.twoFactorBackupCodes);
+    console.log('Decryption test:', {
+      original: backupCodes,
+      encrypted: encryptedData,
+      decrypted: decryptedCodes,
+    });
+
+    // Send email notification for 2FA enablement
     await this.emailService.send2FAEnabledEmail(user.email);
 
     return {

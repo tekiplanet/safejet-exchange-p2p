@@ -47,7 +47,9 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
           _isLoading = false;
         });
         
-        // Force rebuild
+        // Store the secret for verification
+        await authProvider.storeTemp2FASecret(_secretKey!);
+        
         setState(() {});
         
         print('Updated state - Secret: $_secretKey');
@@ -81,25 +83,34 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.enable2FA(_codeController.text);
       
-      // Get backup codes after successful 2FA setup
-      _backupCodes = await authProvider.getBackupCodes();
+      // The response contains both message and backupCodes
+      final response = await authProvider.enable2FA(_codeController.text);
+      
+      // Update backup codes from response
+      setState(() {
+        _backupCodes = List<String>.from(response['backupCodes']);
+      });
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('2FA enabled successfully'),
-          backgroundColor: SafeJetColors.success,
-        ),
-      );
-      Navigator.pop(context, true);
+      // Only show success message and navigate back if we got backup codes
+      if (_backupCodes.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('2FA enabled successfully'),
+            backgroundColor: SafeJetColors.success,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        throw 'Failed to get backup codes';
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text('Error: Unable to enable 2FA. Please try again.'),
           backgroundColor: SafeJetColors.error,
         ),
       );
@@ -315,7 +326,7 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
               if (_currentStep > 0)
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: details.onStepCancel,
+                    onPressed: _isLoading ? null : details.onStepCancel,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
@@ -333,7 +344,7 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
               if (_currentStep > 0) const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _currentStep == 2 ? _handleSetup : details.onStepContinue,
+                  onPressed: _isLoading ? null : (_currentStep == 2 ? _handleSetup : details.onStepContinue),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: SafeJetColors.secondaryHighlight,
                     foregroundColor: Colors.white,
@@ -343,7 +354,16 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: Text(_currentStep == 2 ? 'Enable 2FA' : 'Continue'),
+                  child: _isLoading 
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(_currentStep == 2 ? 'Enable 2FA' : 'Continue'),
                 ),
               ),
             ],
@@ -507,23 +527,26 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
             maxLength: 6,
           ),
         ),
-        const SizedBox(height: 24),
-        Text(
-          'Backup Codes',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.grey[300] : Colors.black87,
+        // Only show backup codes section if we have backup codes
+        if (_backupCodes.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text(
+            'Backup Codes',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.grey[300] : Colors.black87,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Save these backup codes in a secure place. You can use them to access your account if you lose your phone.',
-          style: TextStyle(
-            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+          const SizedBox(height: 8),
+          Text(
+            'Save these backup codes in a secure place. You can use them to access your account if you lose your phone.',
+            style: TextStyle(
+              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        _buildBackupCodes(isDark),
+          const SizedBox(height: 16),
+          _buildBackupCodes(isDark),
+        ],
       ],
     );
   }

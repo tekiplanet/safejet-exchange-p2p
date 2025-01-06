@@ -192,15 +192,16 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> enable2FA(String code) async {
+  Future<Map<String, dynamic>> enable2FA(String code) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _authService.enable2FA(code);
+      final result = await _authService.enable2FA(code);
       _isLoading = false;
       notifyListeners();
+      return result;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -252,5 +253,9 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
       rethrow;
     }
+  }
+
+  Future<void> storeTemp2FASecret(String secret) async {
+    await _authService.storeTemp2FASecret(secret);
   }
 } 
