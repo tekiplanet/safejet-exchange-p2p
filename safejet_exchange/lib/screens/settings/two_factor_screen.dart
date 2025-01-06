@@ -222,15 +222,16 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
         },
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(isDark),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: _buildStepper(isDark),
-                ),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: _buildHeader(isDark),
+            ),
+            SliverFillRemaining(
+              hasScrollBody: true,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _buildStepper(isDark),
               ),
             ),
           ],
