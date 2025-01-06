@@ -110,6 +110,8 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
     return Consumer<KYCProvider>(
       builder: (context, kycProvider, child) {
         final kycDetails = kycProvider.kycDetails;
+        final currentLevel = kycDetails?.currentLevel ?? 0;
+        final nextLevel = currentLevel + 1;
         return FadeInUp(
           duration: const Duration(milliseconds: 300),
           child: Container(
@@ -141,10 +143,10 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Current Level',
                           style: TextStyle(
                             color: Colors.white70,
@@ -152,8 +154,8 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
                           ),
                         ),
                         Text(
-                          'Level 1',
-                          style: TextStyle(
+                          'Level $currentLevel',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -167,26 +169,20 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: LinearProgressIndicator(
-                    value: 0.33,
+                    value: currentLevel / 3,
                     backgroundColor: Colors.white.withOpacity(0.2),
                     valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                     minHeight: 8,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Complete identity verification to reach Level 2',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                  ),
-                ),
                 Text(
-                  'Level ${kycDetails?.currentLevel ?? 0}',
+                  currentLevel < 3 
+                      ? 'Complete identity verification to reach Level $nextLevel'
+                      : 'Maximum level reached',
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                 ),
               ],
