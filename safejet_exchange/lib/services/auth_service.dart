@@ -179,12 +179,13 @@ class AuthService {
   Future<Map<String, dynamic>> verify2FA(String email, String code) async {
     try {
       final tempToken = await storage.read(key: 'tempToken');
+      print('Verifying 2FA with token: $tempToken'); // Debug log
       
       final response = await http.post(
         Uri.parse('$baseUrl/verify-2fa'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $tempToken',
+          if (tempToken != null) 'Authorization': 'Bearer $tempToken',
         },
         body: json.encode({
           'email': email,
@@ -192,9 +193,10 @@ class AuthService {
         }),
       );
 
+      print('2FA verification response: ${response.body}'); // Debug log
       final data = json.decode(response.body);
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         // Store the new tokens after successful 2FA
         await storage.write(key: 'accessToken', value: data['accessToken']);
         await storage.write(key: 'refreshToken', value: data['refreshToken']);
@@ -204,17 +206,12 @@ class AuthService {
         await storage.delete(key: 'tempToken');
 
         return data;
-      } else {
-        final errorMessage = data['message'] ?? '2FA verification failed';
-        print('2FA error: $errorMessage'); // For debugging
-        throw errorMessage;
       }
+
+      throw data['message'] ?? 'Failed to verify 2FA code';
     } catch (e) {
-      print('2FA error details: $e'); // For debugging
-      if (e is String) {
-        throw e;
-      }
-      throw 'Network error. Please check your connection.';
+      print('2FA verification error: $e'); // Debug log
+      rethrow;
     }
   }
 

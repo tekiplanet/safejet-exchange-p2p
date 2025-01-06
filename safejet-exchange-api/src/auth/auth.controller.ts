@@ -64,8 +64,11 @@ export class AuthController {
     return this.authService.enable2FA(user.id, enable2FADto);
   }
 
-  @Post('2fa/verify')
-  verify2FA(@Body() verify2FADto: Verify2FADto, @Req() req: Request) {
+  @Post('verify-2fa')
+  async verify2FA(
+    @Body() verify2FADto: Verify2FADto,
+    @Req() req: Request,
+  ) {
     return this.authService.verify2FA(verify2FADto, req);
   }
 
