@@ -105,45 +105,44 @@ export class AuthService {
     };
   }
 
-  async login(loginDto: LoginDto, req: Request): Promise<LoginResponseDto> {
+  async login(loginDto: LoginDto, req: Request) {
     const { email, password } = loginDto;
-
-    console.log('Login attempt for:', email); // Debug log
-
-    const user = await this.userRepository.findOne({
-      where: { email },
-    });
+    const user = await this.userRepository.findOne({ where: { email } });
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    console.log('Password valid:', isPasswordValid); // Debug log
-
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // If email is verified, generate tokens and return
-    if (user.emailVerified) {
-      const tokens = await this.generateTokens(user);
-      
-      // Send login notification
-      const loginInfo = this.loginTrackerService.getLoginInfo(req);
-      await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
-
+    // Check if 2FA is enabled
+    if (user.twoFactorEnabled) {
+      console.log('2FA is enabled for user:', user.email); // Debug log
+      const tempToken = await this.jwtService.signAsync(
+        { sub: user.id, email: user.email, temp: true },
+        { expiresIn: '5m' },
+      );
       return {
-        user,
-        ...tokens,
+        requires2FA: true,
+        tempToken,
       };
     }
 
-    // If email is not verified, throw error with userId
-    throw new UnauthorizedException({
-      message: 'Please verify your email before logging in',
-      userId: user.id
-    });
+    // Generate tokens for non-2FA users
+    const tokens = await this.generateTokens(user);
+
+    // Send login notification
+    const loginInfo = this.loginTrackerService.getLoginInfo(req);
+    await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
+
+    return {
+      ...tokens,
+      user,
+      requires2FA: false,
+    };
   }
 
   async verifyEmail(verifyEmailDto: VerifyEmailDto) {

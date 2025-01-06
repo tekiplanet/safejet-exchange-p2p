@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../services/auth_service.dart';
+import 'dart:convert';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -17,29 +18,27 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      print('AuthProvider: Attempting login...');
       final response = await _authService.login(email, password);
-      print('AuthProvider: Login response: $response');
-      
-      // Set logged in state if we have tokens
-      if (response['accessToken'] != null) {
-        _isLoggedIn = true;
-      }
-      
+      print('Login response: $response'); // Debug log
+
       _isLoading = false;
       notifyListeners();
+
+      // If 2FA is required, don't store tokens yet
+      if (response['requires2FA'] == true) {
+        return response;
+      }
+
+      // Store tokens and user data only if 2FA is not required or after 2FA verification
+      await _authService.storage.write(key: 'accessToken', value: response['accessToken']);
+      await _authService.storage.write(key: 'refreshToken', value: response['refreshToken']);
+      await _authService.storage.write(key: 'user', value: json.encode(response['user']));
+
       return response;
     } catch (e) {
-      print('AuthProvider: Login error: $e');
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
-      
-      // Check if it's an email verification error
-      if (_error!.contains('verify your email')) {
-        return {'requiresEmailVerification': true};
-      }
-      
       rethrow;
     }
   }

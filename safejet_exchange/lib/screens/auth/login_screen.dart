@@ -255,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
         onPressed: _isLoading
             ? null
             : () async {
-                _login();
+                _handleLogin();
               },
         style: ElevatedButton.styleFrom(
           backgroundColor: SafeJetColors.secondaryHighlight,
@@ -335,7 +335,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _login() async {
+  Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -349,86 +349,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // Handle email verification requirement
-      if (response['requiresEmailVerification'] == true) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => EmailVerificationScreen(
-              email: _emailController.text,
-            ),
-          ),
-        );
-        return;
-      }
-
-      if (authProvider.error != null) {
-        // Set loading to false before showing error and navigating
-        setState(() => _isLoading = false);
-
-        // Check for email verification error
-        if (authProvider.error!.contains('verify your email')) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.white),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Please verify your email to continue',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 4),
-            ),
-          );
-
-          // Add a small delay to allow the snackbar to show
-          await Future.delayed(const Duration(milliseconds: 100));
-
-          // Navigate to email verification screen
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EmailVerificationScreen(
-                email: _emailController.text,
-              ),
-            ),
-          );
-          return;
-        }
-
-        // Show other errors
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    authProvider.error!,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: SafeJetColors.error,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-        return;
-      }
-
       // Check if 2FA is required
       if (response['requires2FA'] == true) {
+        // Navigate to 2FA verification screen
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -437,53 +360,37 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         );
-        return;
+      } else {
+        // No 2FA required, proceed with normal login flow
+        if (response['user']['emailVerified'] == false) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EmailVerificationScreen(
+                email: _emailController.text,
+              ),
+            ),
+          );
+        } else {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            (route) => false,
+          );
+        }
       }
-
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Login successful!'),
-            ],
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      // Navigate to home screen
-      Navigator.pushAndRemoveUntil(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 500),
-        ),
-        (route) => false,
-      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(e.toString()),
-            ],
-          ),
+          content: Text(e.toString()),
           backgroundColor: SafeJetColors.error,
-          behavior: SnackBarBehavior.floating,
         ),
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 } 

@@ -22,12 +22,11 @@ class AuthService {
       print('Raw Response Status Code: ${response.statusCode}');
       print('Raw Response Body: ${response.body}');
 
-      // Accept both 200 and 201 as success
       if (response.statusCode == 200 || response.statusCode == 201) {
         // Handle 2FA case
         if (data['requires2FA'] == true) {
           await storage.write(key: 'tempToken', value: data['tempToken']);
-          return {'requires2FA': true};
+          return {'requires2FA': true, 'email': email};
         }
 
         // Store tokens and user data for successful login
@@ -38,10 +37,6 @@ class AuthService {
         return data;
       }
 
-      // Handle error responses
-      if (data['message']?.contains('verify your email') == true) {
-        await storage.write(key: 'pendingUserId', value: data['userId']);
-      }
       throw data['message'] ?? 'Login failed';
     } catch (e) {
       print('Login error details: $e');
