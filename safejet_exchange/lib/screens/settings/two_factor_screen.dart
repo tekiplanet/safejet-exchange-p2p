@@ -22,6 +22,7 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
   String? _secretKey;
   String? _qrCodeUrl;
   List<String> _backupCodes = [];
+  bool _setupComplete = false;
 
   @override
   void dispose() {
@@ -83,26 +84,29 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      
-      // The response contains both message and backupCodes
       final response = await authProvider.enable2FA(_codeController.text);
       
       // Update backup codes from response
       setState(() {
         _backupCodes = List<String>.from(response['backupCodes']);
+        _isLoading = false;
       });
 
       if (!mounted) return;
 
-      // Only show success message and navigate back if we got backup codes
+      // Show success message but don't navigate back yet
       if (_backupCodes.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('2FA enabled successfully'),
+            content: Text('2FA enabled successfully. Please save your backup codes.'),
             backgroundColor: SafeJetColors.success,
           ),
         );
-        Navigator.pop(context, true);
+        
+        // Change the "Enable 2FA" button to "Done"
+        setState(() {
+          _setupComplete = true;
+        });
       } else {
         throw 'Failed to get backup codes';
       }
@@ -114,8 +118,6 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
           backgroundColor: SafeJetColors.error,
         ),
       );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -344,7 +346,19 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
               if (_currentStep > 0) const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : (_currentStep == 2 ? _handleSetup : details.onStepContinue),
+                  onPressed: _isLoading 
+                    ? null 
+                    : () {
+                        if (_currentStep == 2) {
+                          if (_setupComplete) {
+                            Navigator.pop(context, true);
+                          } else {
+                            _handleSetup();
+                          }
+                        } else {
+                          details.onStepContinue?.call();
+                        }
+                      },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: SafeJetColors.secondaryHighlight,
                     foregroundColor: Colors.white,
@@ -363,7 +377,9 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : Text(_currentStep == 2 ? 'Enable 2FA' : 'Continue'),
+                    : Text(_currentStep == 2 
+                        ? (_setupComplete ? 'Done' : 'Enable 2FA') 
+                        : 'Continue'),
                 ),
               ),
             ],
@@ -505,46 +521,51 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                : SafeJetColors.lightCardBackground,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: TextField(
-            controller: _codeController,
-            decoration: InputDecoration(
-              labelText: 'Enter 6-digit code',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
+        // Only show code input if 2FA is not yet enabled
+        if (!_setupComplete) 
+          Container(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                  : SafeJetColors.lightCardBackground,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: TextField(
+              controller: _codeController,
+              decoration: InputDecoration(
+                labelText: 'Enter 6-digit code',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: Colors.transparent,
               ),
-              filled: true,
-              fillColor: Colors.transparent,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
             ),
-            keyboardType: TextInputType.number,
-            maxLength: 6,
           ),
-        ),
-        // Only show backup codes section if we have backup codes
+
+        // Show backup codes section after successful setup
         if (_backupCodes.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          Text(
-            'Backup Codes',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey[300] : Colors.black87,
+          if (_setupComplete) ...[
+            Text(
+              'Backup Codes',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: isDark ? Colors.grey[300] : Colors.black87,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Save these backup codes in a secure place. You can use them to access your account if you lose your phone.',
-            style: TextStyle(
-              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+            const SizedBox(height: 8),
+            Text(
+              'Save these backup codes in a secure place. You can use them to access your account if you lose your phone.',
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
           _buildBackupCodes(isDark),
         ],
       ],
