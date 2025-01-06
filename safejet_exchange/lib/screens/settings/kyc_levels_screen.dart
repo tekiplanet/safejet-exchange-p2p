@@ -5,9 +5,23 @@ import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import 'identity_verification_screen.dart';
+import '../../providers/kyc_provider.dart';
+import '../../models/kyc_level.dart';
 
-class KYCLevelsScreen extends StatelessWidget {
+class KYCLevelsScreen extends StatefulWidget {
   const KYCLevelsScreen({super.key});
+
+  @override
+  State<KYCLevelsScreen> createState() => _KYCLevelsScreenState();
+}
+
+class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load KYC levels when screen initializes
+    context.read<KYCProvider>().loadKYCLevels();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,156 +107,123 @@ class KYCLevelsScreen extends StatelessWidget {
   }
 
   Widget _buildCurrentLevel(bool isDark) {
-    return FadeInUp(
-      duration: const Duration(milliseconds: 300),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              SafeJetColors.secondaryHighlight,
-              SafeJetColors.secondaryHighlight.withOpacity(0.8),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-            Row(
+    return Consumer<KYCProvider>(
+      builder: (context, kycProvider, child) {
+        final kycDetails = kycProvider.kycDetails;
+        return FadeInUp(
+          duration: const Duration(milliseconds: 300),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  SafeJetColors.secondaryHighlight,
+                  SafeJetColors.secondaryHighlight.withOpacity(0.8),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.stars,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Text(
-                      'Current Level',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.stars,
+                        color: Colors.white,
                       ),
                     ),
-                    Text(
-                      'Level 1',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    const SizedBox(width: 16),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Current Level',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Text(
+                          'Level 1',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
+                const SizedBox(height: 20),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: 0.33,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                    minHeight: 8,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Complete identity verification to reach Level 2',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  'Level ${kycDetails?.currentLevel ?? 0}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 20),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: 0.33,
-                backgroundColor: Colors.white.withOpacity(0.2),
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                minHeight: 8,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Complete identity verification to reach Level 2',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildLevelsList(BuildContext context, bool isDark) {
-    final levels = [
-      {
-        'level': 0,
-        'title': 'Unverified',
-        'status': 'Completed',
-        'requirements': [
-          'Email verification',
-        ],
-        'benefits': [
-          'View market data',
-          'Create watchlist',
-          'Deposit up to \$1,000',
-          'No withdrawals',
-        ],
-        'color': Colors.grey,
-        'isCompleted': true,
-      },
-      {
-        'level': 1,
-        'title': 'Basic',
-        'status': 'Current',
-        'requirements': [
-          'Email verification',
-          'Phone verification'
-        ],
-        'benefits': [
-          'Deposit crypto',
-          'Withdraw up to \$1,000/day',
-          'Basic trading features',
-        ],
-        'color': SafeJetColors.warning,
-        'isCompleted': false,
-      },
-      {
-        'level': 2,
-        'title': 'Verified',
-        'status': 'In Progress',
-        'requirements': ['Identity verification', 'Address proof'],
-        'benefits': [
-          'Withdraw up to \$50,000/day',
-          'P2P trading',
-          'Fiat deposits',
-        ],
-        'color': SafeJetColors.secondaryHighlight,
-        'isCompleted': false,
-      },
-      {
-        'level': 3,
-        'title': 'Advanced',
-        'status': 'Locked',
-        'requirements': ['Advanced verification', 'Video call verification'],
-        'benefits': [
-          'Unlimited withdrawals',
-          'VIP support',
-          'Lower trading fees',
-          'Higher leverage',
-        ],
-        'color': SafeJetColors.success,
-        'isCompleted': false,
-      },
-    ];
+    return Consumer<KYCProvider>(
+      builder: (context, kycProvider, child) {
+        if (kycProvider.loading) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return Column(
-      children: levels.map((level) => FadeInUp(
-        duration: const Duration(milliseconds: 300),
-        delay: Duration(milliseconds: (level['level'] as int) * 100),
-        child: _buildLevelCard(context, level, isDark),
-      )).toList(),
+        final levels = kycProvider.kycLevels;
+        if (levels == null) {
+          return const Center(child: Text('Unable to load KYC levels'));
+        }
+
+        return Column(
+          children: levels.map((level) => FadeInUp(
+            duration: const Duration(milliseconds: 300),
+            delay: Duration(milliseconds: level.level * 100),
+            child: _buildLevelCard(context, level, isDark),
+          )).toList(),
+        );
+      },
     );
   }
 
-  Widget _buildLevelCard(BuildContext context, Map<String, dynamic> level, bool isDark) {
+  Widget _buildLevelCard(BuildContext context, KYCLevel level, bool isDark) {
+    Color levelColor = _getLevelColor(level.level);
+    String status = _getLevelStatus(level.level);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -251,7 +232,7 @@ class KYCLevelsScreen extends StatelessWidget {
             : SafeJetColors.lightCardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: (level['color'] as Color).withOpacity(0.3),
+          color: levelColor.withOpacity(0.3),
         ),
       ),
       child: Column(
@@ -259,7 +240,7 @@ class KYCLevelsScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: (level['color'] as Color).withOpacity(0.1),
+              color: levelColor.withOpacity(0.1),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(16),
               ),
@@ -272,20 +253,20 @@ class KYCLevelsScreen extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: (level['color'] as Color).withOpacity(0.2),
+                    color: levelColor.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    'Level ${level['level']}',
+                    'Level ${level.level}',
                     style: TextStyle(
-                      color: level['color'] as Color,
+                      color: levelColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  level['title'] as String,
+                  level.title,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -298,13 +279,13 @@ class KYCLevelsScreen extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(level['status'] as String).withOpacity(0.2),
+                    color: _getStatusColor(status).withOpacity(0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    level['status'] as String,
+                    status,
                     style: TextStyle(
-                      color: _getStatusColor(level['status'] as String),
+                      color: _getStatusColor(status),
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -326,21 +307,21 @@ class KYCLevelsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...(level['requirements'] as List).map((req) => Padding(
+                ...level.requirements.map((req) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
                     children: [
                       Icon(
-                        level['isCompleted'] as bool
+                        _isLevelCompleted(level.level)
                             ? Icons.check_circle
                             : Icons.radio_button_unchecked,
                         size: 16,
-                        color: level['isCompleted'] as bool
+                        color: _isLevelCompleted(level.level)
                             ? SafeJetColors.success
                             : Colors.grey,
                       ),
                       const SizedBox(width: 8),
-                      Text(req as String),
+                      Text(req),
                     ],
                   ),
                 )),
@@ -353,52 +334,60 @@ class KYCLevelsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                ...(level['benefits'] as List).map((benefit) => Padding(
+                ...level.benefits.map((benefit) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(
                     children: [
                       Icon(
                         Icons.check,
                         size: 16,
-                        color: level['color'] as Color,
+                        color: levelColor,
                       ),
                       const SizedBox(width: 8),
-                      Text(benefit as String),
+                      Text(benefit),
                     ],
                   ),
                 )),
-                if (level['status'] == 'In Progress') ...[
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const IdentityVerificationScreen(),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: level['color'] as Color,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text('Complete Verification'),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Color _getLevelColor(int level) {
+    switch (level) {
+      case 0:
+        return Colors.grey;
+      case 1:
+        return SafeJetColors.warning;
+      case 2:
+        return SafeJetColors.secondaryHighlight;
+      case 3:
+        return SafeJetColors.success;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getLevelStatus(int level) {
+    switch (level) {
+      case 0:
+        return 'Completed';
+      case 1:
+        return 'Current';
+      case 2:
+        return 'In Progress';
+      default:
+        return 'Locked';
+    }
+  }
+
+  bool _isLevelCompleted(int level) {
+    // Get current level from KYC provider
+    final currentLevel = context.read<KYCProvider>().kycDetails?.currentLevel ?? 0;
+    return level <= currentLevel;
   }
 
   Color _getStatusColor(String status) {

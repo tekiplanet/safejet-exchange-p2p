@@ -16,6 +16,7 @@ import '../../../providers/auth_provider.dart';
 import '../../../screens/auth/login_screen.dart';
 import '../../../widgets/two_factor_dialog.dart';
 import '../../../screens/settings/two_factor_manage_screen.dart';
+import '../../../providers/kyc_provider.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -31,6 +32,9 @@ class _ProfileTabState extends State<ProfileTab> {
   void initState() {
     super.initState();
     _check2FAStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<KYCProvider>().loadKYCDetails();
+    });
   }
 
   Future<void> _check2FAStatus() async {
@@ -135,84 +139,89 @@ class _ProfileTabState extends State<ProfileTab> {
               // Profile Header with animation
               FadeInDown(
                 duration: const Duration(milliseconds: 400),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          'JD',
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            color: SafeJetColors.secondaryHighlight,
-                            fontWeight: FontWeight.bold,
+                child: Consumer<KYCProvider>(
+                  builder: (context, kycProvider, child) {
+                    final kycDetails = kycProvider.kycDetails;
+                    return Row(
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
+                            shape: BoxShape.circle,
                           ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'John Doe',
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'john.doe@example.com',
-                            style: TextStyle(
-                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: SafeJetColors.warning.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const KYCLevelsScreen(),
-                                  ),
-                                );
-                              },
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Level 1',
-                                    style: TextStyle(
-                                      color: SafeJetColors.warning,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Icon(
-                                    Icons.arrow_forward_ios,
-                                    size: 12,
-                                    color: SafeJetColors.warning,
-                                  ),
-                                ],
+                          child: Center(
+                            child: Text(
+                              kycDetails?.userDetails.fullName.substring(0, 2).toUpperCase() ?? 'JD',
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                color: SafeJetColors.secondaryHighlight,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ],
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                kycDetails?.userDetails.fullName ?? 'Loading...',
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                kycDetails?.userDetails.email ?? 'Loading...',
+                                style: TextStyle(
+                                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: SafeJetColors.warning.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const KYCLevelsScreen(),
+                                      ),
+                                    );
+                                  },
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Level ${kycDetails?.currentLevel ?? 0}',
+                                        style: TextStyle(
+                                          color: SafeJetColors.warning,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 12,
+                                        color: SafeJetColors.warning,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
 

@@ -8,6 +8,8 @@ import 'screens/onboarding/onboarding_screen.dart';
 import './services/service_locator.dart';
 import 'providers/auth_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'providers/kyc_provider.dart';
+import './services/services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +25,9 @@ void main() async {
           value: themeProvider,
         ),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(
+          create: (context) => KYCProvider(getIt<KYCService>()),
+        ),
       ],
       child: const MyApp(),
     ),

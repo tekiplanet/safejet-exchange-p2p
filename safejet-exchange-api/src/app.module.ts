@@ -7,6 +7,7 @@ import databaseConfig from './config/database.config';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './email/email.module';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { KYCModule } from './kyc/kyc.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     }),
     AuthModule,
     EmailModule,
+    KYCModule,
     ThrottlerModule.forRoot([{
       ttl: 60, // time in seconds
       limit: 10, // number of requests per ttl
