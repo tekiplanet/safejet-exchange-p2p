@@ -146,7 +146,7 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
 
                     try {
                       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                      await authProvider.disable2FA(_code, '2fa');
+                      await authProvider.disable2FA(_code, 'authenticator');
                       
                       if (!mounted) return;
                       Navigator.pop(context, true);

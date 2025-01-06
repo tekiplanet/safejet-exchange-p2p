@@ -326,11 +326,14 @@ class AuthService {
 
   Future<Map<String, dynamic>> disable2FA(String code, String codeType) async {
     try {
+      final token = await storage.read(key: 'accessToken');
+      print('Using token for disable2FA: $token'); // Debug log
+
       final response = await http.post(
         Uri.parse('$baseUrl/2fa/disable'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await storage.read(key: 'accessToken')}',
+          'Authorization': 'Bearer $token',
         },
         body: json.encode({
           'code': code,
@@ -338,8 +341,10 @@ class AuthService {
         }),
       );
 
+      print('Disable 2FA response: ${response.body}'); // Debug log
       final data = json.decode(response.body);
-      if (response.statusCode == 201 || response.statusCode == 200) {
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return data;
       }
 

@@ -439,12 +439,12 @@ export class AuthService {
     };
   }
 
-  async disable2FA(userId: string, disable2FADto: Disable2FADto) {
-    const { code, codeType } = disable2FADto;
+  async disable2FA(userId: string, code: string, codeType: DisableCodeType) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    
-    if (!user || !user.twoFactorEnabled) {
-      throw new BadRequestException('2FA is not enabled for this user');
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException('2FA is not enabled');
     }
 
     let isValid = false;
@@ -456,28 +456,22 @@ export class AuthService {
         encoding: 'base32',
         token: code,
       });
-    } else {
+    } else if (codeType === DisableCodeType.BACKUP) {
       // Verify backup code
-      try {
-        const backupCodes = JSON.parse(user.twoFactorBackupCodes);
-        const codeIndex = backupCodes.indexOf(code);
-        
-        if (codeIndex !== -1) {
-          isValid = true;
-          // Remove used backup code
-          backupCodes.splice(codeIndex, 1);
-          user.twoFactorBackupCodes = JSON.stringify(backupCodes);
-        }
-      } catch (error) {
-        throw new BadRequestException('Invalid backup code format');
+      const backupCodes = JSON.parse(user.twoFactorBackupCodes);
+      isValid = backupCodes.includes(code);
+      if (isValid) {
+        // Remove used backup code
+        const updatedCodes = backupCodes.filter(c => c !== code);
+        user.twoFactorBackupCodes = JSON.stringify(updatedCodes);
       }
     }
 
     if (!isValid) {
-      throw new BadRequestException('Invalid code');
+      throw new UnauthorizedException('Invalid code');
     }
 
-    // Reset 2FA fields
+    // Disable 2FA
     user.twoFactorEnabled = false;
     user.twoFactorSecret = null;
     user.twoFactorBackupCodes = null;
@@ -486,7 +480,7 @@ export class AuthService {
     // Send email notification
     await this.emailService.send2FADisabledEmail(user.email);
 
-    return { message: '2FA has been disabled successfully' };
+    return { message: '2FA disabled successfully' };
   }
 
   async getBackupCodes(userId: string) {

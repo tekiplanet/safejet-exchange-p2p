@@ -47,33 +47,25 @@ class _ProfileTabState extends State<ProfileTab> {
   Future<void> _handle2FAToggle() async {
     if (_is2FAEnabled) {
       // Show 2FA verification dialog when disabling
-      final code = await showDialog<String>(
+      final dialogResult = await showDialog(
         context: context,
         builder: (context) => const TwoFactorDialog(),
       );
-
-      if (code == null) return;  // User cancelled
-
-      try {
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-        await authProvider.disable2FA(code, 'authenticator');
-        setState(() => _is2FAEnabled = false);
-        
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('2FA disabled successfully'),
-            backgroundColor: SafeJetColors.success,
-          ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: SafeJetColors.error,
-          ),
-        );
+      
+      final bool result = dialogResult as bool? ?? false;
+      
+      if (result) {
+        setState(() {
+          _is2FAEnabled = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('2FA has been disabled'),
+              backgroundColor: SafeJetColors.success,
+            ),
+          );
+        }
       }
     } else {
       // Navigate to 2FA setup screen
