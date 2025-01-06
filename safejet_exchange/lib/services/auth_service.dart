@@ -272,4 +272,110 @@ class AuthService {
       rethrow;
     }
   }
+
+  Future<Map<String, dynamic>> generate2FASecret() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/2fa/generate'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await storage.read(key: 'accessToken')}',
+        },
+      );
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200) {
+        return data;
+      }
+
+      throw data['message'] ?? 'Failed to generate 2FA secret';
+    } catch (e) {
+      print('Generate 2FA secret error: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> enable2FA(String code) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/2fa/enable'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await storage.read(key: 'accessToken')}',
+        },
+        body: json.encode({
+          'code': code,
+        }),
+      );
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200) {
+        return data;
+      }
+
+      throw data['message'] ?? 'Failed to enable 2FA';
+    } catch (e) {
+      print('Enable 2FA error: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> disable2FA(String code, String codeType) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/2fa/disable'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await storage.read(key: 'accessToken')}',
+        },
+        body: json.encode({
+          'code': code,
+          'codeType': codeType,
+        }),
+      );
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200) {
+        return data;
+      }
+
+      throw data['message'] ?? 'Failed to disable 2FA';
+    } catch (e) {
+      print('Disable 2FA error: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<String>> getBackupCodes() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/2fa/backup-codes'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await storage.read(key: 'accessToken')}',
+        },
+      );
+
+      final data = json.decode(response.body);
+      if (response.statusCode == 200) {
+        return List<String>.from(data['backupCodes']);
+      }
+
+      throw data['message'] ?? 'Failed to get backup codes';
+    } catch (e) {
+      print('Get backup codes error: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getCurrentUser() async {
+    try {
+      final userJson = await storage.read(key: 'user');
+      if (userJson == null) throw 'No user data found';
+      return json.decode(userJson);
+    } catch (e) {
+      print('Get current user error: $e');
+      rethrow;
+    }
+  }
 } 

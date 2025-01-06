@@ -14,6 +14,7 @@ import '../../../screens/settings/kyc_levels_screen.dart';
 import 'package:animate_do/animate_do.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../screens/auth/login_screen.dart';
+import '../../../widgets/two_factor_dialog.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -23,6 +24,72 @@ class ProfileTab extends StatefulWidget {
 }
 
 class _ProfileTabState extends State<ProfileTab> {
+  bool _is2FAEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check2FAStatus();
+  }
+
+  Future<void> _check2FAStatus() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = await authProvider.getCurrentUser();
+      setState(() {
+        _is2FAEnabled = user['twoFactorEnabled'] ?? false;
+      });
+    } catch (e) {
+      print('Error checking 2FA status: $e');
+    }
+  }
+
+  Future<void> _handle2FAToggle() async {
+    if (_is2FAEnabled) {
+      // Show 2FA verification dialog when disabling
+      final code = await showDialog<String>(
+        context: context,
+        builder: (context) => const TwoFactorDialog(),
+      );
+
+      if (code == null) return;  // User cancelled
+
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        await authProvider.disable2FA(code, 'authenticator');
+        setState(() => _is2FAEnabled = false);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('2FA disabled successfully'),
+            backgroundColor: SafeJetColors.success,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: SafeJetColors.error,
+          ),
+        );
+      }
+    } else {
+      // Navigate to 2FA setup screen
+      final result = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const TwoFactorScreen(),
+        ),
+      );
+
+      if (result == true) {
+        setState(() => _is2FAEnabled = true);
+      }
+    }
+  }
+
   void _handleLogout() async {
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -202,22 +269,9 @@ class _ProfileTabState extends State<ProfileTab> {
                       title: 'Two-Factor Authentication',
                       subtitle: 'Add an extra layer of security',
                       trailing: Switch(
-                        value: false,
-                        onChanged: (value) async {
-                          if (value) {
-                            final enabled = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const TwoFactorScreen(),
-                              ),
-                            );
-                            if (enabled == true) {
-                              // TODO: Update 2FA status in state management
-                            }
-                          } else {
-                            // TODO: Handle 2FA disable flow
-                          }
-                        },
+                        value: _is2FAEnabled,
+                        onChanged: (value) => _handle2FAToggle(),
+                        activeColor: SafeJetColors.secondaryHighlight,
                       ),
                       delay: 200,
                     ),

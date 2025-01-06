@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../providers/auth_provider.dart';
 
 class TwoFactorScreen extends StatefulWidget {
   const TwoFactorScreen({super.key});
@@ -18,22 +19,170 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
   final _codeController = TextEditingController();
   bool _isLoading = false;
   int _currentStep = 0;
-  final String _secretKey = 'ABCD EFGH IJKL MNOP'; // Example secret key
-  final List<String> _backupCodes = [
-    '1234-5678',
-    '2345-6789',
-    '3456-7890',
-    '4567-8901',
-    '5678-9012',
-    '6789-0123',
-    '7890-1234',
-    '8901-2345',
-  ];
+  String? _secretKey;
+  String? _qrCodeUrl;
+  List<String> _backupCodes = [];
 
   @override
   void dispose() {
     _codeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _generate2FASecret() async {
+    setState(() => _isLoading = true);
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final result = await authProvider.generate2FASecret();
+      setState(() {
+        _secretKey = result['secret'];
+        _qrCodeUrl = result['qrCodeUrl'];
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _handleSetup() async {
+    if (_codeController.text.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 6-digit code'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.enable2FA(_codeController.text);
+      
+      // Get backup codes after successful 2FA setup
+      _backupCodes = await authProvider.getBackupCodes();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('2FA enabled successfully'),
+          backgroundColor: SafeJetColors.success,
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _buildQRStep(bool isDark) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_qrCodeUrl == null || _secretKey == null) {
+      return Center(
+        child: ElevatedButton(
+          onPressed: _generate2FASecret,
+          child: const Text('Generate 2FA Secret'),
+        ),
+      );
+    }
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final qrSize = screenWidth * 0.6;
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: QrImageView(
+              data: _qrCodeUrl!,
+              version: QrVersions.auto,
+              size: qrSize,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Secret Key',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.grey[300] : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                  : SafeJetColors.lightCardBackground,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                SelectableText(
+                  _secretKey!,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _secretKey != null ? () {
+                    Clipboard.setData(ClipboardData(text: _secretKey!));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Secret key copied to clipboard'),
+                        backgroundColor: SafeJetColors.success,
+                      ),
+                    );
+                  } : null,
+                  icon: const Icon(Icons.copy),
+                  label: const Text('Copy Key'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -120,10 +269,14 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
   Widget _buildStepper(bool isDark) {
     return Stepper(
       currentStep: _currentStep,
-      onStepContinue: () {
-        setState(() {
-          if (_currentStep < 2) _currentStep++;
-        });
+      onStepContinue: () async {
+        if (_currentStep == 0) {
+          // When moving to step 2, generate the secret
+          setState(() => _currentStep++);
+          await _generate2FASecret();
+        } else if (_currentStep < 2) {
+          setState(() => _currentStep++);
+        }
       },
       onStepCancel: () {
         setState(() {
@@ -242,85 +395,6 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
     );
   }
 
-  Widget _buildQRStep(bool isDark) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final qrSize = screenWidth * 0.6; // Make QR code 60% of screen width
-
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: QrImageView(
-              data: 'otpauth://totp/SafeJet:user@example.com?secret=$_secretKey&issuer=SafeJet',
-              version: QrVersions.auto,
-              size: qrSize,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Secret Key',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.grey[300] : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                  : SafeJetColors.lightCardBackground,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                SelectableText(
-                  _secretKey,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: _secretKey));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Secret key copied to clipboard'),
-                        backgroundColor: SafeJetColors.success,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.copy),
-                  label: const Text('Copy Key'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBackupCodes(bool isDark) {
     return Container(
       width: double.infinity,
@@ -428,43 +502,5 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
         _buildBackupCodes(isDark),
       ],
     );
-  }
-
-  void _handleSetup() async {
-    if (_codeController.text.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid 6-digit code'),
-          backgroundColor: SafeJetColors.error,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // TODO: Implement 2FA verification logic
-      await Future.delayed(const Duration(seconds: 2)); // Simulate API call
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('2FA enabled successfully'),
-          backgroundColor: SafeJetColors.success,
-        ),
-      );
-      Navigator.pop(context, true);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: SafeJetColors.error,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 } 
