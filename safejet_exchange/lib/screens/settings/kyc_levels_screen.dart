@@ -308,11 +308,11 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
                   child: Row(
                     children: [
                       Icon(
-                        _isLevelCompleted(level.level)
+                        _isRequirementCompleted(req)
                             ? Icons.check_circle
                             : Icons.radio_button_unchecked,
                         size: 16,
-                        color: _isLevelCompleted(level.level)
+                        color: _isRequirementCompleted(req)
                             ? SafeJetColors.success
                             : Colors.grey,
                       ),
@@ -397,6 +397,23 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         return Colors.grey;
       default:
         return SafeJetColors.success;
+    }
+  }
+
+  bool _isRequirementCompleted(String requirement) {
+    final kycDetails = context.read<KYCProvider>().kycDetails;
+    if (kycDetails == null) return false;
+
+    switch (requirement.toLowerCase()) {
+      case 'email verification':
+        return kycDetails.userDetails.emailVerified;
+      case 'phone verification':
+        return kycDetails.userDetails.phoneVerified;
+      case 'identity verification':
+      case 'address proof':
+        return kycDetails.kycData?['identityVerified'] == true;
+      default:
+        return false;
     }
   }
 } 
