@@ -30,16 +30,31 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
   }
 
   Future<void> _generate2FASecret() async {
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+    
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final result = await authProvider.generate2FASecret();
-      setState(() {
-        _secretKey = result['secret'];
-        _qrCodeUrl = result['qrCodeUrl'];
-        _isLoading = false;
-      });
+      
+      print('2FA Secret result: $result');
+      
+      if (mounted) {
+        setState(() {
+          _secretKey = result['secret'];
+          _qrCodeUrl = result['qrCode'];
+          _isLoading = false;
+        });
+        
+        // Force rebuild
+        setState(() {});
+        
+        print('Updated state - Secret: $_secretKey');
+        print('Updated state - QR URL: $_qrCodeUrl');
+      }
     } catch (e) {
+      print('Generate 2FA secret error: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -101,7 +116,10 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
     if (_qrCodeUrl == null || _secretKey == null) {
       return Center(
         child: ElevatedButton(
-          onPressed: _generate2FASecret,
+          onPressed: () {
+            print('Generating 2FA Secret...');
+            _generate2FASecret();
+          },
           child: const Text('Generate 2FA Secret'),
         ),
       );
@@ -109,6 +127,9 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final qrSize = screenWidth * 0.6;
+
+    // Create otpauth URL
+    final otpauthUrl = 'otpauth://totp/SafeJet:${_secretKey}?secret=${_secretKey}&issuer=SafeJet';
 
     return SingleChildScrollView(
       child: Column(
@@ -121,9 +142,11 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
               borderRadius: BorderRadius.circular(24),
             ),
             child: QrImageView(
-              data: _qrCodeUrl!,
+              data: otpauthUrl,  // Use otpauth URL instead of base64 image
               version: QrVersions.auto,
               size: qrSize,
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
             ),
           ),
           const SizedBox(height: 24),
