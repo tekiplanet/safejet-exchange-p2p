@@ -173,17 +173,36 @@ class KYCLevelsScreen extends StatelessWidget {
   Widget _buildLevelsList(BuildContext context, bool isDark) {
     final levels = [
       {
+        'level': 0,
+        'title': 'Unverified',
+        'status': 'Completed',
+        'requirements': [
+          'Email verification',
+        ],
+        'benefits': [
+          'View market data',
+          'Create watchlist',
+          'Deposit up to \$1,000',
+          'No withdrawals',
+        ],
+        'color': Colors.grey,
+        'isCompleted': true,
+      },
+      {
         'level': 1,
         'title': 'Basic',
         'status': 'Current',
-        'requirements': ['Email verification', 'Phone verification'],
+        'requirements': [
+          'Email verification',
+          'Phone verification'
+        ],
         'benefits': [
           'Deposit crypto',
           'Withdraw up to \$1,000/day',
           'Basic trading features',
         ],
         'color': SafeJetColors.warning,
-        'isCompleted': true,
+        'isCompleted': false,
       },
       {
         'level': 2,

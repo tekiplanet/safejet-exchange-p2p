@@ -327,7 +327,7 @@ class _ProfileTabState extends State<ProfileTab> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const IdentityVerificationScreen(),
+                      builder: (context) => const KYCLevelsScreen(),
                     ),
                   );
                 },
