@@ -20,6 +20,7 @@ import { DisableCodeType } from './dto/disable-2fa.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { LoginTrackerService } from './login-tracker.service';
 import { Request } from 'express';
+import { KYCLevel } from './entities/kyc-level.entity';
 
 @Injectable()
 export class AuthService {
@@ -28,6 +29,8 @@ export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(KYCLevel)
+    private readonly kycLevelRepository: Repository<KYCLevel>,
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
     private readonly loginTrackerService: LoginTrackerService,
@@ -174,9 +177,15 @@ export class AuthService {
       throw new BadRequestException('Incorrect verification code. Please try again.');
     }
 
+    // Get the level 0 KYC level
+    const unverifiedKycLevel = await this.kycLevelRepository.findOne({
+      where: { level: 0 }
+    });
+
     user.emailVerified = true;
     user.verificationCode = null;
     user.verificationCodeExpires = null;
+    user.kycLevelDetails = unverifiedKycLevel;  // Set the KYC level relationship
     await this.userRepository.save(user);
 
     // Send welcome email after successful verification

@@ -70,7 +70,7 @@ export class User {
   kycLevel: number;
 
   @ManyToOne(() => KYCLevel)
-  @JoinColumn({ name: 'kyc_level_id' })
+  @JoinColumn({ name: 'kycLevelId' })
   kycLevelDetails: KYCLevel;
 
   @Column('json', { nullable: true })

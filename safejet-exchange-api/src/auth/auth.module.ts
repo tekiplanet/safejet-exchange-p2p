@@ -8,10 +8,11 @@ import { User } from './entities/user.entity';
 import { EmailModule } from '../email/email.module';
 import { JwtStrategy } from './jwt.strategy';
 import { LoginTrackerService } from './login-tracker.service';
+import { KYCLevel } from './entities/kyc-level.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, KYCLevel]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
