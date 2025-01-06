@@ -491,17 +491,17 @@ export class AuthService {
     }
 
     if (!user.twoFactorBackupCodes) {
-      throw new BadRequestException('No backup codes found. Please disable and re-enable 2FA to generate new backup codes.');
+      throw new BadRequestException('No backup codes found');
     }
 
     try {
-      const backupCodes = JSON.parse(user.twoFactorBackupCodes);
-      if (!Array.isArray(backupCodes) || backupCodes.length === 0) {
-        throw new BadRequestException('Invalid backup codes format');
-      }
-      return { backupCodes };
+      console.log('Retrieving backup codes for user:', userId);
+      const decryptedCodes = this.decryptBackupCodes(user.twoFactorBackupCodes);
+      console.log('Successfully decrypted backup codes');
+      return { backupCodes: decryptedCodes };
     } catch (error) {
-      throw new BadRequestException('Unable to retrieve backup codes. Please disable and re-enable 2FA to generate new backup codes.');
+      console.error('Error retrieving backup codes:', error);
+      throw new BadRequestException('Unable to retrieve backup codes');
     }
   }
 

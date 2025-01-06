@@ -357,14 +357,20 @@ class AuthService {
 
   Future<Map<String, dynamic>> getBackupCodes() async {
     try {
+      final token = await storage.read(key: 'accessToken');
+      print('Getting backup codes with token: $token'); // Debug log
+
       final response = await http.get(
         Uri.parse('$baseUrl/2fa/backup-codes'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await storage.read(key: 'accessToken')}',
+          'Authorization': 'Bearer $token',
         },
       );
 
+      print('Backup codes response status: ${response.statusCode}'); // Debug log
+      print('Backup codes response body: ${response.body}'); // Debug log
+      
       final data = json.decode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
         return data;
