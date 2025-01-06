@@ -7,6 +7,7 @@ import '../../widgets/p2p_app_bar.dart';
 import 'identity_verification_screen.dart';
 import '../../providers/kyc_provider.dart';
 import '../../models/kyc_level.dart';
+import 'phone_verification_screen.dart';
 
 class KYCLevelsScreen extends StatefulWidget {
   const KYCLevelsScreen({super.key});
@@ -219,6 +220,8 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
   Widget _buildLevelCard(BuildContext context, KYCLevel level, bool isDark) {
     Color levelColor = _getLevelColor(level.level);
     String status = _getLevelStatus(level.level);
+    final currentLevel = context.read<KYCProvider>().kycDetails?.currentLevel ?? 0;
+    final isNextLevel = level.level == currentLevel + 1;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -344,6 +347,38 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
                     ],
                   ),
                 )),
+                if (isNextLevel) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final nextStep = _getNextVerificationStep(level.level);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => nextStep,
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: levelColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Complete Verification',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -414,6 +449,17 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         return kycDetails.kycData?['identityVerified'] == true;
       default:
         return false;
+    }
+  }
+
+  Widget _getNextVerificationStep(int level) {
+    switch (level) {
+      case 1:
+        return const PhoneVerificationScreen();  // For Level 1
+      case 2:
+        return const IdentityVerificationScreen();  // For Level 2
+      default:
+        return const IdentityVerificationScreen();
     }
   }
 } 
