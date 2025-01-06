@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { KYCLevel } from './kyc-level.entity';
 
 @Entity('users')
 export class User {
@@ -64,4 +65,24 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ default: 0 })
+  kycLevel: number;
+
+  @ManyToOne(() => KYCLevel)
+  @JoinColumn({ name: 'kyc_level_id' })
+  kycLevelDetails: KYCLevel;
+
+  @Column('json', { nullable: true })
+  kycData: {
+    phoneVerified?: boolean;
+    identityVerified?: boolean;
+    addressVerified?: boolean;
+    videoVerified?: boolean;
+    documents?: {
+      idCard?: string;
+      proofOfAddress?: string;
+      selfie?: string;
+    };
+  };
 } 

@@ -18,6 +18,11 @@ import { ThrottlerModule } from '@nestjs/throttler';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         ...configService.get('database'),
+        logging: true,
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        migrations: ['dist/src/migrations/*.js'],
+        migrationsRun: false,
+        migrationsTableName: 'migrations'
       }),
     }),
     AuthModule,
