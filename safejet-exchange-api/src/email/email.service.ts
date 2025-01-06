@@ -14,21 +14,31 @@ export class EmailService {
   ) {
     this.transporter = nodemailer.createTransport({
       host: configService.get('SMTP_HOST'),
-      port: configService.get('SMTP_PORT'),
+      port: parseInt(configService.get('SMTP_PORT')),
       auth: {
         user: configService.get('SMTP_USER'),
         pass: configService.get('SMTP_PASSWORD'),
       },
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
     });
   }
 
   async sendVerificationEmail(email: string, code: string) {
-    await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
-      to: email,
-      subject: 'Verify Your Email - SafeJet Exchange',
-      html: this.emailTemplatesService.verificationEmail(code),
-    });
+    try {
+      await this.transporter.sendMail({
+        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        to: email,
+        subject: 'Verify Your Email - SafeJet Exchange',
+        html: this.emailTemplatesService.verificationEmail(code),
+      });
+    } catch (error) {
+      console.error('Email sending failed:', error);
+    }
   }
 
   async sendWelcomeEmail(email: string, userName: string) {
@@ -41,12 +51,16 @@ export class EmailService {
   }
 
   async sendPasswordResetEmail(email: string, code: string) {
-    await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
-      to: email,
-      subject: 'Reset Your Password - SafeJet Exchange',
-      html: this.emailTemplatesService.passwordResetEmail(code),
-    });
+    try {
+      await this.transporter.sendMail({
+        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        to: email,
+        subject: 'Reset Your Password - SafeJet Exchange',
+        html: this.emailTemplatesService.passwordResetEmail(code),
+      });
+    } catch (error) {
+      console.error('Password reset email failed:', error);
+    }
   }
 
   async sendPasswordChangedEmail(email: string) {

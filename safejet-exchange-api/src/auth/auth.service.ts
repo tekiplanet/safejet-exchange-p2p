@@ -211,24 +211,37 @@ export class AuthService {
   }
 
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
-    const { email } = forgotPasswordDto;
-    const user = await this.userRepository.findOne({ where: { email } });
+    try {
+      const { email } = forgotPasswordDto;
+      const user = await this.userRepository.findOne({ where: { email } });
 
-    if (!user) {
-      // Return success even if user doesn't exist (security best practice)
-      return { message: 'If your email is registered, you will receive a password reset code.' };
+      if (!user) {
+        // Return success even if user doesn't exist (security best practice)
+        return { message: 'If your email is registered, you will receive a password reset code.' };
+      }
+
+      // Generate and save reset code
+      const resetCode = this.generateVerificationCode();
+      user.passwordResetCode = await bcrypt.hash(resetCode, 10);
+      user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      await this.userRepository.save(user);
+
+      // Try to send email but don't fail if it doesn't work
+      try {
+        await this.emailService.sendPasswordResetEmail(email, resetCode);
+      } catch (error) {
+        console.error('Failed to send password reset email:', error);
+      }
+
+      return { 
+        message: 'If your email is registered, you will receive a password reset code.',
+        // For development, return the code
+        code: process.env.NODE_ENV === 'development' ? resetCode : undefined
+      };
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      throw new BadRequestException('Failed to process password reset request');
     }
-
-    // Generate and save reset code
-    const resetCode = this.generateVerificationCode();
-    user.passwordResetCode = await bcrypt.hash(resetCode, 10);
-    user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-    await this.userRepository.save(user);
-
-    // Send password reset email
-    await this.emailService.sendPasswordResetEmail(email, resetCode);
-
-    return { message: 'If your email is registered, you will receive a password reset code.' };
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {

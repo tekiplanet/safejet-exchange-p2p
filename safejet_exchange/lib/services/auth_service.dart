@@ -137,7 +137,7 @@ class AuthService {
       final data = json.decode(response.body);
       print('Backend Response: $data');
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         // Store tokens
         await storage.write(key: 'accessToken', value: data['accessToken']);
         await storage.write(key: 'refreshToken', value: data['refreshToken']);
@@ -168,7 +168,7 @@ class AuthService {
 
       final data = json.decode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         return data;
       } else {
         throw data['message'] ?? 'Failed to resend verification code';
@@ -199,7 +199,7 @@ class AuthService {
 
       final data = json.decode(response.body);
 
-      if (response.statusCode == 200) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         // Store the new tokens after successful 2FA
         await storage.write(key: 'accessToken', value: data['accessToken']);
         await storage.write(key: 'refreshToken', value: data['refreshToken']);
@@ -220,6 +220,56 @@ class AuthService {
         throw e;
       }
       throw 'Network error. Please check your connection.';
+    }
+  }
+
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+        }),
+      );
+
+      final data = json.decode(response.body);
+      print('Forgot password response: $data');
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return data;
+      }
+
+      throw data['message'] ?? 'Failed to send reset code';
+    } catch (e) {
+      print('Forgot password error: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> resetPassword(String email, String code, String newPassword) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'email': email,
+          'code': code,
+          'newPassword': newPassword,
+        }),
+      );
+
+      final data = json.decode(response.body);
+      print('Reset password response: $data');
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        return data;
+      }
+
+      throw data['message'] ?? 'Failed to reset password';
+    } catch (e) {
+      print('Reset password error: $e');
+      rethrow;
     }
   }
 } 
