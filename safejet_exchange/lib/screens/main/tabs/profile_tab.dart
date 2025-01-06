@@ -280,7 +280,7 @@ class _ProfileTabState extends State<ProfileTab> {
                             ),
                           );
                           
-                          if (disabled == true) {
+                          if (disabled == true && mounted) {
                             setState(() => _is2FAEnabled = false);
                           }
                         } else {

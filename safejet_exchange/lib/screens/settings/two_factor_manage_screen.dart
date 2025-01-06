@@ -70,6 +70,18 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
     );
 
     if (result == true && mounted) {
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('2FA has been disabled successfully'),
+          backgroundColor: SafeJetColors.success,
+        ),
+      );
+      
+      // Add a small delay to allow the snackbar to be visible
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (!mounted) return;
       Navigator.pop(context, true); // Return true to indicate 2FA was disabled
     }
   }
