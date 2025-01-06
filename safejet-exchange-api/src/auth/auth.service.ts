@@ -216,27 +216,28 @@ export class AuthService {
       const user = await this.userRepository.findOne({ where: { email } });
 
       if (!user) {
-        // Return success even if user doesn't exist (security best practice)
         return { message: 'If your email is registered, you will receive a password reset code.' };
       }
 
       // Generate and save reset code
       const resetCode = this.generateVerificationCode();
+      console.log('Generated reset code:', resetCode); // Add this for debugging
+
       user.passwordResetCode = await bcrypt.hash(resetCode, 10);
-      user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
       await this.userRepository.save(user);
 
-      // Try to send email but don't fail if it doesn't work
       try {
         await this.emailService.sendPasswordResetEmail(email, resetCode);
+        console.log('Reset email sent successfully'); // Add this for debugging
       } catch (error) {
         console.error('Failed to send password reset email:', error);
       }
 
       return { 
         message: 'If your email is registered, you will receive a password reset code.',
-        // For development, return the code
-        code: process.env.NODE_ENV === 'development' ? resetCode : undefined
+        // Always return code in development for testing
+        code: resetCode // Remove the condition
       };
     } catch (error) {
       console.error('Forgot password error:', error);

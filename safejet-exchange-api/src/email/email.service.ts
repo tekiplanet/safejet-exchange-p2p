@@ -9,22 +9,36 @@ export class EmailService {
   private transporter;
 
   constructor(
-    private configService: ConfigService,
-    private emailTemplatesService: EmailTemplatesService,
+    private readonly configService: ConfigService,
+    private readonly emailTemplatesService: EmailTemplatesService,
   ) {
+    // Log the SMTP config for debugging
+    console.log('SMTP Config:', {
+      host: this.configService.get<string>('SMTP_HOST'),
+      port: this.configService.get<number>('SMTP_PORT'),
+      user: this.configService.get<string>('SMTP_USER'),
+    });
+
     this.transporter = nodemailer.createTransport({
-      host: configService.get('SMTP_HOST'),
-      port: parseInt(configService.get('SMTP_PORT')),
+      host: this.configService.get<string>('SMTP_HOST'),
+      port: this.configService.get<number>('SMTP_PORT'),
+      secure: false,
       auth: {
-        user: configService.get('SMTP_USER'),
-        pass: configService.get('SMTP_PASSWORD'),
+        user: this.configService.get<string>('SMTP_USER'),
+        pass: this.configService.get<string>('SMTP_PASSWORD')
       },
       tls: {
         rejectUnauthorized: false
-      },
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 5000,
+      }
+    });
+
+    // Verify connection
+    this.transporter.verify((error, success) => {
+      if (error) {
+        console.error('SMTP connection error:', error);
+      } else {
+        console.log('SMTP server is ready');
+      }
     });
   }
 
@@ -52,14 +66,16 @@ export class EmailService {
 
   async sendPasswordResetEmail(email: string, code: string) {
     try {
-      await this.transporter.sendMail({
-        from: '"SafeJet Exchange" <noreply@safejet.com>',
+      const info = await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: 'Reset Your Password - SafeJet Exchange',
         html: this.emailTemplatesService.passwordResetEmail(code),
       });
+      console.log('Message sent: %s', info.messageId);
     } catch (error) {
       console.error('Password reset email failed:', error);
+      // Don't throw, just log the error
     }
   }
 
