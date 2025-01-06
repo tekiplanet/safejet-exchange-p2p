@@ -368,12 +368,15 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
   }
 
   String _getLevelStatus(int level) {
+    // Get current level from KYC provider
+    final currentLevel = context.read<KYCProvider>().kycDetails?.currentLevel ?? 0;
+    
     switch (level) {
       case 0:
         return 'Completed';
-      case 1:
-        return 'Current';
-      case 2:
+      case _ when level <= currentLevel:
+        return 'Completed';
+      case _ when level == currentLevel + 1:
         return 'In Progress';
       default:
         return 'Locked';
@@ -388,8 +391,6 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'Current':
-        return SafeJetColors.warning;
       case 'In Progress':
         return SafeJetColors.secondaryHighlight;
       case 'Locked':
