@@ -355,7 +355,7 @@ class AuthService {
     }
   }
 
-  Future<List<String>> getBackupCodes() async {
+  Future<Map<String, dynamic>> getBackupCodes() async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/2fa/backup-codes'),
@@ -366,8 +366,8 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return List<String>.from(data['backupCodes']);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return data;
       }
 
       throw data['message'] ?? 'Failed to get backup codes';

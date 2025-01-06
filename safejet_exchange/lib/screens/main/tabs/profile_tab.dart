@@ -15,6 +15,7 @@ import 'package:animate_do/animate_do.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../screens/auth/login_screen.dart';
 import '../../../widgets/two_factor_dialog.dart';
+import '../../../screens/settings/two_factor_manage_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -259,12 +260,33 @@ class _ProfileTabState extends State<ProfileTab> {
                       context,
                       icon: Icons.security,
                       title: 'Two-Factor Authentication',
-                      subtitle: 'Add an extra layer of security',
-                      trailing: Switch(
-                        value: _is2FAEnabled,
-                        onChanged: (value) => _handle2FAToggle(),
-                        activeColor: SafeJetColors.secondaryHighlight,
-                      ),
+                      subtitle: _is2FAEnabled ? 'Enabled' : 'Disabled',
+                      trailing: _is2FAEnabled 
+                        ? Icon(
+                            Icons.chevron_right,
+                            color: isDark ? Colors.grey[600] : Colors.grey[400],
+                          )
+                        : Switch(
+                            value: false,
+                            onChanged: (value) => _handle2FAToggle(),
+                            activeColor: SafeJetColors.secondaryHighlight,
+                          ),
+                      onTap: () async {
+                        if (_is2FAEnabled) {
+                          final disabled = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const TwoFactorManageScreen(),
+                            ),
+                          );
+                          
+                          if (disabled == true) {
+                            setState(() => _is2FAEnabled = false);
+                          }
+                        } else {
+                          _handle2FAToggle();
+                        }
+                      },
                       delay: 200,
                     ),
                   ],

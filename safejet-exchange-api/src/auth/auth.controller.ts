@@ -71,11 +71,15 @@ export class AuthController {
 
   @Post('2fa/disable')
   @UseGuards(JwtAuthGuard)
-  disable2FA(
+  async disable2FA(
     @GetUser() user: User,
     @Body() disable2FADto: Disable2FADto,
   ) {
-    return this.authService.disable2FA(user.id, disable2FADto);
+    return this.authService.disable2FA(
+      user.id, 
+      disable2FADto.code,
+      disable2FADto.codeType
+    );
   }
 
   @Get('2fa/backup-codes')

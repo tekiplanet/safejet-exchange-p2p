@@ -233,10 +233,10 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final codes = await _authService.getBackupCodes();
+      final result = await _authService.getBackupCodes();
       _isLoading = false;
       notifyListeners();
-      return codes;
+      return List<String>.from(result['backupCodes']);
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
