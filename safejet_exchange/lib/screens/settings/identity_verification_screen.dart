@@ -1031,39 +1031,24 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   void _handleContinue() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Debug log the data being sent
-    print('Submitting identity details:');
-    print('First Name: ${_firstNameController.text}');
-    print('Last Name: ${_lastNameController.text}');
-    print('Date of Birth: ${_dobController.text}');
-    print('Address: ${_addressController.text}');
-    print('Country: $_selectedCountry');
-    print('State: $_selectedState');
-    print('City: $_selectedCity');
-
     try {
       setState(() => _isLoading = true);
 
       await context.read<KYCProvider>().submitIdentityDetails(
         firstName: _firstNameController.text,
         lastName: _lastNameController.text,
-        dateOfBirth: _formatDateForApi(_dobController.text),  // Format date properly
+        dateOfBirth: _formatDateForApi(_dobController.text),
         address: _addressController.text,
         city: _selectedCity!,
         state: _selectedState!,
         country: _selectedCountry!,
       );
 
-      // Show success message
+      // Start Onfido verification after successful submission
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Identity details saved successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
+        await context.read<KYCProvider>().startDocumentVerification();
       }
+
     } catch (e) {
       print('Error submitting identity details: $e');
       if (mounted) {

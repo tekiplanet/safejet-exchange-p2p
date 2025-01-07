@@ -177,14 +177,32 @@ class KYCService {
 
   Future<void> startDocumentVerification() async {
     try {
+      print('Starting document verification...');
       final headers = await _getAuthHeaders();
-      final response = await _dio.post(
-        '/kyc/onfido-token',
+      final userResponse = await _dio.get(
+        '/auth/me',
         options: Options(headers: headers),
       );
       
+      final userData = userResponse.data;
+      final response = await _dio.post(
+        '/kyc/onfido-token',
+        data: {
+          'firstName': userData['firstName'] ?? '',
+          'lastName': userData['lastName'] ?? '',
+          'email': userData['email'] ?? '',
+          'country': _getOnfidoCountryCode(userData['country'] ?? ''),
+          'type': 'document_verification',
+          'returnUrl': 'safejetexchange://onfido-callback',
+        },
+        options: Options(headers: headers),
+      );
+      
+      print('Onfido token response: ${response.data}');
+      
       if (response.statusCode == 200) {
         final sdkToken = response.data['token'];
+        print('Got SDK token: $sdkToken');
         
         _onfido = Onfido(
           sdkToken: sdkToken,
@@ -196,23 +214,31 @@ class KYCService {
         final results = await _onfido!.start(
           flowSteps: FlowSteps(
             welcome: true,
-            documentCapture: DocumentCapture(
-              documentType: DocumentType.nationalIdentityCard,
+            documentCapture: DocumentCapture(),
+            faceCapture: FaceCapture.photo(
+              withIntroScreen: true,
             ),
           ),
         );
         
+        print('Onfido verification results: $results');
+        
         if (results.isNotEmpty) {
-          print('Document verification completed successfully');
+          print('KYC verification completed successfully');
           return;
         }
         
-        throw Exception('Document verification failed or was cancelled');
+        throw Exception('KYC verification failed or was cancelled');
       }
       
       throw Exception('Failed to get Onfido token');
     } catch (e) {
       print('Document verification error: $e');
+      if (e is DioException) {
+        print('Response data: ${e.response?.data}');
+        print('Response status: ${e.response?.statusCode}');
+        print('Response headers: ${e.response?.headers}');
+      }
       rethrow;
     }
   }
@@ -257,5 +283,17 @@ class KYCService {
       print('Address verification error: $e');
       rethrow;
     }
+  }
+
+  // Helper function to convert country names to Onfido country codes
+  String _getOnfidoCountryCode(String country) {
+    // Map of country names to Onfido country codes
+    final countryMap = {
+      'Nigeria': 'NGA',
+      'United States': 'USA',
+      'United Kingdom': 'GBR',
+      // Add more mappings as needed
+    };
+    return countryMap[country] ?? country;
   }
 }

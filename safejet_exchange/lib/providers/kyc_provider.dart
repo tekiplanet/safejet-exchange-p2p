@@ -129,6 +129,9 @@ class KYCProvider extends ChangeNotifier {
 
       await _kycService.startDocumentVerification();
       await loadKYCDetails();
+
+      _error = null;
+      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
