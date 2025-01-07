@@ -113,3 +113,4 @@ flutter:
     - .env
     - assets/images/
     - assets/animations/
+    - packages/country_state_city_picker/lib/assets/

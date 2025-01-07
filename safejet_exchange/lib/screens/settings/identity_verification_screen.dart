@@ -10,6 +10,8 @@ import '../../widgets/verification_status_card.dart';
 import '../../providers/kyc_provider.dart';
 import '../../models/kyc_details.dart';
 import 'package:country_picker/country_picker.dart';
+import '../../providers/auth_provider.dart';
+import 'dart:convert';
 
 class IdentityVerificationScreen extends StatefulWidget {
   const IdentityVerificationScreen({super.key});
@@ -42,10 +44,31 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     'Driver\'s License',
   ];
 
+  // Add map to store country data
+  List<dynamic>? _countryData;
+
   @override
   void initState() {
     super.initState();
     _loadKYCDetails();
+    _loadUserDetails();
+    _loadCountryData();
+  }
+
+  Future<void> _loadUserDetails() async {
+    try {
+      final provider = context.read<AuthProvider>();
+      final user = await provider.getCurrentUser();
+      final fullName = user['fullName'] as String;
+      final names = fullName.split(' ');
+      
+      setState(() {
+        _firstNameController.text = names.first;
+        _lastNameController.text = names.length > 1 ? names.sublist(1).join(' ') : '';
+      });
+    } catch (e) {
+      print('Error loading user details: $e');
+    }
   }
 
   Future<void> _loadKYCDetails() async {
@@ -54,6 +77,23 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     setState(() {
       kycDetails = provider.kycDetails;
     });
+  }
+
+  Future<void> _loadCountryData() async {
+    try {
+      print('Loading country data...');
+      final String data = await DefaultAssetBundle.of(context)
+          .loadString('packages/country_state_city_picker/lib/assets/country.json');
+      
+      final decoded = json.decode(data) as List<dynamic>;
+      print('Decoded data structure: ${decoded.runtimeType}');
+      
+      setState(() {
+        _countryData = decoded;
+      });
+    } catch (e, stackTrace) {
+      print('Error loading country data: $e\nStack trace: $stackTrace');
+    }
   }
 
   @override
@@ -397,21 +437,50 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   void _showStatesPicker() {
     if (_selectedCountry == null) return;
     
+    final states = _getStates(_selectedCountry!);
+    if (states.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No states found for selected country'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
-      builder: (context) => ListView.builder(
-        itemCount: _states.length,
-        itemBuilder: (context, index) => ListTile(
-          title: Text(_states[index]),
-          onTap: () {
-            setState(() {
-              _selectedState = _states[index];
-              _selectedCity = null;
-              _cities = _getCities(_selectedCountry!, _states[index]);
-            });
-            Navigator.pop(context);
-          },
-        ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Select State',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          const Divider(),
+          Expanded(
+            child: ListView.builder(
+              itemCount: states.length,
+              itemBuilder: (context, index) => ListTile(
+                title: Text(states[index]),
+                onTap: () {
+                  setState(() {
+                    _selectedState = states[index];
+                    _selectedCity = null;
+                    _cities = _getCities(_selectedCountry!, states[index]);
+                  });
+                  Navigator.pop(context);
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -437,15 +506,75 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   }
 
   List<String> _getStates(String country) {
-    // Return list of states for the selected country
-    // You can use a data source or API for this
-    return ['State 1', 'State 2', 'State 3']; // Replace with real data
+    try {
+      if (_countryData == null) {
+        print('Country data is null');
+        return [];
+      }
+      
+      print('Getting states for country: $country');
+      
+      final countryData = _countryData!.firstWhere(
+        (c) => c['name'] == country,
+        orElse: () => null,
+      );
+      
+      if (countryData == null) {
+        print('No data found for country: $country');
+        return [];
+      }
+      
+      final states = (countryData['state'] as List)
+          .map((state) => state['name'].toString())
+          .toList();
+      
+      print('Found states: $states');
+      return states;
+    } catch (e, stackTrace) {
+      print('Error getting states: $e\nStack trace: $stackTrace');
+      return [];
+    }
   }
 
   List<String> _getCities(String country, String state) {
-    // Return list of cities for the selected state
-    // You can use a data source or API for this
-    return ['City 1', 'City 2', 'City 3']; // Replace with real data
+    try {
+      if (_countryData == null) {
+        print('Country data is null');
+        return [];
+      }
+      
+      print('Getting cities for country: $country, state: $state');
+      
+      final countryData = _countryData!.firstWhere(
+        (c) => c['name'] == country,
+        orElse: () => null,
+      );
+      
+      if (countryData == null) {
+        print('No data found for country: $country');
+        return [];
+      }
+      
+      final stateData = (countryData['state'] as List).firstWhere(
+        (s) => s['name'] == state,
+        orElse: () => null,
+      );
+      
+      if (stateData == null) {
+        print('No data found for state: $state');
+        return [];
+      }
+      
+      final cities = (stateData['city'] as List)
+          .map((city) => city['name'].toString())
+          .toList();
+      
+      print('Found cities: $cities');
+      return cities;
+    } catch (e, stackTrace) {
+      print('Error getting cities: $e\nStack trace: $stackTrace');
+      return [];
+    }
   }
 
   Widget _buildDocumentStep(bool isDark) {
