@@ -1,4 +1,0 @@
-dependencies:
-  google_mlkit_text_recognition: ^[latest_version]
-  google_mlkit_face_detection: ^[latest_version]
-  camera: ^[latest_version] 

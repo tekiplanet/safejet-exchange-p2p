@@ -9,6 +9,7 @@ import 'package:country_state_city_picker/country_state_city_picker.dart';
 import '../../widgets/verification_status_card.dart';
 import '../../providers/kyc_provider.dart';
 import '../../models/kyc_details.dart';
+import 'package:country_picker/country_picker.dart';
 
 class IdentityVerificationScreen extends StatefulWidget {
   const IdentityVerificationScreen({super.key});
@@ -32,6 +33,8 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   String? _selectedCountry;
   String? _selectedState;
   String? _selectedCity;
+  List<String> _states = [];
+  List<String> _cities = [];
   
   final List<String> _documentTypes = [
     'Passport',
@@ -275,53 +278,46 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
             const SizedBox(height: 16),
             _buildDropdownField(
               label: 'Country',
-              icon: Icons.public,
               value: _selectedCountry,
-              items: countries.map((country) => DropdownMenuItem(
-                value: country,
-                child: Text(country),
-              )).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedCountry = value;
-                  _selectedState = null;
-                  _selectedCity = null;
-                });
+              hint: 'Select Country',
+              icon: Icons.public,
+              onTap: () {
+                showCountryPicker(
+                  context: context,
+                  showPhoneCode: false,
+                  onSelect: (Country country) {
+                    setState(() {
+                      _selectedCountry = country.name;
+                      _selectedState = null;
+                      _selectedCity = null;
+                      _states = _getStates(country.name);
+                      _cities = [];
+                    });
+                  },
+                );
               },
-              isDark: isDark,
             ),
             const SizedBox(height: 16),
             _buildDropdownField(
               label: 'State/Province',
-              icon: Icons.map,
               value: _selectedState,
-              items: _selectedCountry != null
-                ? getStates(_selectedCountry!).map((state) => DropdownMenuItem(
-                    value: state,
-                    child: Text(state),
-                  )).toList()
-                : [],
-              onChanged: (value) {
-                setState(() {
-                  _selectedState = value;
-                  _selectedCity = null;
-                });
+              hint: 'Select State',
+              icon: Icons.map,
+              enabled: _selectedCountry != null,
+              onTap: () {
+                _showStatesPicker();
               },
-              isDark: isDark,
             ),
             const SizedBox(height: 16),
             _buildDropdownField(
               label: 'City',
-              icon: Icons.location_city,
               value: _selectedCity,
-              items: _selectedState != null
-                ? getCities(_selectedCountry!, _selectedState!).map((city) => DropdownMenuItem(
-                    value: city,
-                    child: Text(city),
-                  )).toList()
-                : [],
-              onChanged: (value) => setState(() => _selectedCity = value),
-              isDark: isDark,
+              hint: 'Select City',
+              icon: Icons.location_city,
+              enabled: _selectedState != null,
+              onTap: () {
+                _showCitiesPicker();
+              },
             ),
             const SizedBox(height: 32),
             SizedBox(
@@ -350,6 +346,106 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String? value,
+    required String hint,
+    required IconData icon,
+    bool enabled = true,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+              : SafeJetColors.lightCardBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: enabled 
+                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                : Colors.grey.withOpacity(0.2),
+          ),
+        ),
+        child: ListTile(
+          leading: Icon(
+            icon,
+            color: enabled 
+                ? Theme.of(context).iconTheme.color 
+                : Colors.grey,
+          ),
+          title: Text(
+            value ?? hint,
+            style: TextStyle(
+              color: value == null 
+                  ? Colors.grey 
+                  : Theme.of(context).textTheme.bodyLarge?.color,
+            ),
+          ),
+          enabled: enabled,
+        ),
+      ),
+    );
+  }
+
+  void _showStatesPicker() {
+    if (_selectedCountry == null) return;
+    
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => ListView.builder(
+        itemCount: _states.length,
+        itemBuilder: (context, index) => ListTile(
+          title: Text(_states[index]),
+          onTap: () {
+            setState(() {
+              _selectedState = _states[index];
+              _selectedCity = null;
+              _cities = _getCities(_selectedCountry!, _states[index]);
+            });
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showCitiesPicker() {
+    if (_selectedState == null) return;
+    
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => ListView.builder(
+        itemCount: _cities.length,
+        itemBuilder: (context, index) => ListTile(
+          title: Text(_cities[index]),
+          onTap: () {
+            setState(() {
+              _selectedCity = _cities[index];
+            });
+            Navigator.pop(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  List<String> _getStates(String country) {
+    // Return list of states for the selected country
+    // You can use a data source or API for this
+    return ['State 1', 'State 2', 'State 3']; // Replace with real data
+  }
+
+  List<String> _getCities(String country, String state) {
+    // Return list of cities for the selected state
+    // You can use a data source or API for this
+    return ['City 1', 'City 2', 'City 3']; // Replace with real data
   }
 
   Widget _buildDocumentStep(bool isDark) {
@@ -636,45 +732,6 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     );
   }
 
-  Widget _buildDropdownField({
-    required String label,
-    required IconData icon,
-    required String? value,
-    required List<DropdownMenuItem<String>> items,
-    required Function(String?) onChanged,
-    required bool isDark,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonFormField<String>(
-        value: value,
-        items: items,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.transparent,
-        ),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'This field is required';
-          }
-          return null;
-        },
-      ),
-    );
-  }
-
   void _handlePersonalInfoSubmit() async {
     if (_formKey.currentState!.validate() &&
         _selectedCountry != null &&
@@ -761,6 +818,39 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  // Date picker method
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime now = DateTime.now();
+    final DateTime minAge = now.subtract(const Duration(days: 6570)); // 18 years ago
+    final DateTime maxAge = now.subtract(const Duration(days: 36500)); // 100 years ago
+
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: minAge,
+      firstDate: maxAge,
+      lastDate: minAge,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: SafeJetColors.secondaryHighlight,
+              onPrimary: Colors.white,
+              surface: Theme.of(context).scaffoldBackgroundColor,
+              onSurface: Theme.of(context).textTheme.bodyLarge!.color!,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _dobController.text = '${picked.day}/${picked.month}/${picked.year}';
+      });
     }
   }
 } 
