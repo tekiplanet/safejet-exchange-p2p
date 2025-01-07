@@ -127,11 +127,13 @@ class KYCProvider extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      await _kycService.startDocumentVerification();
+      // Get Onfido SDK token
+      final sdkToken = await _kycService.getOnfidoToken();
+      
+      // Initialize and start Onfido verification
+      await _kycService.startDocumentVerification(sdkToken);
+      
       await loadKYCDetails();
-
-      _error = null;
-      notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();

@@ -1044,8 +1044,13 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
         country: _selectedCountry!,
       );
 
-      // Start Onfido verification after successful submission
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Identity details saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
         await context.read<KYCProvider>().startDocumentVerification();
       }
 
