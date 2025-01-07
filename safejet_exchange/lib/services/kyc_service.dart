@@ -177,9 +177,29 @@ class KYCService {
 
   Future<String> getOnfidoToken() async {
     try {
-      final response = await _dio.post('/kyc/onfido-token');
+      final token = await _storage.read(key: 'accessToken');
+      print('Making request to get Onfido token');
+      print('Access token: $token');
+      print('Base URL: ${_dio.options.baseUrl}');
+
+      final response = await _dio.post(
+        '/kyc/onfido-token',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+      print('Response: ${response.data}');
       return response.data['token'];
     } catch (e) {
+      print('Full error details:');
+      if (e is DioException) {
+        print('Status code: ${e.response?.statusCode}');
+        print('Response data: ${e.response?.data}');
+        print('Headers: ${e.response?.headers}');
+      }
       print('Error getting Onfido token: $e');
       rethrow;
     }
@@ -193,9 +213,6 @@ class KYCService {
       // Initialize Onfido SDK
       final onfido = Onfido(
         sdkToken: token,
-        enterpriseFeatures: EnterpriseFeatures(
-          hideOnfidoLogo: false,
-        ),
       );
 
       // Start the verification flow
