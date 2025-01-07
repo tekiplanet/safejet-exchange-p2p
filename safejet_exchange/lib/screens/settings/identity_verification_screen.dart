@@ -4,6 +4,11 @@ import 'package:animate_do/animate_do.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../services/kyc_service.dart';
+import 'package:country_state_city_picker/country_state_city_picker.dart';
+import '../../widgets/verification_status_card.dart';
+import '../../providers/kyc_provider.dart';
+import '../../models/kyc_details.dart';
 
 class IdentityVerificationScreen extends StatefulWidget {
   const IdentityVerificationScreen({super.key});
@@ -16,15 +21,17 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   int _currentStep = 0;
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
+  KYCDetails? kycDetails;
   
   // Personal Information
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _dobController = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController();
-  final _countryController = TextEditingController();
   String? _selectedDocType;
+  String? _selectedCountry;
+  String? _selectedState;
+  String? _selectedCity;
   
   final List<String> _documentTypes = [
     'Passport',
@@ -33,13 +40,25 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadKYCDetails();
+  }
+
+  Future<void> _loadKYCDetails() async {
+    final provider = context.read<KYCProvider>();
+    await provider.loadKYCDetails();
+    setState(() {
+      kycDetails = provider.kycDetails;
+    });
+  }
+
+  @override
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
     _dobController.dispose();
     _addressController.dispose();
-    _cityController.dispose();
-    _countryController.dispose();
     super.dispose();
   }
 
@@ -47,6 +66,8 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final provider = context.watch<KYCProvider>();
+    kycDetails = provider.kycDetails;
 
     return Scaffold(
       appBar: P2PAppBar(
@@ -221,7 +242,6 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       child: Form(
         key: _formKey,
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildInputField(
               controller: _firstNameController,
@@ -243,17 +263,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
               icon: Icons.calendar_today,
               isDark: isDark,
               readOnly: true,
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now().subtract(const Duration(days: 6570)), // 18 years ago
-                  firstDate: DateTime.now().subtract(const Duration(days: 36500)), // 100 years ago
-                  lastDate: DateTime.now().subtract(const Duration(days: 6570)), // 18 years ago
-                );
-                if (date != null) {
-                  _dobController.text = '${date.day}/${date.month}/${date.year}';
-                }
-              },
+              onTap: () => _selectDate(context),
             ),
             const SizedBox(height: 16),
             _buildInputField(
@@ -263,17 +273,54 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
               isDark: isDark,
             ),
             const SizedBox(height: 16),
-            _buildInputField(
-              controller: _cityController,
-              label: 'City',
-              icon: Icons.location_city,
+            _buildDropdownField(
+              label: 'Country',
+              icon: Icons.public,
+              value: _selectedCountry,
+              items: countries.map((country) => DropdownMenuItem(
+                value: country,
+                child: Text(country),
+              )).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedCountry = value;
+                  _selectedState = null;
+                  _selectedCity = null;
+                });
+              },
               isDark: isDark,
             ),
             const SizedBox(height: 16),
-            _buildInputField(
-              controller: _countryController,
-              label: 'Country',
-              icon: Icons.public,
+            _buildDropdownField(
+              label: 'State/Province',
+              icon: Icons.map,
+              value: _selectedState,
+              items: _selectedCountry != null
+                ? getStates(_selectedCountry!).map((state) => DropdownMenuItem(
+                    value: state,
+                    child: Text(state),
+                  )).toList()
+                : [],
+              onChanged: (value) {
+                setState(() {
+                  _selectedState = value;
+                  _selectedCity = null;
+                });
+              },
+              isDark: isDark,
+            ),
+            const SizedBox(height: 16),
+            _buildDropdownField(
+              label: 'City',
+              icon: Icons.location_city,
+              value: _selectedCity,
+              items: _selectedState != null
+                ? getCities(_selectedCountry!, _selectedState!).map((city) => DropdownMenuItem(
+                    value: city,
+                    child: Text(city),
+                  )).toList()
+                : [],
+              onChanged: (value) => setState(() => _selectedCity = value),
               isDark: isDark,
             ),
             const SizedBox(height: 32),
@@ -309,8 +356,33 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     return FadeInUp(
       duration: const Duration(milliseconds: 300),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (kycDetails != null) ...[
+            if (kycDetails!.identityVerificationStatus != null)
+              VerificationStatusCard(
+                type: 'Identity',
+                status: kycDetails!.identityVerificationStatus!.status,
+                documentType: kycDetails!.identityVerificationStatus!.documentType,
+                failureReason: kycDetails!.identityVerificationStatus!.failureReason,
+                lastAttempt: kycDetails!.identityVerificationStatus!.lastAttempt,
+                onRetry: kycDetails!.identityVerificationStatus!.status == 'failed'
+                  ? () => _handleRetryVerification('identity')
+                  : null,
+              ),
+            const SizedBox(height: 16),
+            if (kycDetails!.addressVerificationStatus != null)
+              VerificationStatusCard(
+                type: 'Address',
+                status: kycDetails!.addressVerificationStatus!.status,
+                documentType: kycDetails!.addressVerificationStatus!.documentType,
+                failureReason: kycDetails!.addressVerificationStatus!.failureReason,
+                lastAttempt: kycDetails!.addressVerificationStatus!.lastAttempt,
+                onRetry: kycDetails!.addressVerificationStatus!.status == 'failed'
+                  ? () => _handleRetryVerification('address')
+                  : null,
+              ),
+            const SizedBox(height: 24),
+          ],
           Text(
             'Select Document Type',
             style: TextStyle(
@@ -564,14 +636,131 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     );
   }
 
-  void _handlePersonalInfoSubmit() {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _currentStep = 1);
+  Widget _buildDropdownField({
+    required String label,
+    required IconData icon,
+    required String? value,
+    required List<DropdownMenuItem<String>> items,
+    required Function(String?) onChanged,
+    required bool isDark,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        items: items,
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.transparent,
+        ),
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'This field is required';
+          }
+          return null;
+        },
+      ),
+    );
+  }
+
+  void _handlePersonalInfoSubmit() async {
+    if (_formKey.currentState!.validate() &&
+        _selectedCountry != null &&
+        _selectedState != null &&
+        _selectedCity != null) {
+      final kycService = context.read<KYCProvider>();
+      try {
+        await kycService.submitIdentityDetails(
+          firstName: _firstNameController.text,
+          lastName: _lastNameController.text,
+          dateOfBirth: _dobController.text,
+          address: _addressController.text,
+          city: _selectedCity!,
+          state: _selectedState!,
+          country: _selectedCountry!,
+        );
+        setState(() => _currentStep = 1);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to save identity details: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select country, state and city'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  void _handleDocumentSubmit() {
-    // TODO: Implement document submission
-    setState(() => _currentStep = 2);
+  void _handleDocumentSubmit() async {
+    try {
+      if (_selectedDocType == 'Passport' || _selectedDocType == 'National ID Card') {
+        await context.read<KYCProvider>().startDocumentVerification();
+      }
+      await context.read<KYCProvider>().startAddressVerification();
+      setState(() => _currentStep = 2);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Verification failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleRetryVerification(String type) async {
+    try {
+      setState(() => _isLoading = true);
+      
+      if (type == 'identity') {
+        await context.read<KYCProvider>().startDocumentVerification();
+      } else if (type == 'address') {
+        await context.read<KYCProvider>().startAddressVerification();
+      }
+
+      // Refresh KYC details after retry
+      await context.read<KYCProvider>().loadKYCDetails();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification restarted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to restart verification: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 } 

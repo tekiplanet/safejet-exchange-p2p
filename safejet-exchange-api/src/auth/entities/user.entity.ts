@@ -79,6 +79,32 @@ export class User {
     identityVerified?: boolean;
     addressVerified?: boolean;
     videoVerified?: boolean;
+    verificationCompletedAt?: Date;
+    onfidoApplicantId?: string;
+    identityDetails?: {
+      firstName: string;
+      lastName: string;
+      dateOfBirth: string;
+      address: string;
+      city: string;
+      state: string;
+      country: string;
+      submittedAt: Date;
+    };
+    verificationStatus?: {
+      identity?: {
+        status: 'pending' | 'processing' | 'completed' | 'failed';
+        documentType?: string;
+        lastAttempt?: Date;
+        failureReason?: string;
+      };
+      address?: {
+        status: 'pending' | 'processing' | 'completed' | 'failed';
+        documentType?: string;
+        lastAttempt?: Date;
+        failureReason?: string;
+      };
+    };
     documents?: {
       idCard?: string;
       proofOfAddress?: string;

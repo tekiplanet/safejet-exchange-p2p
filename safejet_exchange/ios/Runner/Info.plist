@@ -46,6 +46,10 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access is required to scan QR codes</string>
+	<string>We need access to your camera for identity verification</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone for video verification</string>
+	<key>io.onfido.sdk.capture.manual</key>
+	<true/>
 </dict>
 </plist>

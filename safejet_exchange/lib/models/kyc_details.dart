@@ -1,4 +1,5 @@
-import './kyc_level.dart';
+import 'package:safejet_exchange/models/kyc_level.dart';
+import 'package:safejet_exchange/models/user_details.dart';
 
 class KYCDetails {
   final int currentLevel;
@@ -21,27 +22,41 @@ class KYCDetails {
       kycData: json['kycData'],
     );
   }
+
+  VerificationStatus? get identityVerificationStatus {
+    return kycData?['verificationStatus']?['identity'] != null
+        ? VerificationStatus.fromJson(kycData!['verificationStatus']['identity'])
+        : null;
+  }
+
+  VerificationStatus? get addressVerificationStatus {
+    return kycData?['verificationStatus']?['address'] != null
+        ? VerificationStatus.fromJson(kycData!['verificationStatus']['address'])
+        : null;
+  }
 }
 
-class UserDetails {
-  final String fullName;
-  final String email;
-  final bool emailVerified;
-  final bool phoneVerified;
+class VerificationStatus {
+  final String status;
+  final String? documentType;
+  final String? failureReason;
+  final DateTime? lastAttempt;
 
-  UserDetails({
-    required this.fullName,
-    required this.email,
-    required this.emailVerified,
-    required this.phoneVerified,
+  VerificationStatus({
+    required this.status,
+    this.documentType,
+    this.failureReason,
+    this.lastAttempt,
   });
 
-  factory UserDetails.fromJson(Map<String, dynamic> json) {
-    return UserDetails(
-      fullName: json['fullName'],
-      email: json['email'],
-      emailVerified: json['emailVerified'],
-      phoneVerified: json['phoneVerified'],
+  factory VerificationStatus.fromJson(Map<String, dynamic> json) {
+    return VerificationStatus(
+      status: json['status'] ?? 'pending',
+      documentType: json['documentType'],
+      failureReason: json['failureReason'],
+      lastAttempt: json['lastAttempt'] != null 
+          ? DateTime.parse(json['lastAttempt']) 
+          : null,
     );
   }
 }

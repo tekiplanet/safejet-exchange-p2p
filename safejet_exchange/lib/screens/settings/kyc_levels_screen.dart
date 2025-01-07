@@ -464,4 +464,41 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         return const IdentityVerificationScreen();
     }
   }
+
+  Widget _buildVerificationButton(BuildContext context, int currentLevel) {
+    final kycProvider = Provider.of<KYCProvider>(context);
+    
+    if (currentLevel >= 2) return const SizedBox.shrink();
+
+    return ElevatedButton(
+      onPressed: kycProvider.loading 
+        ? null 
+        : () async {
+            try {
+              await kycProvider.startKYCVerification();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Verification completed successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Verification failed: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
+      child: Text(
+        kycProvider.loading ? 'Verifying...' : 'Start Verification',
+        style: TextStyle(color: Colors.white),
+      ),
+    );
+  }
 } 

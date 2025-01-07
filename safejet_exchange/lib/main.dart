@@ -10,10 +10,20 @@ import 'providers/auth_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'providers/kyc_provider.dart';
 import './services/services.dart';
+import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+  
+  final dio = Dio();
+  dio.interceptors.add(LogInterceptor(
+    requestBody: true,
+    responseBody: true,
+    error: true,
+  ));
+
   await setupServices();
   final prefs = await SharedPreferences.getInstance();
   final themeProvider = ThemeProvider()..init(prefs);
@@ -26,7 +36,9 @@ void main() async {
         ),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(
-          create: (context) => KYCProvider(getIt<KYCService>()),
+          create: (context) => KYCProvider(
+            KYCService(dio),
+          ),
         ),
       ],
       child: const MyApp(),

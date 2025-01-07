@@ -2,16 +2,27 @@ import 'package:dio/dio.dart';
 import '../models/kyc_level.dart';
 import '../models/kyc_details.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:onfido_sdk/onfido_sdk.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class KYCService {
   final Dio _dio;
   final _storage = const FlutterSecureStorage();
 
-  KYCService(this._dio);
+  // Store applicant ID for later use
+  String? _currentApplicantId;
+
+  // Store Onfido instance
+  Onfido? _onfido;
+
+  KYCService(Dio dio) : _dio = dio {
+    _dio.options.baseUrl = dotenv.env['API_URL'] ?? 'http://localhost:3000';
+    _dio.options.connectTimeout = const Duration(seconds: 5);
+    _dio.options.receiveTimeout = const Duration(seconds: 3);
+  }
 
   Future<Map<String, String>> _getAuthHeaders() async {
     final token = await _storage.read(key: 'accessToken');
-    print('Debug - Token being used: $token');
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
@@ -29,10 +40,17 @@ class KYCService {
       if (response.statusCode == 200) {
         return KYCDetails.fromJson(response.data);
       } else {
-        throw Exception('Failed to load KYC details');
+        throw Exception('Failed to load KYC details: ${response.statusMessage}');
       }
     } catch (e) {
-      print('Error getting KYC details: $e');
+      if (e is DioException) {
+        if (e.type == DioExceptionType.connectionTimeout) {
+          throw Exception('Connection timeout. Please check your internet connection.');
+        } else if (e.response?.statusCode == 401) {
+          throw Exception('Unauthorized. Please log in again.');
+        }
+        throw Exception('Network error: ${e.message}');
+      }
       rethrow;
     }
   }
@@ -54,6 +72,168 @@ class KYCService {
       }
     } catch (e) {
       print('Error getting KYC levels: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> startKYCVerification() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _dio.post(
+        '/kyc/onfido-token',
+        options: Options(headers: headers),
+      );
+      
+      if (response.statusCode == 200) {
+        final sdkToken = response.data['token'];
+        
+        _onfido = Onfido(
+          sdkToken: sdkToken,
+          enterpriseFeatures: EnterpriseFeatures(
+            hideOnfidoLogo: false,
+          ),
+        );
+
+        final results = await _onfido!.start(
+          flowSteps: FlowSteps(
+            welcome: true,
+            documentCapture: DocumentCapture(),
+            faceCapture: FaceCapture.photo(
+              withIntroScreen: true,
+            ),
+          ),
+        );
+        
+        // Check if we have successful results
+        if (results.isNotEmpty) {
+          print('KYC verification completed successfully');
+          return;
+        }
+        
+        throw Exception('KYC verification failed or was cancelled');
+      }
+      
+      throw Exception('Failed to get Onfido token');
+    } catch (e) {
+      print('KYC verification error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> submitIdentityDetails({
+    required String firstName,
+    required String lastName,
+    required String dateOfBirth,
+    required String address,
+    required String city,
+    required String state,
+    required String country,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _dio.put(
+        '/auth/identity-details',
+        options: Options(headers: headers),
+        data: {
+          'firstName': firstName,
+          'lastName': lastName,
+          'dateOfBirth': dateOfBirth,
+          'address': address,
+          'city': city,
+          'state': state,
+          'country': country,
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to update identity details');
+      }
+    } catch (e) {
+      print('Error updating identity details: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> startDocumentVerification() async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _dio.post(
+        '/kyc/onfido-token',
+        options: Options(headers: headers),
+      );
+      
+      if (response.statusCode == 200) {
+        final sdkToken = response.data['token'];
+        
+        _onfido = Onfido(
+          sdkToken: sdkToken,
+          enterpriseFeatures: EnterpriseFeatures(
+            hideOnfidoLogo: false,
+          ),
+        );
+
+        final results = await _onfido!.start(
+          flowSteps: FlowSteps(
+            welcome: true,
+            documentCapture: DocumentCapture(
+              documentType: DocumentType.nationalIdentityCard,
+            ),
+          ),
+        );
+        
+        if (results.isNotEmpty) {
+          print('Document verification completed successfully');
+          return;
+        }
+        
+        throw Exception('Document verification failed or was cancelled');
+      }
+      
+      throw Exception('Failed to get Onfido token');
+    } catch (e) {
+      print('Document verification error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> startAddressVerification({DocumentType? documentType}) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await _dio.post(
+        '/kyc/onfido-token',
+        options: Options(headers: headers),
+      );
+      
+      if (response.statusCode == 200) {
+        final sdkToken = response.data['token'];
+        
+        _onfido = Onfido(
+          sdkToken: sdkToken,
+          enterpriseFeatures: EnterpriseFeatures(
+            hideOnfidoLogo: false,
+          ),
+        );
+
+        final results = await _onfido!.start(
+          flowSteps: FlowSteps(
+            welcome: true,
+            documentCapture: DocumentCapture(
+              documentType: documentType ?? DocumentType.drivingLicence,
+            ),
+          ),
+        );
+        
+        if (results.isNotEmpty) {
+          print('Address verification completed successfully');
+          return;
+        }
+        
+        throw Exception('Address verification failed or was cancelled');
+      }
+      
+      throw Exception('Failed to get Onfido token');
+    } catch (e) {
+      print('Address verification error: $e');
       rethrow;
     }
   }

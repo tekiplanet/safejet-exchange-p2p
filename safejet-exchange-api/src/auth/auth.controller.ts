@@ -16,6 +16,7 @@ import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { Request } from 'express';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { TwilioService } from '../twilio/twilio.service';
+import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -133,5 +134,14 @@ export class AuthController {
   @Post('refresh-token')
   async refreshToken(@Body('refreshToken') refreshToken: string) {
     return this.authService.refreshToken(refreshToken);
+  }
+
+  @Put('identity-details')
+  @UseGuards(JwtAuthGuard)
+  async updateIdentityDetails(
+    @GetUser() user: User,
+    @Body() updateIdentityDetailsDto: UpdateIdentityDetailsDto,
+  ) {
+    return this.authService.updateIdentityDetails(user.id, updateIdentityDetailsDto);
   }
 } 

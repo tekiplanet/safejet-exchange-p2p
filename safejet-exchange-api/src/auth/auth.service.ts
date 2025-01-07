@@ -23,6 +23,7 @@ import { Request } from 'express';
 import { KYCLevel } from './entities/kyc-level.entity';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { TwilioService } from '../twilio/twilio.service';
+import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 
 @Injectable()
 export class AuthService {
@@ -687,5 +688,28 @@ export class AuthService {
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }
+  }
+
+  async updateIdentityDetails(userId: string, details: UpdateIdentityDetailsDto) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.kycData = {
+      ...user.kycData,
+      identityDetails: {
+        firstName: details.firstName,
+        lastName: details.lastName,
+        dateOfBirth: details.dateOfBirth,
+        address: details.address,
+        city: details.city,
+        state: details.state,
+        country: details.country,
+        submittedAt: new Date(),
+      },
+    };
+
+    return this.userRepository.save(user);
   }
 } 
