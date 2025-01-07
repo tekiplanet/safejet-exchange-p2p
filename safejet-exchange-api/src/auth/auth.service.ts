@@ -22,6 +22,7 @@ import { LoginTrackerService } from './login-tracker.service';
 import { Request } from 'express';
 import { KYCLevel } from './entities/kyc-level.entity';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
+import { TwilioService } from '../twilio/twilio.service';
 
 @Injectable()
 export class AuthService {
@@ -35,6 +36,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
     private readonly loginTrackerService: LoginTrackerService,
+    private readonly twilioService: TwilioService,
   ) {}
 
   private generateVerificationCode(): string {
@@ -591,5 +593,55 @@ export class AuthService {
     } catch (error) {
       throw new InternalServerErrorException('Failed to update phone number');
     }
+  }
+
+  async sendPhoneVerification(userId: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    try {
+      const verificationCode = await this.twilioService.sendVerificationCode(user.phone);
+      
+      // Hash and save the verification code
+      user.verificationCode = await bcrypt.hash(verificationCode, 10);
+      user.verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      await this.userRepository.save(user);
+
+      return { message: 'Verification code sent successfully' };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to send verification code');
+    }
+  }
+
+  async verifyPhone(userId: string, code: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.verificationCode || !user.verificationCodeExpires) {
+      throw new BadRequestException('No verification code found');
+    }
+
+    if (new Date() > user.verificationCodeExpires) {
+      throw new BadRequestException('Verification code has expired');
+    }
+
+    const isCodeValid = await bcrypt.compare(code, user.verificationCode);
+    if (!isCodeValid) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    user.phoneVerified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    await this.userRepository.save(user);
+
+    return {
+      message: 'Phone number verified successfully',
+      user: this.sanitizeUser(user),
+    };
   }
 } 

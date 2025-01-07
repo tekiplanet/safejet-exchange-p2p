@@ -9,6 +9,7 @@ import { EmailModule } from '../email/email.module';
 import { JwtStrategy } from './jwt.strategy';
 import { LoginTrackerService } from './login-tracker.service';
 import { KYCLevel } from './entities/kyc-level.entity';
+import { TwilioModule } from '../twilio/twilio.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { KYCLevel } from './entities/kyc-level.entity';
       }),
     }),
     EmailModule,
+    TwilioModule,
   ],
   controllers: [AuthController],
   providers: [

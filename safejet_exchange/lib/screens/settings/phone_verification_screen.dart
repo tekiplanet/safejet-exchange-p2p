@@ -399,10 +399,59 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   }
 
   Future<void> _sendVerificationCode() async {
-    // TODO: Implement Twilio SMS verification
+    setState(() => _loading = true);
+    try {
+      final response = await Provider.of<AuthProvider>(context, listen: false)
+          .sendPhoneVerification();
+      
+      setState(() {
+        _codeSent = true;
+        _loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification code sent successfully'),
+          backgroundColor: SafeJetColors.success,
+        ),
+      );
+    } catch (e) {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending code: $e'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _verifyCode() async {
-    // TODO: Implement code verification
+    setState(() => _loading = true);
+    try {
+      final response = await Provider.of<AuthProvider>(context, listen: false)
+          .verifyPhone(_otpController.text);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number verified successfully'),
+          backgroundColor: SafeJetColors.success,
+        ),
+      );
+
+      // Refresh KYC details
+      await Provider.of<KYCProvider>(context, listen: false).loadKYCDetails();
+      
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error verifying code: $e'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      setState(() => _loading = false);
+    }
   }
 } 

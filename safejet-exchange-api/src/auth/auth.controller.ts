@@ -15,6 +15,7 @@ import { Disable2FADto } from './dto/disable-2fa.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { Request } from 'express';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
+import { TwilioService } from '../twilio/twilio.service';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -112,5 +113,20 @@ export class AuthController {
     @Body() updatePhoneDto: UpdatePhoneDto,
   ) {
     return this.authService.updatePhone(req.user.id, updatePhoneDto);
+  }
+
+  @Post('send-phone-verification')
+  @UseGuards(JwtAuthGuard)
+  async sendPhoneVerification(@GetUser() user: User) {
+    return this.authService.sendPhoneVerification(user.id);
+  }
+
+  @Post('verify-phone')
+  @UseGuards(JwtAuthGuard)
+  async verifyPhone(
+    @GetUser() user: User,
+    @Body('code') code: string,
+  ) {
+    return this.authService.verifyPhone(user.id, code);
   }
 } 

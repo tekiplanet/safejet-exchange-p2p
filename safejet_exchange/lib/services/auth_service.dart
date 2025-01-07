@@ -429,4 +429,49 @@ class AuthService {
       rethrow;
     }
   }
+
+  Future<void> sendPhoneVerification() async {
+    try {
+      final token = await storage.read(key: 'accessToken');
+      final response = await http.post(
+        Uri.parse('$baseUrl/send-phone-verification'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = json.decode(response.body);
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw data['message'] ?? 'Failed to send verification code';
+      }
+    } catch (e) {
+      print('Send phone verification error: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyPhone(String code) async {
+    try {
+      final token = await storage.read(key: 'accessToken');
+      final response = await http.post(
+        Uri.parse('$baseUrl/verify-phone'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({'code': code}),
+      );
+
+      final data = json.decode(response.body);
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw data['message'] ?? 'Failed to verify phone';
+      }
+
+      return data;
+    } catch (e) {
+      print('Verify phone error: $e');
+      rethrow;
+    }
+  }
 } 

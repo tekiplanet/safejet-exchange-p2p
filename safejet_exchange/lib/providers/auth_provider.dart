@@ -295,4 +295,37 @@ class AuthProvider with ChangeNotifier {
     final storage = const FlutterSecureStorage();
     await storage.write(key: 'user', value: json.encode(user));
   }
+
+  Future<void> sendPhoneVerification() async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _authService.sendPhoneVerification();
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> verifyPhone(String code) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      final response = await _authService.verifyPhone(code);
+      await _updateStoredUser(response['user']);
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 } 
