@@ -373,7 +373,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _handlePersonalInfoSubmit,
+                onPressed: _handleContinue,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: SafeJetColors.secondaryHighlight,
                   foregroundColor: Colors.white,
@@ -1028,24 +1028,45 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     );
   }
 
-  void _handlePersonalInfoSubmit() async {
-    if (_formKey.currentState!.validate() &&
-        _selectedCountry != null &&
-        _selectedState != null &&
-        _selectedCity != null) {
-      final kycService = context.read<KYCProvider>();
-      try {
-        await kycService.submitIdentityDetails(
-          firstName: _firstNameController.text,
-          lastName: _lastNameController.text,
-          dateOfBirth: _dobController.text,
-          address: _addressController.text,
-          city: _selectedCity!,
-          state: _selectedState!,
-          country: _selectedCountry!,
+  void _handleContinue() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    // Debug log the data being sent
+    print('Submitting identity details:');
+    print('First Name: ${_firstNameController.text}');
+    print('Last Name: ${_lastNameController.text}');
+    print('Date of Birth: ${_dobController.text}');
+    print('Address: ${_addressController.text}');
+    print('Country: $_selectedCountry');
+    print('State: $_selectedState');
+    print('City: $_selectedCity');
+
+    try {
+      setState(() => _isLoading = true);
+
+      await context.read<KYCProvider>().submitIdentityDetails(
+        firstName: _firstNameController.text,
+        lastName: _lastNameController.text,
+        dateOfBirth: _formatDateForApi(_dobController.text),  // Format date properly
+        address: _addressController.text,
+        city: _selectedCity!,
+        state: _selectedState!,
+        country: _selectedCountry!,
+      );
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Identity details saved successfully'),
+            backgroundColor: Colors.green,
+          ),
         );
-        setState(() => _currentStep = 1);
-      } catch (e) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      print('Error submitting identity details: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to save identity details: $e'),
@@ -1053,14 +1074,24 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
           ),
         );
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select country, state and city'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  String _formatDateForApi(String date) {
+    // Ensure month and day are padded with leading zeros
+    final parts = date.split('/');
+    if (parts.length == 3) {
+      final day = parts[0].padLeft(2, '0');
+      final month = parts[1].padLeft(2, '0');
+      final year = parts[2];
+      // Return in ISO 8601 format (YYYY-MM-DD)
+      return '$year-$month-$day';
+    }
+    return date;
   }
 
   void _handleDocumentSubmit() async {

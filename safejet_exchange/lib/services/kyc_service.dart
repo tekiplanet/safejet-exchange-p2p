@@ -130,10 +130,21 @@ class KYCService {
     required String country,
   }) async {
     try {
-      final headers = await _getAuthHeaders();
+      print('Sending request to API:');
+      print('URL: ${_dio.options.baseUrl}/auth/identity-details');
+      print('Data: {');
+      print('  firstName: $firstName,');
+      print('  lastName: $lastName,');
+      print('  dateOfBirth: $dateOfBirth,');
+      print('  address: $address,');
+      print('  city: $city,');
+      print('  state: $state,');
+      print('  country: $country');
+      print('}');
+
+      final token = await _storage.read(key: 'accessToken');
       final response = await _dio.put(
         '/auth/identity-details',
-        options: Options(headers: headers),
         data: {
           'firstName': firstName,
           'lastName': lastName,
@@ -143,13 +154,23 @@ class KYCService {
           'state': state,
           'country': country,
         },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
       );
 
-      if (response.statusCode != 200) {
-        throw Exception('Failed to update identity details');
-      }
+      print('API Response: ${response.data}');
+      return response.data;
     } catch (e) {
-      print('Error updating identity details: $e');
+      print('API Error: $e');
+      if (e is DioException) {
+        print('Response data: ${e.response?.data}');
+        print('Response status: ${e.response?.statusCode}');
+        print('Response headers: ${e.response?.headers}');
+      }
       rethrow;
     }
   }
