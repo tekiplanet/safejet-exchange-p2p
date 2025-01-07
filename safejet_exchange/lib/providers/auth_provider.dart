@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../services/auth_service.dart';
 import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -256,5 +257,42 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> storeTemp2FASecret(String secret) async {
     await _authService.storeTemp2FASecret(secret);
+  }
+
+  Future<void> updatePhone({
+    required String phone,
+    required String countryCode,
+    required String countryName,
+    required String phoneWithoutCode,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _authService.updatePhone(
+        phone: phone,
+        countryCode: countryCode,
+        countryName: countryName,
+        phoneWithoutCode: phoneWithoutCode,
+      );
+
+      // Update local user data
+      final updatedUser = await _authService.getCurrentUser();
+      await _updateStoredUser(updatedUser);
+
+    } catch (e) {
+      _error = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Helper method to update stored user data
+  Future<void> _updateStoredUser(Map<String, dynamic> user) async {
+    final storage = const FlutterSecureStorage();
+    await storage.write(key: 'user', value: json.encode(user));
   }
 } 

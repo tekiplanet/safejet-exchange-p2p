@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -21,6 +21,7 @@ import { LoginResponseDto } from './dto/login-response.dto';
 import { LoginTrackerService } from './login-tracker.service';
 import { Request } from 'express';
 import { KYCLevel } from './entities/kyc-level.entity';
+import { UpdatePhoneDto } from './dto/update-phone.dto';
 
 @Injectable()
 export class AuthService {
@@ -550,6 +551,45 @@ export class AuthService {
       };
     } catch (error) {
       throw new BadRequestException('Failed to logout');
+    }
+  }
+
+  private sanitizeUser(user: User) {
+    const { 
+      passwordHash,
+      verificationCode,
+      verificationCodeExpires,
+      twoFactorSecret,
+      twoFactorBackupCodes,
+      passwordResetCode,
+      passwordResetExpires,
+      ...sanitizedUser 
+    } = user;
+    return sanitizedUser;
+  }
+
+  async updatePhone(userId: string, updatePhoneDto: UpdatePhoneDto) {
+    try {
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Update user phone details
+      user.phone = updatePhoneDto.phone;
+      user.countryCode = updatePhoneDto.countryCode;
+      user.countryName = updatePhoneDto.countryName;
+      user.phoneWithoutCode = updatePhoneDto.phoneWithoutCode;
+      user.phoneVerified = false;  // Reset phone verification status
+
+      await this.userRepository.save(user);
+
+      return {
+        message: 'Phone number updated successfully',
+        user: this.sanitizeUser(user),
+      };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update phone number');
     }
   }
 } 

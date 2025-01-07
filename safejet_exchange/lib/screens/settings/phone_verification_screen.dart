@@ -3,6 +3,8 @@ import '../../config/theme/colors.dart';
 import '../../widgets/p2p_app_bar.dart';
 import 'package:provider/provider.dart';
 import '../../providers/kyc_provider.dart';
+import 'package:country_picker/country_picker.dart';
+import '../../providers/auth_provider.dart';
 
 class PhoneVerificationScreen extends StatefulWidget {
   const PhoneVerificationScreen({super.key});
@@ -16,6 +18,27 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   final _otpController = TextEditingController();
   bool _codeSent = false;
   bool _loading = false;
+  bool _isChangingNumber = false;
+  Country? _selectedCountry;
+  String? _currentPhone;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserPhone();
+  }
+
+  Future<void> _loadUserPhone() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = await authProvider.getCurrentUser();
+      setState(() {
+        _currentPhone = user['phone'];
+      });
+    } catch (e) {
+      print('Error loading user phone: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,48 +112,187 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
             const SizedBox(height: 24),
 
             if (!_codeSent) ...[
-              Text(
-                'Enter Phone Number',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(
-                  hintText: '+1234567890',
-                  prefixIcon: const Icon(Icons.phone),
-                  border: OutlineInputBorder(
+              if (!_isChangingNumber) ...[
+                // Show current phone number
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        : SafeJetColors.lightCardBackground,
                     borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _sendVerificationCode,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: SafeJetColors.secondaryHighlight,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: SafeJetColors.primaryAccent.withOpacity(0.2),
                     ),
                   ),
-                  child: _loading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current Phone Number',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            _currentPhone ?? 'Loading...',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        )
-                      : const Text('Send Code'),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _isChangingNumber = true;
+                              });
+                            },
+                            child: const Text('Change'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : _sendVerificationCode,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: SafeJetColors.secondaryHighlight,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _loading
+                        ? const CircularProgressIndicator()
+                        : const Text('Send Code'),
+                  ),
+                ),
+              ] else ...[
+                // Phone number change form
+                Text(
+                  'Enter New Phone Number',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: SafeJetColors.primaryAccent.withOpacity(0.2),
+                    ),
+                  ),
+                  child: TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
+                    decoration: InputDecoration(
+                      labelText: 'Phone Number',
+                      labelStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                      prefixIcon: GestureDetector(
+                        onTap: () {
+                          showCountryPicker(
+                            context: context,
+                            showPhoneCode: true,
+                            countryListTheme: CountryListThemeData(
+                              backgroundColor: SafeJetColors.primaryBackground,
+                              textStyle: const TextStyle(color: Colors.white),
+                              searchTextStyle: const TextStyle(color: Colors.white),
+                              bottomSheetHeight: 500,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(20),
+                                topRight: Radius.circular(20),
+                              ),
+                              inputDecoration: InputDecoration(
+                                hintText: 'Search country',
+                                hintStyle: TextStyle(color: Colors.grey[400]),
+                                prefixIcon: const Icon(Icons.search, color: Colors.white),
+                                filled: true,
+                                fillColor: SafeJetColors.primaryAccent.withOpacity(0.1),
+                              ),
+                            ),
+                            onSelect: (Country country) {
+                              setState(() {
+                                _selectedCountry = country;
+                              });
+                            },
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            _selectedCountry?.flagEmoji ?? '🌍',
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                        ),
+                      ),
+                      prefix: _selectedCountry != null
+                          ? Text(
+                              '+${_selectedCountry!.phoneCode} ',
+                              style: const TextStyle(color: Colors.white),
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          setState(() {
+                            _isChangingNumber = false;
+                            _phoneController.clear();
+                            _selectedCountry = null;
+                          });
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(color: SafeJetColors.secondaryHighlight),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _loading ? null : _updatePhoneNumber,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: SafeJetColors.secondaryHighlight,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: _loading
+                            ? const CircularProgressIndicator()
+                            : const Text('Update'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ] else ...[
               Text(
                 'Enter Verification Code',
@@ -179,6 +341,61 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _updatePhoneNumber() async {
+    if (_selectedCountry == null || _phoneController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a country and enter phone number'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      String phoneNumber = _phoneController.text;
+      if (phoneNumber.startsWith('0')) {
+        phoneNumber = phoneNumber.substring(1);
+      }
+      
+      final countryCode = '+${_selectedCountry!.phoneCode}';
+      final countryName = _selectedCountry!.name;
+      final fullPhoneNumber = '$countryCode$phoneNumber';
+
+      // TODO: Add method in auth service to update phone
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await authProvider.updatePhone(
+        phone: fullPhoneNumber,
+        countryCode: countryCode,
+        countryName: countryName,
+        phoneWithoutCode: phoneNumber,
+      );
+
+      setState(() {
+        _currentPhone = fullPhoneNumber;
+        _isChangingNumber = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number updated successfully'),
+          backgroundColor: SafeJetColors.success,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating phone: $e'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _sendVerificationCode() async {

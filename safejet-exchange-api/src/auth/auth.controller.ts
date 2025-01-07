@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Req, Put } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -14,6 +14,7 @@ import { Verify2FADto } from './dto/verify-2fa.dto';
 import { Disable2FADto } from './dto/disable-2fa.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { Request } from 'express';
+import { UpdatePhoneDto } from './dto/update-phone.dto';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -102,5 +103,14 @@ export class AuthController {
   async logout(@GetUser() user: User) {
     // Blacklist the token
     return this.authService.logout(user.id);
+  }
+
+  @Put('update-phone')
+  @UseGuards(JwtAuthGuard)
+  async updatePhone(
+    @Req() req,
+    @Body() updatePhoneDto: UpdatePhoneDto,
+  ) {
+    return this.authService.updatePhone(req.user.id, updatePhoneDto);
   }
 } 

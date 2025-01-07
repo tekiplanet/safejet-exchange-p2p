@@ -385,4 +385,48 @@ class AuthService {
       rethrow;
     }
   }
+
+  Future<Map<String, dynamic>> updatePhone({
+    required String phone,
+    required String countryCode,
+    required String countryName,
+    required String phoneWithoutCode,
+  }) async {
+    try {
+      final token = await storage.read(key: 'accessToken');
+      
+      final response = await http.put(
+        Uri.parse('$baseUrl/update-phone'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: json.encode({
+          'phone': phone,
+          'countryCode': countryCode,
+          'countryName': countryName,
+          'phoneWithoutCode': phoneWithoutCode,
+        }),
+      );
+      
+      final data = json.decode(response.body);
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Update stored user data
+        final currentUser = await getCurrentUser();
+        currentUser['phone'] = phone;
+        currentUser['countryCode'] = countryCode;
+        currentUser['countryName'] = countryName;
+        currentUser['phoneWithoutCode'] = phoneWithoutCode;
+        await storage.write(key: 'user', value: json.encode(currentUser));
+        
+        return data;
+      }
+      
+      throw data['message'] ?? 'Failed to update phone number';
+    } catch (e) {
+      print('Update phone error: $e');
+      rethrow;
+    }
+  }
 } 

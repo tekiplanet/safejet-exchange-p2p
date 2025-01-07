@@ -20,8 +20,10 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
   @override
   void initState() {
     super.initState();
-    // Load KYC levels when screen initializes
-    context.read<KYCProvider>().loadKYCLevels();
+    // Schedule loading KYC levels after the build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<KYCProvider>().loadKYCLevels();
+    });
   }
 
   @override
