@@ -2,16 +2,33 @@ import 'package:flutter/foundation.dart';
 import '../services/auth_service.dart';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/material.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
   bool _isLoading = false;
   bool _isLoggedIn = false;
   String? _error;
+  BuildContext? _context;
 
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _isLoggedIn;
   String? get error => _error;
+
+  void setContext(BuildContext context) {
+    _context = context;
+  }
+
+  Future<void> handleSessionExpiration() async {
+    await logout();
+    if (_context != null && _context!.mounted) {
+      // Clear navigation stack and go to login
+      Navigator.of(_context!).pushNamedAndRemoveUntil(
+        '/login',
+        (route) => false,
+      );
+    }
+  }
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     _isLoading = true;
@@ -283,6 +300,9 @@ class AuthProvider with ChangeNotifier {
 
     } catch (e) {
       _error = e.toString();
+      if (e.toString().contains('Session expired')) {
+        await handleSessionExpiration();
+      }
       rethrow;
     } finally {
       _isLoading = false;
@@ -305,6 +325,9 @@ class AuthProvider with ChangeNotifier {
       await _authService.sendPhoneVerification();
     } catch (e) {
       _error = e.toString();
+      if (e.toString().contains('Session expired')) {
+        await handleSessionExpiration();
+      }
       rethrow;
     } finally {
       _isLoading = false;
@@ -322,6 +345,9 @@ class AuthProvider with ChangeNotifier {
       await _updateStoredUser(response['user']);
     } catch (e) {
       _error = e.toString();
+      if (e.toString().contains('Session expired')) {
+        await handleSessionExpiration();
+      }
       rethrow;
     } finally {
       _isLoading = false;

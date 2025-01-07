@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/kyc_provider.dart';
 import 'package:country_picker/country_picker.dart';
 import '../../providers/auth_provider.dart';
+import 'dart:async';
 
 class PhoneVerificationScreen extends StatefulWidget {
   const PhoneVerificationScreen({super.key});
@@ -21,11 +22,33 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   bool _isChangingNumber = false;
   Country? _selectedCountry;
   String? _currentPhone;
+  int _resendCooldown = 0;
+  Timer? _cooldownTimer;
 
   @override
   void initState() {
     super.initState();
     _loadUserPhone();
+    Provider.of<AuthProvider>(context, listen: false).setContext(context);
+  }
+
+  @override
+  void dispose() {
+    _cooldownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startCooldownTimer() {
+    setState(() => _resendCooldown = 60);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_resendCooldown > 0) {
+          _resendCooldown--;
+        } else {
+          _cooldownTimer?.cancel();
+        }
+      });
+    });
   }
 
   Future<void> _loadUserPhone() async {
@@ -305,7 +328,11 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                 controller: _otpController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  hintText: '123456',
+                  hintText: 'Enter 6-digit code',
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    fontSize: 14,
+                  ),
                   prefixIcon: const Icon(Icons.lock_clock),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -335,6 +362,39 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
                         )
                       : const Text('Verify'),
                 ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    "Didn't receive code? ",
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: (_loading || _resendCooldown > 0) ? null : _sendVerificationCode,
+                    child: _loading 
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              SafeJetColors.secondaryHighlight,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          _resendCooldown > 0 ? 'Resend in ${_resendCooldown}s' : 'Resend',
+                          style: TextStyle(
+                            color: SafeJetColors.secondaryHighlight,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -399,6 +459,8 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   }
 
   Future<void> _sendVerificationCode() async {
+    if (_resendCooldown > 0) return;
+
     setState(() => _loading = true);
     try {
       final response = await Provider.of<AuthProvider>(context, listen: false)
@@ -408,6 +470,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         _codeSent = true;
         _loading = false;
       });
+      _startCooldownTimer();
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

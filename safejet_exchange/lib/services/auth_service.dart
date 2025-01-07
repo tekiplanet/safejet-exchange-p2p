@@ -394,6 +394,9 @@ class AuthService {
   }) async {
     try {
       final token = await storage.read(key: 'accessToken');
+      if (token == null) {
+        throw 'Authentication token not found';
+      }
       
       final response = await http.put(
         Uri.parse('$baseUrl/update-phone'),
@@ -411,6 +414,20 @@ class AuthService {
       
       final data = json.decode(response.body);
       
+      if (response.statusCode == 401) {
+        final refreshed = await refreshToken();
+        if (refreshed) {
+          return updatePhone(
+            phone: phone,
+            countryCode: countryCode,
+            countryName: countryName,
+            phoneWithoutCode: phoneWithoutCode,
+          );
+        } else {
+          throw 'Session expired. Please login again.';
+        }
+      }
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         // Update stored user data
         final currentUser = await getCurrentUser();
@@ -433,6 +450,10 @@ class AuthService {
   Future<void> sendPhoneVerification() async {
     try {
       final token = await storage.read(key: 'accessToken');
+      if (token == null) {
+        throw 'Authentication token not found';
+      }
+
       final response = await http.post(
         Uri.parse('$baseUrl/send-phone-verification'),
         headers: {
@@ -442,6 +463,19 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
+      
+      // Handle token expiration
+      if (response.statusCode == 401) {
+        // Try to refresh token
+        final refreshed = await refreshToken();
+        if (refreshed) {
+          // Retry with new token
+          return sendPhoneVerification();
+        } else {
+          throw 'Session expired. Please login again.';
+        }
+      }
+
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw data['message'] ?? 'Failed to send verification code';
       }
@@ -451,9 +485,38 @@ class AuthService {
     }
   }
 
+  Future<bool> refreshToken() async {
+    try {
+      final refreshToken = await storage.read(key: 'refreshToken');
+      if (refreshToken == null) return false;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/refresh-token'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({'refreshToken': refreshToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        await storage.write(key: 'accessToken', value: data['accessToken']);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Token refresh error: $e');
+      return false;
+    }
+  }
+
   Future<Map<String, dynamic>> verifyPhone(String code) async {
     try {
       final token = await storage.read(key: 'accessToken');
+      if (token == null) {
+        throw 'Authentication token not found';
+      }
+      
       final response = await http.post(
         Uri.parse('$baseUrl/verify-phone'),
         headers: {
@@ -464,6 +527,19 @@ class AuthService {
       );
 
       final data = json.decode(response.body);
+      
+      // Handle token expiration
+      if (response.statusCode == 401) {
+        // Try to refresh token
+        final refreshed = await refreshToken();
+        if (refreshed) {
+          // Retry with new token
+          return verifyPhone(code);
+        } else {
+          throw 'Session expired. Please login again.';
+        }
+      }
+
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw data['message'] ?? 'Failed to verify phone';
       }

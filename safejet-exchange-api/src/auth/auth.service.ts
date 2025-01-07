@@ -637,11 +637,49 @@ export class AuthService {
     user.phoneVerified = true;
     user.verificationCode = null;
     user.verificationCodeExpires = null;
+
+    // Update KYC level if this completes level 1
+    if (user.emailVerified && user.phoneVerified && user.kycLevel < 1) {
+      const level1 = await this.kycLevelRepository.findOne({ where: { level: 1 } });
+      if (level1) {
+        user.kycLevel = 1;
+        user.kycLevelDetails = level1;
+      }
+    }
+
     await this.userRepository.save(user);
 
     return {
       message: 'Phone number verified successfully',
       user: this.sanitizeUser(user),
     };
+  }
+
+  async refreshToken(refreshToken: string) {
+    try {
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: process.env.JWT_SECRET,
+      });
+
+      const user = await this.userRepository.findOne({
+        where: { id: payload.sub },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      const accessToken = this.jwtService.sign(
+        { sub: user.id, email: user.email },
+        {
+          secret: process.env.JWT_SECRET,
+          expiresIn: process.env.JWT_EXPIRATION,
+        },
+      );
+
+      return { accessToken };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 } 

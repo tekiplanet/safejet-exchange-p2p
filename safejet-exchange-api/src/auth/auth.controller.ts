@@ -129,4 +129,9 @@ export class AuthController {
   ) {
     return this.authService.verifyPhone(user.id, code);
   }
+
+  @Post('refresh-token')
+  async refreshToken(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refreshToken(refreshToken);
+  }
 } 
