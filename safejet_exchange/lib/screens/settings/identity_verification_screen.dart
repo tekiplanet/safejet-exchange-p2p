@@ -12,6 +12,7 @@ import '../../models/kyc_details.dart';
 import 'package:country_picker/country_picker.dart';
 import '../../providers/auth_provider.dart';
 import 'dart:convert';
+import 'package:flutter/cupertino.dart';
 
 class IdentityVerificationScreen extends StatefulWidget {
   const IdentityVerificationScreen({super.key});
@@ -46,6 +47,10 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
 
   // Add map to store country data
   List<dynamic>? _countryData;
+
+  // Add controllers for search
+  final TextEditingController _stateSearchController = TextEditingController();
+  final TextEditingController _citySearchController = TextEditingController();
 
   @override
   void initState() {
@@ -102,6 +107,8 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     _lastNameController.dispose();
     _dobController.dispose();
     _addressController.dispose();
+    _stateSearchController.dispose();
+    _citySearchController.dispose();
     super.dispose();
   }
 
@@ -448,39 +455,100 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       return;
     }
 
+    List<String> filteredStates = states;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Select State',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          const Divider(),
-          Expanded(
-            child: ListView.builder(
-              itemCount: states.length,
-              itemBuilder: (context, index) => ListTile(
-                title: Text(states[index]),
-                onTap: () {
-                  setState(() {
-                    _selectedState = states[index];
-                    _selectedCity = null;
-                    _cities = _getCities(_selectedCountry!, states[index]);
-                  });
-                  Navigator.pop(context);
-                },
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                width: 50,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(5),
+                ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Select State',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: CupertinoSearchTextField(
+                  controller: _stateSearchController,
+                  onChanged: (value) {
+                    setModalState(() {
+                      filteredStates = states
+                          .where((state) => state.toLowerCase()
+                              .contains(value.toLowerCase()))
+                          .toList();
+                    });
+                  },
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (filteredStates.isEmpty) 
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 48,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No states found',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: filteredStates.length,
+                    itemBuilder: (context, index) => ListTile(
+                      title: Text(filteredStates[index]),
+                      onTap: () {
+                        setState(() {
+                          _selectedState = filteredStates[index];
+                          _selectedCity = null;
+                          _cities = _getCities(_selectedCountry!, filteredStates[index]);
+                        });
+                        _stateSearchController.clear();
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -488,18 +556,108 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   void _showCitiesPicker() {
     if (_selectedState == null) return;
     
+    final cities = _getCities(_selectedCountry!, _selectedState!);
+    if (cities.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No cities found for selected state'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    List<String> filteredCities = cities;
+
     showModalBottomSheet(
       context: context,
-      builder: (context) => ListView.builder(
-        itemCount: _cities.length,
-        itemBuilder: (context, index) => ListTile(
-          title: Text(_cities[index]),
-          onTap: () {
-            setState(() {
-              _selectedCity = _cities[index];
-            });
-            Navigator.pop(context);
-          },
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                width: 50,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'Select City',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: CupertinoSearchTextField(
+                  controller: _citySearchController,
+                  onChanged: (value) {
+                    setModalState(() {
+                      filteredCities = cities
+                          .where((city) => city.toLowerCase()
+                              .contains(value.toLowerCase()))
+                          .toList();
+                    });
+                  },
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (filteredCities.isEmpty) 
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 48,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No cities found',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: filteredCities.length,
+                    itemBuilder: (context, index) => ListTile(
+                      title: Text(filteredCities[index]),
+                      onTap: () {
+                        setState(() {
+                          _selectedCity = filteredCities[index];
+                        });
+                        _citySearchController.clear();
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -527,6 +685,9 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       final states = (countryData['state'] as List)
           .map((state) => state['name'].toString())
           .toList();
+      
+      // Sort states alphabetically
+      states.sort((a, b) => a.compareTo(b));
       
       print('Found states: $states');
       return states;
@@ -568,6 +729,9 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       final cities = (stateData['city'] as List)
           .map((city) => city['name'].toString())
           .toList();
+      
+      // Sort cities alphabetically
+      cities.sort((a, b) => a.compareTo(b));
       
       print('Found cities: $cities');
       return cities;
