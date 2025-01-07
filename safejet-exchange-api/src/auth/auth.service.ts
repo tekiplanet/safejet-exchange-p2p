@@ -644,6 +644,12 @@ export class AuthService {
       if (level1) {
         user.kycLevel = 1;
         user.kycLevelDetails = level1;
+        // Send KYC upgrade email
+        await this.emailService.sendKYCLevelUpgradeEmail(
+          user.email,
+          user.fullName,
+          1
+        );
       }
     }
 

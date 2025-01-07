@@ -202,4 +202,86 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  kycLevelUpgradeEmail(userName: string, newLevel: number, isDark = true) {
+    const content = `
+      <h1>KYC Level ${newLevel} Achieved! 🎉</h1>
+      <p>Congratulations ${userName}! Your KYC level has been upgraded to Level ${newLevel}.</p>
+      
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">New Benefits 🌟</h2>
+        ${this.getKYCLevelBenefits(newLevel)}
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Next Steps 🚀</h2>
+        ${this.getNextStepsContent(newLevel)}
+      </div>
+
+      <p>Thank you for choosing SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  private getKYCLevelBenefits(level: number): string {
+    const benefits = {
+      1: `
+        <ul>
+          <li>Increased withdrawal limits</li>
+          <li>Access to P2P trading</li>
+          <li>Basic trading features</li>
+        </ul>
+      `,
+      2: `
+        <ul>
+          <li>Higher withdrawal limits</li>
+          <li>Advanced trading features</li>
+          <li>Lower trading fees</li>
+          <li>OTC trading access</li>
+        </ul>
+      `,
+      3: `
+        <ul>
+          <li>Maximum withdrawal limits</li>
+          <li>VIP trading features</li>
+          <li>Lowest trading fees</li>
+          <li>Priority support</li>
+          <li>Exclusive market insights</li>
+        </ul>
+      `,
+    };
+    return benefits[level] || '';
+  }
+
+  private getNextStepsContent(level: number): string {
+    const nextSteps = {
+      1: `
+        <p>To unlock more benefits, consider upgrading to Level 2:</p>
+        <ul>
+          <li>Submit a valid government ID</li>
+          <li>Provide proof of address</li>
+          <li>Complete facial verification</li>
+        </ul>
+      `,
+      2: `
+        <p>To reach our highest tier (Level 3), you'll need to:</p>
+        <ul>
+          <li>Complete advanced verification</li>
+          <li>Provide additional documentation</li>
+          <li>Pass enhanced due diligence</li>
+        </ul>
+      `,
+      3: `
+        <p>You've reached our highest KYC level! You now have access to all features and benefits.</p>
+        <ul>
+          <li>Explore our advanced trading features</li>
+          <li>Join our VIP community</li>
+          <li>Contact your dedicated account manager</li>
+        </ul>
+      `,
+    };
+    return nextSteps[level] || '';
+  }
 } 

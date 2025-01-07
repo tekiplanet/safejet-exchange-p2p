@@ -114,4 +114,17 @@ export class EmailService {
       html: this.emailTemplatesService.loginNotificationEmail(loginInfo),
     });
   }
+
+  async sendKYCLevelUpgradeEmail(email: string, userName: string, newLevel: number) {
+    try {
+      await this.transporter.sendMail({
+        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        to: email,
+        subject: `KYC Level ${newLevel} Achieved - SafeJet Exchange`,
+        html: this.emailTemplatesService.kycLevelUpgradeEmail(userName, newLevel),
+      });
+    } catch (error) {
+      console.error('KYC upgrade email failed:', error);
+    }
+  }
 } 
