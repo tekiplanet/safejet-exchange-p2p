@@ -175,44 +175,45 @@ class KYCService {
     }
   }
 
+  Future<String> getOnfidoToken() async {
+    try {
+      final response = await _dio.post('/kyc/onfido-token');
+      return response.data['token'];
+    } catch (e) {
+      print('Error getting Onfido token: $e');
+      rethrow;
+    }
+  }
+
   Future<void> startDocumentVerification() async {
     try {
-      final headers = await _getAuthHeaders();
-      final response = await _dio.post(
-        '/kyc/onfido-token',
-        options: Options(headers: headers),
+      // Get the token and initialize Onfido SDK
+      final token = await getOnfidoToken();
+      
+      // Initialize Onfido SDK
+      final onfido = Onfido(
+        sdkToken: token,
+        enterpriseFeatures: EnterpriseFeatures(
+          hideOnfidoLogo: false,
+        ),
       );
-      
-      if (response.statusCode == 200) {
-        final sdkToken = response.data['token'];
-        
-        _onfido = Onfido(
-          sdkToken: sdkToken,
-          enterpriseFeatures: EnterpriseFeatures(
-            hideOnfidoLogo: false,
-          ),
-        );
 
-        final results = await _onfido!.start(
-          flowSteps: FlowSteps(
-            welcome: true,
-            documentCapture: DocumentCapture(
-              documentType: DocumentType.nationalIdentityCard,
-            ),
+      // Start the verification flow
+      final results = await onfido.start(
+        flowSteps: FlowSteps(
+          welcome: true,
+          documentCapture: DocumentCapture(),
+          faceCapture: FaceCapture.photo(
+            withIntroScreen: true,
           ),
-        );
-        
-        if (results.isNotEmpty) {
-          print('Document verification completed successfully');
-          return;
-        }
-        
-        throw Exception('Document verification failed or was cancelled');
+        ),
+      );
+
+      if (results.isEmpty) {
+        throw Exception('Verification was cancelled or failed');
       }
-      
-      throw Exception('Failed to get Onfido token');
     } catch (e) {
-      print('Document verification error: $e');
+      print('Error starting document verification: $e');
       rethrow;
     }
   }

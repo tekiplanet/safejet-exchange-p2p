@@ -22,6 +22,7 @@ class IdentityVerificationScreen extends StatefulWidget {
 }
 
 class _IdentityVerificationScreenState extends State<IdentityVerificationScreen> {
+  final steps = ['Personal Info', 'Identity Verification'];
   int _currentStep = 0;
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
@@ -51,6 +52,11 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   // Add controllers for search
   final TextEditingController _stateSearchController = TextEditingController();
   final TextEditingController _citySearchController = TextEditingController();
+
+  bool _isSubmitting = false;
+
+  // Track Onfido verification status
+  bool _isOnfidoVerifying = false;
 
   @override
   void initState() {
@@ -205,7 +211,6 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   }
 
   Widget _buildProgressIndicator(bool isDark) {
-    final steps = ['Personal Info', 'Document', 'Verification'];
     return Row(
       children: steps.asMap().entries.map((entry) {
         final index = entry.key;
@@ -370,25 +375,36 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
               },
             ),
             const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _handleContinue,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: SafeJetColors.secondaryHighlight,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _handleContinue,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SafeJetColors.secondaryHighlight,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'Continue',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  child: _isSubmitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        'Continue',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
                 ),
               ),
             ),
@@ -1032,7 +1048,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     if (!_formKey.currentState!.validate()) return;
 
     try {
-      setState(() => _isLoading = true);
+      setState(() => _isSubmitting = true);
 
       await context.read<KYCProvider>().submitIdentityDetails(
         firstName: _firstNameController.text,
@@ -1051,9 +1067,44 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
             backgroundColor: Colors.green,
           ),
         );
-        await context.read<KYCProvider>().startDocumentVerification();
-      }
 
+        // Update step indicator before starting Onfido
+        setState(() {
+          _currentStep = 1;
+          _isOnfidoVerifying = true;
+        });
+
+        // Start document verification with Onfido
+        try {
+          await context.read<KYCProvider>().startDocumentVerification();
+          // If verification completes successfully
+          if (mounted) {
+            setState(() {
+              _isOnfidoVerifying = false;
+            });
+            // Show success message and navigate back
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Verification completed successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            Navigator.pop(context);
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              _isOnfidoVerifying = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Verification failed: ${e.toString()}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
     } catch (e) {
       print('Error submitting identity details: $e');
       if (mounted) {
@@ -1066,7 +1117,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -1169,5 +1220,91 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
         _dobController.text = '${picked.day}/${picked.month}/${picked.year}';
       });
     }
+  }
+
+  Widget _buildStepIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Row(
+        children: List.generate(steps.length, (index) {
+          final isActive = index == _currentStep;
+          final isCompleted = index < _currentStep;
+          
+          return Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        height: 40,
+                        width: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isCompleted
+                              ? SafeJetColors.secondaryHighlight
+                              : isActive
+                                  ? SafeJetColors.secondaryHighlight
+                                  : Colors.grey[300],
+                        ),
+                        child: Center(
+                          child: isCompleted
+                              ? const Icon(Icons.check, color: Colors.white)
+                              : Text(
+                                  '${index + 1}',
+                                  style: TextStyle(
+                                    color: isActive ? Colors.white : Colors.grey[600],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        steps[index],
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: isActive ? Colors.white : Colors.grey[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (index < steps.length - 1)
+                  Expanded(
+                    child: Container(
+                      height: 2,
+                      color: isCompleted
+                          ? SafeJetColors.secondaryHighlight
+                          : Colors.grey[300],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isOnfidoVerifying) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Verifying your identity...',
+              style: TextStyle(fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return _buildPersonalInfoStep(Theme.of(context).brightness == Brightness.dark);
   }
 } 
