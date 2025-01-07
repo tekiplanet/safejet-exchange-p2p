@@ -23,9 +23,9 @@ class KYCProvider extends ChangeNotifier {
       notifyListeners();
       
       _kycDetails = await _kycService.getUserKYCDetails();
+      _loading = false;
       notifyListeners();
     } finally {
-      _loading = false;
       notifyListeners();
     }
   }

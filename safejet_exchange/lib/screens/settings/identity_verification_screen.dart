@@ -55,8 +55,11 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   @override
   void initState() {
     super.initState();
-    _loadKYCDetails();
-    _loadUserDetails();
+    // Schedule loading after the build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadKYCDetails();
+      _loadUserDetails();
+    });
     _loadCountryData();
   }
 
