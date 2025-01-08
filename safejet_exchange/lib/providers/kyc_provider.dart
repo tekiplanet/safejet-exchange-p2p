@@ -121,15 +121,16 @@ class KYCProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> startDocumentVerification() async {
+  Future<Map<String, String>> startDocumentVerification() async {
     try {
       _loading = true;
       _error = null;
       notifyListeners();
 
-      await _kycService.startDocumentVerification();
+      final result = await _kycService.startDocumentVerification();
       
       await loadKYCDetails();
+      return result;
     } catch (e) {
       _error = e.toString();
       notifyListeners();

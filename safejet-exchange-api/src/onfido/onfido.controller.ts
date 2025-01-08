@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards, Get, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Controller, Post, UseGuards, Get, BadRequestException, NotFoundException, Body } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { OnfidoService } from './onfido.service';
 import { GetUser } from '../auth/get-user.decorator';
@@ -48,6 +48,38 @@ export class OnfidoController {
       return { token: sdkToken.data.token };
     } catch (error) {
       console.error('Error generating SDK token:', error);
+      throw error;
+    }
+  }
+
+  @Post('submit-verification')
+  @UseGuards(JwtAuthGuard)
+  async submitVerification(
+    @GetUser() user: User,
+    @Body() data: { documentResults: any; verificationType: string }
+  ) {
+    try {
+      // Update user's verification status to pending
+      await this.userRepository.update(user.id, {
+        kycData: {
+          ...user.kycData,
+          verificationStatus: {
+            ...user.kycData?.verificationStatus,
+            identity: {
+              status: 'pending',
+              lastAttempt: new Date(),
+            }
+          }
+        }
+      });
+
+      // Process will continue via webhook when Onfido completes verification
+      return {
+        status: 'pending',
+        message: 'Your documents are being verified. This may take a few minutes.'
+      };
+    } catch (error) {
+      console.error('Error submitting verification:', error);
       throw error;
     }
   }

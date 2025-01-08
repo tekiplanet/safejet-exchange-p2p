@@ -205,12 +205,10 @@ class KYCService {
     }
   }
 
-  Future<void> startDocumentVerification() async {
+  Future<Map<String, String>> startDocumentVerification() async {
     try {
-      // Get the token and initialize Onfido SDK
       final token = await getOnfidoToken();
       
-      // Initialize Onfido SDK
       final onfido = Onfido(
         sdkToken: token,
       );
@@ -227,8 +225,31 @@ class KYCService {
       );
 
       if (results.isEmpty) {
-        throw Exception('Verification was cancelled or failed');
+        throw Exception('Verification was cancelled');
       }
+      
+      // Send results to backend
+      final authToken = await _storage.read(key: 'accessToken');
+      await _dio.post(
+        '/kyc/submit-verification',
+        data: {
+          'documentResults': results,
+          'verificationType': 'identity'
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $authToken',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+      
+      // Show pending status
+      return {
+        'status': 'pending',
+        'message': 'Your documents are being verified. This may take a few minutes.'
+      };
+
     } catch (e) {
       print('Error starting document verification: $e');
       rethrow;
