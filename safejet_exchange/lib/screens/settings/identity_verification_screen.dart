@@ -11,6 +11,7 @@ import '../../providers/kyc_provider.dart';
 import 'sumsub_verification_screen.dart';
 import 'package:animate_do/animate_do.dart';
 import '../../widgets/location_picker/location_picker.dart';
+import '../../providers/auth_provider.dart';
 
 class IdentityVerificationScreen extends StatefulWidget {
   const IdentityVerificationScreen({super.key});
@@ -46,11 +47,28 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     }
   }
 
+  Future<void> _loadUserDetails() async {
+    try {
+      final provider = context.read<AuthProvider>();
+      final user = await provider.getCurrentUser();
+      final fullName = user['fullName'] as String;
+      final names = fullName.split(' ');
+      
+      setState(() {
+        _firstNameController.text = names.first;
+        _lastNameController.text = names.length > 1 ? names.sublist(1).join(' ') : '';
+      });
+    } catch (e) {
+      print('Error loading user details: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadKYCDetails();
+      _loadUserDetails();
     });
     _loadSavedFormData();
     _setupAutoSave();
@@ -115,20 +133,30 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     }
   }
 
-  Future<void> _selectDate() async {
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime now = DateTime.now();
+    final DateTime minAge = now.subtract(const Duration(days: 6570)); // 18 years ago
+    final DateTime maxAge = now.subtract(const Duration(days: 36500)); // 100 years ago
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 6570)), // 18 years ago
-      firstDate: DateTime.now().subtract(const Duration(days: 36500)), // 100 years ago
-      lastDate: DateTime.now().subtract(const Duration(days: 6570)), // 18 years ago
+      initialDate: minAge,
+      firstDate: maxAge,
+      lastDate: minAge,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: ColorScheme.light(
-              primary: SafeJetColors.primary,
+              primary: SafeJetColors.secondaryHighlight,
               onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
+              surface: Theme.of(context).scaffoldBackgroundColor,
+              onSurface: Theme.of(context).textTheme.bodyLarge!.color!,
+            ),
+            dialogBackgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: SafeJetColors.secondaryHighlight,
+              ),
             ),
           ),
           child: child!,
@@ -138,7 +166,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
 
     if (picked != null) {
       setState(() {
-        _dobController.text = DateFormat('yyyy-MM-dd').format(picked);
+        _dobController.text = '${picked.day}/${picked.month}/${picked.year}';
       });
     }
   }
@@ -278,7 +306,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
                         ),
                         const SizedBox(height: 16),
                         GestureDetector(
-                          onTap: _selectDate,
+                          onTap: () => _selectDate(context),
                           child: AbsorbPointer(
                             child: _buildFormField(
                               controller: _dobController,
@@ -404,11 +432,21 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
 
     setState(() => _loading = true);
     try {
-      await Provider.of<KYCProvider>(context, listen: false).submitIdentityDetails(
-        firstName: _firstNameController.text,
-        lastName: _lastNameController.text,
-        dateOfBirth: _dobController.text,
-        address: _addressController.text,
+      // Convert date from DD/MM/YYYY to YYYY-MM-DD
+      final dateParts = _dobController.text.split('/');
+      if (dateParts.length != 3) {
+        throw Exception('Invalid date format');
+      }
+      final day = dateParts[0].padLeft(2, '0');
+      final month = dateParts[1].padLeft(2, '0');
+      final year = dateParts[2];
+      final formattedDate = '$year-$month-$day';
+
+      await context.read<KYCProvider>().submitIdentityDetails(
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        dateOfBirth: formattedDate,  // Now in YYYY-MM-DD format
+        address: _addressController.text.trim(),
         city: _selectedCity,
         state: _selectedState,
         country: _selectedCountry,
@@ -422,15 +460,18 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       // Start document verification with Sumsub after details are submitted
       await _startVerification();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error submitting details: $e'),
-          backgroundColor: SafeJetColors.error,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting details: $e'),
+            backgroundColor: SafeJetColors.error,
+          ),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 

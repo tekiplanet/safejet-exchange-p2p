@@ -135,19 +135,18 @@ class KYCService {
     required String country,
   }) async {
     try {
-      print('Sending request to API:');
-      print('URL: ${_dio.options.baseUrl}/auth/identity-details');
-      print('Data: {');
-      print('  firstName: $firstName,');
-      print('  lastName: $lastName,');
-      print('  dateOfBirth: $dateOfBirth,');
-      print('  address: $address,');
-      print('  city: $city,');
-      print('  state: $state,');
-      print('  country: $country');
-      print('}');
+      // Validate all fields are present
+      if (firstName.isEmpty || lastName.isEmpty || dateOfBirth.isEmpty || 
+          address.isEmpty || city.isEmpty || state.isEmpty || country.isEmpty) {
+        throw Exception('All fields are required');
+      }
 
-      final token = await _storage.read(key: 'accessToken');
+      // Validate date format (should be YYYY-MM-DD)
+      if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dateOfBirth)) {
+        throw Exception('Invalid date format. Expected YYYY-MM-DD');
+      }
+
+      final headers = await _getAuthHeaders();
       final response = await _dio.put(
         '/auth/identity-details',
         data: {
@@ -159,22 +158,15 @@ class KYCService {
           'state': state,
           'country': country,
         },
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        ),
+        options: Options(headers: headers),
       );
 
-      print('API Response: ${response.data}');
       return response.data;
     } catch (e) {
-      print('API Error: $e');
       if (e is DioException) {
-        print('Response data: ${e.response?.data}');
-        print('Response status: ${e.response?.statusCode}');
-        print('Response headers: ${e.response?.headers}');
+        final responseData = e.response?.data;
+        final errorMessage = responseData is Map ? responseData['message'] ?? 'Unknown error' : 'Unknown error';
+        throw Exception('Failed to submit identity details: $errorMessage');
       }
       rethrow;
     }
