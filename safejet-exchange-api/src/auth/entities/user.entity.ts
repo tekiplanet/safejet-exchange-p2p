@@ -97,6 +97,8 @@ export class User {
         documentType?: string;
         lastAttempt?: Date;
         failureReason?: string;
+        documentId?: string;
+        faceId?: string;
       };
       address?: {
         status: 'pending' | 'processing' | 'completed' | 'failed';

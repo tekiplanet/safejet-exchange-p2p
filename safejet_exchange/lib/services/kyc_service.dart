@@ -315,4 +315,26 @@ class KYCService {
       rethrow;
     }
   }
+
+  Future<Map<String, String>> getVerificationStatus() async {
+    try {
+      final token = await _storage.read(key: 'accessToken');
+      final response = await _dio.get(
+        '/kyc/verification-status',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+      return {
+        'status': response.data['status'],
+        'message': response.data['message'],
+      };
+    } catch (e) {
+      print('Error getting verification status: $e');
+      rethrow;
+    }
+  }
 }

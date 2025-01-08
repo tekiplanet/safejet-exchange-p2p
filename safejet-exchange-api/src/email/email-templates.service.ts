@@ -284,4 +284,23 @@ export class EmailTemplatesService {
     };
     return nextSteps[level] || '';
   }
+
+  verificationFailedEmail(userName: string, reason: string): string {
+    return `
+      <h2>Hello ${userName},</h2>
+      <p>Your verification attempt was unsuccessful.</p>
+      <p>Reason: ${reason}</p>
+      <p>Please try again with valid documents.</p>
+      <p>Best regards,<br>SafeJet Exchange Team</p>
+    `;
+  }
+
+  verificationSuccessEmail(userName: string): string {
+    return `
+      <h2>Hello ${userName},</h2>
+      <p>Your verification has been completed successfully!</p>
+      <p>You now have access to additional features on SafeJet Exchange.</p>
+      <p>Best regards,<br>SafeJet Exchange Team</p>
+    `;
+  }
 } 

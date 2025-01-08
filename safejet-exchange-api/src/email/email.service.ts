@@ -129,4 +129,30 @@ export class EmailService {
       console.error('KYC upgrade email failed:', error);
     }
   }
+
+  async sendVerificationFailedEmail(email: string, userName: string, reason: string) {
+    try {
+      await this.transporter.sendMail({
+        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        to: email,
+        subject: 'Verification Failed - SafeJet Exchange',
+        html: this.emailTemplatesService.verificationFailedEmail(userName, reason),
+      });
+    } catch (error) {
+      console.error('Verification failed email error:', error);
+    }
+  }
+
+  async sendVerificationSuccessEmail(email: string, userName: string) {
+    try {
+      await this.transporter.sendMail({
+        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        to: email,
+        subject: 'Verification Successful - SafeJet Exchange',
+        html: this.emailTemplatesService.verificationSuccessEmail(userName),
+      });
+    } catch (error) {
+      console.error('Verification success email error:', error);
+    }
+  }
 } 

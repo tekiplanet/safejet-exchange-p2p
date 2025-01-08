@@ -62,24 +62,80 @@ export class OnfidoController {
       // Update user's verification status to pending
       await this.userRepository.update(user.id, {
         kycData: {
-          ...user.kycData,
+          identityDetails: user.kycData?.identityDetails,
           verificationStatus: {
-            ...user.kycData?.verificationStatus,
             identity: {
               status: 'pending',
               lastAttempt: new Date(),
+              documentId: data.documentResults[0].document.front.id,
+              faceId: data.documentResults[0].face.id,
             }
           }
         }
       });
 
-      // Process will continue via webhook when Onfido completes verification
+      // Create Onfido check
+      await this.onfidoService.createCheck(
+        data.documentResults[0].document.front.id,
+        data.documentResults[0].face.id,
+        user.kycData?.onfidoApplicantId,
+      );
+
       return {
         status: 'pending',
         message: 'Your documents are being verified. This may take a few minutes.'
       };
     } catch (error) {
       console.error('Error submitting verification:', error);
+      throw error;
+    }
+  }
+
+  @Get('verification-status')
+  @UseGuards(JwtAuthGuard)
+  async getVerificationStatus(@GetUser() user: User) {
+    try {
+      const freshUser = await this.userRepository.findOne({
+        where: { id: user.id }
+      });
+
+      if (!freshUser) {
+        throw new NotFoundException('User not found');
+      }
+
+      const status = freshUser.kycData?.verificationStatus?.identity;
+      
+      if (!status) {
+        return {
+          status: 'not_started',
+          message: 'Verification not started'
+        };
+      }
+
+      switch (status.status) {
+        case 'pending':
+          return {
+            status: 'pending',
+            message: 'Your documents are being verified'
+          };
+        case 'completed':
+          return {
+            status: 'completed',
+            message: 'Verification completed successfully'
+          };
+        case 'failed':
+          return {
+            status: 'failed',
+            message: status.failureReason || 'Verification failed'
+          };
+        default:
+          return {
+            status: 'unknown',
+            message: 'Unknown verification status'
+          };
+      }
+    } catch (error) {
+      console.error('Error getting verification status:', error);
       throw error;
     }
   }

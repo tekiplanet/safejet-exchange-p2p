@@ -68,9 +68,7 @@ export class OnfidoService {
 
   async handleCheckCompletion(payload: any) {
     try {
-      const { status, result, applicant_id, document_type, extracted_data } = payload;
-      
-      const isAddressDocument = document_type.toLowerCase().includes('proof_of_address');
+      const { status, result, applicant_id, document_type } = payload;
       
       const user = await this.userRepository.findOne({
         where: {
@@ -84,76 +82,71 @@ export class OnfidoService {
         throw new Error('User not found for applicant ID');
       }
 
-      // Validate document details against submitted details
-      if (status === 'complete' && extracted_data) {
-        const identityDetails = user.kycData?.identityDetails;
-        if (identityDetails) {
-          const detailsMatch = this.validateDocumentDetails(
-            identityDetails,
-            extracted_data,
-            document_type
-          );
-          
-          if (!detailsMatch) {
-            user.kycData = {
-              ...user.kycData,
-              verificationStatus: {
-                ...user.kycData?.verificationStatus,
-                [isAddressDocument ? 'address' : 'identity']: {
-                  status: 'failed',
-                  documentType: document_type,
-                  lastAttempt: new Date(),
-                  failureReason: 'Document details do not match submitted information',
-                },
-              },
-            };
-            await this.userRepository.save(user);
-            return;
+      // Handle different failure scenarios
+      if (status === 'complete' && result !== 'clear') {
+        let failureReason = 'Verification failed';
+        
+        switch (result) {
+          case 'rejected':
+            failureReason = 'Document rejected - please try again with a valid document';
+            break;
+          case 'suspected':
+            failureReason = 'Document appears suspicious';
+            break;
+          case 'caution':
+            failureReason = 'Additional verification required';
+            break;
+        }
+
+        user.kycData = {
+          ...user.kycData,
+          verificationStatus: {
+            ...user.kycData?.verificationStatus,
+            identity: {
+              status: 'failed',
+              lastAttempt: new Date(),
+              failureReason,
+              documentId: user.kycData?.verificationStatus?.identity?.documentId,
+              faceId: user.kycData?.verificationStatus?.identity?.faceId,
+            }
           }
-        }
+        };
+
+        await this.userRepository.save(user);
+        
+        // Send email notification about failure
+        await this.emailService.sendVerificationFailedEmail(
+          user.email,
+          user.fullName,
+          failureReason
+        );
+        
+        return;
       }
 
-      // Update verification status based on document type
-      const verificationKey = isAddressDocument ? 'address' : 'identity';
-      
-      user.kycData = {
-        ...user.kycData,
-        verificationStatus: {
-          ...user.kycData?.verificationStatus,
-          [verificationKey]: {
-            status: status === 'complete' && result === 'clear' ? 'completed' : 'failed',
-            documentType: document_type,
-            lastAttempt: new Date(),
-            failureReason: status === 'complete' && result !== 'clear' ? result : undefined,
-          },
-        },
-      };
+      // Handle successful verification
+      if (status === 'complete' && result === 'clear') {
+        user.kycData = {
+          ...user.kycData,
+          verificationStatus: {
+            ...user.kycData?.verificationStatus,
+            identity: {
+              status: 'completed',
+              lastAttempt: new Date(),
+              documentId: user.kycData?.verificationStatus?.identity?.documentId,
+              faceId: user.kycData?.verificationStatus?.identity?.faceId,
+            }
+          }
+        };
 
-      // Only update KYC level if both verifications are complete
-      const bothVerificationsComplete = 
-        user.kycData?.verificationStatus?.identity?.status === 'completed' &&
-        user.kycData?.verificationStatus?.address?.status === 'completed';
-
-      if (bothVerificationsComplete) {
-        // Update user's KYC level to 2
-        const level2 = await this.kycLevelRepository.findOne({ 
-          where: { level: 2 } 
-        });
-
-        if (level2) {
-          user.kycLevel = 2;
-          user.kycLevelDetails = level2;
-          await this.userRepository.save(user);
-
-          await this.emailService.sendKYCLevelUpgradeEmail(
-            user.email,
-            user.fullName,
-            2
-          );
-        }
+        await this.userRepository.save(user);
+        
+        // Send success email
+        await this.emailService.sendVerificationSuccessEmail(
+          user.email,
+          user.fullName
+        );
       }
-
-      await this.userRepository.save(user);
     } catch (error) {
       console.error('Error handling check completion:', error);
       throw error;
@@ -219,5 +212,22 @@ export class OnfidoService {
   async startAddressVerification(userId: string) {
     // Similar cooldown check for address verification
     // ... implementation
+  }
+
+  async createCheck(documentId: string, faceId: string, applicantId: string) {
+    try {
+      const check = await this.onfido.createCheck({
+        applicant_id: applicantId,
+        report_names: ['document', 'facial_similarity_photo'],
+        document_ids: [documentId],
+        applicant_provides_data: true
+      });
+      
+      console.log('Created Onfido check:', check);
+      return check;
+    } catch (error) {
+      console.error('Error creating Onfido check:', error);
+      throw error;
+    }
   }
 } 
