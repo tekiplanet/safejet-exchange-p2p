@@ -228,12 +228,30 @@ class KYCService {
         throw Exception('Verification was cancelled');
       }
       
+      // Convert Onfido results to serializable format
+      final serializedResults = results.map((result) => {
+        'document': {
+          'front': {
+            'id': result.document?.front?.id,
+            'fileName': result.document?.front?.fileName,
+            'fileSize': result.document?.front?.fileSize,
+            'fileType': result.document?.front?.fileType,
+          },
+          'typeSelected': result.document?.typeSelected.toString(),
+          'countrySelected': result.document?.countrySelected,
+        },
+        'face': {
+          'id': result.face?.id,
+          'variant': result.face?.variant.toString(),
+        },
+      }).toList();
+      
       // Send results to backend
       final authToken = await _storage.read(key: 'accessToken');
       await _dio.post(
         '/kyc/submit-verification',
         data: {
-          'documentResults': results,
+          'documentResults': serializedResults,
           'verificationType': 'identity'
         },
         options: Options(
