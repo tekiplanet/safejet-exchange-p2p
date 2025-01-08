@@ -17,12 +17,16 @@ class KYCLevelsScreen extends StatefulWidget {
 }
 
 class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
+  bool _loading = false;
+  late KYCProvider _kycProvider;
+
   @override
   void initState() {
     super.initState();
+    _kycProvider = Provider.of<KYCProvider>(context, listen: false);
     // Schedule loading KYC levels after the build is complete
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<KYCProvider>().loadKYCLevels();
+      _kycProvider.loadKYCLevels();
     });
   }
 
@@ -466,16 +470,14 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
   }
 
   Widget _buildVerificationButton(BuildContext context, int currentLevel) {
-    final kycProvider = Provider.of<KYCProvider>(context);
-    
     if (currentLevel >= 2) return const SizedBox.shrink();
 
     return ElevatedButton(
-      onPressed: kycProvider.loading 
+      onPressed: _kycProvider.loading 
         ? null 
         : () async {
             try {
-              await kycProvider.startKYCVerification();
+              await _kycProvider.startVerification();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -496,9 +498,30 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
             }
           },
       child: Text(
-        kycProvider.loading ? 'Verifying...' : 'Start Verification',
+        _kycProvider.loading ? 'Verifying...' : 'Start Verification',
         style: TextStyle(color: Colors.white),
       ),
     );
+  }
+
+  Future<void> _startVerification() async {
+    try {
+      setState(() => _loading = true);
+      await _kycProvider.startVerification();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verification started')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting verification: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
   }
 } 

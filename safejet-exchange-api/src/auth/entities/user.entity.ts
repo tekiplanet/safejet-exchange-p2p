@@ -80,7 +80,7 @@ export class User {
     addressVerified?: boolean;
     videoVerified?: boolean;
     verificationCompletedAt?: Date;
-    onfidoApplicantId?: string;
+    sumsubApplicantId?: string;
     identityDetails?: {
       firstName: string;
       lastName: string;
@@ -97,8 +97,9 @@ export class User {
         documentType?: string;
         lastAttempt?: Date;
         failureReason?: string;
-        documentId?: string;
-        faceId?: string;
+        reviewAnswer?: string;
+        reviewRejectType?: string;
+        reviewRejectDetails?: string;
       };
       address?: {
         status: 'pending' | 'processing' | 'completed' | 'failed';

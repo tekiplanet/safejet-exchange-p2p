@@ -8,7 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './email/email.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { KYCModule } from './kyc/kyc.module';
-import { OnfidoModule } from './onfido/onfido.module';
+import { SumsubModule } from './sumsub/sumsub.module';
 
 @Module({
   imports: [
@@ -30,7 +30,7 @@ import { OnfidoModule } from './onfido/onfido.module';
     AuthModule,
     EmailModule,
     KYCModule,
-    OnfidoModule,
+    SumsubModule,
     ThrottlerModule.forRoot([{
       ttl: 60, // time in seconds
       limit: 10, // number of requests per ttl

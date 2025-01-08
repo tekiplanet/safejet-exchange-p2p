@@ -49,7 +49,7 @@
 	<string>We need access to your camera for identity verification</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>We need access to your microphone for video verification</string>
-	<key>io.onfido.sdk.capture.manual</key>
-	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photos for document verification</string>
 </dict>
 </plist>

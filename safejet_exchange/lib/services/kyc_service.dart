@@ -2,18 +2,11 @@ import 'package:dio/dio.dart';
 import '../models/kyc_level.dart';
 import '../models/kyc_details.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:onfido_sdk/onfido_sdk.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class KYCService {
   final Dio _dio;
   final _storage = const FlutterSecureStorage();
-
-  // Store applicant ID for later use
-  String? _currentApplicantId;
-
-  // Store Onfido instance
-  Onfido? _onfido;
 
   KYCService(Dio dio) : _dio = dio {
     _dio.options.baseUrl = dotenv.env['API_URL'] ?? 'http://localhost:3000';
@@ -76,46 +69,58 @@ class KYCService {
     }
   }
 
-  Future<void> startKYCVerification() async {
+  Future<Map<String, String>> startDocumentVerification() async {
+    try {
+      final token = await getAccessToken();
+      
+      return {
+        'token': token,
+        'status': 'pending',
+        'message': 'Please complete your verification',
+      };
+    } catch (e) {
+      print('Error starting document verification: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> startAddressVerification() async {
     try {
       final headers = await _getAuthHeaders();
       final response = await _dio.post(
-        '/kyc/onfido-token',
+        '/kyc/access-token',
         options: Options(headers: headers),
       );
       
       if (response.statusCode == 200) {
-        final sdkToken = response.data['token'];
-        
-        _onfido = Onfido(
-          sdkToken: sdkToken,
-          enterpriseFeatures: EnterpriseFeatures(
-            hideOnfidoLogo: false,
-          ),
-        );
-
-        final results = await _onfido!.start(
-          flowSteps: FlowSteps(
-            welcome: true,
-            documentCapture: DocumentCapture(),
-            faceCapture: FaceCapture.photo(
-              withIntroScreen: true,
-            ),
-          ),
-        );
-        
-        // Check if we have successful results
-        if (results.isNotEmpty) {
-          print('KYC verification completed successfully');
-          return;
-        }
-        
-        throw Exception('KYC verification failed or was cancelled');
+        return response.data['token'];
       }
       
-      throw Exception('Failed to get Onfido token');
+      throw Exception('Failed to get access token');
     } catch (e) {
-      print('KYC verification error: $e');
+      print('Address verification error: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, String>> getVerificationStatus() async {
+    try {
+      final token = await _storage.read(key: 'accessToken');
+      final response = await _dio.get(
+        '/kyc/verification-status',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        ),
+      );
+      return {
+        'status': response.data['status'],
+        'message': response.data['message'],
+      };
+    } catch (e) {
+      print('Error getting verification status: $e');
       rethrow;
     }
   }
@@ -175,165 +180,17 @@ class KYCService {
     }
   }
 
-  Future<String> getOnfidoToken() async {
-    try {
-      final token = await _storage.read(key: 'accessToken');
-      print('Making request to get Onfido token');
-      print('Access token: $token');
-      print('Base URL: ${_dio.options.baseUrl}');
-
-      final response = await _dio.post(
-        '/kyc/onfido-token',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-      print('Response: ${response.data}');
-      return response.data['token'];
-    } catch (e) {
-      print('Full error details:');
-      if (e is DioException) {
-        print('Status code: ${e.response?.statusCode}');
-        print('Response data: ${e.response?.data}');
-        print('Headers: ${e.response?.headers}');
-      }
-      print('Error getting Onfido token: $e');
-      rethrow;
-    }
-  }
-
-  Future<Map<String, String>> startDocumentVerification() async {
-    try {
-      final token = await getOnfidoToken();
-      
-      final onfido = Onfido(
-        sdkToken: token,
-      );
-
-      // Start the verification flow
-      final results = await onfido.start(
-        flowSteps: FlowSteps(
-          welcome: true,
-          documentCapture: DocumentCapture(),
-          faceCapture: FaceCapture.photo(
-            withIntroScreen: true,
-          ),
-        ),
-      );
-
-      if (results.isEmpty) {
-        throw Exception('Verification was cancelled');
-      }
-      
-      // Convert Onfido results to serializable format
-      final serializedResults = results.map((result) => {
-        'document': {
-          'front': {
-            'id': result.document?.front?.id,
-            'fileName': result.document?.front?.fileName,
-            'fileSize': result.document?.front?.fileSize,
-            'fileType': result.document?.front?.fileType,
-          },
-          'typeSelected': result.document?.typeSelected.toString(),
-          'countrySelected': result.document?.countrySelected,
-        },
-        'face': {
-          'id': result.face?.id,
-          'variant': result.face?.variant.toString(),
-        },
-      }).toList();
-      
-      // Send results to backend
-      final authToken = await _storage.read(key: 'accessToken');
-      await _dio.post(
-        '/kyc/submit-verification',
-        data: {
-          'documentResults': serializedResults,
-          'verificationType': 'identity'
-        },
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $authToken',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-      
-      // Show pending status
-      return {
-        'status': 'pending',
-        'message': 'Your documents are being verified. This may take a few minutes.'
-      };
-
-    } catch (e) {
-      print('Error starting document verification: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> startAddressVerification({DocumentType? documentType}) async {
+  Future<String> getAccessToken() async {
     try {
       final headers = await _getAuthHeaders();
       final response = await _dio.post(
-        '/kyc/onfido-token',
+        '/kyc/access-token',
         options: Options(headers: headers),
       );
       
-      if (response.statusCode == 200) {
-        final sdkToken = response.data['token'];
-        
-        _onfido = Onfido(
-          sdkToken: sdkToken,
-          enterpriseFeatures: EnterpriseFeatures(
-            hideOnfidoLogo: false,
-          ),
-        );
-
-        final results = await _onfido!.start(
-          flowSteps: FlowSteps(
-            welcome: true,
-            documentCapture: DocumentCapture(
-              documentType: documentType ?? DocumentType.drivingLicence,
-            ),
-          ),
-        );
-        
-        if (results.isNotEmpty) {
-          print('Address verification completed successfully');
-          return;
-        }
-        
-        throw Exception('Address verification failed or was cancelled');
-      }
-      
-      throw Exception('Failed to get Onfido token');
+      return response.data['token'];
     } catch (e) {
-      print('Address verification error: $e');
-      rethrow;
-    }
-  }
-
-  Future<Map<String, String>> getVerificationStatus() async {
-    try {
-      final token = await _storage.read(key: 'accessToken');
-      final response = await _dio.get(
-        '/kyc/verification-status',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-      return {
-        'status': response.data['status'],
-        'message': response.data['message'],
-      };
-    } catch (e) {
-      print('Error getting verification status: $e');
+      print('Error getting access token: $e');
       rethrow;
     }
   }

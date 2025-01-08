@@ -6,57 +6,128 @@ class KYCDetails {
   final KYCLevel levelDetails;
   final UserDetails userDetails;
   final Map<String, dynamic>? kycData;
+  final VerificationStatus? verificationStatus;
 
   KYCDetails({
     required this.currentLevel,
     required this.levelDetails,
     required this.userDetails,
     this.kycData,
+    this.verificationStatus,
   });
 
   factory KYCDetails.fromJson(Map<String, dynamic> json) {
     return KYCDetails(
-      currentLevel: json['currentLevel'],
-      levelDetails: KYCLevel.fromJson(json['levelDetails']),
-      userDetails: UserDetails.fromJson(json['userDetails']),
+      currentLevel: json['currentLevel'] ?? 0,
+      levelDetails: KYCLevel.fromJson(json['levelDetails'] ?? {}),
+      userDetails: UserDetails.fromJson(json['userDetails'] ?? {}),
       kycData: json['kycData'],
+      verificationStatus: json['kycData']?['verificationStatus'] != null
+          ? VerificationStatus.fromJson(json['kycData']['verificationStatus'])
+          : null,
     );
   }
+}
 
-  VerificationStatus? get identityVerificationStatus {
-    return kycData?['verificationStatus']?['identity'] != null
-        ? VerificationStatus.fromJson(kycData!['verificationStatus']['identity'])
-        : null;
-  }
+class UserDetails {
+  final String fullName;
+  final String email;
+  final bool emailVerified;
+  final bool phoneVerified;
 
-  VerificationStatus? get addressVerificationStatus {
-    return kycData?['verificationStatus']?['address'] != null
-        ? VerificationStatus.fromJson(kycData!['verificationStatus']['address'])
-        : null;
+  UserDetails({
+    required this.fullName,
+    required this.email,
+    required this.emailVerified,
+    required this.phoneVerified,
+  });
+
+  factory UserDetails.fromJson(Map<String, dynamic> json) {
+    return UserDetails(
+      fullName: json['fullName'] ?? '',
+      email: json['email'] ?? '',
+      emailVerified: json['emailVerified'] ?? false,
+      phoneVerified: json['phoneVerified'] ?? false,
+    );
   }
 }
 
 class VerificationStatus {
-  final String status;
-  final String? documentType;
-  final String? failureReason;
-  final DateTime? lastAttempt;
+  final IdentityVerification? identity;
+  final AddressVerification? address;
 
   VerificationStatus({
-    required this.status,
-    this.documentType,
-    this.failureReason,
-    this.lastAttempt,
+    this.identity,
+    this.address,
   });
 
   factory VerificationStatus.fromJson(Map<String, dynamic> json) {
     return VerificationStatus(
-      status: json['status'] ?? 'pending',
-      documentType: json['documentType'],
-      failureReason: json['failureReason'],
-      lastAttempt: json['lastAttempt'] != null 
-          ? DateTime.parse(json['lastAttempt']) 
+      identity: json['identity'] != null
+          ? IdentityVerification.fromJson(json['identity'])
           : null,
+      address: json['address'] != null
+          ? AddressVerification.fromJson(json['address'])
+          : null,
+    );
+  }
+}
+
+class IdentityVerification {
+  final String status;
+  final String? documentType;
+  final DateTime? lastAttempt;
+  final String? failureReason;
+  final String? reviewAnswer;
+  final String? reviewRejectType;
+  final String? reviewRejectDetails;
+
+  IdentityVerification({
+    required this.status,
+    this.documentType,
+    this.lastAttempt,
+    this.failureReason,
+    this.reviewAnswer,
+    this.reviewRejectType,
+    this.reviewRejectDetails,
+  });
+
+  factory IdentityVerification.fromJson(Map<String, dynamic> json) {
+    return IdentityVerification(
+      status: json['status'],
+      documentType: json['documentType'],
+      lastAttempt: json['lastAttempt'] != null
+          ? DateTime.parse(json['lastAttempt'])
+          : null,
+      failureReason: json['failureReason'],
+      reviewAnswer: json['reviewAnswer'],
+      reviewRejectType: json['reviewRejectType'],
+      reviewRejectDetails: json['reviewRejectDetails'],
+    );
+  }
+}
+
+class AddressVerification {
+  final String status;
+  final String? documentType;
+  final DateTime? lastAttempt;
+  final String? failureReason;
+
+  AddressVerification({
+    required this.status,
+    this.documentType,
+    this.lastAttempt,
+    this.failureReason,
+  });
+
+  factory AddressVerification.fromJson(Map<String, dynamic> json) {
+    return AddressVerification(
+      status: json['status'],
+      documentType: json['documentType'],
+      lastAttempt: json['lastAttempt'] != null
+          ? DateTime.parse(json['lastAttempt'])
+          : null,
+      failureReason: json['failureReason'],
     );
   }
 }

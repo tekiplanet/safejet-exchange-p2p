@@ -43,19 +43,15 @@ class KYCProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> startKYCVerification() async {
-    try {
-      _loading = true;
-      _error = null;
-      notifyListeners();
+  Future<void> startVerification() async {
+    _loading = true;
+    notifyListeners();
 
-      await _kycService.startKYCVerification();
-      
-      // Refresh KYC details after verification
+    try {
+      await _kycService.startDocumentVerification();
       await loadKYCDetails();
     } catch (e) {
-      _error = e.toString();
-      notifyListeners();
+      print('Error starting verification: $e');
       rethrow;
     } finally {
       _loading = false;
