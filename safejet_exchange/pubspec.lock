@@ -190,8 +190,16 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.2.1"
+  flutter_idensic_mobile_sdk_plugin:
+    dependency: "direct main"
+    description:
+      name: flutter_idensic_mobile_sdk_plugin
+      sha256: "62e8c26fd92b4e9f143ac99adf73519ce076565bb435092dc01b2079c7482d3d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.33.1"
   flutter_keyboard_visibility:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: flutter_keyboard_visibility
       sha256: "4983655c26ab5b959252ee204c2fffa4afeb4413cd030455194ec0caa3b8e7cb"
@@ -492,10 +500,10 @@ packages:
     dependency: "direct main"
     description:
       name: mobile_scanner
-      sha256: "1b60b8f9d4ce0cb0e7d7bc223c955d083a0737bee66fa1fcfe5de48225e0d5b3"
+      sha256: da55204e5439bc8dc058df56231a7a1d513c6ec9cbad84492f56d493382d296f
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.7"
+    version: "3.2.0"
   nested:
     dependency: transitive
     description:

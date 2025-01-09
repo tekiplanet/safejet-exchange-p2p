@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_idensic_mobile_sdk_plugin/flutter_idensic_mobile_sdk_plugin.dart';
 import '../../config/theme/colors.dart';
 import '../../widgets/p2p_app_bar.dart';
+import 'package:provider/provider.dart';
+import '../../providers/kyc_provider.dart';
 
 class SumsubVerificationScreen extends StatefulWidget {
   final String accessToken;
@@ -16,65 +18,78 @@ class SumsubVerificationScreen extends StatefulWidget {
 }
 
 class _SumsubVerificationScreenState extends State<SumsubVerificationScreen> {
-  late final WebViewController _controller;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _initWebView();
+    _initSumsubSDK();
   }
 
-  void _initWebView() {
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (String url) {
-            setState(() {
-              _isLoading = false;
-            });
-          },
-          onNavigationRequest: (NavigationRequest request) {
-            // Handle navigation if needed
-            return NavigationDecision.navigate;
-          },
+  Future<void> _initSumsubSDK() async {
+    try {
+      final onTokenExpiration = () async {
+        // Get new token using existing KYC service
+        final result = await context.read<KYCProvider>().startDocumentVerification();
+        return result['token'] ?? '';
+      };
+
+      final snsMobileSDK = SNSMobileSDK.init(widget.accessToken, onTokenExpiration)
+        .withHandlers(
+          onStatusChanged: _handleStatusChange,
+          onEvent: _handleEvent,
+        )
+        .withDebug(true) // Remove in production
+        .withLocale(const Locale("en"))
+        .withAutoCloseOnApprove(3) // Auto close after 3 seconds on approval
+        .build();
+
+      setState(() => _isLoading = false);
+      
+      final result = await snsMobileSDK.launch();
+      _handleSDKResult(result);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error initializing verification: $e'),
+            backgroundColor: SafeJetColors.error,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    }
+  }
+
+  void _handleStatusChange(SNSMobileSDKStatus newStatus, SNSMobileSDKStatus prevStatus) {
+    print("SDK Status changed: $prevStatus -> $newStatus");
+    
+    if (newStatus == SNSMobileSDKStatus.Approved ||
+        newStatus == SNSMobileSDKStatus.FinallyRejected) {
+      // Refresh KYC details to update UI
+      if (mounted) {
+        context.read<KYCProvider>().loadKYCDetails();
+      }
+    }
+  }
+
+  void _handleEvent(SNSMobileSDKEvent event) {
+    print("SDK Event: ${event.eventType} - ${event.payload}");
+  }
+
+  void _handleSDKResult(SNSMobileSDKResult result) {
+    if (!mounted) return;
+
+    if (!result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result.errorMsg ?? 'Verification error'),
+          backgroundColor: SafeJetColors.error,
         ),
-      )
-      ..loadHtmlString('''
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <script src="https://static.sumsub.com/idensic/static/sns-websdk-builder.js"></script>
-          </head>
-          <body style="margin:0">
-            <div id="sumsub-websdk-container"></div>
-            <script>
-              const accessToken = '${widget.accessToken}';
-              
-              let snsWebSdkInstance = snsWebSdk
-                .init(accessToken)
-                .withConf({
-                  lang: 'en',
-                  uiConf: {
-                    customCssStr: 'body { background: #fff; }',
-                  }
-                })
-                .on('onError', (error) => {
-                  console.error('Error:', error);
-                })
-                .on('onActionCompleted', (action) => {
-                  console.log('Action completed:', action);
-                })
-                .build();
-              
-              snsWebSdkInstance.launch('#sumsub-websdk-container');
-            </script>
-          </body>
-        </html>
-      ''');
+      );
+    }
+    
+    Navigator.pop(context);
   }
 
   @override
@@ -84,14 +99,10 @@ class _SumsubVerificationScreenState extends State<SumsubVerificationScreen> {
         title: 'Identity Verification',
         hasNotification: false,
       ),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
-        ],
+      body: Center(
+        child: _isLoading
+          ? const CircularProgressIndicator()
+          : const SizedBox(), // SDK will overlay its UI
       ),
     );
   }
