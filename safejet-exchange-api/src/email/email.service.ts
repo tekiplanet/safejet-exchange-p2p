@@ -160,16 +160,17 @@ export class EmailService {
     email: string,
     fullName: string,
     status: 'completed' | 'failed',
-    rejectLabels?: string[]
+    rejectLabels?: string[],
+    level: 'identity' | 'advanced' = 'identity'
   ): Promise<void> {
     try {
-      const subject = status === 'completed' 
-        ? 'Identity Verification Successful - SafeJet Exchange'
-        : 'Identity Verification Failed - SafeJet Exchange';
+      const subject = status === 'completed'
+        ? `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Successful - SafeJet Exchange`
+        : `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Failed - SafeJet Exchange`;
 
       const text = status === 'completed'
-        ? `Congratulations ${fullName}! Your identity verification has been successfully completed.`
-        : `Hello ${fullName}, unfortunately your identity verification was not successful. ${rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''}`;
+        ? `Congratulations ${fullName}! Your ${level === 'advanced' ? 'advanced' : 'identity'} verification has been successfully completed.`
+        : `Hello ${fullName}, unfortunately your ${level === 'advanced' ? 'advanced' : 'identity'} verification was not successful. ${rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''}`;
 
       await this.transporter.sendMail({
         from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,

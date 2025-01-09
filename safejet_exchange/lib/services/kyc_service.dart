@@ -210,4 +210,21 @@ class KYCService {
       rethrow;
     }
   }
+
+  Future<String> startAdvancedVerification() async {
+    try {
+      final response = await _dio.post('/kyc/advanced-verification');
+      
+      if (response.data['token'] != null) {
+        return response.data['token'];
+      }
+      
+      throw Exception('Failed to get verification token');
+    } catch (e) {
+      if (e is DioException && e.response?.statusCode == 400) {
+        throw Exception('Please complete Level 2 verification first');
+      }
+      throw Exception('Failed to start advanced verification: ${e.toString()}');
+    }
+  }
 }
