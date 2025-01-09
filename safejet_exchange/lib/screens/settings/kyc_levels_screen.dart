@@ -500,7 +500,8 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         return kycDetails.userDetails.phoneVerified;
       case 'identity verification':
       case 'address proof':
-        return kycDetails.verificationStatus?.identity?.status == 'completed';
+        return kycDetails.verificationStatus?.identity?.status == 'completed' && 
+               kycDetails.verificationStatus?.identity?.reviewAnswer == 'GREEN';
       default:
         return false;
     }

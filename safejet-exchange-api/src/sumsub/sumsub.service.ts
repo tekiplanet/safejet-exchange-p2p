@@ -208,25 +208,25 @@ export class SumsubService {
       buttonIds?: string[];
     }
   ): Promise<void> {
-    // Check if it's force approved (reviewStatus is 'completed') or normally approved (reviewAnswer is 'GREEN')
-    const status = (reviewStatus === 'completed' || reviewResult?.reviewAnswer === 'GREEN') 
+    // Only consider it successful if reviewAnswer is GREEN
+    const status = reviewResult?.reviewAnswer === 'GREEN' 
       ? 'completed' 
       : 'failed';
 
-    // If force approved, override the reviewAnswer to GREEN
+    // If completed, override the reviewAnswer to GREEN
     const finalReviewAnswer = status === 'completed' ? 'GREEN' : reviewResult?.reviewAnswer;
 
     await this.updateVerificationStatus(user, {
       status,
       lastAttempt: new Date(),
-      reviewAnswer: finalReviewAnswer,  // Use the overridden review answer
+      reviewAnswer: finalReviewAnswer,
       reviewRejectType: reviewResult?.reviewRejectType as 'RETRY' | 'FINAL',
       reviewRejectDetails: reviewResult?.rejectLabels?.join(', '),
       moderationComment: reviewResult?.moderationComment,
       clientComment: reviewResult?.clientComment
     });
 
-    
+    // Only update KYC level if verification was successful
     if (status === 'completed') {
       // Get KYC Level 2
       const kycLevel = await this.kycLevelRepository.findOne({
@@ -243,8 +243,6 @@ export class SumsubService {
         kycLevelDetails: kycLevel
       });
     }
-
-
 
     // Send email notification
     await this.emailService.sendVerificationStatusEmail(
