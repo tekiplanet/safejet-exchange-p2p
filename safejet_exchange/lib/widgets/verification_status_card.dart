@@ -48,7 +48,7 @@ class VerificationStatusCard extends StatelessWidget {
 
   String? _getFailureReason() {
     if (type == 'Identity') {
-      return identityStatus?.reviewRejectDetails ?? identityStatus?.failureReason;
+      return identityStatus?.clientComment ?? identityStatus?.reviewRejectDetails ?? identityStatus?.failureReason;
     } else {
       return addressStatus?.failureReason;
     }

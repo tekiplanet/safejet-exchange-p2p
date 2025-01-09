@@ -238,7 +238,7 @@ export class SumsubService {
       user.email,
       user.fullName,
       status as 'completed' | 'failed',
-      reviewResult?.rejectLabels
+      reviewResult?.clientComment ? [reviewResult.clientComment] : reviewResult?.rejectLabels
     );
   }
 

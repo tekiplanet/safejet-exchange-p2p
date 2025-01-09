@@ -13,6 +13,8 @@ import './services/services.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/dio.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
@@ -62,6 +64,7 @@ class MyApp extends StatelessWidget {
       title: 'SafeJet Exchange',
       debugShowCheckedModeBanner: false,
       theme: themeProvider.theme,
+      navigatorKey: navigatorKey,
       home: FutureBuilder<bool>(
         future: isFirstLaunch(),
         builder: (context, snapshot) {

@@ -81,6 +81,7 @@ class IdentityVerification {
   final String? reviewAnswer;
   final String? reviewRejectType;
   final String? reviewRejectDetails;
+  final String? clientComment;
 
   IdentityVerification({
     required this.status,
@@ -90,6 +91,7 @@ class IdentityVerification {
     this.reviewAnswer,
     this.reviewRejectType,
     this.reviewRejectDetails,
+    this.clientComment,
   });
 
   factory IdentityVerification.fromJson(Map<String, dynamic> json) {
@@ -103,6 +105,7 @@ class IdentityVerification {
       reviewAnswer: json['reviewAnswer'],
       reviewRejectType: json['reviewRejectType'],
       reviewRejectDetails: json['reviewRejectDetails'],
+      clientComment: json['clientComment'],
     );
   }
 }
