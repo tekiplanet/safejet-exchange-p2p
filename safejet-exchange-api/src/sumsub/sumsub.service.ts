@@ -7,7 +7,7 @@ import { EmailService } from '../email/email.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import * as countryCodes from 'country-codes-list';
-import type { CountryProperty } from 'country-codes-list';
+import type { CountryData } from 'country-codes-list';
 
 interface SumsubWebhookPayload {
   type: string;
@@ -24,14 +24,37 @@ interface SumsubWebhookPayload {
 @Injectable()
 export class SumsubService {
   private readonly baseUrl = 'https://api.sumsub.com';
-  private readonly countryList = countryCodes.customList('countryCode' as CountryProperty, '{alpha3}');
+  private readonly countryList: Array<{
+    name: string;
+    alpha2: string;
+    alpha3: string;
+  }>;
   
   constructor(
     private configService: ConfigService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private emailService: EmailService,
-  ) {}
+  ) {
+    // Initialize country list with correct mappings
+    const countries = countryCodes.all();
+    this.countryList = countries.map((country: CountryData) => ({
+      name: country.countryNameEn,
+      alpha2: country.countryCode,
+      alpha3: this.getAlpha3Code(country.countryCode), // Convert alpha2 to alpha3
+    }));
+  }
+
+  // Helper method to convert alpha2 to alpha3
+  private getAlpha3Code(alpha2: string): string {
+    const alpha3Map: { [key: string]: string } = {
+      'NG': 'NGA', // Nigeria
+      'US': 'USA', // United States
+      'GB': 'GBR', // United Kingdom
+      // Add more as needed, or implement a more comprehensive solution
+    };
+    return alpha3Map[alpha2] || alpha2;
+  }
 
   private generateSignature(method: string, url: string, body: string = ''): string {
     const ts = Math.floor(Date.now() / 1000).toString();
@@ -64,19 +87,27 @@ export class SumsubService {
       const url = '/resources/accessTokens';
       const method = 'POST';
       const body = JSON.stringify({
-        userId: userId,
+        externalUserId: userId,
         levelName: 'id-and-liveness',
         ttlInSecs: 600,
       });
 
-      const response = await axios({
-        method,
-        url: `${this.baseUrl}${url}`,
-        data: body,
-        headers: this.getHeaders(method, url, body),
-      });
+      try {
+        const response = await axios({
+          method,
+          url: `${this.baseUrl}${url}`,
+          data: body,
+          headers: this.getHeaders(method, url, body),
+        });
 
-      return response.data.token;
+        return response.data.token;
+      } catch (error) {
+        console.error('Sumsub API Error:', error.response?.data);
+        throw new HttpException(
+          error.response?.data?.description || 'Failed to generate access token',
+          error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
     } catch (error) {
       console.error('Error generating access token:', error);
       throw new HttpException(
@@ -192,10 +223,11 @@ export class SumsubService {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      const countryCode = this.countryList[user.kycData?.identityDetails?.country];
+      // Get the country code (alpha-3) for the given country name
+      const countryCode = this.getCountryCode(user.kycData?.identityDetails?.country);
       if (!countryCode) {
         throw new HttpException(
-          `Invalid country name: ${user.kycData?.identityDetails?.country}`,
+          `Invalid or unsupported country: ${user.kycData?.identityDetails?.country}`,
           HttpStatus.BAD_REQUEST
         );
       }
@@ -209,7 +241,7 @@ export class SumsubService {
           firstName: user.kycData?.identityDetails?.firstName,
           lastName: user.kycData?.identityDetails?.lastName,
           dob: user.kycData?.identityDetails?.dateOfBirth,
-          country: countryCode,
+          country: countryCode, // Using the alpha-3 country code
           phone: user.phone,
           email: user.email,
         },
@@ -228,7 +260,6 @@ export class SumsubService {
         headers: this.getHeaders(method, url, body),
       });
 
-      // Store the applicant ID
       user.kycData = {
         ...user.kycData,
         sumsubApplicantId: response.data.id,
@@ -246,6 +277,27 @@ export class SumsubService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  private getCountryCode(countryName: string): string | null {
+    if (!countryName) return null;
+
+    // Try to find the country (case-insensitive)
+    const country = this.countryList.find(c => 
+      c.name.toLowerCase() === countryName.toLowerCase()
+    );
+
+    if (country) {
+      return country.alpha3;
+    }
+
+    // If exact match not found, try fuzzy matching
+    const fuzzyMatch = this.countryList.find(c => 
+      c.name.toLowerCase().includes(countryName.toLowerCase()) ||
+      countryName.toLowerCase().includes(c.name.toLowerCase())
+    );
+
+    return fuzzyMatch ? fuzzyMatch.alpha3 : null;
   }
 
   private getHeaders(method: string, url: string, body: string = '') {

@@ -10,8 +10,9 @@ class KYCService {
 
   KYCService(Dio dio) : _dio = dio {
     _dio.options.baseUrl = dotenv.env['API_URL'] ?? 'http://localhost:3000';
-    _dio.options.connectTimeout = const Duration(seconds: 5);
-    _dio.options.receiveTimeout = const Duration(seconds: 3);
+    _dio.options.connectTimeout = const Duration(seconds: 10);
+    _dio.options.receiveTimeout = const Duration(seconds: 30);
+    _dio.options.sendTimeout = const Duration(seconds: 10);
   }
 
   Future<Map<String, String>> _getAuthHeaders() async {
@@ -158,15 +159,31 @@ class KYCService {
           'state': state,
           'country': country,
         },
-        options: Options(headers: headers),
+        options: Options(
+          headers: headers,
+          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 10),
+        ),
       );
 
       return response.data;
     } catch (e) {
+      print('Technical error details: $e');
+      
       if (e is DioException) {
+        if (e.type == DioExceptionType.connectionTimeout || 
+            e.type == DioExceptionType.sendTimeout || 
+            e.type == DioExceptionType.receiveTimeout) {
+          throw Exception('Unable to connect to server. Please check your internet connection and try again.');
+        }
+        
+        if (e.response?.statusCode == 500) {
+          throw Exception('We\'re experiencing technical difficulties. Please try again later.');
+        }
+
         final responseData = e.response?.data;
         final errorMessage = responseData is Map ? responseData['message'] ?? 'Unknown error' : 'Unknown error';
-        throw Exception('Failed to submit identity details: $errorMessage');
+        throw Exception('Unable to submit your details. Please try again later.');
       }
       rethrow;
     }

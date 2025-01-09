@@ -452,22 +452,28 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
         country: _selectedCountry,
       );
 
-      // Clear saved form data after successful submission
       await _clearSavedData();
 
       if (!mounted) return;
       
-      // Start document verification with Sumsub after details are submitted
       await _startVerification();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error submitting details: $e'),
+            content: Text(
+              e.toString().replaceAll('Exception: ', ''),
+            ),
             backgroundColor: SafeJetColors.error,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
       }
+      print('Technical error details: $e');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -494,17 +500,31 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? 'Error starting verification'),
+            content: Text(result['message'] ?? 'Unable to start verification'),
             backgroundColor: SafeJetColors.info,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
       }
     } catch (e) {
+      print('Technical error details: $e'); // Keep technical details in logs
+      
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error starting verification: $e'),
+          content: Text(
+            'Unable to start verification process. Please try again later.',
+          ),
           backgroundColor: SafeJetColors.error,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
     } finally {

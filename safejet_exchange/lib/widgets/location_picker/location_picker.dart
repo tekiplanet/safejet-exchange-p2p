@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import '../../config/theme/colors.dart';
 import 'package:animate_do/animate_do.dart';
 import 'dart:convert';
+import 'dart:io';
 
 class CustomLocationPicker extends StatefulWidget {
   final bool isDark;
@@ -46,35 +47,70 @@ class _CustomLocationPickerState extends State<CustomLocationPicker> {
 
   Future<void> _loadCountryData() async {
     try {
+      print('Loading country data...');
+      print('Attempting to load from: assets/data/country.json');
+      
       final String data = await DefaultAssetBundle.of(context)
-          .loadString('packages/country_state_city_picker/lib/assets/country.json');
+          .loadString('assets/data/country.json');
+      
+      print('Raw data loaded successfully');
+      print('Data length: ${data.length}');
+      
+      final decoded = json.decode(data);
+      print('Data decoded successfully');
+      print('Data type: ${decoded.runtimeType}');
+      print('Number of countries: ${(decoded as List).length}');
+      print('First country: ${decoded.first}');
+      
       setState(() {
-        _countryData = json.decode(data);
+        _countryData = decoded;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error loading country data: $e');
+      print('Stack trace: $stackTrace');
+      print('Current directory: ${Directory.current}');
     }
   }
 
   List<String> _getStates(String country) {
     try {
-      if (_countryData == null) return [];
+      if (_countryData == null) {
+        print('Country data is null');
+        return [];
+      }
       
+      print('Getting states for country: $country');
+      
+      // Find the country data - case-insensitive comparison
       final countryData = _countryData!.firstWhere(
-        (c) => c['name'] == country,
-        orElse: () => null,
+        (c) => c['name'].toString().toLowerCase() == country.toLowerCase(),
+        orElse: () {
+          print('Country not found: $country');
+          return null;
+        },
       );
       
-      if (countryData == null) return [];
+      if (countryData == null) {
+        print('Country data not found for: $country');
+        return [];
+      }
+      
+      // Make sure state exists and is a List
+      if (!countryData.containsKey('state') || !(countryData['state'] is List)) {
+        print('Invalid state data structure for country: $country');
+        return [];
+      }
       
       final states = (countryData['state'] as List)
           .map((state) => state['name'].toString())
           .toList();
       
+      print('Found ${states.length} states for $country: $states');
       states.sort((a, b) => a.compareTo(b));
       return states;
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error getting states: $e');
+      print('Stack trace: $stackTrace');
       return [];
     }
   }

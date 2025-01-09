@@ -20,7 +20,13 @@ allprojects {
         afterEvaluate { project ->
             if (project.hasProperty('android')) {
                 android {
-                    if (project.android.hasProperty('namespace') && project.android.namespace == null) {
+                    if (project.name == 'flutter_idensic_mobile_sdk_plugin') {
+                        namespace "com.sumsub.idensic.mobile.sdk.plugin"
+                    }
+                    else if (project.name == 'mobile_scanner') {
+                        namespace "dev.steenbakker.mobile_scanner"
+                    }
+                    else if (project.android.hasProperty('namespace') && project.android.namespace == null) {
                         namespace project.group
                     }
                 }

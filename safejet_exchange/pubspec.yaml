@@ -37,6 +37,7 @@ dependencies:
   csc_picker: ^0.2.7
   flutter_typeahead: ^4.8.0
   country_state_city: ^0.1.6
+  country_state_city_picker: ^1.2.8
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -118,4 +119,4 @@ flutter:
     - .env
     - assets/images/
     - assets/animations/
-    - packages/country_state_city_picker/lib/assets/
+    - assets/data/
