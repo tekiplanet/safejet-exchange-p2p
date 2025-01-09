@@ -68,31 +68,38 @@ export class SumsubService {
 
   async generateAccessToken(userId: string): Promise<string> {
     try {
-      // First, check if user has an applicant ID
       const user = await this.userRepository.findOne({ where: { id: userId } });
       if (!user) {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      // If no applicant ID exists, create one
+      console.log('Current user KYC data:', user.kycData);
+
+      // Create applicant if doesn't exist
       if (!user.kycData?.sumsubApplicantId) {
-        await this.createApplicant(userId);
-        // Refresh user data to get the new applicant ID
-        const updatedUser = await this.userRepository.findOne({ where: { id: userId } });
-        if (!updatedUser?.kycData?.sumsubApplicantId) {
-          throw new Error('Failed to create applicant');
-        }
+        console.log('No applicant ID found, creating new applicant...');
+        const applicantId = await this.createApplicant(userId);
+        user.kycData = {
+          ...user.kycData,
+          sumsubApplicantId: applicantId
+        };
+        await this.userRepository.save(user);
       }
+
+      console.log('Using applicant ID:', user.kycData?.sumsubApplicantId);
 
       const url = '/resources/accessTokens';
       const method = 'POST';
+
+      // Simplified request body according to Sumsub docs
       const body = JSON.stringify({
-        externalUserId: userId,
+        userId: userId,  // Use our user ID
         levelName: 'id-and-liveness',
-        ttlInSecs: 600,
+        ttlInSecs: 600
       });
 
       try {
+        console.log('Making request to Sumsub API with body:', body);
         const response = await axios({
           method,
           url: `${this.baseUrl}${url}`,
@@ -100,16 +107,30 @@ export class SumsubService {
           headers: this.getHeaders(method, url, body),
         });
 
+        console.log('Sumsub API response:', response.data);
         return response.data.token;
       } catch (error) {
-        console.error('Sumsub API Error:', error.response?.data);
+        // Add more detailed error logging
+        console.error('Sumsub API Error Details:', {
+          error: error.response?.data,
+          status: error.response?.status,
+          headers: error.response?.headers,
+          requestBody: body,
+          url: `${this.baseUrl}${url}`,
+          method,
+          requestHeaders: this.getHeaders(method, url, body)
+        });
+
         throw new HttpException(
           error.response?.data?.description || 'Failed to generate access token',
           error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
     } catch (error) {
-      console.error('Error generating access token:', error);
+      console.error('Error in generateAccessToken:', error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         'Failed to generate access token',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -223,7 +244,11 @@ export class SumsubService {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      // Get the country code (alpha-3) for the given country name
+      console.log('Creating applicant for user:', {
+        userId,
+        kycData: user.kycData
+      });
+
       const countryCode = this.getCountryCode(user.kycData?.identityDetails?.country);
       if (!countryCode) {
         throw new HttpException(
@@ -241,7 +266,7 @@ export class SumsubService {
           firstName: user.kycData?.identityDetails?.firstName,
           lastName: user.kycData?.identityDetails?.lastName,
           dob: user.kycData?.identityDetails?.dateOfBirth,
-          country: countryCode, // Using the alpha-3 country code
+          country: countryCode,
           phone: user.phone,
           email: user.email,
         },
@@ -253,6 +278,8 @@ export class SumsubService {
         },
       });
 
+      console.log('Sending applicant creation request:', body);
+
       const response = await axios({
         method,
         url: `${this.baseUrl}${url}`,
@@ -260,21 +287,19 @@ export class SumsubService {
         headers: this.getHeaders(method, url, body),
       });
 
-      user.kycData = {
-        ...user.kycData,
-        sumsubApplicantId: response.data.id,
-      };
-      await this.userRepository.save(user);
+      console.log('Applicant creation response:', response.data);
 
       return response.data.id;
     } catch (error) {
-      console.error('Error creating Sumsub applicant:', error);
-      if (error.response?.data) {
-        console.error('Sumsub error details:', error.response.data);
-      }
+      console.error('Error creating Sumsub applicant:', {
+        error: error.response?.data,
+        status: error.response?.status,
+        headers: error.response?.headers,
+        fullError: error
+      });
       throw new HttpException(
         `Failed to create applicant: ${error.response?.data?.description || error.message}`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

@@ -66,16 +66,17 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Load saved form data first
+    _loadSavedFormData().then((_) {
+      // Then load other data
       _loadKYCDetails();
       _loadUserDetails();
     });
-    _loadSavedFormData();
     _setupAutoSave();
   }
 
   void _setupAutoSave() {
-    // Auto-save when text fields change
+    // Set up listeners for text fields
     _firstNameController.addListener(_saveFormData);
     _lastNameController.addListener(_saveFormData);
     _dobController.addListener(_saveFormData);
@@ -89,16 +90,19 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       
       if (savedData != null) {
         final data = json.decode(savedData) as Map<String, dynamic>;
+        print('Loading saved form data: $data'); // Debug log
         
-        setState(() {
-          _firstNameController.text = data['firstName'] ?? '';
-          _lastNameController.text = data['lastName'] ?? '';
-          _dobController.text = data['dob'] ?? '';
-          _addressController.text = data['address'] ?? '';
-          _selectedCountry = data['country'] ?? '';
-          _selectedState = data['state'] ?? '';
-          _selectedCity = data['city'] ?? '';
-        });
+        if (mounted) {
+          setState(() {
+            _firstNameController.text = data['firstName'] ?? '';
+            _lastNameController.text = data['lastName'] ?? '';
+            _dobController.text = data['dob'] ?? '';
+            _addressController.text = data['address'] ?? '';
+            _selectedCountry = data['country'] ?? '';
+            _selectedState = data['state'] ?? '';
+            _selectedCity = data['city'] ?? '';
+          });
+        }
       }
     } catch (e) {
       print('Error loading saved form data: $e');
@@ -106,6 +110,8 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   }
 
   Future<void> _saveFormData() async {
+    if (!mounted) return;  // Don't save if widget is disposed
+    
     try {
       final prefs = await SharedPreferences.getInstance();
       final data = {
@@ -119,6 +125,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       };
       
       await prefs.setString(_storageKey, json.encode(data));
+      print('Form data saved successfully: $data'); // Debug log
     } catch (e) {
       print('Error saving form data: $e');
     }
@@ -128,6 +135,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_storageKey);
+      print('Form data cleared successfully'); // Debug log
     } catch (e) {
       print('Error clearing saved form data: $e');
     }
@@ -191,51 +199,9 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
           selectedCity: _selectedCity,
           isLoading: _locationLoading,
           errorMessage: _locationError,
-          onCountryChanged: (country) async {
-            setState(() {
-              _locationLoading = true;
-              _locationError = null;
-            });
-            try {
-              setState(() {
-                _selectedCountry = country;
-                _selectedState = '';
-                _selectedCity = '';
-              });
-              await Future.delayed(const Duration(milliseconds: 500));
-            } catch (e) {
-              setState(() {
-                _locationError = 'Failed to load states for selected country';
-              });
-            } finally {
-              setState(() => _locationLoading = false);
-            }
-          },
-          onStateChanged: (state) async {
-            setState(() {
-              _locationLoading = true;
-              _locationError = null;
-            });
-            try {
-              setState(() {
-                _selectedState = state;
-                _selectedCity = '';
-              });
-              await Future.delayed(const Duration(milliseconds: 500));
-            } catch (e) {
-              setState(() {
-                _locationError = 'Failed to load cities for selected state';
-              });
-            } finally {
-              setState(() => _locationLoading = false);
-            }
-          },
-          onCityChanged: (city) {
-            setState(() {
-              _selectedCity = city;
-              _locationError = null;
-            });
-          },
+          onCountryChanged: _onCountryChanged,
+          onStateChanged: _onStateChanged,
+          onCityChanged: _onCityChanged,
         ),
       ],
     );
@@ -532,12 +498,36 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     }
   }
 
+  void _onCountryChanged(String country) {
+    setState(() {
+      _selectedCountry = country;
+      _selectedState = '';
+      _selectedCity = '';
+    });
+    _saveFormData();  // Save when country changes
+  }
+
+  void _onStateChanged(String state) {
+    setState(() {
+      _selectedState = state;
+      _selectedCity = '';
+    });
+    _saveFormData();  // Save when state changes
+  }
+
+  void _onCityChanged(String city) {
+    setState(() {
+      _selectedCity = city;
+    });
+    _saveFormData();  // Save when city changes
+  }
+
   @override
   void dispose() {
     // Save form data one last time before disposing
     _saveFormData();
     
-    // Clean up controllers
+    // Clean up controllers and listeners
     _firstNameController.removeListener(_saveFormData);
     _lastNameController.removeListener(_saveFormData);
     _dobController.removeListener(_saveFormData);
