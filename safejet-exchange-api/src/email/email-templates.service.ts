@@ -285,40 +285,65 @@ export class EmailTemplatesService {
     return nextSteps[level] || '';
   }
 
-  verificationFailedEmail(fullName: string, reason: string): string {
-    return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Hello ${fullName},</h2>
-        <p>Unfortunately, your identity verification was not successful.</p>
+  verificationFailedEmail(fullName: string, reason: string, isDark = true): string {
+    const content = `
+      <h1>Identity Verification Failed ❌</h1>
+      <p>Hello ${fullName},</p>
+      
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Issue Details ⚠️</h2>
         <p>${reason}</p>
-        <p>Please try again with valid documents.</p>
-        <p>If you need assistance, please contact our support team.</p>
-        <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Try Again</a>
       </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Next Steps 🚀</h2>
+        <ul>
+          <li>Please ensure your documents are clear and valid</li>
+          <li>Make sure photos are well-lit and not blurry</li>
+          <li>Try the verification process again</li>
+        </ul>
+      </div>
+
+      <p>If you need assistance, our support team is here to help!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
     `;
+
+    return baseTemplate(content, isDark);
   }
 
-  verificationSuccessEmail(fullName: string): string {
-    return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Congratulations ${fullName}!</h2>
-        <p>Your identity verification has been successfully completed. You can now access all features of your account.</p>
-        <p>Thank you for choosing Safejet.</p>
-        <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px;">Go to Dashboard</a>
+  verificationSuccessEmail(fullName: string, isDark = true): string {
+    const content = `
+      <h1>Identity Verification Successful! 🎉</h1>
+      <p>Congratulations ${fullName}!</p>
+      
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">What's Next 🌟</h2>
+        <ul>
+          <li>Access to all platform features</li>
+          <li>Higher transaction limits</li>
+          <li>Enhanced security features</li>
+        </ul>
       </div>
+
+      <p>Thank you for choosing SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
     `;
+
+    return baseTemplate(content, isDark);
   }
 
-  verificationStatusEmail(status: string, text: string, fullName: string): string {
-    const buttonColor = status === 'completed' ? '#28a745' : '#007bff';
-    const buttonText = status === 'completed' ? 'Go to Dashboard' : 'Try Again';
-    
-    return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Hello ${fullName},</h2>
-        <p>${text}</p>
-        <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: ${buttonColor}; color: white; text-decoration: none; border-radius: 5px;">${buttonText}</a>
+  verificationStatusEmail(status: string, text: string, fullName: string, isDark = true): string {
+    const content = `
+      <h1>${status === 'completed' ? 'Verification Complete! 🎉' : 'Verification Update ⚠️'}</h1>
+      <p>Hello ${fullName},</p>
+      
+      <div style="margin: 20px 0;">
+        ${text}
       </div>
+
+      <p>Best regards,<br>The SafeJet Team</p>
     `;
+
+    return baseTemplate(content, isDark);
   }
 } 

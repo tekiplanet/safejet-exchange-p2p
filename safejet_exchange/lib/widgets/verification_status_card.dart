@@ -69,6 +69,7 @@ class VerificationStatusCard extends StatelessWidget {
     
     // Map technical error codes to user-friendly messages
     final errorMessages = {
+      'BAD_PROOF_OF_ADDRESS': 'The provided address proof could not be verified. Please ensure your document is clear, valid, and not expired.',
       'BAD_PROOF_OF_IDENTITY': 'The provided ID document could not be verified. Please ensure your document is clear, valid, and not expired.',
       'BAD_QUALITY': 'The image quality is too low. Please provide a clearer photo.',
       'DOCUMENT_PAGE_MISSING': 'Some document pages are missing. Please provide all required pages.',
