@@ -394,7 +394,6 @@ export class SumsubService {
       const { type, applicantId, reviewStatus } = payload;
       console.log('Received webhook event:', { type, applicantId, reviewStatus });
 
-      // Find user by applicant ID
       const user = await this.userRepository
         .createQueryBuilder('user')
         .where("user.kycData->>'sumsubApplicantId' = :applicantId", { applicantId })
@@ -406,7 +405,31 @@ export class SumsubService {
 
       // Update user's KYC status based on the webhook event
       switch (type) {
+        case 'applicantCreated':
+          // Initial state when applicant is created
+          user.kycData = {
+            ...user.kycData,
+            sumsubApplicantId: payload.applicantId,
+            verificationStatus: {
+              identity: {
+                status: 'pending',
+                lastAttempt: new Date(),
+              }
+            }
+          };
+          await this.userRepository.save(user);
+          break;
+
+        case 'applicantPending':
+          // Documents uploaded, under review
+          await this.updateVerificationStatus(user, {
+            status: 'processing',
+            lastAttempt: new Date(),
+          });
+          break;
+
         case 'applicantReviewed':
+          // Final review completed
           const status = this.mapReviewStatus(reviewStatus);
           user.kycData = {
             ...user.kycData,
@@ -429,8 +452,6 @@ export class SumsubService {
             payload.reviewResult?.rejectLabels
           );
           break;
-
-        // Handle other webhook event types as needed
       }
     } catch (error) {
       console.error('Error handling webhook event:', error);
