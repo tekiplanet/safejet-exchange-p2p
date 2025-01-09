@@ -218,12 +218,14 @@ export class SumsubService {
     user.kycData = {
       ...user.kycData,
       verificationStatus: {
-        ...user.kycData?.verificationStatus,
         identity: {
-          ...user.kycData?.verificationStatus?.identity,
-          ...status,
-        },
-      },
+          status: status.status,
+          lastAttempt: status.lastAttempt,
+          reviewAnswer: status.reviewAnswer,
+          reviewRejectType: status.reviewRejectType,
+          reviewRejectDetails: status.reviewRejectDetails
+        }
+      }
     };
 
     await this.userRepository.save(user);
@@ -374,6 +376,68 @@ export class SumsubService {
         return 'failed';
       default:
         return 'pending';
+    }
+  }
+
+  async verifyWebhookSignature(signature: string, payload: any): Promise<boolean> {
+    const webhookSecret = this.configService.get<string>('SUMSUB_WEBHOOK_SECRET');
+    const calculatedSignature = crypto
+      .createHmac('sha1', webhookSecret)
+      .update(JSON.stringify(payload))
+      .digest('hex');
+    
+    return signature === calculatedSignature;
+  }
+
+  async handleWebhookEvent(payload: SumsubWebhookPayload) {
+    try {
+      const { type, applicantId, reviewStatus } = payload;
+      console.log('Received webhook event:', { type, applicantId, reviewStatus });
+
+      // Find user by applicant ID
+      const user = await this.userRepository
+        .createQueryBuilder('user')
+        .where("user.kycData->>'sumsubApplicantId' = :applicantId", { applicantId })
+        .getOne();
+
+      if (!user) {
+        throw new Error(`No user found for applicant ID: ${applicantId}`);
+      }
+
+      // Update user's KYC status based on the webhook event
+      switch (type) {
+        case 'applicantReviewed':
+          const status = this.mapReviewStatus(reviewStatus);
+          user.kycData = {
+            ...user.kycData,
+            verificationStatus: {
+              identity: {
+                status: status,
+                lastAttempt: new Date(),
+                reviewAnswer: payload.reviewResult?.reviewAnswer,
+                reviewRejectType: payload.reviewResult?.reviewRejectType,
+                reviewRejectDetails: payload.reviewResult?.rejectLabels?.join(', ')
+              }
+            }
+          };
+          await this.userRepository.save(user);
+
+          // Send email notification
+          await this.emailService.sendVerificationStatusEmail(
+            user.email,
+            status,
+            payload.reviewResult?.rejectLabels
+          );
+          break;
+
+        // Handle other webhook event types as needed
+      }
+    } catch (error) {
+      console.error('Error handling webhook event:', error);
+      throw new HttpException(
+        'Failed to process webhook event',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 } 

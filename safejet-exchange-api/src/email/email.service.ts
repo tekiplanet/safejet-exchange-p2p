@@ -155,4 +155,40 @@ export class EmailService {
       console.error('Verification success email error:', error);
     }
   }
+
+  async sendVerificationStatusEmail(
+    email: string,
+    status: 'pending' | 'completed' | 'failed',
+    rejectLabels?: string[]
+  ): Promise<void> {
+    let subject: string;
+    let text: string;
+
+    switch (status) {
+      case 'completed':
+        subject = 'Identity Verification Successful';
+        text = 'Congratulations! Your identity has been successfully verified.';
+        break;
+      case 'failed':
+        subject = 'Identity Verification Failed';
+        text = `Your identity verification was not successful. ${
+          rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''
+        }`;
+        break;
+      default:
+        subject = 'Identity Verification Update';
+        text = 'Your identity verification is being processed.';
+    }
+
+    try {
+      await this.transporter.sendMail({
+        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        to: email,
+        subject,
+        html: this.emailTemplatesService.verificationStatusEmail(status, text),
+      });
+    } catch (error) {
+      console.error('Verification status email error:', error);
+    }
+  }
 } 

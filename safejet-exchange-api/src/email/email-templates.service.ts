@@ -303,4 +303,15 @@ export class EmailTemplatesService {
       <p>Best regards,<br>SafeJet Exchange Team</p>
     `;
   }
+
+  verificationStatusEmail(status: string, message: string): string {
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Identity Verification Update</h2>
+        <p>${message}</p>
+        <p>If you did not request this verification, please contact our support team immediately.</p>
+        <p>Best regards,<br>SafeJet Exchange Team</p>
+      </div>
+    `;
+  }
 } 
