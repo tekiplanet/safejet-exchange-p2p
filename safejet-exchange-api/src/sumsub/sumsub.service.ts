@@ -86,39 +86,31 @@ export class SumsubService {
         await this.userRepository.save(user);
       }
 
-      console.log('Using applicant ID:', user.kycData?.sumsubApplicantId);
+      const applicantId = user.kycData?.sumsubApplicantId;
+      console.log('Using applicant ID:', applicantId);
 
-      const url = '/resources/accessTokens';
+      // Add parameters as query string
+      const url = `/resources/accessTokens?userId=${userId}&levelName=id-and-liveness`;
       const method = 'POST';
-
-      // Simplified request body according to Sumsub docs
-      const body = JSON.stringify({
-        userId: userId,  // Use our user ID
-        levelName: 'id-and-liveness',
-        ttlInSecs: 600
-      });
-
+      
       try {
-        console.log('Making request to Sumsub API with body:', body);
+        console.log('Making request to Sumsub API:', `${this.baseUrl}${url}`);
         const response = await axios({
           method,
           url: `${this.baseUrl}${url}`,
-          data: body,
-          headers: this.getHeaders(method, url, body),
+          headers: this.getHeaders(method, url),
         });
 
         console.log('Sumsub API response:', response.data);
         return response.data.token;
       } catch (error) {
-        // Add more detailed error logging
         console.error('Sumsub API Error Details:', {
           error: error.response?.data,
           status: error.response?.status,
           headers: error.response?.headers,
-          requestBody: body,
           url: `${this.baseUrl}${url}`,
           method,
-          requestHeaders: this.getHeaders(method, url, body)
+          requestHeaders: this.getHeaders(method, url)
         });
 
         throw new HttpException(
@@ -278,28 +270,43 @@ export class SumsubService {
         },
       });
 
-      console.log('Sending applicant creation request:', body);
+      try {
+        console.log('Sending applicant creation request:', body);
+        const response = await axios({
+          method,
+          url: `${this.baseUrl}${url}`,
+          data: body,
+          headers: this.getHeaders(method, url, body),
+        });
 
-      const response = await axios({
-        method,
-        url: `${this.baseUrl}${url}`,
-        data: body,
-        headers: this.getHeaders(method, url, body),
-      });
+        console.log('Applicant creation response:', response.data);
+        return response.data.id;
+      } catch (error) {
+        // Check if error is due to existing applicant
+        if (error.response?.status === 409) {
+          const existingApplicantId = error.response.data.description.match(/(\w+)$/)[0];
+          console.log('Using existing applicant ID:', existingApplicantId);
+          return existingApplicantId;
+        }
 
-      console.log('Applicant creation response:', response.data);
-
-      return response.data.id;
+        console.error('Error creating Sumsub applicant:', {
+          error: error.response?.data,
+          status: error.response?.status,
+          headers: error.response?.headers,
+          fullError: error
+        });
+        throw new HttpException(
+          `Failed to create applicant: ${error.response?.data?.description || error.message}`,
+          error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
     } catch (error) {
-      console.error('Error creating Sumsub applicant:', {
-        error: error.response?.data,
-        status: error.response?.status,
-        headers: error.response?.headers,
-        fullError: error
-      });
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
-        `Failed to create applicant: ${error.response?.data?.description || error.message}`,
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to create applicant',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
