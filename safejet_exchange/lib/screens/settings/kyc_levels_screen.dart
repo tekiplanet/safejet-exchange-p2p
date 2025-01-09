@@ -118,17 +118,14 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
       builder: (context, kycProvider, child) {
         final kycDetails = kycProvider.kycDetails;
         final currentLevel = kycDetails?.currentLevel ?? 0;
-        final nextLevel = currentLevel + 1;
+        final nextLevel = currentLevel < 3 ? currentLevel + 1 : 3;
         return FadeInUp(
           duration: const Duration(milliseconds: 300),
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  SafeJetColors.secondaryHighlight,
-                  SafeJetColors.secondaryHighlight.withOpacity(0.8),
-                ],
+                colors: _getCurrentLevelGradient(currentLevel),
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -144,8 +141,8 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
-                        Icons.stars,
+                      child: Icon(
+                        _getCurrentLevelIcon(currentLevel),
                         color: Colors.white,
                       ),
                     ),
@@ -161,7 +158,7 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
                           ),
                         ),
                         Text(
-                          'Level $currentLevel',
+                          _getCurrentLevelText(currentLevel),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
@@ -198,6 +195,57 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         );
       },
     );
+  }
+
+  List<Color> _getCurrentLevelGradient(int level) {
+    switch (level) {
+      case 3:
+        return [
+          SafeJetColors.primary,
+          SafeJetColors.primary.withOpacity(0.8),
+        ];
+      case 2:
+        return [
+          SafeJetColors.success,
+          SafeJetColors.success.withOpacity(0.8),
+        ];
+      case 1:
+        return [
+          SafeJetColors.warning,
+          SafeJetColors.warning.withOpacity(0.8),
+        ];
+      default:
+        return [
+          SafeJetColors.error,
+          SafeJetColors.error.withOpacity(0.8),
+        ];
+    }
+  }
+
+  IconData _getCurrentLevelIcon(int level) {
+    switch (level) {
+      case 3:
+        return Icons.verified;
+      case 2:
+        return Icons.check_circle;
+      case 1:
+        return Icons.pending;
+      default:
+        return Icons.cancel;
+    }
+  }
+
+  String _getCurrentLevelText(int level) {
+    switch (level) {
+      case 3:
+        return 'Level 3';
+      case 2:
+        return 'Level 2';
+      case 1:
+        return 'Level 1';
+      default:
+        return 'Level 0';
+    }
   }
 
   Widget _buildLevelsList(BuildContext context, bool isDark) {

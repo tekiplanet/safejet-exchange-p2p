@@ -123,6 +123,45 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  Color _getVerificationColor(int level) {
+    switch (level) {
+      case 3:
+        return SafeJetColors.primary;
+      case 2:
+        return SafeJetColors.success;
+      case 1:
+        return SafeJetColors.warning;
+      default:
+        return SafeJetColors.error;
+    }
+  }
+
+  IconData _getVerificationIcon(int level) {
+    switch (level) {
+      case 3:
+        return Icons.verified;
+      case 2:
+        return Icons.check_circle;
+      case 1:
+        return Icons.pending;
+      default:
+        return Icons.cancel;
+    }
+  }
+
+  String _getVerificationText(int level) {
+    switch (level) {
+      case 3:
+        return 'Level 3';
+      case 2:
+        return 'Level 2';
+      case 1:
+        return 'Level 1';
+      default:
+        return 'Level 0';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -183,7 +222,7 @@ class _ProfileTabState extends State<ProfileTab> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: SafeJetColors.warning.withOpacity(0.2),
+                                  color: _getVerificationColor(kycDetails?.currentLevel ?? 0).withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: GestureDetector(
@@ -198,10 +237,16 @@ class _ProfileTabState extends State<ProfileTab> {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
+                                      Icon(
+                                        _getVerificationIcon(kycDetails?.currentLevel ?? 0),
+                                        size: 14,
+                                        color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
+                                      ),
+                                      const SizedBox(width: 4),
                                       Text(
-                                        'Level ${kycDetails?.currentLevel ?? 0}',
+                                        _getVerificationText(kycDetails?.currentLevel ?? 0),
                                         style: TextStyle(
-                                          color: SafeJetColors.warning,
+                                          color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
                                           fontWeight: FontWeight.bold,
                                           fontSize: 12,
                                         ),
@@ -210,7 +255,7 @@ class _ProfileTabState extends State<ProfileTab> {
                                       Icon(
                                         Icons.arrow_forward_ios,
                                         size: 12,
-                                        color: SafeJetColors.warning,
+                                        color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
                                       ),
                                     ],
                                   ),
