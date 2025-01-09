@@ -137,6 +137,14 @@ export class SumsubService {
     try {
       const { type, externalUserId, reviewStatus, reviewResult } = payload;
 
+      // Add detailed logging
+      console.log('Received Sumsub webhook:', {
+        type,
+        reviewStatus,
+        reviewResult,
+        fullPayload: payload
+      });
+
       const user = await this.userRepository.findOne({
         where: { id: externalUserId }
       });
@@ -190,7 +198,7 @@ export class SumsubService {
 
   private async handleVerificationComplete(
     user: User, 
-    reviewStatus: string, 
+    reviewStatus: string,
     reviewResult?: {
       reviewAnswer: 'GREEN' | 'RED';
       rejectLabels?: string[];
@@ -200,13 +208,18 @@ export class SumsubService {
       buttonIds?: string[];
     }
   ): Promise<void> {
-    const status = reviewResult?.reviewAnswer === 'GREEN' ? 'completed' : 'failed';
+    // Check if it's force approved (reviewStatus is 'completed') or normally approved (reviewAnswer is 'GREEN')
+    const status = (reviewStatus === 'completed' || reviewResult?.reviewAnswer === 'GREEN') 
+      ? 'completed' 
+      : 'failed';
 
+    // If force approved, override the reviewAnswer to GREEN
+    const finalReviewAnswer = status === 'completed' ? 'GREEN' : reviewResult?.reviewAnswer;
 
     await this.updateVerificationStatus(user, {
       status,
       lastAttempt: new Date(),
-      reviewAnswer: reviewResult?.reviewAnswer,
+      reviewAnswer: finalReviewAnswer,  // Use the overridden review answer
       reviewRejectType: reviewResult?.reviewRejectType as 'RETRY' | 'FINAL',
       reviewRejectDetails: reviewResult?.rejectLabels?.join(', '),
       moderationComment: reviewResult?.moderationComment,

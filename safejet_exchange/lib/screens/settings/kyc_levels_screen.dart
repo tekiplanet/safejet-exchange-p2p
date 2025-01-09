@@ -452,7 +452,7 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         return kycDetails.userDetails.phoneVerified;
       case 'identity verification':
       case 'address proof':
-        return kycDetails.kycData?['identityVerified'] == true;
+        return kycDetails.verificationStatus?.identity?.status == 'completed';
       default:
         return false;
     }
