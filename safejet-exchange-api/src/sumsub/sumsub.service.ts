@@ -206,14 +206,13 @@ export class SumsubService {
       moderationComment?: string;
       clientComment?: string;
       buttonIds?: string[];
-    }
+    },
+    level: 'identity' | 'advanced' = 'identity'
   ): Promise<void> {
-    // Only consider it successful if reviewAnswer is GREEN
     const status = reviewResult?.reviewAnswer === 'GREEN' 
       ? 'completed' 
       : 'failed';
 
-    // If completed, override the reviewAnswer to GREEN
     const finalReviewAnswer = status === 'completed' ? 'GREEN' : reviewResult?.reviewAnswer;
 
     await this.updateVerificationStatus(user, {
@@ -223,23 +222,23 @@ export class SumsubService {
       reviewRejectType: reviewResult?.reviewRejectType as 'RETRY' | 'FINAL',
       reviewRejectDetails: reviewResult?.rejectLabels?.join(', '),
       moderationComment: reviewResult?.moderationComment,
-      clientComment: reviewResult?.clientComment
+      clientComment: reviewResult?.clientComment,
+      level
     });
 
-    // Only update KYC level if verification was successful
     if (status === 'completed') {
-      // Get KYC Level 2
+      // Get appropriate KYC Level based on verification level
       const kycLevel = await this.kycLevelRepository.findOne({
-        where: { level: 2 }
+        where: { level: level === 'advanced' ? 3 : 2 }
       });
 
       if (!kycLevel) {
-        throw new Error('KYC Level 2 not found');
+        throw new Error(`KYC Level ${level === 'advanced' ? 3 : 2} not found`);
       }
 
       // Update user's KYC level
       await this.userRepository.update(user.id, {
-        kycLevel: 2,
+        kycLevel: level === 'advanced' ? 3 : 2,
         kycLevelDetails: kycLevel
       });
     }
@@ -249,7 +248,8 @@ export class SumsubService {
       user.email,
       user.fullName,
       status as 'completed' | 'failed',
-      reviewResult?.clientComment ? [reviewResult.clientComment] : reviewResult?.rejectLabels
+      reviewResult?.clientComment ? [reviewResult.clientComment] : reviewResult?.rejectLabels,
+      level
     );
   }
 
@@ -261,12 +261,14 @@ export class SumsubService {
     reviewRejectDetails?: string;
     moderationComment?: string;
     clientComment?: string;
+    level?: 'identity' | 'advanced';
   }): Promise<void> {
     user.kycData = {
       ...user.kycData,
       verificationStatus: {
-        identity: {
-          ...user.kycData?.verificationStatus?.identity,
+        ...user.kycData?.verificationStatus,
+        [status.level || 'identity']: {
+          ...user.kycData?.verificationStatus?.[status.level || 'identity'],
           status: status.status,
           lastAttempt: status.lastAttempt,
           reviewAnswer: status.reviewAnswer,
@@ -536,5 +538,35 @@ export class SumsubService {
       encoded: encodeURIComponent(secret)
     });
     return secret;
+  }
+
+  async startAdvancedVerification(userId: string): Promise<string> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Check if Level 2 is completed
+    if (user.kycLevel < 2 || 
+        user.kycData?.verificationStatus?.identity?.status !== 'completed' ||
+        user.kycData?.verificationStatus?.identity?.reviewAnswer !== 'GREEN') {
+      throw new HttpException('Complete Level 2 verification first', HttpStatus.BAD_REQUEST);
+    }
+
+    // Generate token for advanced verification
+    const url = `/resources/accessTokens?userId=${userId}&levelName=advanced-verification`;
+    const method = 'POST';
+    
+    try {
+      const response = await axios({
+        method,
+        url: `${this.baseUrl}${url}`,
+        headers: this.getHeaders(method, url),
+      });
+
+      return response.data.token;
+    } catch (error) {
+      // ... error handling
+    }
   }
 } 

@@ -35,6 +35,15 @@ export interface KYCData {
       documentType?: string;
       lastAttempt?: Date;
     };
+    advanced?: {
+      status: 'pending' | 'processing' | 'completed' | 'failed';
+      lastAttempt: Date;
+      reviewAnswer?: 'GREEN' | 'RED';
+      reviewRejectType?: 'RETRY' | 'FINAL';
+      reviewRejectDetails?: string;
+      moderationComment?: string;
+      clientComment?: string;
+    };
   };
   documents?: {
     idCard?: string;

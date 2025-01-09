@@ -154,4 +154,13 @@ class KYCProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> startAdvancedVerification() async {
+    try {
+      final token = await _kycService.startAdvancedVerification();
+      // Launch Sumsub SDK with token
+    } catch (e) {
+      rethrow;
+    }
+  }
 } 

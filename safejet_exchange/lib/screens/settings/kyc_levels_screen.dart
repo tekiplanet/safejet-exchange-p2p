@@ -8,6 +8,7 @@ import 'identity_verification_screen.dart';
 import '../../providers/kyc_provider.dart';
 import '../../models/kyc_level.dart';
 import 'phone_verification_screen.dart';
+import 'advanced_verification_screen.dart';
 
 class KYCLevelsScreen extends StatefulWidget {
   const KYCLevelsScreen({super.key});
@@ -510,9 +511,11 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
   Widget _getNextVerificationStep(int level) {
     switch (level) {
       case 1:
-        return const PhoneVerificationScreen();  // For Level 1
+        return const PhoneVerificationScreen();
       case 2:
-        return const IdentityVerificationScreen();  // For Level 2
+        return const IdentityVerificationScreen();
+      case 3:
+        return const AdvancedVerificationScreen();
       default:
         return const IdentityVerificationScreen();
     }
