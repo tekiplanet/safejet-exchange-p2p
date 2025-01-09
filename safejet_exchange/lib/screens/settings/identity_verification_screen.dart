@@ -248,6 +248,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
                   onRetry: kycDetails?.verificationStatus?.identity?.status == 'failed'
                       ? _startVerification
                       : null,
+                  isRetrying: _loading,
                 ),
               ),
             ),

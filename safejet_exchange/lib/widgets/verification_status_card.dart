@@ -9,6 +9,7 @@ class VerificationStatusCard extends StatelessWidget {
   final IdentityVerification? identityStatus;
   final AddressVerification? addressStatus;
   final VoidCallback? onRetry;
+  final bool isRetrying;
 
   const VerificationStatusCard({
     Key? key,
@@ -16,6 +17,7 @@ class VerificationStatusCard extends StatelessWidget {
     this.identityStatus,
     this.addressStatus,
     this.onRetry,
+    this.isRetrying = false,
   }) : super(key: key);
 
   Color _getStatusColor(String status) {
@@ -198,9 +200,20 @@ class VerificationStatusCard extends StatelessWidget {
               width: double.infinity,
               height: 40,
               child: ElevatedButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Retry Verification'),
+                onPressed: isRetrying ? null : onRetry,
+                icon: isRetrying 
+                    ? SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.refresh, size: 18),
+                label: Text(isRetrying ? 'Retrying...' : 'Retry Verification'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: SafeJetColors.primary,
                   foregroundColor: Colors.white,
