@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/kyc_details.dart';
 import '../models/kyc_level.dart';
 import '../services/kyc_service.dart';
+import 'package:flutter_idensic_mobile_sdk_plugin/flutter_idensic_mobile_sdk_plugin.dart';
 
 class KYCProvider extends ChangeNotifier {
   final KYCService _kycService;
@@ -155,12 +156,19 @@ class KYCProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> startAdvancedVerification() async {
+  Future<String> startAdvancedVerification() async {
     try {
+      _loading = true;
+      notifyListeners();
+
       final token = await _kycService.startAdvancedVerification();
-      // Launch Sumsub SDK with token
+      return token;
     } catch (e) {
+      print('Error in advanced verification: $e');
       rethrow;
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
   }
 } 

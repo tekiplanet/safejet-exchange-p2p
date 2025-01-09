@@ -5,6 +5,7 @@ import '../../widgets/verification_status_card.dart';
 import '../../config/theme/colors.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../config/theme/theme_provider.dart';
+import '../../screens/settings/advanced_sumsub_verification_screen.dart';
 
 class AdvancedVerificationScreen extends StatefulWidget {
   const AdvancedVerificationScreen({super.key});
@@ -19,15 +20,22 @@ class _AdvancedVerificationScreenState extends State<AdvancedVerificationScreen>
   Future<void> _startAdvancedVerification() async {
     try {
       setState(() => _loading = true);
-      await context.read<KYCProvider>().startAdvancedVerification();
+      final token = await context.read<KYCProvider>().startAdvancedVerification();
+      
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AdvancedSumsubVerificationScreen(
+              accessToken: token,
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: SafeJetColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     } finally {

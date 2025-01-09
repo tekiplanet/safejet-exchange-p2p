@@ -213,7 +213,13 @@ class KYCService {
 
   Future<String> startAdvancedVerification() async {
     try {
-      final response = await _dio.post('/kyc/advanced-verification');
+      // Get auth headers with token
+      final headers = await _getAuthHeaders();
+      
+      final response = await _dio.post(
+        '/kyc/advanced-verification',
+        options: Options(headers: headers),  // Add auth headers
+      );
       
       if (response.data['token'] != null) {
         return response.data['token'];
