@@ -8,6 +8,7 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import * as countryCodes from 'country-codes-list';
 import type { CountryData } from 'country-codes-list';
+import { KYCLevel } from '../auth/entities/kyc-level.entity';
 
 interface SumsubWebhookPayload {
   type: string;
@@ -34,6 +35,8 @@ export class SumsubService {
     private configService: ConfigService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(KYCLevel)
+    private kycLevelRepository: Repository<KYCLevel>,
     private emailService: EmailService,
   ) {
     // Initialize country list with correct mappings
@@ -198,7 +201,8 @@ export class SumsubService {
     }
   ): Promise<void> {
     const status = reviewResult?.reviewAnswer === 'GREEN' ? 'completed' : 'failed';
-    
+
+
     await this.updateVerificationStatus(user, {
       status,
       lastAttempt: new Date(),
@@ -209,7 +213,27 @@ export class SumsubService {
       clientComment: reviewResult?.clientComment
     });
 
-    // Send email notification using consolidated method
+    
+    if (status === 'completed') {
+      // Get KYC Level 2
+      const kycLevel = await this.kycLevelRepository.findOne({
+        where: { level: 2 }
+      });
+
+      if (!kycLevel) {
+        throw new Error('KYC Level 2 not found');
+      }
+
+      // Update user's KYC level
+      await this.userRepository.update(user.id, {
+        kycLevel: 2,
+        kycLevelDetails: kycLevel
+      });
+    }
+
+
+
+    // Send email notification
     await this.emailService.sendVerificationStatusEmail(
       user.email,
       user.fullName,
