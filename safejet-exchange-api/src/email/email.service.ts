@@ -130,26 +130,26 @@ export class EmailService {
     }
   }
 
-  async sendVerificationFailedEmail(email: string, userName: string, reason: string) {
+  async sendVerificationFailedEmail(email: string, fullName: string, reason: string): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Verification Failed - SafeJet Exchange',
-        html: this.emailTemplatesService.verificationFailedEmail(userName, reason),
+        subject: 'Identity Verification Failed - SafeJet Exchange',
+        html: this.emailTemplatesService.verificationFailedEmail(fullName, reason),
       });
     } catch (error) {
       console.error('Verification failed email error:', error);
     }
   }
 
-  async sendVerificationSuccessEmail(email: string, userName: string) {
+  async sendVerificationSuccessEmail(email: string, fullName: string): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Verification Successful - SafeJet Exchange',
-        html: this.emailTemplatesService.verificationSuccessEmail(userName),
+        subject: 'Identity Verification Successful - SafeJet Exchange',
+        html: this.emailTemplatesService.verificationSuccessEmail(fullName),
       });
     } catch (error) {
       console.error('Verification success email error:', error);
@@ -158,34 +158,24 @@ export class EmailService {
 
   async sendVerificationStatusEmail(
     email: string,
-    status: 'pending' | 'completed' | 'failed',
+    fullName: string,
+    status: 'completed' | 'failed',
     rejectLabels?: string[]
   ): Promise<void> {
-    let subject: string;
-    let text: string;
-
-    switch (status) {
-      case 'completed':
-        subject = 'Identity Verification Successful';
-        text = 'Congratulations! Your identity has been successfully verified.';
-        break;
-      case 'failed':
-        subject = 'Identity Verification Failed';
-        text = `Your identity verification was not successful. ${
-          rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''
-        }`;
-        break;
-      default:
-        subject = 'Identity Verification Update';
-        text = 'Your identity verification is being processed.';
-    }
-
     try {
+      const subject = status === 'completed' 
+        ? 'Identity Verification Successful - SafeJet Exchange'
+        : 'Identity Verification Failed - SafeJet Exchange';
+
+      const text = status === 'completed'
+        ? `Congratulations ${fullName}! Your identity verification has been successfully completed.`
+        : `Hello ${fullName}, unfortunately your identity verification was not successful. ${rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''}`;
+
       await this.transporter.sendMail({
-        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject,
-        html: this.emailTemplatesService.verificationStatusEmail(status, text),
+        html: this.emailTemplatesService.verificationStatusEmail(status, text, fullName),
       });
     } catch (error) {
       console.error('Verification status email error:', error);

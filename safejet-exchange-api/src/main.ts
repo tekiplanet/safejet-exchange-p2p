@@ -1,20 +1,38 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import * as express from 'express';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Enable validation pipe
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true, // Strip properties that don't have decorators
-    transform: true, // Transform payloads to DTO instances
-    forbidNonWhitelisted: true, // Throw errors if non-whitelisted values are provided
+  // Important: This must come before any other middleware
+  app.use(bodyParser.json({
+    verify: (req: any, res, buf) => {
+      // Store the raw body string
+      req.rawBody = buf.toString();
+    }
   }));
 
-  // Enable CORS
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true,
+  }));
+
   app.enableCors();
+
+
+    // Enable CORS
   
+  // Add raw body parser
+  // app.use(express.json({
+  //   verify: (req: any, res, buf) => {
+  //     req.rawBody = buf;
+  //   }
+  // }));
+
   await app.listen(3000, '0.0.0.0');
 }
 bootstrap();

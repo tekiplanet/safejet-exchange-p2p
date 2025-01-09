@@ -64,6 +64,29 @@ class VerificationStatusCard extends StatelessWidget {
         : addressStatus?.status ?? 'pending';
   }
 
+  String _getUserFriendlyError(String? error) {
+    if (error == null) return 'Verification failed';
+    
+    // Map technical error codes to user-friendly messages
+    final errorMessages = {
+      'BAD_PROOF_OF_IDENTITY': 'The provided ID document could not be verified. Please ensure your document is clear, valid, and not expired.',
+      'BAD_QUALITY': 'The image quality is too low. Please provide a clearer photo.',
+      'DOCUMENT_PAGE_MISSING': 'Some document pages are missing. Please provide all required pages.',
+      'DOCUMENT_DAMAGED': 'The document appears to be damaged. Please provide an undamaged document.',
+      'DOCUMENT_EXPIRED': 'The document has expired. Please provide a valid, unexpired document.',
+      'SELFIE_MISMATCH': 'The selfie does not match the ID photo. Please retake your selfie.',
+      'FACE_NOT_VISIBLE': 'Your face is not clearly visible. Please retake the photo in good lighting.',
+    };
+
+    // Split by comma in case there are multiple errors
+    final errors = error.split(',').map((e) => e.trim());
+    
+    // Map each error to its user-friendly version or use the original if no mapping exists
+    final friendlyErrors = errors.map((e) => errorMessages[e] ?? e).join('\n');
+    
+    return friendlyErrors;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -147,7 +170,7 @@ class VerificationStatusCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      failureReason,
+                      _getUserFriendlyError(failureReason),
                       style: TextStyle(
                         color: SafeJetColors.error,
                         fontSize: 14,

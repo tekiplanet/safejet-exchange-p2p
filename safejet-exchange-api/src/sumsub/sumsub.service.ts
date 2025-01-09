@@ -145,7 +145,15 @@ export class SumsubService {
       switch (type) {
         case 'applicantReviewed':
         case 'applicantWorkflowCompleted':
-          await this.handleVerificationComplete(user, reviewStatus, reviewResult);
+          if (reviewResult) {
+            const typedReviewResult = {
+              ...reviewResult,
+              reviewRejectType: reviewResult.reviewRejectType as 'RETRY' | 'FINAL'
+            };
+            await this.handleVerificationComplete(user, reviewStatus, typedReviewResult);
+          } else {
+            await this.handleVerificationComplete(user, reviewStatus);
+          }
           break;
 
         case 'applicantPending':
@@ -180,10 +188,13 @@ export class SumsubService {
   private async handleVerificationComplete(
     user: User, 
     reviewStatus: string, 
-    reviewResult?: { 
-      reviewAnswer: string;
+    reviewResult?: {
+      reviewAnswer: 'GREEN' | 'RED';
       rejectLabels?: string[];
-      reviewRejectType?: string;
+      reviewRejectType?: 'RETRY' | 'FINAL';
+      moderationComment?: string;
+      clientComment?: string;
+      buttonIds?: string[];
     }
   ): Promise<void> {
     const status = reviewResult?.reviewAnswer === 'GREEN' ? 'completed' : 'failed';
@@ -192,38 +203,42 @@ export class SumsubService {
       status,
       lastAttempt: new Date(),
       reviewAnswer: reviewResult?.reviewAnswer,
-      reviewRejectType: reviewResult?.reviewRejectType,
+      reviewRejectType: reviewResult?.reviewRejectType as 'RETRY' | 'FINAL',
       reviewRejectDetails: reviewResult?.rejectLabels?.join(', '),
+      moderationComment: reviewResult?.moderationComment,
+      clientComment: reviewResult?.clientComment
     });
 
-    // Send email notification
-    if (status === 'completed') {
-      await this.emailService.sendVerificationSuccessEmail(user.email, user.fullName);
-    } else {
-      await this.emailService.sendVerificationFailedEmail(
-        user.email,
-        user.fullName,
-        `Verification failed: ${reviewResult?.rejectLabels?.join(', ')}`
-      );
-    }
+    // Send email notification using consolidated method
+    await this.emailService.sendVerificationStatusEmail(
+      user.email,
+      user.fullName,
+      status as 'completed' | 'failed',
+      reviewResult?.rejectLabels
+    );
   }
 
   private async updateVerificationStatus(user: User, status: {
     status: 'pending' | 'processing' | 'completed' | 'failed';
     lastAttempt: Date;
-    reviewAnswer?: string;
-    reviewRejectType?: string;
+    reviewAnswer?: 'GREEN' | 'RED' | 'ON_HOLD';
+    reviewRejectType?: 'RETRY' | 'FINAL';
     reviewRejectDetails?: string;
+    moderationComment?: string;
+    clientComment?: string;
   }): Promise<void> {
     user.kycData = {
       ...user.kycData,
       verificationStatus: {
         identity: {
+          ...user.kycData?.verificationStatus?.identity,
           status: status.status,
           lastAttempt: status.lastAttempt,
           reviewAnswer: status.reviewAnswer,
           reviewRejectType: status.reviewRejectType,
-          reviewRejectDetails: status.reviewRejectDetails
+          reviewRejectDetails: status.reviewRejectDetails,
+          moderationComment: status.moderationComment,
+          clientComment: status.clientComment
         }
       }
     };
@@ -379,80 +394,96 @@ export class SumsubService {
     }
   }
 
-  async verifyWebhookSignature(signature: string, payload: any): Promise<boolean> {
-    const webhookSecret = this.configService.get<string>('SUMSUB_WEBHOOK_SECRET');
-    const calculatedSignature = crypto
-      .createHmac('sha1', webhookSecret)
-      .update(JSON.stringify(payload))
-      .digest('hex');
-    
-    return signature === calculatedSignature;
+  async verifyWebhookSignature(signature: string, payload: any, rawBody?: string): Promise<boolean> {
+    try {
+      const webhookSecret = this.configService.get<string>('SUMSUB_WEBHOOK_SECRET');
+      
+      // Important: Use rawBody directly without any modifications
+      if (!rawBody) {
+        console.error('Raw body is missing');
+        return false;
+      }
+
+      const calculatedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(rawBody)  // Use rawBody directly
+        .digest('hex');
+
+      console.log('Detailed signature verification:', {
+        webhookSecret,
+        rawBodyLength: rawBody.length,
+        rawBodyPreview: rawBody.substring(0, 100) + '...',
+        receivedSignature: signature,
+        calculatedSignature,
+        match: signature === calculatedSignature,
+        // Debug info
+        rawBodyType: typeof rawBody,
+        signatureType: typeof signature,
+        firstFewChars: {
+          rawBody: rawBody.substring(0, 20),
+          signature: signature.substring(0, 20)
+        }
+      });
+
+      return signature === calculatedSignature;
+    } catch (error) {
+      console.error('Error verifying webhook signature:', error);
+      console.error('Full error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      return false;
+    }
   }
 
   async handleWebhookEvent(payload: SumsubWebhookPayload) {
     try {
-      const { type, applicantId, reviewStatus } = payload;
-      console.log('Received webhook event:', { type, applicantId, reviewStatus });
+      const { type, applicantId, reviewStatus, reviewResult } = payload;
+      console.log('Received webhook event:', { type, applicantId, reviewStatus, reviewResult });
 
       const user = await this.userRepository
         .createQueryBuilder('user')
-        .where("user.kycData->>'sumsubApplicantId' = :applicantId", { applicantId })
+        .where(`"user"."kycData"->>'sumsubApplicantId' = :applicantId`, { applicantId })
         .getOne();
 
       if (!user) {
         throw new Error(`No user found for applicant ID: ${applicantId}`);
       }
 
-      // Update user's KYC status based on the webhook event
       switch (type) {
         case 'applicantCreated':
-          // Initial state when applicant is created
-          user.kycData = {
-            ...user.kycData,
-            sumsubApplicantId: payload.applicantId,
-            verificationStatus: {
-              identity: {
-                status: 'pending',
-                lastAttempt: new Date(),
-              }
-            }
-          };
-          await this.userRepository.save(user);
-          break;
-
         case 'applicantPending':
-          // Documents uploaded, under review
           await this.updateVerificationStatus(user, {
-            status: 'processing',
+            status: 'pending',
             lastAttempt: new Date(),
           });
           break;
 
-        case 'applicantReviewed':
-          // Final review completed
-          const status = this.mapReviewStatus(reviewStatus);
-          user.kycData = {
-            ...user.kycData,
-            verificationStatus: {
-              identity: {
-                status: status,
-                lastAttempt: new Date(),
-                reviewAnswer: payload.reviewResult?.reviewAnswer,
-                reviewRejectType: payload.reviewResult?.reviewRejectType,
-                reviewRejectDetails: payload.reviewResult?.rejectLabels?.join(', ')
-              }
-            }
-          };
-          await this.userRepository.save(user);
+        case 'applicantOnHold':
+          await this.updateVerificationStatus(user, {
+            status: 'pending',
+            lastAttempt: new Date(),
+            reviewAnswer: 'ON_HOLD',
+            reviewRejectDetails: 'Application is on hold for review'
+          });
+          break;
 
-          // Send email notification
-          await this.emailService.sendVerificationStatusEmail(
-            user.email,
-            status,
-            payload.reviewResult?.rejectLabels
-          );
+        case 'applicantReviewed':
+        case 'applicantWorkflowCompleted':
+          if (reviewResult) {
+            const typedReviewResult = {
+              ...reviewResult,
+              reviewRejectType: reviewResult.reviewRejectType as 'RETRY' | 'FINAL'
+            };
+            await this.handleVerificationComplete(user, reviewStatus, typedReviewResult);
+          } else {
+            await this.handleVerificationComplete(user, reviewStatus);
+          }
           break;
       }
+
+      return { success: true };
     } catch (error) {
       console.error('Error handling webhook event:', error);
       throw new HttpException(
@@ -460,5 +491,15 @@ export class SumsubService {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private getWebhookSecret(): string {
+    const secret = this.configService.get<string>('SUMSUB_WEBHOOK_SECRET');
+    console.log('Webhook secret details:', {
+      original: secret,
+      decoded: decodeURIComponent(secret),
+      encoded: encodeURIComponent(secret)
+    });
+    return secret;
   }
 } 

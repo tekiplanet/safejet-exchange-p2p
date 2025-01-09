@@ -1,4 +1,15 @@
-import { Controller, Post, UseGuards, Get, Body, Headers, HttpException, HttpStatus } from '@nestjs/common';
+import { 
+  Controller, 
+  Post, 
+  UseGuards, 
+  Get, 
+  Body, 
+  Headers, 
+  HttpException, 
+  HttpStatus,
+  Req
+} from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SumsubService } from './sumsub.service';
 import { GetUser } from '../auth/get-user.decorator';
@@ -22,15 +33,46 @@ export class SumsubController {
   }
 
   @Post('webhook')
-  async handleWebhook(@Headers('x-payload-digest') signature: string, @Body() payload: SumsubWebhookPayload) {
-    // Verify webhook signature
-    const isValid = await this.sumsubService.verifyWebhookSignature(signature, payload);
-    if (!isValid) {
-      throw new HttpException('Invalid webhook signature', HttpStatus.UNAUTHORIZED);
-    }
+  async handleWebhook(
+    @Headers('x-payload-digest') signature: string,
+    @Body() payload: SumsubWebhookPayload,
+    @Req() request: Request & { rawBody: string }
+  ) {
+    try {
+      if (!signature) {
+        console.error('Missing signature header');
+        throw new HttpException('Missing signature', HttpStatus.BAD_REQUEST);
+      }
 
-    // Handle the webhook event
-    await this.sumsubService.handleWebhookEvent(payload);
-    return { success: true };
+      if (!request.rawBody) {
+        console.error('Missing raw body');
+        throw new HttpException('Missing raw body', HttpStatus.BAD_REQUEST);
+      }
+
+      console.log('Webhook request details:', {
+        headers: request.headers,
+        signatureHeader: signature,
+        rawBodyExists: !!request.rawBody,
+        rawBodyLength: request.rawBody?.length,
+        payloadType: typeof payload,
+      });
+
+      const isValid = await this.sumsubService.verifyWebhookSignature(
+        signature,
+        payload,
+        request.rawBody
+      );
+
+      if (!isValid) {
+        console.error('Invalid webhook signature');
+        throw new HttpException('Invalid webhook signature', HttpStatus.UNAUTHORIZED);
+      }
+
+      await this.sumsubService.handleWebhookEvent(payload);
+      return { success: true };
+    } catch (error) {
+      console.error('Webhook handler error:', error);
+      throw error;
+    }
   }
 } 

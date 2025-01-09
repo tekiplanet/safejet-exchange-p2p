@@ -1,11 +1,27 @@
 export interface SumsubWebhookPayload {
-  type: string;
   applicantId: string;
+  inspectionId: string;
+  correlationId: string;
+  levelName: string;
+  type: 
+    | 'applicantCreated'
+    | 'applicantPending'
+    | 'applicantReviewed'
+    | 'applicantOnHold'
+    | 'applicantPersonalInfoChanged'
+    | 'applicantWorkflowCompleted';
   externalUserId: string;
-  reviewStatus: string;
+  reviewStatus: 'init' | 'pending' | 'completed' | 'onHold';
+  sandboxMode?: boolean;
+  createdAt?: string;
+  createdAtMs: string;
+  clientId?: string;
   reviewResult?: {
     reviewAnswer: 'GREEN' | 'RED';
     rejectLabels?: string[];
-    reviewRejectType?: string;
+    reviewRejectType?: 'RETRY' | 'FINAL';
+    moderationComment?: string;
+    clientComment?: string;
+    buttonIds?: string[];
   };
 } 

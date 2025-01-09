@@ -285,32 +285,39 @@ export class EmailTemplatesService {
     return nextSteps[level] || '';
   }
 
-  verificationFailedEmail(userName: string, reason: string): string {
-    return `
-      <h2>Hello ${userName},</h2>
-      <p>Your verification attempt was unsuccessful.</p>
-      <p>Reason: ${reason}</p>
-      <p>Please try again with valid documents.</p>
-      <p>Best regards,<br>SafeJet Exchange Team</p>
-    `;
-  }
-
-  verificationSuccessEmail(userName: string): string {
-    return `
-      <h2>Hello ${userName},</h2>
-      <p>Your verification has been completed successfully!</p>
-      <p>You now have access to additional features on SafeJet Exchange.</p>
-      <p>Best regards,<br>SafeJet Exchange Team</p>
-    `;
-  }
-
-  verificationStatusEmail(status: string, message: string): string {
+  verificationFailedEmail(fullName: string, reason: string): string {
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Identity Verification Update</h2>
-        <p>${message}</p>
-        <p>If you did not request this verification, please contact our support team immediately.</p>
-        <p>Best regards,<br>SafeJet Exchange Team</p>
+        <h2>Hello ${fullName},</h2>
+        <p>Unfortunately, your identity verification was not successful.</p>
+        <p>${reason}</p>
+        <p>Please try again with valid documents.</p>
+        <p>If you need assistance, please contact our support team.</p>
+        <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Try Again</a>
+      </div>
+    `;
+  }
+
+  verificationSuccessEmail(fullName: string): string {
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Congratulations ${fullName}!</h2>
+        <p>Your identity verification has been successfully completed. You can now access all features of your account.</p>
+        <p>Thank you for choosing Safejet.</p>
+        <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px;">Go to Dashboard</a>
+      </div>
+    `;
+  }
+
+  verificationStatusEmail(status: string, text: string, fullName: string): string {
+    const buttonColor = status === 'completed' ? '#28a745' : '#007bff';
+    const buttonText = status === 'completed' ? 'Go to Dashboard' : 'Try Again';
+    
+    return `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Hello ${fullName},</h2>
+        <p>${text}</p>
+        <a href="${process.env.FRONTEND_URL}/dashboard" style="display: inline-block; padding: 10px 20px; background-color: ${buttonColor}; color: white; text-decoration: none; border-radius: 5px;">${buttonText}</a>
       </div>
     `;
   }

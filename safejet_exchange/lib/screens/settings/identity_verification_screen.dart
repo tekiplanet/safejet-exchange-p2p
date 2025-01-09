@@ -32,6 +32,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   bool _loading = false;
   bool _locationLoading = false;
   String? _locationError;
+  bool _showForm = false;
 
   static const String _storageKey = 'identity_verification_form';
 
@@ -66,7 +67,9 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
   @override
   void initState() {
     super.initState();
-    // Load saved form data first
+    // Show form initially only if no verification attempt has been made
+    final kycDetails = context.read<KYCProvider>().kycDetails;
+    _showForm = kycDetails?.verificationStatus?.identity?.status == null;
     _loadSavedFormData().then((_) {
       // Then load other data
       _loadKYCDetails();
@@ -248,7 +251,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
                 ),
               ),
             ),
-            if (kycDetails?.verificationStatus?.identity?.status != 'completed')
+            if (_showForm || kycDetails?.verificationStatus?.identity?.status == null)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: FadeInUp(

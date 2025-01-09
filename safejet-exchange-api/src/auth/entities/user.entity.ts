@@ -1,6 +1,48 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { KYCLevel } from './kyc-level.entity';
 
+export interface KYCData {
+  sumsubApplicantId?: string;
+  phoneVerified?: boolean;
+  identityVerified?: boolean;
+  addressVerified?: boolean;
+  videoVerified?: boolean;
+  verificationCompletedAt?: Date;
+  identityDetails?: {
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string;
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    submittedAt: Date;
+  };
+  verificationStatus?: {
+    identity?: {
+      status: 'processing' | 'pending' | 'completed' | 'failed';
+      documentType?: string;
+      lastAttempt?: Date;
+      failureReason?: string;
+      reviewAnswer?: 'GREEN' | 'RED' | 'ON_HOLD';
+      reviewRejectType?: 'RETRY' | 'FINAL';
+      reviewRejectDetails?: string;
+      moderationComment?: string;
+      clientComment?: string;
+    };
+    address?: {
+      status: 'processing' | 'pending' | 'completed' | 'failed';
+      documentType?: string;
+      lastAttempt?: Date;
+    };
+  };
+  documents?: {
+    idCard?: string;
+    proofOfAddress?: string;
+    selfie?: string;
+  };
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -74,44 +116,5 @@ export class User {
   kycLevelDetails: KYCLevel;
 
   @Column('json', { nullable: true })
-  kycData: {
-    phoneVerified?: boolean;
-    identityVerified?: boolean;
-    addressVerified?: boolean;
-    videoVerified?: boolean;
-    verificationCompletedAt?: Date;
-    sumsubApplicantId?: string;
-    identityDetails?: {
-      firstName: string;
-      lastName: string;
-      dateOfBirth: string;
-      address: string;
-      city: string;
-      state: string;
-      country: string;
-      submittedAt: Date;
-    };
-    verificationStatus?: {
-      identity?: {
-        status: 'pending' | 'processing' | 'completed' | 'failed';
-        documentType?: string;
-        lastAttempt?: Date;
-        failureReason?: string;
-        reviewAnswer?: string;
-        reviewRejectType?: string;
-        reviewRejectDetails?: string;
-      };
-      address?: {
-        status: 'pending' | 'processing' | 'completed' | 'failed';
-        documentType?: string;
-        lastAttempt?: Date;
-        failureReason?: string;
-      };
-    };
-    documents?: {
-      idCard?: string;
-      proofOfAddress?: string;
-      selfie?: string;
-    };
-  };
+  kycData: KYCData;
 } 

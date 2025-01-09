@@ -171,6 +171,13 @@ class KYCService {
       print('Technical error details: $e');
       
       if (e is DioException) {
+        // Add detailed error logging
+        print('Status code: ${e.response?.statusCode}');
+        print('Response data: ${e.response?.data}');
+        print('Error message: ${e.message}');
+        print('Error type: ${e.type}');
+        print('Stack trace: ${e.stackTrace}');
+        
         if (e.type == DioExceptionType.connectionTimeout || 
             e.type == DioExceptionType.sendTimeout || 
             e.type == DioExceptionType.receiveTimeout) {
