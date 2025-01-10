@@ -488,12 +488,17 @@ export class SumsubService {
         throw new Error(`No user found for applicant ID: ${applicantId}`);
       }
 
+      // Determine if this is for advanced verification based on user's KYC level
+      const isAdvancedVerification = user.kycLevel >= 2;
+      const verificationType = isAdvancedVerification ? 'advanced' : 'identity';
+
       switch (type) {
         case 'applicantCreated':
         case 'applicantPending':
           await this.updateVerificationStatus(user, {
             status: 'pending',
             lastAttempt: new Date(),
+            level: verificationType
           });
           break;
 
@@ -502,7 +507,8 @@ export class SumsubService {
             status: 'pending',
             lastAttempt: new Date(),
             reviewAnswer: 'ON_HOLD',
-            reviewRejectDetails: 'Application is on hold for review'
+            reviewRejectDetails: 'Application is on hold for review',
+            level: verificationType
           });
           break;
 
@@ -513,9 +519,19 @@ export class SumsubService {
               ...reviewResult,
               reviewRejectType: reviewResult.reviewRejectType as 'RETRY' | 'FINAL'
             };
-            await this.handleVerificationComplete(user, reviewStatus, typedReviewResult);
+            await this.handleVerificationComplete(
+              user, 
+              reviewStatus, 
+              typedReviewResult,
+              verificationType
+            );
           } else {
-            await this.handleVerificationComplete(user, reviewStatus);
+            await this.handleVerificationComplete(
+              user, 
+              reviewStatus, 
+              undefined,
+              verificationType
+            );
           }
           break;
       }

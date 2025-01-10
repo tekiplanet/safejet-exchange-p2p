@@ -494,7 +494,10 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
     final kycDetails = context.read<KYCProvider>().kycDetails;
     if (kycDetails == null) return false;
 
-    switch (requirement.toLowerCase()) {
+    // Convert requirement to lowercase for case-insensitive comparison
+    final req = requirement.toLowerCase().trim();
+
+    switch (req) {
       case 'email verification':
         return kycDetails.userDetails.emailVerified;
       case 'phone verification':
@@ -503,7 +506,21 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
       case 'address proof':
         return kycDetails.verificationStatus?.identity?.status == 'completed' && 
                kycDetails.verificationStatus?.identity?.reviewAnswer == 'GREEN';
+      // Make sure these match exactly with the text shown in the UI
+      case 'advanced verification':
+      case 'bank statement':
+      case 'proof of income':
+      case 'tax documents':
+        // Print for debugging
+        print('Advanced verification status: ${kycDetails.verificationStatus?.advanced?.status}');
+        print('Advanced verification review answer: ${kycDetails.verificationStatus?.advanced?.reviewAnswer}');
+        
+        final isAdvancedCompleted = kycDetails.verificationStatus?.advanced?.status?.toLowerCase() == 'completed' && 
+                                   kycDetails.verificationStatus?.advanced?.reviewAnswer == 'GREEN';
+        print('Is advanced completed: $isAdvancedCompleted');
+        return isAdvancedCompleted;
       default:
+        print('Unmatched requirement: $req');
         return false;
     }
   }

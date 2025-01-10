@@ -55,10 +55,12 @@ class UserDetails {
 class VerificationStatus {
   final IdentityVerification? identity;
   final AddressVerification? address;
+  final AdvancedVerification? advanced;
 
   VerificationStatus({
     this.identity,
     this.address,
+    this.advanced,
   });
 
   factory VerificationStatus.fromJson(Map<String, dynamic> json) {
@@ -68,6 +70,9 @@ class VerificationStatus {
           : null,
       address: json['address'] != null
           ? AddressVerification.fromJson(json['address'])
+          : null,
+      advanced: json['advanced'] != null
+          ? AdvancedVerification.fromJson(json['advanced'])
           : null,
     );
   }
@@ -131,6 +136,40 @@ class AddressVerification {
           ? DateTime.parse(json['lastAttempt'])
           : null,
       failureReason: json['failureReason'],
+    );
+  }
+}
+
+class AdvancedVerification {
+  final String status;
+  final DateTime? lastAttempt;
+  final String? reviewAnswer;
+  final String? reviewRejectType;
+  final String? reviewRejectDetails;
+  final String? moderationComment;
+  final String? clientComment;
+
+  AdvancedVerification({
+    required this.status,
+    this.lastAttempt,
+    this.reviewAnswer,
+    this.reviewRejectType,
+    this.reviewRejectDetails,
+    this.moderationComment,
+    this.clientComment,
+  });
+
+  factory AdvancedVerification.fromJson(Map<String, dynamic> json) {
+    return AdvancedVerification(
+      status: json['status'],
+      lastAttempt: json['lastAttempt'] != null
+          ? DateTime.parse(json['lastAttempt'])
+          : null,
+      reviewAnswer: json['reviewAnswer'],
+      reviewRejectType: json['reviewRejectType'],
+      reviewRejectDetails: json['reviewRejectDetails'],
+      moderationComment: json['moderationComment'],
+      clientComment: json['clientComment'],
     );
   }
 }
