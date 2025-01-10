@@ -81,13 +81,17 @@ export class EmailService {
     }
   }
 
-  async sendPasswordChangedEmail(email: string) {
-    await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
-      to: email,
-      subject: 'Password Changed Successfully - SafeJet Exchange',
-      html: this.emailTemplatesService.passwordChangedEmail(),
-    });
+  async sendPasswordChangedEmail(email: string, userName: string): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'Password Changed Successfully - SafeJet Exchange',
+        html: this.emailTemplatesService.passwordChangedEmail(userName),
+      });
+    } catch (error) {
+      console.error('Password changed email error:', error);
+    }
   }
 
   async send2FAEnabledEmail(email: string) {

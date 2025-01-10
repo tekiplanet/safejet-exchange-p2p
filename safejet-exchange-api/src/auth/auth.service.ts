@@ -24,6 +24,7 @@ import { KYCLevel } from './entities/kyc-level.entity';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { TwilioService } from '../twilio/twilio.service';
 import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -283,7 +284,7 @@ export class AuthService {
     await this.userRepository.save(user);
 
     // Send password changed confirmation email
-    await this.emailService.sendPasswordChangedEmail(email);
+    await this.emailService.sendPasswordChangedEmail(email, user.fullName);
 
     return { message: 'Password has been reset successfully' };
   }
@@ -711,5 +712,33 @@ export class AuthService {
     };
 
     return this.userRepository.save(user);
+  }
+
+  async verifyPassword(password: string, user: User): Promise<{ valid: boolean }> {
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    return { valid: isValid };
+  }
+
+  async changePassword(
+    changePasswordDto: ChangePasswordDto,
+    user: User,
+  ): Promise<void> {
+    const { currentPassword, newPassword } = changePasswordDto;
+
+    // Verify current password
+    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt();
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Update password
+    await this.userRepository.update(user.id, { passwordHash });
+
+    // Send email notification with user's name
+    await this.emailService.sendPasswordChangedEmail(user.email, user.fullName);
   }
 } 

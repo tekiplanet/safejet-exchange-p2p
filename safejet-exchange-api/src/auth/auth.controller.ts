@@ -17,6 +17,7 @@ import { Request } from 'express';
 import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { TwilioService } from '../twilio/twilio.service';
 import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -143,5 +144,23 @@ export class AuthController {
     @Body() updateIdentityDetailsDto: UpdateIdentityDetailsDto,
   ) {
     return this.authService.updateIdentityDetails(user.id, updateIdentityDetailsDto);
+  }
+
+  @Post('verify-password')
+  @UseGuards(JwtAuthGuard)
+  async verifyPassword(
+    @Body('password') password: string,
+    @GetUser() user: User,
+  ): Promise<{ valid: boolean }> {
+    return this.authService.verifyPassword(password, user);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @GetUser() user: User,
+  ): Promise<void> {
+    await this.authService.changePassword(changePasswordDto, user);
   }
 } 

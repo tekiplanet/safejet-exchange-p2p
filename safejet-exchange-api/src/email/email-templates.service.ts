@@ -114,18 +114,34 @@ export class EmailTemplatesService {
     return baseTemplate(content, isDark);
   }
 
-  passwordChangedEmail(isDark = true) {
+  passwordChangedEmail(userName: string, isDark = true): string {
     const content = `
       <h1>Password Changed Successfully 🔒</h1>
-      <p>Your password has been successfully changed.</p>
+      <p>Hello ${userName},</p>
       
-      <p>If you did not make this change, please contact our support team immediately:</p>
-      <ul style="list-style: none; padding: 0;">
-        <li>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></li>
-        <li>💬 <a href="#" style="color: #ffc300;">Live Chat Support</a></li>
-      </ul>
-      
-      <p>Best regards,<br>The SafeJet Team</p>
+      <div style="margin: 20px 0;">
+        <p>Your password has been successfully changed. If you did not make this change, please:</p>
+        <ol style="margin: 20px 0;">
+          <li>Change your password immediately</li>
+          <li>Enable 2FA if not already enabled</li>
+          <li>Contact our support team</li>
+        </ol>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Security Tips 🛡️</h2>
+        <ul style="list-style: none; padding: 0;">
+          <li>✓ Use a unique password for each account</li>
+          <li>✓ Enable 2FA for additional security</li>
+          <li>✓ Never share your password with anyone</li>
+          <li>✓ Regularly check your account activity</li>
+        </ul>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>If you need any assistance, our support team is available 24/7.</p>
+        <p>Best regards,<br>The SafeJet Team</p>
+      </div>
     `;
 
     return baseTemplate(content, isDark);

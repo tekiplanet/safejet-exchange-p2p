@@ -2,10 +2,34 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/env/env_config.dart';
+import 'package:dio/dio.dart';
 
 class AuthService {
   final String baseUrl = EnvConfig.authBaseUrl;
   final storage = const FlutterSecureStorage();
+  late final Dio _dio;
+
+  AuthService() {
+    _dio = Dio(BaseOptions(
+      baseUrl: baseUrl,
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 3),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ));
+
+    // Add interceptor for logging
+    _dio.interceptors.add(LogInterceptor(
+      request: true,
+      requestHeader: true,
+      requestBody: true,
+      responseHeader: true,
+      responseBody: true,
+      error: true,
+    ));
+  }
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
@@ -179,38 +203,34 @@ class AuthService {
   Future<Map<String, dynamic>> verify2FA(String email, String code) async {
     try {
       final tempToken = await storage.read(key: 'tempToken');
-      print('Verifying 2FA with token: $tempToken'); // Debug log
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/verify-2fa'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (tempToken != null) 'Authorization': 'Bearer $tempToken',
-        },
-        body: json.encode({
+      print('Verifying 2FA with token: $tempToken');
+
+      final response = await _dio.post(
+        '/verify-2fa',
+        data: {
           'email': email,
           'code': code,
-        }),
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $tempToken',
+            'Content-Type': 'application/json',
+          },
+        ),
       );
 
-      print('2FA verification response: ${response.body}'); // Debug log
-      final data = json.decode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Store the new tokens after successful 2FA
-        await storage.write(key: 'accessToken', value: data['accessToken']);
-        await storage.write(key: 'refreshToken', value: data['refreshToken']);
-        await storage.write(key: 'user', value: json.encode(data['user']));
-        
-        // Clean up temp token
-        await storage.delete(key: 'tempToken');
-
-        return data;
-      }
-
-      throw data['message'] ?? 'Failed to verify 2FA code';
+      print('2FA verification response: ${response.data}');
+      
+      // Clean up temp token after successful verification
+      await storage.delete(key: 'tempToken');
+      
+      return response.data;
     } catch (e) {
-      print('2FA verification error: $e'); // Debug log
+      if (e is DioException) {
+        print('2FA verification error: ${e.response?.data['message']}');
+        throw e.response?.data['message'] ?? 'Failed to verify 2FA code';
+      }
+      print('2FA verification error: $e');
       rethrow;
     }
   }
@@ -377,9 +397,12 @@ class AuthService {
 
   Future<Map<String, dynamic>> getCurrentUser() async {
     try {
-      final userJson = await storage.read(key: 'user');
-      if (userJson == null) throw 'No user data found';
-      return json.decode(userJson);
+      final response = await _dio.get(
+        '/me',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      
+      return response.data;
     } catch (e) {
       print('Get current user error: $e');
       rethrow;
@@ -547,6 +570,82 @@ class AuthService {
       return data;
     } catch (e) {
       print('Verify phone error: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> verifyCurrentPassword(String currentPassword) async {
+    try {
+      final response = await _dio.post(
+        '/verify-password',
+        data: {
+          'password': currentPassword,
+        },
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      
+      return response.data['valid'] == true;
+    } catch (e) {
+      if (e is DioException) {
+        if (e.response?.statusCode == 401) {
+          throw Exception('Current password is incorrect');
+        }
+        print('Verify password error details: ${e.response?.data}');
+      }
+      throw Exception('Failed to verify password');
+    }
+  }
+
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    try {
+      await _dio.post(
+        '/change-password',
+        data: {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+        options: Options(headers: await _getAuthHeaders()),
+      );
+    } catch (e) {
+      if (e is DioException) {
+        if (e.response?.statusCode == 401) {
+          throw Exception('Current password is incorrect');
+        }
+        if (e.response?.statusCode == 400) {
+          throw Exception(e.response?.data['message'] ?? 'Invalid password format');
+        }
+        print('Change password error details: ${e.response?.data}');
+      }
+      throw Exception('Failed to change password');
+    }
+  }
+
+  Future<Map<String, dynamic>> _getAuthHeaders() async {
+    final accessToken = await storage.read(key: 'accessToken');
+    return {
+      'Authorization': 'Bearer $accessToken',
+    };
+  }
+
+  Future<void> verify2FAForAction(String code) async {
+    try {
+      final response = await _dio.post(
+        '/verify-2fa-action',
+        data: {
+          'code': code,
+        },
+        options: Options(headers: await _getAuthHeaders()),
+      );
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception(response.data['message'] ?? 'Failed to verify 2FA code');
+      }
+    } catch (e) {
+      if (e is DioException) {
+        print('2FA action verification error details: ${e.response?.data}');
+        throw e.response?.data['message'] ?? 'Failed to verify 2FA code';
+      }
+      print('2FA action verification error: $e');
       rethrow;
     }
   }

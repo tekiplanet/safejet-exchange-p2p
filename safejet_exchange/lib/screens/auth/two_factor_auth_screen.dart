@@ -57,7 +57,7 @@ class _TwoFactorAuthScreenState extends State<TwoFactorAuthScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.verify2FA(widget.email, code);
+      await authProvider.verify2FA(code, widget.email);
 
       if (!mounted) return;
 

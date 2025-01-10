@@ -5,7 +5,16 @@ import 'package:provider/provider.dart';
 import 'package:safejet_exchange/providers/auth_provider.dart';
 
 class TwoFactorDialog extends StatefulWidget {
-  const TwoFactorDialog({super.key});
+  final String? action;
+  final String? title;
+  final String? message;
+
+  const TwoFactorDialog({
+    super.key,
+    this.action,
+    this.title,
+    this.message,
+  });
 
   @override
   State<TwoFactorDialog> createState() => _TwoFactorDialogState();
@@ -57,9 +66,9 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              '2FA Verification',
-              style: TextStyle(
+            Text(
+              widget.title ?? '2FA Verification',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -67,7 +76,7 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Enter the 6-digit code from your authenticator app',
+              widget.message ?? 'Enter the 6-digit code from your authenticator app',
               style: TextStyle(
                 color: Colors.grey[400],
                 fontSize: 13,
@@ -146,7 +155,17 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
 
                     try {
                       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                      await authProvider.disable2FA(_code, 'authenticator');
+                      
+                      switch (widget.action) {
+                        case 'disable2fa':
+                          await authProvider.disable2FA(_code, 'authenticator');
+                          break;
+                        case 'changePassword':
+                          await authProvider.verify2FA(_code);
+                          break;
+                        default:
+                          await authProvider.verify2FA(_code, authProvider.user?.email);
+                      }
                       
                       if (!mounted) return;
                       Navigator.pop(context, true);
@@ -182,7 +201,7 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                         ),
                       )
-                    : const Text('Verify'),
+                    : Text(widget.action == 'disable2fa' ? 'Disable 2FA' : 'Verify'),
                 ),
               ],
             ),
@@ -190,5 +209,16 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
         ),
       ),
     );
+  }
+
+  String _getActionButtonText() {
+    switch (widget.action) {
+      case 'disable2fa':
+        return 'Disable 2FA';
+      case 'changePassword':
+        return 'Verify';
+      default:
+        return 'Verify';
+    }
   }
 } 

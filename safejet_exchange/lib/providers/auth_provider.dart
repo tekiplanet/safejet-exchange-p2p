@@ -10,10 +10,12 @@ class AuthProvider with ChangeNotifier {
   bool _isLoggedIn = false;
   String? _error;
   BuildContext? _context;
+  User? _user;
 
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _isLoggedIn;
   String? get error => _error;
+  User? get user => _user;
 
   void setContext(BuildContext context) {
     _context = context;
@@ -138,18 +140,31 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> verify2FA(String email, String code) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
+  Future<void> verify2FA(String code, [String? email]) async {
     try {
-      final response = await _authService.verify2FA(email, code);
-      _isLoggedIn = true;
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      if (email != null) {
+        // This is for login verification
+        final response = await _authService.verify2FA(email, code);
+        
+        // Store tokens after successful 2FA verification
+        await _authService.storage.write(key: 'accessToken', value: response['accessToken']);
+        await _authService.storage.write(key: 'refreshToken', value: response['refreshToken']);
+        await _authService.storage.write(key: 'user', value: json.encode(response['user']));
+        
+        _isLoggedIn = true;
+      } else {
+        // This is for password change verification
+        await _authService.verify2FAForAction(code);
+      }
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      print('2FA Provider error: $e'); // For debugging
+      print('2FA Provider error: $e');
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
@@ -353,5 +368,62 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<bool> verifyCurrentPassword(String currentPassword) async {
+    try {
+      final response = await _authService.verifyCurrentPassword(currentPassword);
+      return response;
+    } catch (e) {
+      print('Error verifying password: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _authService.changePassword(currentPassword, newPassword);
+    } catch (e) {
+      print('Error changing password: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> loadUser() async {
+    try {
+      final userData = await _authService.getCurrentUser();
+      _user = User.fromJson(userData); // You'll need to create this model
+      notifyListeners();
+    } catch (e) {
+      print('Error loading user: $e');
+      rethrow;
+    }
+  }
+}
+
+class User {
+  final String id;
+  final String email;
+  final bool twoFactorEnabled;
+  final String fullName;
+  // Add other fields as needed
+
+  User({
+    required this.id,
+    required this.email,
+    required this.twoFactorEnabled,
+    required this.fullName,
+  });
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      id: json['id'],
+      email: json['email'],
+      twoFactorEnabled: json['twoFactorEnabled'] ?? false,
+      fullName: json['fullName'] ?? '',
+    );
   }
 } 

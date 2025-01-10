@@ -4,6 +4,8 @@ import 'package:animate_do/animate_do.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/two_factor_dialog.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -29,6 +31,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Load user data if not already loaded
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    if (authProvider.user == null) {
+      authProvider.loadUser();
+    }
   }
 
   @override
@@ -309,8 +321,41 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Implement password change logic
-      await Future.delayed(const Duration(seconds: 2)); // Simulate API call
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // First verify current password
+      final isCurrentPasswordValid = await authProvider.verifyCurrentPassword(
+        _currentPasswordController.text
+      );
+      
+      if (!isCurrentPasswordValid) {
+        throw Exception('Current password is incorrect');
+      }
+
+      // If 2FA is enabled, show verification dialog
+      if (authProvider.user?.twoFactorEnabled == true) {
+        if (!mounted) return;
+        
+        final verified = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const TwoFactorDialog(
+            action: 'changePassword',
+            title: 'Verify 2FA',
+            message: 'Enter the 6-digit code to change password',
+          ),
+        );
+        
+        if (verified != true) {
+          throw Exception('2FA verification failed');
+        }
+      }
+
+      // Change password
+      await authProvider.changePassword(
+        currentPassword: _currentPasswordController.text,
+        newPassword: _newPasswordController.text,
+      );
 
       if (!mounted) return;
       
@@ -322,6 +367,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       );
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
