@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart';
 import '../screens/auth/login_screen.dart';
+import 'dart:async';
+import 'package:dio/dio.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -12,6 +14,25 @@ class AuthProvider with ChangeNotifier {
   String? _error;
   BuildContext? _context;
   User? _user;
+  Timer? _refreshTimer;
+  Timer? _tokenRefreshTimer;
+  DateTime? _tokenExpiryTime;
+
+  AuthProvider() {
+    _startPeriodicRefresh();
+  }
+
+  void _startPeriodicRefresh() {
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      loadUserData();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _isLoggedIn;
@@ -56,7 +77,11 @@ class AuthProvider with ChangeNotifier {
       await _authService.storage.write(key: 'user', value: json.encode(response['user']));
 
       _user = User.fromJson(response['user']);
+      _startPeriodicRefresh();  // Start refresh timer after login
       notifyListeners();
+
+      // Track token expiry
+      _updateTokenExpiry(response['accessToken']);
 
       return response;
     } catch (e) {
@@ -70,8 +95,8 @@ class AuthProvider with ChangeNotifier {
   Future<void> logout() async {
     try {
       await _authService.logout();
-      _isLoggedIn = false;
-      _error = null;
+      _refreshTimer?.cancel();  // Stop refresh timer on logout
+      _user = null;
       notifyListeners();
     } catch (e) {
       _error = e.toString();
@@ -435,9 +460,28 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> handleUnauthorized(BuildContext context) async {
-    await logout();
+    // Cancel the refresh timer
+    _refreshTimer?.cancel();
+    
+    // Clear all stored data
+    await _authService.storage.deleteAll();
+    
+    // Reset state
+    _user = null;
+    _isLoggedIn = false;
+    _error = null;
+    notifyListeners();
     
     if (!context.mounted) return;
+
+    // Show session expired message and navigate to login
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Session expired. Please login again.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => const LoginScreen(
@@ -450,6 +494,7 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> loadUserData() async {
     try {
+      // First try to load from storage
       final storage = const FlutterSecureStorage();
       final userJson = await storage.read(key: 'user');
       
@@ -458,8 +503,100 @@ class AuthProvider with ChangeNotifier {
         _user = User.fromJson(userData);
         notifyListeners();
       }
+
+      // Then refresh from API
+      await refreshUserData();
     } catch (e) {
       print('Error loading user data: $e');
+    }
+  }
+
+  Future<void> refreshUserData() async {
+    try {
+      final userData = await _authService.getCurrentUser();
+      if (userData != null) {
+        _user = User.fromJson(userData);
+        await _authService.storage.write(
+          key: 'user',
+          value: json.encode(userData),
+        );
+        notifyListeners();
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        // Let the interceptor handle it
+        rethrow;
+      }
+      print('Error refreshing user data: $e');
+    } catch (e) {
+      print('Error refreshing user data: $e');
+    }
+  }
+
+  Future<void> updateProfile(Map<String, dynamic> data) async {
+    try {
+      await _authService.updateProfile(data);
+      await refreshUserData();  // Refresh after profile update
+    } catch (e) {
+      // ... error handling
+    }
+  }
+
+  // Parse JWT to get expiration time
+  void _updateTokenExpiry(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return;
+
+      final payload = json.decode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      
+      // exp is in seconds, convert to DateTime
+      _tokenExpiryTime = DateTime.fromMillisecondsSinceEpoch(payload['exp'] * 1000);
+      
+      // Schedule token refresh 5 minutes before expiration
+      _scheduleTokenRefresh();
+    } catch (e) {
+      print('Error parsing token: $e');
+    }
+  }
+
+  void _scheduleTokenRefresh() {
+    _tokenRefreshTimer?.cancel();
+    
+    if (_tokenExpiryTime != null) {
+      final now = DateTime.now();
+      final timeUntilExpiry = _tokenExpiryTime!.difference(now);
+      final refreshTime = timeUntilExpiry - const Duration(minutes: 5);
+
+      if (refreshTime.isNegative) {
+        handleUnauthorized(_context!);
+        return;
+      }
+
+      _tokenRefreshTimer = Timer(refreshTime, () async {
+        try {
+          // Attempt to refresh the token
+          final newTokens = await _authService.refreshToken();
+          
+          // Update stored tokens
+          await _authService.storage.write(
+            key: 'accessToken',
+            value: newTokens['accessToken'],
+          );
+          await _authService.storage.write(
+            key: 'refreshToken',
+            value: newTokens['refreshToken'],
+          );
+
+          // Update expiry time for new token
+          _updateTokenExpiry(newTokens['accessToken']);
+        } catch (e) {
+          print('Error refreshing token: $e');
+          handleUnauthorized(_context!);
+        }
+      });
     }
   }
 }

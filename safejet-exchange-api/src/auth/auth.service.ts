@@ -32,6 +32,7 @@ import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { TwilioService } from '../twilio/twilio.service';
 import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
@@ -46,6 +47,8 @@ export class AuthService {
     private readonly emailService: EmailService,
     private readonly loginTrackerService: LoginTrackerService,
     private readonly twilioService: TwilioService,
+    @Inject(ConfigService)
+    private readonly configService: ConfigService,
   ) {}
 
   private generateVerificationCode(): string {
@@ -223,15 +226,26 @@ export class AuthService {
     };
   }
 
-  private async generateTokens(user: User) {
+  async generateTokens(user: User) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
-        { sub: user.id, email: user.email },
-        { expiresIn: process.env.JWT_EXPIRATION },
+        {
+          sub: user.id,
+          email: user.email,
+        },
+        {
+          secret: this.configService.get<string>('JWT_SECRET'),
+          expiresIn: '15m',  // Access token expires in 15 minutes
+        },
       ),
       this.jwtService.signAsync(
-        { sub: user.id },
-        { expiresIn: process.env.JWT_REFRESH_EXPIRATION },
+        {
+          sub: user.id,
+        },
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          expiresIn: '7d',   // Refresh token expires in 7 days
+        },
       ),
     ]);
 

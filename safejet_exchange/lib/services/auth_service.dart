@@ -745,4 +745,20 @@ class AuthService {
       throw 'Unable to verify 2FA code';
     }
   }
+
+  Future<Map<String, dynamic>> refreshToken() async {
+    try {
+      final refreshToken = await storage.read(key: 'refreshToken');
+      if (refreshToken == null) throw 'No refresh token found';
+
+      final response = await _dio.post(
+        '/auth/refresh',
+        data: {'refreshToken': refreshToken},
+      );
+
+      return response.data;
+    } catch (e) {
+      throw 'Failed to refresh token';
+    }
+  }
 } 

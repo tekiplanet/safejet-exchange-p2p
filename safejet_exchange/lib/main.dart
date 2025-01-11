@@ -14,6 +14,8 @@ import 'package:dio/dio.dart';
 import 'package:dio/dio.dart';
 import 'providers/payment_methods_provider.dart';
 import 'services/payment_methods_service.dart';
+import './widgets/auth_wrapper.dart';
+import './services/dio_interceptors.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -22,11 +24,19 @@ void main() async {
   await dotenv.load(fileName: ".env");
   
   final dio = Dio();
-  dio.interceptors.add(LogInterceptor(
-    requestBody: true,
-    responseBody: true,
-    error: true,
-  ));
+  
+  // Create AuthProvider first
+  final authProvider = AuthProvider();
+
+  // Add interceptors
+  dio.interceptors.addAll([
+    LogInterceptor(
+      requestBody: true,
+      responseBody: true,
+      error: true,
+    ),
+    AuthInterceptor(authProvider),  // Add auth interceptor
+  ]);
 
   await setupServices();
   final prefs = await SharedPreferences.getInstance();
@@ -35,10 +45,8 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(
-          value: themeProvider,
-        ),
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider.value(value: themeProvider),
+        ChangeNotifierProvider.value(value: authProvider),  // Use the same instance
         ChangeNotifierProvider(
           create: (context) => KYCProvider(
             KYCService(dio),
@@ -50,7 +58,9 @@ void main() async {
           ),
         ),
       ],
-      child: const MyApp(),
+      child: AuthWrapper(
+        child: const MyApp(),
+      ),
     ),
   );
 }
