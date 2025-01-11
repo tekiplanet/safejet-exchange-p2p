@@ -1,17 +1,47 @@
 import 'payment_method_type.dart';
 
+class PaymentMethodDetail {
+  final String value;
+  final String fieldId;
+  final String fieldType;
+  final String fieldName;
+
+  PaymentMethodDetail({
+    required this.value,
+    required this.fieldId,
+    required this.fieldType,
+    required this.fieldName,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'value': value,
+    'fieldId': fieldId,
+    'fieldType': fieldType,
+    'fieldName': fieldName,
+  };
+
+  factory PaymentMethodDetail.fromJson(Map<String, dynamic> json) {
+    return PaymentMethodDetail(
+      value: json['value'] as String,
+      fieldId: json['fieldId'] as String,
+      fieldType: json['fieldType'] as String,
+      fieldName: json['fieldName'] as String,
+    );
+  }
+}
+
 class PaymentMethod {
   final String id;
   final String userId;
   final String paymentMethodTypeId;
   final bool isDefault;
   final bool isVerified;
-  final Map<String, dynamic> details;
+  final Map<String, PaymentMethodDetail> details;
   final String createdAt;
   final String updatedAt;
   final PaymentMethodType? paymentMethodType;
 
-  String get name => details['name'] ?? '';
+  String get name => (details['name'] as String?) ?? '';
   String get icon => paymentMethodType?.icon ?? 'account_balance';
 
   PaymentMethod({
@@ -27,13 +57,19 @@ class PaymentMethod {
   });
 
   factory PaymentMethod.fromJson(Map<String, dynamic> json) {
+    final detailsMap = json['details'] as Map<String, dynamic>;
+    final details = detailsMap.map((key, value) => MapEntry(
+      key,
+      value is PaymentMethodDetail ? value : PaymentMethodDetail.fromJson(value),
+    ));
+
     return PaymentMethod(
       id: json['id'] as String,
       userId: json['userId'] as String,
       paymentMethodTypeId: json['paymentMethodTypeId'] as String,
       isDefault: json['isDefault'] as bool,
       isVerified: json['isVerified'] as bool,
-      details: Map<String, dynamic>.from(json['details'] ?? {}),
+      details: details,
       createdAt: json['createdAt'] as String,
       updatedAt: json['updatedAt'] as String,
       paymentMethodType: json['paymentMethodType'] != null 

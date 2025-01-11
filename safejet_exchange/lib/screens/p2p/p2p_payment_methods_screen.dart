@@ -8,6 +8,7 @@ import '../../models/payment_method.dart';
 import '../../widgets/payment_method_dialog.dart';
 import 'package:animate_do/animate_do.dart';
 import 'add_payment_method_screen.dart';
+import 'dart:convert';
 
 class P2PPaymentMethodsScreen extends StatefulWidget {
   const P2PPaymentMethodsScreen({super.key});
@@ -306,29 +307,13 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  method.details['name'] ?? '',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  method.details['bankName'] ?? '',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  method.details['accountNumber'] ?? '',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
+                ...method.details.entries.map((entry) {
+                  final detail = entry.value;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: _buildDetailValue(detail, isDark, method),
+                  );
+                }).toList(),
               ],
             ),
           ),
@@ -399,6 +384,82 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
         return Icons.currency_exchange;
       default:
         return Icons.account_balance; // default icon
+    }
+  }
+
+  Widget _buildDetailValue(PaymentMethodDetail detail, bool isDark, PaymentMethod method) {
+    switch (detail.fieldType.toLowerCase()) {
+      case 'image':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              detail.fieldName,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : Colors.black45,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Image.memory(
+              base64Decode(detail.value),
+              height: 100,
+              width: 100,
+              fit: BoxFit.cover,
+            ),
+          ],
+        );
+      
+      case 'select':
+        final field = method.paymentMethodType?.fields
+            .firstWhere((f) => f.id == detail.fieldId);
+        final options = field?.validationRules?['options'] as List<dynamic>?;
+        final selectedOption = options?.firstWhere(
+          (o) => o['value'].toString() == detail.value,
+          orElse: () => {'label': detail.value},
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              detail.fieldName,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : Colors.black45,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              selectedOption['label'].toString(),
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
+        );
+
+      default:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              detail.fieldName,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : Colors.black45,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              detail.value,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
+        );
     }
   }
 } 

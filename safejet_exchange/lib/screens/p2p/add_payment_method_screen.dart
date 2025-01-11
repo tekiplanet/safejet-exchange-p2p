@@ -7,6 +7,8 @@ import '../../providers/payment_methods_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../widgets/payment_method_type_picker.dart';
 import '../../providers/auth_provider.dart';
+import 'dart:convert';
+import '../../models/payment_method_field.dart';
 
 class AddPaymentMethodScreen extends StatefulWidget {
   const AddPaymentMethodScreen({
@@ -427,10 +429,19 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
       try {
         setState(() => _isLoading = true);
         
-        final details = {
-          'name': _nameController.text,
-          ..._details,
-        };
+        final details = <String, dynamic>{};
+        
+        for (var field in _selectedType!.fields) {
+          final controller = _detailControllers[field.name];
+          if (controller != null) {
+            details[field.name] = {
+              'value': controller.text,
+              'fieldId': field.id,
+              'fieldType': field.type,
+              'fieldName': field.name,
+            };
+          }
+        }
 
         final data = {
           'isDefault': _isDefault,
@@ -438,9 +449,8 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
           'details': details,
         };
 
-        final provider = Provider.of<PaymentMethodsProvider>(context, listen: false);
-        
-        await provider.createPaymentMethod(data);
+        await Provider.of<PaymentMethodsProvider>(context, listen: false)
+            .createPaymentMethod(data);
 
         if (!mounted) return;
 
@@ -483,14 +493,6 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
         }
       }
     }
-  }
-
-  Map<String, dynamic> get _details {
-    final details = <String, dynamic>{};
-    _detailControllers.forEach((key, controller) {
-      details[key] = controller.text;
-    });
-    return details;
   }
 
   Future<void> _handleDefaultToggle(bool value) async {
@@ -543,5 +545,238 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
       default:
         return Icons.account_balance; // default icon
     }
+  }
+
+  // Update _buildFieldInput to handle more types
+  Widget _buildFieldInput(PaymentMethodField field) {
+    switch (field.type.toLowerCase()) {
+      case 'image':
+        return _buildImageInput(field);
+      case 'select':
+        return _buildSelectInput(field);
+      case 'date':
+        return _buildDateInput(field);
+      case 'number':
+        return _buildNumberInput(field);
+      case 'phone':
+        return _buildPhoneInput(field);
+      case 'email':
+        return _buildEmailInput(field);
+      case 'text':
+      default:
+        return _buildTextInput(field);
+    }
+  }
+
+  // Add new field type widgets
+  Widget _buildDateInput(PaymentMethodField field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _detailControllers[field.name],
+          readOnly: true,
+          decoration: InputDecoration(
+            hintText: field.placeholder ?? 'Select date',
+            suffixIcon: const Icon(Icons.calendar_today),
+          ),
+          onTap: () async {
+            final date = await showDatePicker(
+              context: context,
+              initialDate: DateTime.now(),
+              firstDate: DateTime(1900),
+              lastDate: DateTime.now(),
+            );
+            if (date != null) {
+              _detailControllers[field.name]?.text = date.toIso8601String().split('T')[0];
+            }
+          },
+          validator: field.isRequired ? (value) {
+            if (value?.isEmpty ?? true) return '${field.label} is required';
+            return null;
+          } : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNumberInput(PaymentMethodField field) {
+    final min = field.validationRules?['min'] as num?;
+    final max = field.validationRules?['max'] as num?;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _detailControllers[field.name],
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+          ),
+          validator: (value) {
+            if (field.isRequired && (value?.isEmpty ?? true)) {
+              return '${field.label} is required';
+            }
+            if (value != null && value.isNotEmpty) {
+              final number = num.tryParse(value);
+              if (number == null) {
+                return 'Please enter a valid number';
+              }
+              if (min != null && number < min) {
+                return '${field.label} must be at least $min';
+              }
+              if (max != null && number > max) {
+                return '${field.label} must not exceed $max';
+              }
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhoneInput(PaymentMethodField field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _detailControllers[field.name],
+          keyboardType: TextInputType.phone,
+          decoration: InputDecoration(
+            hintText: field.placeholder ?? 'Enter phone number',
+            prefixIcon: const Icon(Icons.phone),
+          ),
+          validator: (value) {
+            if (field.isRequired && (value?.isEmpty ?? true)) {
+              return '${field.label} is required';
+            }
+            if (value != null && value.isNotEmpty) {
+              // Basic phone number validation
+              if (!RegExp(r'^\+?[\d\s-]+$').hasMatch(value)) {
+                return 'Please enter a valid phone number';
+              }
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmailInput(PaymentMethodField field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _detailControllers[field.name],
+          keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(
+            hintText: field.placeholder ?? 'Enter email address',
+            prefixIcon: const Icon(Icons.email),
+          ),
+          validator: (value) {
+            if (field.isRequired && (value?.isEmpty ?? true)) {
+              return '${field.label} is required';
+            }
+            if (value != null && value.isNotEmpty) {
+              // Email validation
+              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                return 'Please enter a valid email address';
+              }
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  // Update _buildTextInput to handle multiline text
+  Widget _buildTextInput(PaymentMethodField field) {
+    final maxLines = field.validationRules?['maxLines'] as int? ?? 1;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _detailControllers[field.name],
+          maxLines: maxLines,
+          decoration: InputDecoration(
+            hintText: field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+          ),
+          validator: (value) {
+            if (field.isRequired && (value?.isEmpty ?? true)) {
+              return '${field.label} is required';
+            }
+            // Add any additional validation from validationRules
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImageInput(PaymentMethodField field) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _detailControllers[field.name],
+          readOnly: true,
+          decoration: InputDecoration(
+            hintText: field.placeholder ?? 'Select image',
+            suffixIcon: const Icon(Icons.image),
+          ),
+          onTap: () async {
+            // TODO: Implement image picking
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectInput(PaymentMethodField field) {
+    final options = field.validationRules?['options'] as List<dynamic>?;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          decoration: InputDecoration(
+            hintText: field.placeholder ?? 'Select ${field.label.toLowerCase()}',
+          ),
+          value: _detailControllers[field.name]?.text.isEmpty ?? true 
+              ? null 
+              : _detailControllers[field.name]?.text,
+          items: options?.map((option) {
+            final value = option['value'].toString();
+            final label = option['label'].toString();
+            return DropdownMenuItem(value: value, child: Text(label));
+          }).toList() ?? [],
+          onChanged: (value) {
+            _detailControllers[field.name]?.text = value ?? '';
+          },
+          validator: field.isRequired ? (value) {
+            if (value?.isEmpty ?? true) return '${field.label} is required';
+            return null;
+          } : null,
+        ),
+      ],
+    );
   }
 } 

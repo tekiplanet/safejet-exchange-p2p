@@ -28,87 +28,97 @@ export class PaymentMethodsSeederService {
             order: 1,
           },
           {
-            name: 'accountName',
-            label: 'Account Name',
-            type: 'text',
-            isRequired: true,
-            order: 2,
-          },
-          {
             name: 'accountNumber',
             label: 'Account Number',
-            type: 'text',
-            validationRules: {
-              minLength: 10,
-              maxLength: 10,
-              pattern: '^[0-9]*$',
-            },
-            isRequired: true,
-            order: 3,
-          },
-        ],
-      },
-      {
-        name: 'PayPal',
-        icon: 'paypal',
-        description: 'PayPal payment method',
-        fields: [
-          {
-            name: 'email',
-            label: 'PayPal Email',
-            type: 'email',
-            validationRules: {
-              pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$',
-            },
-            isRequired: true,
-            order: 1,
-          },
-          {
-            name: 'accountName',
-            label: 'Account Name',
-            type: 'text',
-            helpText: 'Full name as shown on your PayPal account',
+            type: 'number',
             isRequired: true,
             order: 2,
-          },
+            validationRules: {
+              min: 1000000000,  // 10 digits minimum
+              max: 9999999999999  // 13 digits maximum
+            }
+          }
         ],
       },
       {
         name: 'Mobile Money',
         icon: 'mobile',
-        description: 'Mobile money transfer payment method',
+        description: 'Mobile money transfer services',
         fields: [
           {
             name: 'provider',
-            label: 'Provider',
+            label: 'Service Provider',
             type: 'select',
-            validationRules: {
-              options: ['MTN', 'Airtel', 'Vodafone'],
-            },
             isRequired: true,
             order: 1,
+            validationRules: {
+              options: [
+                { value: 'mtn', label: 'MTN Mobile Money' },
+                { value: 'airtel', label: 'Airtel Money' },
+                { value: 'glo', label: 'Glo Money' }
+              ]
+            }
           },
           {
             name: 'phoneNumber',
             label: 'Phone Number',
-            type: 'text',
-            validationRules: {
-              pattern: '^[0-9]{10}$',
-            },
-            helpText: 'Enter your mobile money number',
+            type: 'phone',
             isRequired: true,
             order: 2,
-          },
-          {
-            name: 'accountName',
-            label: 'Account Name',
-            type: 'text',
-            helpText: 'Name registered with the mobile money account',
-            isRequired: true,
-            order: 3,
-          },
+            placeholder: 'Enter your mobile money number'
+          }
         ],
       },
+      {
+        name: 'QR Payment',
+        icon: 'qr_code',
+        description: 'QR code based payments',
+        fields: [
+          {
+            name: 'qrCode',
+            label: 'Payment QR Code',
+            type: 'image',
+            isRequired: true,
+            order: 1,
+            validationRules: {
+              maxSize: 5242880, // 5MB in bytes
+              allowedTypes: ['image/png', 'image/jpeg', 'image/jpg']
+            }
+          },
+          {
+            name: 'expiryDate',
+            label: 'QR Code Expiry Date',
+            type: 'date',
+            isRequired: true,
+            order: 2
+          },
+          {
+            name: 'instructions',
+            label: 'Payment Instructions',
+            type: 'text',
+            isRequired: true,
+            order: 3,
+            validationRules: {
+              maxLines: 5
+            }
+          }
+        ],
+      },
+      {
+        name: 'PayPal',
+        icon: 'payment',
+        description: 'PayPal payment service',
+        fields: [
+          {
+            name: 'email',
+            label: 'PayPal Email',
+            type: 'email',
+            isRequired: true,
+            order: 1,
+            placeholder: 'Enter your PayPal email address'
+          }
+        ],
+      }
     ];
 
     for (const typeData of paymentMethodTypes) {
