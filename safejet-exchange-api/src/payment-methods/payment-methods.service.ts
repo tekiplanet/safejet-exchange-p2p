@@ -83,8 +83,8 @@ export class PaymentMethodsService {
   }
 
   // New methods for payment method types
-  async findAllTypes(): Promise<PaymentMethodTypeDto[]> {
-    const types = await this.paymentMethodTypeRepository.find({
+  async findAllTypes(): Promise<PaymentMethodType[]> {
+    return this.paymentMethodTypeRepository.find({
       where: { isActive: true },
       relations: ['fields'],
       order: {
@@ -94,11 +94,9 @@ export class PaymentMethodsService {
         },
       },
     });
-
-    return types.map((type) => this.mapToDto(type));
   }
 
-  async findOneType(id: string): Promise<PaymentMethodTypeDto> {
+  async findOneType(id: string): Promise<PaymentMethodType> {
     const type = await this.paymentMethodTypeRepository.findOne({
       where: { id, isActive: true },
       relations: ['fields'],
@@ -108,7 +106,7 @@ export class PaymentMethodsService {
       throw new NotFoundException('Payment method type not found');
     }
 
-    return this.mapToDto(type);
+    return type;
   }
 
   private mapToDto(type: PaymentMethodType): PaymentMethodTypeDto {

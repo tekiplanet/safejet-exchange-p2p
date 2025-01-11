@@ -25,6 +25,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
       final provider = context.read<PaymentMethodsProvider>();
       provider.setContext(context);
       provider.loadPaymentMethods();
+      provider.loadPaymentMethodTypes();
     });
   }
 
@@ -303,6 +304,13 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
   }
 
   void _showAddPaymentMethodDialog(bool isDark) async {
+    final provider = context.read<PaymentMethodsProvider>();
+    if (provider.paymentMethodTypes.isEmpty) {
+      await provider.loadPaymentMethodTypes();
+    }
+
+    if (!mounted) return;
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       barrierDismissible: false,

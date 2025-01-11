@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../models/payment_method.dart';
+import '../models/payment_method_type.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -90,6 +91,52 @@ class PaymentMethodsService {
         throw message ?? 'Failed to delete payment method';
       }
       throw 'Failed to delete payment method';
+    }
+  }
+
+  Future<List<PaymentMethodType>> getPaymentMethodTypes(BuildContext context) async {
+    try {
+      final response = await _dio.get(
+        '/payment-methods/types',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+
+      return (response.data as List)
+          .map((json) => PaymentMethodType.fromJson(json))
+          .toList();
+    } catch (e) {
+      if (e is DioException) {
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          await Provider.of<AuthProvider>(context, listen: false)
+              .handleUnauthorized(context);
+          throw 'Session expired';
+        }
+        final message = e.response?.data['message'];
+        throw message ?? 'Failed to fetch payment method types';
+      }
+      throw 'Failed to fetch payment method types';
+    }
+  }
+
+  Future<PaymentMethodType> getPaymentMethodType(String id, BuildContext context) async {
+    try {
+      final response = await _dio.get(
+        '/payment-methods/types/$id',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+
+      return PaymentMethodType.fromJson(response.data);
+    } catch (e) {
+      if (e is DioException) {
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          await Provider.of<AuthProvider>(context, listen: false)
+              .handleUnauthorized(context);
+          throw 'Session expired';
+        }
+        final message = e.response?.data['message'];
+        throw message ?? 'Failed to fetch payment method type';
+      }
+      throw 'Failed to fetch payment method type';
     }
   }
 } 

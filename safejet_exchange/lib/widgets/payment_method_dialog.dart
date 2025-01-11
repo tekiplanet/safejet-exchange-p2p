@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import '../config/theme/colors.dart';
 import '../models/payment_method.dart';
+import '../models/payment_method_type.dart';
+import 'package:provider/provider.dart';
+import '../providers/payment_methods_provider.dart';
 
 class PaymentMethodDialog extends StatefulWidget {
   final PaymentMethod? method;
+  final PaymentMethodType? selectedType;
   final bool isDark;
 
   const PaymentMethodDialog({
     super.key,
     this.method,
+    this.selectedType,
     required this.isDark,
   });
 
@@ -22,10 +27,13 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
   bool _isDefault = false;
   bool _isLoading = false;
   Map<String, TextEditingController> _detailControllers = {};
+  PaymentMethodType? _selectedType;
 
   @override
   void initState() {
     super.initState();
+    _selectedType = widget.selectedType;
+    
     if (widget.method != null) {
       _nameController.text = widget.method!.name;
       _isDefault = widget.method!.isDefault;
@@ -34,11 +42,11 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
       widget.method!.details.forEach((key, value) {
         _detailControllers[key] = TextEditingController(text: value.toString());
       });
-    } else {
-      // Initialize empty controllers for new payment method
-      ['Bank Name', 'Account Number', 'Account Name'].forEach((field) {
-        _detailControllers[field] = TextEditingController();
-      });
+    } else if (_selectedType != null) {
+      // Initialize controllers based on type fields
+      for (var field in _selectedType!.fields) {
+        _detailControllers[field.name] = TextEditingController();
+      }
     }
   }
 
@@ -122,6 +130,72 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
                 ),
                 const SizedBox(height: 24),
 
+                // Payment Method Type Dropdown
+                if (widget.method == null) ...[
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 8),
+                        child: Text(
+                          'Payment Method Type',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: widget.isDark ? Colors.white70 : Colors.black87,
+                          ),
+                        ),
+                      ),
+                      Consumer<PaymentMethodsProvider>(
+                        builder: (context, provider, child) {
+                          final types = provider.paymentMethodTypes;
+                          
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: SafeJetColors.primaryAccent.withOpacity(0.2),
+                              ),
+                            ),
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedType?.id,
+                              decoration: const InputDecoration(
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 20),
+                              ),
+                              items: types.map((type) {
+                                return DropdownMenuItem(
+                                  value: type.id,
+                                  child: Text(type.name),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedType = types.firstWhere((t) => t.id == value);
+                                    // Reset controllers and create new ones based on selected type
+                                    _detailControllers = {};
+                                    for (var field in _selectedType!.fields) {
+                                      _detailControllers[field.name] = TextEditingController();
+                                    }
+                                  });
+                                }
+                              },
+                              validator: (value) {
+                                if (value == null) {
+                                  return 'Please select a payment method type';
+                                }
+                                return null;
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ],
+
                 // Name Field
                 _buildInputField(
                   controller: _nameController,
@@ -142,16 +216,19 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
                 const SizedBox(height: 16),
 
                 // Detail Fields
-                ..._detailControllers.entries.map((entry) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _buildInputField(
-                      controller: entry.value,
-                      label: entry.key,
-                      hint: 'Enter ${entry.key.toLowerCase()}',
-                    ),
-                  );
-                }).toList(),
+                if (_selectedType != null) ...[
+                  ..._selectedType!.fields.map((field) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _buildInputField(
+                        controller: _detailControllers[field.name]!,
+                        label: field.label,
+                        hint: field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+                        validationRules: field.validationRules,
+                      ),
+                    );
+                  }).toList(),
+                ],
 
                 // Set as Default Switch
                 Container(
@@ -229,6 +306,7 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
     required TextEditingController controller,
     required String label,
     required String hint,
+    Map<String, dynamic>? validationRules,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,8 +361,24 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
             ),
           ),
           validator: (value) {
-            if (value?.isEmpty ?? true) {
+            if (validationRules?['required'] == true && (value?.isEmpty ?? true)) {
               return 'Please enter $label';
+            }
+            if (value != null && value.isNotEmpty) {
+              final minLength = validationRules?['minLength'] as int?;
+              if (minLength != null && value.length < minLength) {
+                return '$label must be at least $minLength characters';
+              }
+              
+              final maxLength = validationRules?['maxLength'] as int?;
+              if (maxLength != null && value.length > maxLength) {
+                return '$label must not exceed $maxLength characters';
+              }
+              
+              final pattern = validationRules?['pattern'] as String?;
+              if (pattern != null && !RegExp(pattern).hasMatch(value)) {
+                return '$label format is invalid';
+              }
             }
             return null;
           },
@@ -296,9 +390,10 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
   void _handleSubmit() {
     if (_formKey.currentState?.validate() ?? false) {
       final data = {
-        'Name': _nameController.text,
-        'IsDefault': _isDefault,
-        'Details': _details,
+        'name': _nameController.text,
+        'isDefault': _isDefault,
+        'paymentMethodTypeId': _selectedType?.id,
+        'details': _details,
       };
       Navigator.pop(context, data);
     }

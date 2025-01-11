@@ -21,6 +21,18 @@ import { PaymentMethodTypeDto } from './dto/payment-method-type.dto';
 export class PaymentMethodsController {
   constructor(private readonly paymentMethodsService: PaymentMethodsService) {}
 
+  @Get('types')
+  async getPaymentMethodTypes(): Promise<PaymentMethodTypeDto[]> {
+    return this.paymentMethodsService.findAllTypes();
+  }
+
+  @Get('types/:id')
+  async getPaymentMethodType(
+    @Param('id') id: string,
+  ): Promise<PaymentMethodTypeDto> {
+    return this.paymentMethodsService.findOneType(id);
+  }
+
   @Post()
   create(@GetUser() user: User, @Body() createDto: CreatePaymentMethodDto) {
     return this.paymentMethodsService.create(user.id, createDto);
@@ -48,17 +60,5 @@ export class PaymentMethodsController {
   @Delete(':id')
   remove(@GetUser() user: User, @Param('id') id: string) {
     return this.paymentMethodsService.remove(user.id, id);
-  }
-
-  @Get('types')
-  async getPaymentMethodTypes(): Promise<PaymentMethodTypeDto[]> {
-    return this.paymentMethodsService.findAllTypes();
-  }
-
-  @Get('types/:id')
-  async getPaymentMethodType(
-    @Param('id') id: string,
-  ): Promise<PaymentMethodTypeDto> {
-    return this.paymentMethodsService.findOneType(id);
   }
 }

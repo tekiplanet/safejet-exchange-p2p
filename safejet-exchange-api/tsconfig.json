@@ -19,5 +19,10 @@
     "noFallthroughCasesInSwitch": false
   },
   "include": ["src/**/*", "scripts/**/*", "test/**/*"],
-  "exclude": ["node_modules", "dist", "src/commands"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/commands",
+    "**/commands/**"
+  ]
 }
