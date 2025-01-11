@@ -453,47 +453,94 @@ export class AuthService {
   }
 
   async disable2FA(userId: string, code: string, codeType: DisableCodeType) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-
-    if (!user.twoFactorEnabled) {
-      throw new BadRequestException('2FA is not enabled');
-    }
-
-    let isValid = false;
-
-    if (codeType === DisableCodeType.AUTHENTICATOR) {
-      // Verify authenticator code
-      isValid = speakeasy.totp.verify({
-        secret: user.twoFactorSecret,
-        encoding: 'base32',
-        token: code,
-      });
-    } else if (codeType === DisableCodeType.BACKUP) {
-      // Verify backup code
-      const backupCodes = JSON.parse(user.twoFactorBackupCodes);
-      isValid = backupCodes.includes(code);
-      if (isValid) {
-        // Remove used backup code
-        const updatedCodes = backupCodes.filter(c => c !== code);
-        user.twoFactorBackupCodes = JSON.stringify(updatedCodes);
+    try {
+      console.log('Starting 2FA disable process for user:', userId);
+      
+      // Fetch complete user data
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found');
       }
+
+      console.log('Current 2FA status:', {
+        enabled: user.twoFactorEnabled,
+        hasSecret: !!user.twoFactorSecret,
+        hasBackupCodes: !!user.twoFactorBackupCodes
+      });
+
+      if (!user.twoFactorEnabled) {
+        throw new BadRequestException('2FA is not enabled');
+      }
+
+      let isValid = false;
+
+      if (codeType === DisableCodeType.AUTHENTICATOR) {
+        if (!user.twoFactorSecret) {
+          throw new BadRequestException('2FA is not properly configured');
+        }
+        // Verify authenticator code
+        isValid = speakeasy.totp.verify({
+          secret: user.twoFactorSecret,
+          encoding: 'base32',
+          token: code,
+          window: 1
+        });
+        console.log('Authenticator code verification result:', isValid);
+      } else if (codeType === DisableCodeType.BACKUP) {
+        if (!user.twoFactorBackupCodes) {
+          throw new BadRequestException('No backup codes available');
+        }
+        // Verify backup code
+        const backupCodes = JSON.parse(user.twoFactorBackupCodes);
+        isValid = backupCodes.includes(code);
+        console.log('Backup code verification result:', isValid);
+      }
+
+      if (!isValid) {
+        throw new UnauthorizedException(
+          codeType === DisableCodeType.AUTHENTICATOR 
+            ? 'Invalid authenticator code' 
+            : 'Invalid backup code'
+        );
+      }
+
+      console.log('Code verification successful, disabling 2FA...');
+
+      // Disable 2FA and clear all related fields
+      const updateResult = await this.userRepository
+        .createQueryBuilder()
+        .update(User)
+        .set({
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+          twoFactorBackupCodes: null
+        })
+        .where('id = :id', { id: userId })
+        .execute();
+
+      console.log('Database update result:', updateResult);
+
+      // Verify the update
+      const updatedUser = await this.userRepository.findOne({ where: { id: userId } });
+      console.log('User status after update:', {
+        enabled: updatedUser.twoFactorEnabled,
+        hasSecret: !!updatedUser.twoFactorSecret,
+        hasBackupCodes: !!updatedUser.twoFactorBackupCodes
+      });
+
+      // Send email notification
+      await this.emailService.send2FADisabledEmail(user.email);
+
+      return { message: '2FA disabled successfully' };
+    } catch (error) {
+      console.error('Disable 2FA error:', error);
+      if (error instanceof BadRequestException || 
+          error instanceof UnauthorizedException || 
+          error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Unable to disable 2FA. Please try again later.');
     }
-
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid code');
-    }
-
-    // Disable 2FA
-    user.twoFactorEnabled = false;
-    user.twoFactorSecret = null;
-    user.twoFactorBackupCodes = null;
-    await this.userRepository.save(user);
-
-    // Send email notification
-    await this.emailService.send2FADisabledEmail(user.email);
-
-    return { message: '2FA disabled successfully' };
   }
 
   async getBackupCodes(userId: string) {
@@ -716,21 +763,40 @@ export class AuthService {
 
   async verifyPassword(password: string, user: User): Promise<{ valid: boolean }> {
     try {
+      console.log('=== Password Verification Debug ===');
+      console.log('Initial user object:', JSON.stringify(user, null, 2));
+      console.log('Password received:', password);
+
       if (!password) {
         throw new BadRequestException('Please enter your current password');
       }
 
-      if (!user.passwordHash) {
+      // Fetch complete user data from database
+      const completeUser = await this.userRepository.findOne({
+        where: { id: user.id }
+      });
+
+      if (!completeUser) {
+        throw new BadRequestException('User not found');
+      }
+
+      console.log('Complete user data fetched:', JSON.stringify(completeUser, null, 2));
+
+      if (!completeUser.passwordHash) {
+        console.log('Password hash is missing from complete user data');
         throw new InternalServerErrorException('User password data is corrupted. Please contact support.');
       }
 
-      const isValid = await bcrypt.compare(password, user.passwordHash);
+      console.log('Password hash exists:', completeUser.passwordHash);
+      const isValid = await bcrypt.compare(password, completeUser.passwordHash);
+      console.log('Password verification result:', isValid);
+
       return { valid: isValid };
     } catch (error) {
+      console.error('Password verification detailed error:', error);
       if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
         throw error;
       }
-      console.error('Password verification error:', error);
       throw new InternalServerErrorException('Unable to verify password. Please try again later.');
     }
   }
@@ -750,12 +816,30 @@ export class AuthService {
         throw new BadRequestException('Please enter a new password');
       }
 
-      if (!user.passwordHash) {
+      // Log password validation attempt (without showing the actual password)
+      console.log('Password validation check:', {
+        length: newPassword.length,
+        hasUppercase: /[A-Z]/.test(newPassword),
+        hasLowercase: /[a-z]/.test(newPassword),
+        hasNumber: /\d/.test(newPassword),
+        hasSpecial: /[!@#$%^&*(),.?":{}|<>_\-+=]/.test(newPassword),
+      });
+
+      // Fetch complete user data from database
+      const completeUser = await this.userRepository.findOne({
+        where: { id: user.id }
+      });
+
+      if (!completeUser) {
+        throw new BadRequestException('User not found');
+      }
+
+      if (!completeUser.passwordHash) {
         throw new InternalServerErrorException('User password data is corrupted. Please contact support.');
       }
 
-      // Verify current password
-      const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      // Verify current password using complete user data
+      const isValid = await bcrypt.compare(currentPassword, completeUser.passwordHash);
       if (!isValid) {
         throw new UnauthorizedException('Current password is incorrect. Please try again.');
       }
@@ -769,17 +853,17 @@ export class AuthService {
       const passwordHash = await bcrypt.hash(newPassword, salt);
 
       // Update password
-      await this.userRepository.update(user.id, { passwordHash });
+      await this.userRepository.update(completeUser.id, { passwordHash });
 
       // Send email notification
-      await this.emailService.sendPasswordChangedEmail(user.email, user.fullName);
+      await this.emailService.sendPasswordChangedEmail(completeUser.email, completeUser.fullName);
     } catch (error) {
+      console.error('Change password error:', error);
       if (error instanceof BadRequestException || 
           error instanceof UnauthorizedException || 
           error instanceof InternalServerErrorException) {
         throw error;
       }
-      console.error('Change password error:', error);
       throw new InternalServerErrorException('Unable to change password. Please try again later.');
     }
   }
@@ -797,5 +881,46 @@ export class AuthService {
     // Remove sensitive data
     const { passwordHash, passwordResetCode, passwordResetExpires, ...safeUser } = user;
     return safeUser;
+  }
+
+  async verify2FAAction(code: string, user: User): Promise<void> {
+    try {
+      // Fetch complete user data to get 2FA secret
+      const completeUser = await this.userRepository.findOne({
+        where: { id: user.id }
+      });
+
+      if (!completeUser) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (!completeUser.twoFactorEnabled) {
+        throw new BadRequestException('2FA is not enabled for this account');
+      }
+
+      if (!completeUser.twoFactorSecret) {
+        throw new BadRequestException('2FA is not properly configured');
+      }
+
+      // Verify the code
+      const isValid = speakeasy.totp.verify({
+        secret: completeUser.twoFactorSecret,
+        encoding: 'base32',
+        token: code,
+        window: 1  // Allow 30 seconds window
+      });
+
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid 2FA code');
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException || 
+          error instanceof UnauthorizedException || 
+          error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error('2FA action verification error:', error);
+      throw new InternalServerErrorException('Unable to verify 2FA code. Please try again later.');
+    }
   }
 } 

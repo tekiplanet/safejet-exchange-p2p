@@ -158,10 +158,23 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
                       
                       switch (widget.action) {
                         case 'disable2fa':
-                          await authProvider.disable2FA(_code, 'authenticator');
+                          print('=== TwoFactorDialog Debug ===');
+                          print('Action: ${widget.action}');
+                          print('Code: $_code');
+                          print('Calling disable2FA...');
+                          await authProvider.disable2FA(
+                            _code,
+                            'authenticator',
+                          );
+                          print('disable2FA completed');
                           break;
                         case 'changePassword':
-                          await authProvider.verify2FA(_code);
+                          print('=== TwoFactorDialog Debug ===');
+                          print('Action: ${widget.action}');
+                          print('Code: $_code');
+                          print('Calling verify2FAForAction...');
+                          await authProvider.verify2FAForAction(_code);
+                          print('verify2FAForAction completed');
                           break;
                         default:
                           await authProvider.verify2FA(_code, authProvider.user?.email);
@@ -173,8 +186,12 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Error: ${e.toString()}'),
+                          content: Text(
+                            e.toString().replaceAll('Exception: ', '').replaceAll('Error: ', ''),
+                            style: const TextStyle(color: Colors.white),
+                          ),
                           backgroundColor: SafeJetColors.error,
+                          duration: const Duration(seconds: 4),
                         ),
                       );
                       setState(() => _isLoading = false);

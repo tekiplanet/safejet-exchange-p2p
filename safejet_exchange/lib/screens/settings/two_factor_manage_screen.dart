@@ -66,7 +66,11 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
   Future<void> _handleDisable2FA() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => const TwoFactorDialog(),
+      builder: (context) => const TwoFactorDialog(
+        action: 'disable2fa',
+        title: 'Disable 2FA',
+        message: 'Enter the 6-digit code from your authenticator app to disable 2FA',
+      ),
     );
 
     if (result == true && mounted) {

@@ -165,7 +165,10 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       print('2FA Provider error: $e');
-      _error = e.toString();
+      // Clean up error message before setting it
+      _error = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('Error: ', '');
       _isLoading = false;
       notifyListeners();
       rethrow;
@@ -243,16 +246,20 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> disable2FA(String code, String codeType) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
     try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
       await _authService.disable2FA(code, codeType);
+      await loadUser();  // Refresh user data after disable
+      
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('Error: ', '');
       _isLoading = false;
       notifyListeners();
       rethrow;
@@ -399,6 +406,26 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
     } catch (e) {
       print('Error loading user: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> verify2FAForAction(String code) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      await _authService.verify2FAForAction(code);
+      
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('Error: ', '');
+      _isLoading = false;
+      notifyListeners();
       rethrow;
     }
   }

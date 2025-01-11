@@ -162,6 +162,32 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  String _getVerificationStatus(int level) {
+    switch (level) {
+      case 3:
+        return 'Completed';
+      case 2:
+        return 'Level 2';
+      case 1:
+        return 'Level 1';
+      default:
+        return 'Upgrade';
+    }
+  }
+
+  Color _getVerificationStatusColor(int level) {
+    switch (level) {
+      case 3:
+        return SafeJetColors.success;
+      case 2:
+        return SafeJetColors.primary;
+      case 1:
+        return SafeJetColors.warning;
+      default:
+        return SafeJetColors.error;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -357,55 +383,60 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
               ),
               const SizedBox(height: 16),
-              _buildSettingCard(
-                context,
-                icon: Icons.person_outline,
-                title: 'Identity Verification',
-                subtitle: 'Complete KYC to increase limits',
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: SafeJetColors.warning.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Pending',
-                    style: TextStyle(
-                      color: SafeJetColors.warning,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                onTap: () {
-                  Navigator.push(
+              Consumer<KYCProvider>(
+                builder: (context, kycProvider, child) {
+                  final kycLevel = kycProvider.kycDetails?.currentLevel ?? 0;
+                  return _buildSettingCard(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const KYCLevelsScreen(),
+                    icon: Icons.person_outline,
+                    title: 'Identity Verification',
+                    subtitle: 'Complete KYC to increase limits',
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _getVerificationStatusColor(kycLevel).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        _getVerificationStatus(kycLevel),
+                        style: TextStyle(
+                          color: _getVerificationStatusColor(kycLevel),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const KYCLevelsScreen(),
+                        ),
+                      );
+                    },
                   );
                 },
               ),
 
               const SizedBox(height: 32),
 
-              // API Management
-              Text(
-                'API Management',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildSettingCard(
-                context,
-                icon: Icons.key,
-                title: 'API Keys',
-                subtitle: 'Manage your API keys',
-                onTap: () {
-                  // TODO: Show API keys management
-                },
-              ),
+              // // API Management
+              // Text(
+              //   'API Management',
+              //   style: theme.textTheme.titleMedium?.copyWith(
+              //     fontWeight: FontWeight.bold,
+              //   ),
+              // ),
+              // const SizedBox(height: 16),
+              // _buildSettingCard(
+              //   context,
+              //   icon: Icons.key,
+              //   title: 'API Keys',
+              //   subtitle: 'Manage your API keys',
+              //   onTap: () {
+              //     // TODO: Show API keys management
+              //   },
+              // ),
 
               const SizedBox(height: 32),
 

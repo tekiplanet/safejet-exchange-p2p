@@ -18,6 +18,7 @@ import { UpdatePhoneDto } from './dto/update-phone.dto';
 import { TwilioService } from '../twilio/twilio.service';
 import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { DisableCodeType } from './enums/disable-code-type.enum';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -76,17 +77,21 @@ export class AuthController {
     return this.authService.verify2FA(verify2FADto, req);
   }
 
-  @Post('2fa/disable')
+  @Post('disable-2fa')
   @UseGuards(JwtAuthGuard)
   async disable2FA(
     @GetUser() user: User,
-    @Body() disable2FADto: Disable2FADto,
+    @Body('code') code: string,
+    @Body('codeType') codeType: DisableCodeType,
   ) {
-    return this.authService.disable2FA(
-      user.id, 
-      disable2FADto.code,
-      disable2FADto.codeType
-    );
+    console.log('=== Disable 2FA Controller ===');
+    console.log('User:', user.id);
+    console.log('Code:', code);
+    console.log('Code Type:', codeType);
+    
+    const result = await this.authService.disable2FA(user.id, code, codeType);
+    console.log('Disable 2FA Result:', result);
+    return result;
   }
 
   @Get('2fa/backup-codes')
@@ -152,8 +157,13 @@ export class AuthController {
     @Body('password') password: string,
     @GetUser() user: User,
   ): Promise<{ valid: boolean }> {
+    console.log('=== Controller Debug ===');
+    console.log('Password received in controller:', password);
+    console.log('User in controller:', JSON.stringify(user, null, 2));
+    console.log('======================');
+
     if (!password) {
-      throw new BadRequestException('Password is required');
+      throw new BadRequestException('Please enter your current password');
     }
     return this.authService.verifyPassword(password, user);
   }
@@ -171,5 +181,17 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@GetUser() user: User) {
     return this.authService.getCurrentUser(user.id);
+  }
+
+  @Post('verify-2fa-action')
+  @UseGuards(JwtAuthGuard)
+  async verify2FAAction(
+    @Body('code') code: string,
+    @GetUser() user: User,
+  ): Promise<void> {
+    if (!code) {
+      throw new BadRequestException('2FA code is required');
+    }
+    await this.authService.verify2FAAction(code, user);
   }
 } 

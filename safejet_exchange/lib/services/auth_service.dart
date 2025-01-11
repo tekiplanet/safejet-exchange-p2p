@@ -336,34 +336,58 @@ class AuthService {
     }
   }
 
-  Future<Map<String, dynamic>> disable2FA(String code, String codeType) async {
+  Future<void> disable2FA(String code, String codeType) async {
     try {
-      final token = await storage.read(key: 'accessToken');
-      print('Using token for disable2FA: $token'); // Debug log
+      print('=== Disable 2FA Debug ===');
+      print('Attempting to disable 2FA with:');
+      print('Code: $code');
+      print('Code Type: $codeType');
+      print('Endpoint: ${_dio.options.baseUrl}/disable-2fa');
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/2fa/disable'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: json.encode({
-          'code': code,
-          'codeType': codeType,
-        }),
-      );
-
-      print('Disable 2FA response: ${response.body}'); // Debug log
-      final data = json.decode(response.body);
-      
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return data;
+      if (code.isEmpty) {
+        throw 'Please enter the 2FA code';
+      }
+      if (code.length != 6) {
+        throw '2FA code must be 6 digits';
       }
 
-      throw data['message'] ?? 'Failed to disable 2FA';
+      final response = await _dio.post(
+        '/disable-2fa',
+        data: {
+          'code': code,
+          'codeType': codeType,
+        },
+        options: Options(headers: await _getAuthHeaders()),
+      );
+
+      print('Response status: ${response.statusCode}');
+      print('Response data: ${response.data}');
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw response.data['message'] ?? 'Failed to disable 2FA';
+      }
     } catch (e) {
       print('Disable 2FA error: $e');
-      rethrow;
+      if (e is DioException) {
+        print('DioError type: ${e.type}');
+        print('DioError message: ${e.message}');
+        print('DioError response: ${e.response?.data}');
+        
+        final message = e.response?.data['message'];
+        switch (e.response?.statusCode) {
+          case 400:
+            throw message ?? 'Invalid code';
+          case 401:
+            throw 'Invalid or expired code';
+          case 429:
+            throw 'Too many attempts. Please try again later';
+          default:
+            print('Disable 2FA error details: ${e.response?.data}');
+            throw 'Unable to disable 2FA. Please try again later';
+        }
+      }
+      if (e is String) throw e;
+      throw 'Unable to disable 2FA';
     }
   }
 
@@ -683,10 +707,10 @@ class AuthService {
   Future<void> verify2FAForAction(String code) async {
     try {
       if (code.isEmpty) {
-        throw Exception('Please enter the 2FA code');
+        throw 'Please enter the 2FA code';
       }
       if (code.length != 6) {
-        throw Exception('2FA code must be 6 digits');
+        throw '2FA code must be 6 digits';
       }
 
       final response = await _dio.post(
@@ -698,24 +722,27 @@ class AuthService {
       );
 
       if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception(response.data['message'] ?? 'Failed to verify 2FA code');
+        throw response.data['message'] ?? 'Failed to verify 2FA code';
       }
     } catch (e) {
       if (e is DioException) {
         final message = e.response?.data['message'];
         switch (e.response?.statusCode) {
           case 400:
-            throw Exception(message ?? 'Invalid 2FA code');
+            throw message ?? 'Invalid 2FA code';
           case 401:
-            throw Exception('Invalid or expired 2FA code');
+            throw 'Invalid or expired 2FA code';
+          case 404:
+            throw '2FA verification not available';
           case 429:
-            throw Exception('Too many attempts. Please try again later.');
+            throw 'Too many attempts. Please try again later';
           default:
             print('2FA verification error details: ${e.response?.data}');
-            throw Exception('Unable to verify 2FA code. Please try again later.');
+            throw 'Unable to verify 2FA code. Please try again later';
         }
       }
-      throw Exception(e.toString());
+      if (e is String) throw e;
+      throw 'Unable to verify 2FA code';
     }
   }
 } 
