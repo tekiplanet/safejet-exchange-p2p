@@ -55,6 +55,9 @@ class AuthProvider with ChangeNotifier {
       await _authService.storage.write(key: 'refreshToken', value: response['refreshToken']);
       await _authService.storage.write(key: 'user', value: json.encode(response['user']));
 
+      _user = User.fromJson(response['user']);
+      notifyListeners();
+
       return response;
     } catch (e) {
       _error = e.toString();
@@ -443,6 +446,21 @@ class AuthProvider with ChangeNotifier {
       ),
       (route) => false,
     );
+  }
+
+  Future<void> loadUserData() async {
+    try {
+      final storage = const FlutterSecureStorage();
+      final userJson = await storage.read(key: 'user');
+      
+      if (userJson != null) {
+        final userData = json.decode(userJson);
+        _user = User.fromJson(userData);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
+    }
   }
 }
 

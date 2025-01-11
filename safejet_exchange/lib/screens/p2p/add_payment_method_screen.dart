@@ -31,10 +31,9 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
   @override
   void initState() {
     super.initState();
-    // Set user's full name from AuthProvider
+    // Load user data when screen initializes
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final user = Provider.of<AuthProvider>(context, listen: false).user;
-      _nameController.text = user?.fullName ?? '';
+      Provider.of<AuthProvider>(context, listen: false).loadUserData();
     });
   }
 
@@ -195,33 +194,44 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _nameController,
-                          enabled: false,  // Make it non-editable
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: widget.isDark ? Colors.white : Colors.black,
-                          ),
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: widget.isDark 
-                                ? Colors.white.withOpacity(0.05)
-                                : Colors.black.withOpacity(0.05),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.person_outline,
-                              color: widget.isDark 
-                                  ? Colors.white.withOpacity(0.7)
-                                  : Colors.black.withOpacity(0.7),
-                            ),
-                          ),
+                        Consumer<AuthProvider>(
+                          builder: (context, authProvider, _) {
+                            print('AuthProvider state: ${authProvider.toString()}');
+                            print('User object: ${authProvider.user}');
+                            print('User fullName: ${authProvider.user?.fullName}');
+
+                            final fullName = authProvider.user?.fullName ?? '';
+                            _nameController.text = fullName;
+                            
+                            return TextFormField(
+                              controller: _nameController,
+                              enabled: false,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: widget.isDark ? Colors.white : Colors.black,
+                              ),
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: widget.isDark 
+                                    ? Colors.white.withOpacity(0.05)
+                                    : Colors.black.withOpacity(0.05),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                                prefixIcon: Icon(
+                                  Icons.person_outline,
+                                  color: widget.isDark 
+                                      ? Colors.white.withOpacity(0.7)
+                                      : Colors.black.withOpacity(0.7),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
