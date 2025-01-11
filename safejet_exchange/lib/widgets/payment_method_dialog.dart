@@ -35,7 +35,7 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
     _selectedType = widget.selectedType;
     
     if (widget.method != null) {
-      _nameController.text = widget.method!.name;
+      _nameController.text = widget.method!.name ?? '';
       _isDefault = widget.method!.isDefault;
       
       // Initialize detail controllers with existing values

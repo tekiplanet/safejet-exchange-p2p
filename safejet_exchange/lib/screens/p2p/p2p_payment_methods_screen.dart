@@ -282,7 +282,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                         ),
                       ),
                       Text(
-                        method.name,
+                        method.displayName,
                         style: TextStyle(
                           fontSize: 14,
                           color: isDark ? Colors.white70 : Colors.black54,

@@ -732,63 +732,120 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
   }
 
   Widget _buildEmailInput(PaymentMethodField field) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(field.label),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _detailControllers[field.name],
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(
-            hintText: field.placeholder ?? 'Enter email address',
-            prefixIcon: const Icon(Icons.email),
+        Text(
+          field.label,
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.white70 : Colors.black54,
           ),
-          validator: (value) {
-            if (field.isRequired && (value?.isEmpty ?? true)) {
-              return '${field.label} is required';
-            }
-            if (value != null && value.isNotEmpty) {
-              // Email validation
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                return 'Please enter a valid email address';
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextFormField(
+            controller: _detailControllers[field.name],
+            keyboardType: TextInputType.emailAddress,
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black,
+              fontSize: 16,
+            ),
+            decoration: InputDecoration(
+              hintText: field.placeholder ?? 'Enter email address',
+              hintStyle: TextStyle(
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              prefixIcon: Container(
+                margin: const EdgeInsets.all(12),
+                child: Icon(
+                  Icons.mail_outline_rounded,
+                  color: SafeJetColors.primaryAccent,
+                  size: 22,
+                ),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(16),
+            ),
+            validator: (value) {
+              if (field.isRequired && (value?.isEmpty ?? true)) {
+                return '${field.label} is required';
               }
-            }
-            return null;
-          },
+              if (value != null && value.isNotEmpty) {
+                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                  return 'Please enter a valid email address';
+                }
+              }
+              return null;
+            },
+          ),
         ),
       ],
     );
   }
 
   // Common input decoration for all fields
-  InputDecoration _getInputDecoration(String hint, bool isDark, {Widget? suffixIcon}) {
+  InputDecoration _getInputDecoration(String hint, bool isDark, {Widget? prefixIcon, Widget? suffixIcon}) {
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(
-        color: isDark ? Colors.white.withOpacity(0.3) : Colors.black.withOpacity(0.3),
+        color: isDark ? Colors.white38 : Colors.black38,
       ),
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
       filled: true,
-      fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+      fillColor: isDark 
+          ? Colors.white.withOpacity(0.05)
+          : Colors.black.withOpacity(0.05),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderSide: BorderSide(
+          color: isDark 
+              ? Colors.white.withOpacity(0.1)
+              : Colors.black.withOpacity(0.1),
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+          color: isDark 
+              ? Colors.white.withOpacity(0.1)
+              : Colors.black.withOpacity(0.1),
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
-          color: SafeJetColors.primaryAccent,
-          width: 1.5,
+          color: SafeJetColors.primaryAccent.withOpacity(0.5),
+          width: 2,
         ),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      suffixIcon: suffixIcon,
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: SafeJetColors.error.withOpacity(0.5),
+        ),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: SafeJetColors.error.withOpacity(0.8),
+          width: 2,
+        ),
+      ),
     );
   }
 
@@ -1004,6 +1061,74 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildTextField(PaymentMethodField field, bool isDark) {
+    // Return original implementation for other field types
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label, style: _getLabelStyle(isDark)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _detailControllers[field.name],
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontSize: 16,
+          ),
+          keyboardType: field.type == 'email' 
+              ? TextInputType.emailAddress 
+              : TextInputType.text,
+          decoration: _getInputDecoration(
+            field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+            isDark,
+            prefixIcon: field.type == 'email' 
+                ? Icon(
+                    Icons.email_outlined,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  )
+                : null,
+          ),
+          validator: (value) {
+            if (field.isRequired && (value == null || value.isEmpty)) {
+              return '${field.label} is required';
+            }
+            if (field.type == 'email' && value != null && value.isNotEmpty) {
+              final emailRegex = RegExp(
+                r'^[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-zA-Z]+',
+              );
+              if (!emailRegex.hasMatch(value)) {
+                return 'Please enter a valid email address';
+              }
+            }
+            if (field.validationRules != null) {
+              final minLength = field.validationRules!['minLength'] as int?;
+              final maxLength = field.validationRules!['maxLength'] as int?;
+              
+              if (minLength != null && value!.length < minLength) {
+                return '${field.label} must be at least $minLength characters';
+              }
+              if (maxLength != null && value!.length > maxLength) {
+                return '${field.label} must be at most $maxLength characters';
+              }
+            }
+            return null;
+          },
+        ),
+        if (field.helpText != null && field.helpText!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              field.helpText!,
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? Colors.white60 : Colors.black45,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
       ],
     );
   }
