@@ -24,7 +24,6 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
   bool _isLoading = false;
   Map<String, TextEditingController> _detailControllers = {};
   PaymentMethodType? _selectedType;
-  late bool _isDark;
 
   @override
   void initState() {
@@ -37,11 +36,12 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Get isDark directly from Theme
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
-    _isDark = themeProvider.isDark;
 
     return Scaffold(
-      backgroundColor: _isDark 
+      backgroundColor: isDark 
           ? SafeJetColors.darkGradientStart
           : SafeJetColors.lightGradientStart,
       appBar: P2PAppBar(
@@ -85,7 +85,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
-                            color: _isDark ? Colors.white : Colors.black87,
+                            color: isDark ? Colors.white : Colors.black87,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -97,7 +97,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                               backgroundColor: Colors.transparent,
                               builder: (context) => PaymentMethodTypePicker(
                                 types: provider.paymentMethodTypes,
-                                isDark: _isDark,
+                                isDark: isDark,
                                 onSelect: (type) {
                                   setState(() {
                                     _selectedType = type;
@@ -117,7 +117,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                               vertical: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: _isDark 
+                              color: isDark 
                                   ? Colors.white.withOpacity(0.05)
                                   : Colors.black.withOpacity(0.05),
                               borderRadius: BorderRadius.circular(12),
@@ -127,7 +127,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                 if (_selectedType != null) ...[
                                   Icon(
                                     _getIconData(_selectedType!.icon),
-                                    color: _isDark ? Colors.white70 : Colors.black87,
+                                    color: isDark ? Colors.white70 : Colors.black87,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -135,7 +135,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                       _selectedType!.name,
                                       style: TextStyle(
                                         fontSize: 16,
-                                        color: _isDark ? Colors.white : Colors.black,
+                                        color: isDark ? Colors.white : Colors.black,
                                       ),
                                     ),
                                   ),
@@ -144,7 +144,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                     'Select payment method type',
                                     style: TextStyle(
                                       fontSize: 16,
-                                      color: _isDark 
+                                      color: isDark 
                                           ? Colors.white.withOpacity(0.5)
                                           : Colors.black.withOpacity(0.5),
                                     ),
@@ -179,7 +179,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
-                            color: _isDark ? Colors.white : Colors.black87,
+                            color: isDark ? Colors.white : Colors.black87,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -187,7 +187,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           'This payment method will be registered under your name',
                           style: TextStyle(
                             fontSize: 14,
-                            color: _isDark 
+                            color: isDark 
                                 ? Colors.white.withOpacity(0.7)
                                 : Colors.black.withOpacity(0.7),
                           ),
@@ -207,11 +207,11 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                               enabled: false,
                               style: TextStyle(
                                 fontSize: 16,
-                                color: _isDark ? Colors.white : Colors.black,
+                                color: isDark ? Colors.white : Colors.black,
                               ),
                               decoration: InputDecoration(
                                 filled: true,
-                                fillColor: _isDark 
+                                fillColor: isDark 
                                     ? Colors.white.withOpacity(0.05)
                                     : Colors.black.withOpacity(0.05),
                                 border: OutlineInputBorder(
@@ -224,7 +224,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                 ),
                                 prefixIcon: Icon(
                                   Icons.person_outline,
-                                  color: _isDark 
+                                  color: isDark 
                                       ? Colors.white.withOpacity(0.7)
                                       : Colors.black.withOpacity(0.7),
                                 ),
@@ -257,7 +257,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: _isDark ? Colors.white : Colors.black87,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -268,6 +268,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                 controller: _detailControllers[field.name]!,
                                 label: field.label,
                                 hint: field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+                                isDark: isDark,
                                 validationRules: field.validationRules,
                               ),
                             );
@@ -294,7 +295,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                             'Set as Default',
                             style: TextStyle(
                               fontSize: 16,
-                              color: _isDark ? Colors.white : Colors.black87,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
                           ),
                           Switch(
@@ -355,6 +356,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
     required TextEditingController controller,
     required String label,
     required String hint,
+    required bool isDark,
     Map<String, dynamic>? validationRules,
   }) {
     return Column(
@@ -364,24 +366,24 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
           label,
           style: TextStyle(
             fontSize: 14,
-            color: _isDark ? Colors.white70 : Colors.black87,
+            color: isDark ? Colors.white70 : Colors.black87,
           ),
         ),
         TextFormField(
           controller: controller,
           style: TextStyle(
             fontSize: 16,
-            color: _isDark ? Colors.white : Colors.black,
+            color: isDark ? Colors.white : Colors.black,
           ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(
-              color: _isDark 
+              color: isDark 
                   ? Colors.white.withOpacity(0.3)
                   : Colors.black.withOpacity(0.3),
             ),
             filled: true,
-            fillColor: _isDark 
+            fillColor: isDark 
                 ? Colors.white.withOpacity(0.05)
                 : Colors.black.withOpacity(0.05),
             border: OutlineInputBorder(
