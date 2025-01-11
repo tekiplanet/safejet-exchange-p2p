@@ -9,6 +9,9 @@ import { EmailModule } from './email/email.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { KYCModule } from './kyc/kyc.module';
 import { SumsubModule } from './sumsub/sumsub.module';
+import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AuthInterceptor } from './auth/auth.interceptor';
 
 @Module({
   imports: [
@@ -35,8 +38,15 @@ import { SumsubModule } from './sumsub/sumsub.module';
       ttl: 60, // time in seconds
       limit: 10, // number of requests per ttl
     }]),
+    PaymentMethodsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuthInterceptor,
+    },
+  ],
 })
 export class AppModule {}

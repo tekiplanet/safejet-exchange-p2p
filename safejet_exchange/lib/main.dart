@@ -12,6 +12,8 @@ import 'providers/kyc_provider.dart';
 import './services/services.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/dio.dart';
+import 'providers/payment_methods_provider.dart';
+import 'services/payment_methods_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -40,6 +42,11 @@ void main() async {
         ChangeNotifierProvider(
           create: (context) => KYCProvider(
             KYCService(dio),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => PaymentMethodsProvider(
+            PaymentMethodsService(dio),
           ),
         ),
       ],

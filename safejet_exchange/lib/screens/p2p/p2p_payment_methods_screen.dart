@@ -3,6 +3,10 @@ import 'package:provider/provider.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../providers/payment_methods_provider.dart';
+import '../../models/payment_method.dart';
+import '../../widgets/payment_method_dialog.dart';
+import 'package:animate_do/animate_do.dart';
 
 class P2PPaymentMethodsScreen extends StatefulWidget {
   const P2PPaymentMethodsScreen({super.key});
@@ -12,38 +16,17 @@ class P2PPaymentMethodsScreen extends StatefulWidget {
 }
 
 class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {
-      'id': '1',
-      'name': 'Bank Transfer',
-      'icon': Icons.account_balance,
-      'isDefault': true,
-      'isVerified': true,
-      'details': {
-        'bank': 'Access Bank',
-        'accountNumber': '1234567890',
-        'accountName': 'John Doe',
-      },
-      'limits': {
-        'min': '10000',
-        'max': '1000000',
-      },
-    },
-    {
-      'id': '2',
-      'name': 'PayPal',
-      'icon': Icons.payment,
-      'isDefault': false,
-      'isVerified': true,
-      'details': {
-        'email': 'john@example.com',
-      },
-      'limits': {
-        'min': '5000',
-        'max': '500000',
-      },
-    },
-  ];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<PaymentMethodsProvider>();
+      provider.setContext(context);
+      provider.loadPaymentMethods();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,12 +41,79 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
           themeProvider.toggleTheme();
         },
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _paymentMethods.length,
-        itemBuilder: (context, index) {
-          final method = _paymentMethods[index];
-          return _buildPaymentMethodCard(method, isDark);
+      body: Consumer<PaymentMethodsProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (provider.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    provider.error!,
+                    style: TextStyle(color: SafeJetColors.error),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => provider.loadPaymentMethods(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (provider.paymentMethods.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.payment_outlined,
+                    size: 64,
+                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No payment methods added yet',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => _showAddPaymentMethodDialog(isDark),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SafeJetColors.secondaryHighlight,
+                      foregroundColor: Colors.black,
+                    ),
+                    child: const Text('Add Payment Method'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: provider.paymentMethods.length,
+            itemBuilder: (context, index) {
+              final method = provider.paymentMethods[index];
+              return FadeInUp(
+                duration: const Duration(milliseconds: 300),
+                delay: Duration(milliseconds: index * 100),
+                child: SlideInLeft(
+                  duration: const Duration(milliseconds: 300),
+                  delay: Duration(milliseconds: index * 100),
+                  child: _buildPaymentMethodCard(method, isDark),
+                ),
+              );
+            },
+          );
         },
       ),
       floatingActionButton: FloatingActionButton(
@@ -74,7 +124,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     );
   }
 
-  Widget _buildPaymentMethodCard(Map<String, dynamic> method, bool isDark) {
+  Widget _buildPaymentMethodCard(PaymentMethod method, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -101,15 +151,15 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: isDark
                             ? Colors.white.withOpacity(0.05)
                             : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
-                        method['icon'] as IconData,
+                        _getIconData(method.icon),
                         color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
@@ -119,7 +169,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            method['name'],
+                            method.name,
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -128,7 +178,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              if (method['isDefault']) ...[
+                              if (method.isDefault) ...[
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
@@ -148,7 +198,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                                 ),
                                 const SizedBox(width: 8),
                               ],
-                              if (method['isVerified'])
+                              if (method.isVerified)
                                 const Icon(
                                   Icons.verified,
                                   color: SafeJetColors.success,
@@ -166,28 +216,13 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                const Divider(),
+                if (method.details.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  ..._buildMethodDetails(method, isDark),
+                ],
                 const SizedBox(height: 8),
-                ..._buildMethodDetails(method, isDark),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Limits: ₦${method['limits']['min']} - ₦${method['limits']['max']}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -196,8 +231,8 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     );
   }
 
-  List<Widget> _buildMethodDetails(Map<String, dynamic> method, bool isDark) {
-    return (method['details'] as Map<String, dynamic>).entries.map((entry) {
+  List<Widget> _buildMethodDetails(PaymentMethod method, bool isDark) {
+    return (method.details as Map<String, dynamic>).entries.map((entry) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
@@ -222,21 +257,96 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     }).toList();
   }
 
-  void _showAddPaymentMethodDialog(bool isDark) {
-    // TODO: Implement add payment method dialog
+  void _showAddPaymentMethodDialog(bool isDark) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PaymentMethodDialog(isDark: isDark),
+    );
+
+    if (result != null && mounted) {
+      try {
+        setState(() => _isLoading = true);
+        await context.read<PaymentMethodsProvider>().createPaymentMethod(result);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Payment method added successfully'),
+              ],
+            ),
+            backgroundColor: SafeJetColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text(e.toString())),
+              ],
+            ),
+            backgroundColor: SafeJetColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
   }
 
-  void _showEditPaymentMethodDialog(Map<String, dynamic> method, bool isDark) {
-    // TODO: Implement edit payment method dialog
+  void _showEditPaymentMethodDialog(PaymentMethod method, bool isDark) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => PaymentMethodDialog(
+        isDark: isDark,
+        method: method,
+      ),
+    );
+
+    if (result != null && mounted) {
+      try {
+        await context
+            .read<PaymentMethodsProvider>()
+            .updatePaymentMethod(method.id, result);
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment method updated successfully'),
+            backgroundColor: SafeJetColors.success,
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: SafeJetColors.error,
+          ),
+        );
+      }
+    }
   }
 
-  void _showDeleteConfirmation(Map<String, dynamic> method) {
+  void _showDeleteConfirmation(PaymentMethod method) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Payment Method'),
         content: Text(
-          'Are you sure you want to delete ${method['name']}? This action cannot be undone.',
+          'Are you sure you want to delete ${method.name}? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -244,17 +354,29 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              setState(() {
-                _paymentMethods.remove(method);
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Payment method deleted'),
-                  backgroundColor: SafeJetColors.success,
-                ),
-              );
+            onPressed: () async {
+              try {
+                Navigator.pop(context);
+                await context
+                    .read<PaymentMethodsProvider>()
+                    .deletePaymentMethod(method.id);
+                
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Payment method deleted'),
+                    backgroundColor: SafeJetColors.success,
+                  ),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(e.toString()),
+                    backgroundColor: SafeJetColors.error,
+                  ),
+                );
+              }
             },
             style: TextButton.styleFrom(
               foregroundColor: SafeJetColors.error,
@@ -264,5 +386,22 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
         ],
       ),
     );
+  }
+
+  IconData _getIconData(String iconString) {
+    switch (iconString) {
+      case 'account_balance':
+        return Icons.account_balance;
+      case 'payment':
+        return Icons.payment;
+      case 'attach_money':
+        return Icons.attach_money;
+      case 'mobile_friendly':
+        return Icons.mobile_friendly;
+      case 'currency_exchange':
+        return Icons.currency_exchange;
+      default:
+        return Icons.account_balance; // default icon
+    }
   }
 } 

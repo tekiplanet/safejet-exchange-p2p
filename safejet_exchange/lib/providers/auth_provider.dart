@@ -3,6 +3,7 @@ import '../services/auth_service.dart';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart';
+import '../screens/auth/login_screen.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -428,6 +429,20 @@ class AuthProvider with ChangeNotifier {
       notifyListeners();
       rethrow;
     }
+  }
+
+  Future<void> handleUnauthorized(BuildContext context) async {
+    await logout();
+    
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const LoginScreen(
+          message: 'Session expired. Please login again.',
+        ),
+      ),
+      (route) => false,
+    );
   }
 }
 
