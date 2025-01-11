@@ -319,7 +319,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
           child: SizedBox(
             height: 56,
             child: ElevatedButton(
-              onPressed: _isLoading ? null : _handleSubmit,
+              onPressed: _isLoading ? null : _submitForm,
               style: ElevatedButton.styleFrom(
                 backgroundColor: SafeJetColors.secondaryHighlight,
                 foregroundColor: Colors.black,
@@ -421,73 +421,80 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
     );
   }
 
-  void _handleSubmit() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      try {
-        setState(() => _isLoading = true);
+  Future<void> _submitForm() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    try {
+      setState(() => _isLoading = true);
+
+      // Get the current user's name
+      final user = context.read<AuthProvider>().user;
+      final userName = user?.fullName ?? 'Unnamed Payment Method';
+
+      final details = <String, dynamic>{};
+      
+      for (final field in _selectedType!.fields) {
+        final value = _detailControllers[field.name]?.text ?? '';
         
-        final details = <String, dynamic>{};
-        
-        for (var field in _selectedType!.fields) {
-          final controller = _detailControllers[field.name];
-          if (controller != null) {
+        if (field.type == 'image' && value.isNotEmpty) {
+          // Make sure we have proper base64 format
+          if (!value.startsWith('data:image/')) {
             details[field.name] = {
-              'value': controller.text,
+              'value': 'data:image/jpeg;base64,$value',
+              'fieldId': field.id,
+              'fieldType': field.type,
+              'fieldName': field.name,
+            };
+          } else {
+            details[field.name] = {
+              'value': value,
               'fieldId': field.id,
               'fieldType': field.type,
               'fieldName': field.name,
             };
           }
+        } else {
+          details[field.name] = {
+            'value': value,
+            'fieldId': field.id,
+            'fieldType': field.type,
+            'fieldName': field.name,
+          };
         }
+      }
 
-        final data = {
-          'isDefault': _isDefault,
-          'paymentMethodTypeId': _selectedType?.id,
-          'details': details,
-        };
+      final data = {
+        'paymentMethodTypeId': _selectedType!.id,
+        'isDefault': _isDefault,
+        'name': userName,
+        'details': details,
+      };
 
-        await Provider.of<PaymentMethodsProvider>(context, listen: false)
-            .createPaymentMethod(data);
+      await context.read<PaymentMethodsProvider>().createPaymentMethod(data);
 
-        if (!mounted) return;
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment method added successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
 
-        // Show success message and navigate back
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Payment method added successfully'),
-              ],
-            ),
-            backgroundColor: SafeJetColors.success,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        Navigator.pop(context);
-      } catch (e) {
-        if (!mounted) return;
-        
-        // Show error message but don't navigate
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(child: Text(e.toString())),
-              ],
-            ),
-            backgroundColor: SafeJetColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
+      Navigator.of(context).pop();
+    } catch (e) {
+      print('Error submitting form: $e');
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -601,7 +608,8 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
               context: context,
               initialDate: DateTime.now(),
               firstDate: DateTime(1900),
-              lastDate: DateTime.now(),
+              // Allow dates up to 10 years in the future
+              lastDate: DateTime.now().add(const Duration(days: 3650)),
               builder: (context, child) {
                 return Theme(
                   data: Theme.of(context).copyWith(

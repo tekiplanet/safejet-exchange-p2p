@@ -9,6 +9,8 @@ import '../../widgets/payment_method_dialog.dart';
 import 'package:animate_do/animate_do.dart';
 import 'add_payment_method_screen.dart';
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
 
 class P2PPaymentMethodsScreen extends StatefulWidget {
   const P2PPaymentMethodsScreen({super.key});
@@ -268,13 +270,25 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    method.paymentMethodType?.name ?? '',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        method.paymentMethodType?.name ?? '',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        method.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Row(
@@ -388,78 +402,39 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
   }
 
   Widget _buildDetailValue(PaymentMethodDetail detail, bool isDark, PaymentMethod method) {
-    switch (detail.fieldType.toLowerCase()) {
-      case 'image':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              detail.fieldName,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white60 : Colors.black45,
-              ),
+    if (detail.fieldType == 'image') {
+      final baseUrl = dotenv.get('API_URL', fallback: '');
+      return Image.network(
+        detail.getImageUrl(baseUrl),
+        height: 150,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / 
+                    loadingProgress.expectedTotalBytes!
+                  : null,
             ),
-            const SizedBox(height: 4),
-            Image.memory(
-              base64Decode(detail.value),
-              height: 100,
-              width: 100,
-              fit: BoxFit.cover,
-            ),
-          ],
-        );
-      
-      case 'select':
-        final field = method.paymentMethodType?.fields
-            .firstWhere((f) => f.id == detail.fieldId);
-        final options = field?.validationRules?['options'] as List<dynamic>?;
-        final selectedOption = options?.firstWhere(
-          (o) => o['value'].toString() == detail.value,
-          orElse: () => {'label': detail.value},
-        );
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              detail.fieldName,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white60 : Colors.black45,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              selectedOption['label'].toString(),
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-          ],
-        );
-
-      default:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              detail.fieldName,
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white60 : Colors.black45,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              detail.value,
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-          ],
-        );
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('Error loading image: $error');
+          return const Center(
+            child: Icon(Icons.error_outline, color: Colors.red),
+          );
+        },
+      );
+    } else if (detail.fieldType == 'date') {
+      try {
+        final date = DateTime.parse(detail.value);
+        return Text(DateFormat('MMM dd, yyyy').format(date));
+      } catch (e) {
+        return Text(detail.value);
+      }
     }
+    return Text(detail.value);
   }
 } 

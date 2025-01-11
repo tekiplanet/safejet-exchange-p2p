@@ -38,6 +38,9 @@ export class PaymentMethod {
   @Column({ type: 'jsonb' })
   details: Record<string, any>;
 
+  @Column()
+  name: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

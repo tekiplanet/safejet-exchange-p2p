@@ -13,6 +13,13 @@ class PaymentMethodDetail {
     required this.fieldName,
   });
 
+  String getImageUrl(String baseUrl) {
+    if (fieldType == 'image') {
+      return '$baseUrl/uploads/payment-methods/$value';
+    }
+    return value;
+  }
+
   Map<String, dynamic> toJson() => {
     'value': value,
     'fieldId': fieldId,
@@ -40,9 +47,10 @@ class PaymentMethod {
   final String createdAt;
   final String updatedAt;
   final PaymentMethodType? paymentMethodType;
+  final String? name;
 
-  String get name => (details['name'] as String?) ?? '';
   String get icon => paymentMethodType?.icon ?? 'account_balance';
+  String get displayName => name ?? 'Unnamed Payment Method';
 
   PaymentMethod({
     required this.id,
@@ -53,6 +61,7 @@ class PaymentMethod {
     required this.details,
     required this.createdAt,
     required this.updatedAt,
+    this.name,
     this.paymentMethodType,
   });
 
@@ -72,6 +81,7 @@ class PaymentMethod {
       details: details,
       createdAt: json['createdAt'] as String,
       updatedAt: json['updatedAt'] as String,
+      name: json['name'] as String?,
       paymentMethodType: json['paymentMethodType'] != null 
           ? PaymentMethodType.fromJson(Map<String, dynamic>.from(json['paymentMethodType']))
           : null,

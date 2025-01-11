@@ -5,6 +5,7 @@ import { PaymentMethodsController } from './payment-methods.controller';
 import { PaymentMethod } from './entities/payment-method.entity';
 import { PaymentMethodType } from './entities/payment-method-type.entity';
 import { PaymentMethodField } from './entities/payment-method-field.entity';
+import { FileService } from '../common/services/file.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { PaymentMethodField } from './entities/payment-method-field.entity';
     ]),
   ],
   controllers: [PaymentMethodsController],
-  providers: [PaymentMethodsService],
+  providers: [PaymentMethodsService, FileService],
   exports: [PaymentMethodsService],
 })
 export class PaymentMethodsModule {}
