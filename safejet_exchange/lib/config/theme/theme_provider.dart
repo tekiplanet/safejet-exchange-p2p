@@ -30,4 +30,6 @@ class ThemeProvider with ChangeNotifier {
       debugPrint('Error saving theme mode: $e');
     }
   }
+
+  bool get isDark => _isDarkMode == ThemeMode.dark;
 } 

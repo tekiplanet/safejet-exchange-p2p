@@ -488,17 +488,13 @@ class AuthService {
       final data = json.decode(response.body);
       
       if (response.statusCode == 401) {
-        final refreshed = await refreshToken();
-        if (refreshed) {
-          return updatePhone(
-            phone: phone,
-            countryCode: countryCode,
-            countryName: countryName,
-            phoneWithoutCode: phoneWithoutCode,
-          );
-        } else {
-          throw 'Session expired. Please login again.';
-        }
+        await _handleTokenRefresh();
+        return updatePhone(
+          phone: phone,
+          countryCode: countryCode,
+          countryName: countryName,
+          phoneWithoutCode: phoneWithoutCode,
+        );
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -537,16 +533,9 @@ class AuthService {
 
       final data = json.decode(response.body);
       
-      // Handle token expiration
       if (response.statusCode == 401) {
-        // Try to refresh token
-        final refreshed = await refreshToken();
-        if (refreshed) {
-          // Retry with new token
-          return sendPhoneVerification();
-        } else {
-          throw 'Session expired. Please login again.';
-        }
+        await _handleTokenRefresh();
+        return sendPhoneVerification();  // Retry with new token
       }
 
       if (response.statusCode != 200 && response.statusCode != 201) {
@@ -555,31 +544,6 @@ class AuthService {
     } catch (e) {
       print('Send phone verification error: $e');
       rethrow;
-    }
-  }
-
-  Future<bool> refreshToken() async {
-    try {
-      final refreshToken = await storage.read(key: 'refreshToken');
-      if (refreshToken == null) return false;
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/refresh-token'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: json.encode({'refreshToken': refreshToken}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        await storage.write(key: 'accessToken', value: data['accessToken']);
-        return true;
-      }
-      return false;
-    } catch (e) {
-      print('Token refresh error: $e');
-      return false;
     }
   }
 
@@ -601,16 +565,9 @@ class AuthService {
 
       final data = json.decode(response.body);
       
-      // Handle token expiration
       if (response.statusCode == 401) {
-        // Try to refresh token
-        final refreshed = await refreshToken();
-        if (refreshed) {
-          // Retry with new token
-          return verifyPhone(code);
-        } else {
-          throw 'Session expired. Please login again.';
-        }
+        await _handleTokenRefresh();
+        return verifyPhone(code);  // Retry with new token
       }
 
       if (response.statusCode != 200 && response.statusCode != 201) {
@@ -759,6 +716,35 @@ class AuthService {
       return response.data;
     } catch (e) {
       throw 'Failed to refresh token';
+    }
+  }
+
+  Future<void> updateProfile(Map<String, dynamic> data) async {
+    try {
+      final token = await storage.read(key: 'accessToken');
+      await _dio.patch(
+        '/profile',
+        data: data,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> _handleTokenRefresh() async {
+    try {
+      final refreshResponse = await refreshToken();
+      await storage.write(
+        key: 'accessToken',
+        value: refreshResponse['accessToken'],
+      );
+    } catch (e) {
+      throw 'Session expired. Please login again.';
     }
   }
 } 

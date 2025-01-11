@@ -578,20 +578,20 @@ class AuthProvider with ChangeNotifier {
       _tokenRefreshTimer = Timer(refreshTime, () async {
         try {
           // Attempt to refresh the token
-          final newTokens = await _authService.refreshToken();
+          final response = await _authService.refreshToken();
           
           // Update stored tokens
           await _authService.storage.write(
             key: 'accessToken',
-            value: newTokens['accessToken'],
+            value: response['accessToken'] as String,
           );
           await _authService.storage.write(
             key: 'refreshToken',
-            value: newTokens['refreshToken'],
+            value: response['refreshToken'] as String,
           );
 
           // Update expiry time for new token
-          _updateTokenExpiry(newTokens['accessToken']);
+          _updateTokenExpiry(response['accessToken'] as String);
         } catch (e) {
           print('Error refreshing token: $e');
           handleUnauthorized(_context!);

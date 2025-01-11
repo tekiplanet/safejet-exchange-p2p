@@ -115,7 +115,14 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                     width: 200,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: () => _navigateToAddPaymentMethod(isDark),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AddPaymentMethodScreen(),
+                          ),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: SafeJetColors.secondaryHighlight,
                         foregroundColor: Colors.black,
@@ -164,7 +171,14 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToAddPaymentMethod(isDark),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AddPaymentMethodScreen(),
+            ),
+          );
+        },
         backgroundColor: SafeJetColors.secondaryHighlight,
         child: const Icon(Icons.add),
       ),
@@ -304,7 +318,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     }).toList();
   }
 
-  void _navigateToAddPaymentMethod(bool isDark) async {
+  void _navigateToAddPaymentMethod() async {
     final provider = context.read<PaymentMethodsProvider>();
     if (provider.paymentMethodTypes.isEmpty) {
       await provider.loadPaymentMethodTypes();
@@ -315,7 +329,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (context) => AddPaymentMethodScreen(isDark: isDark),
+        builder: (context) => const AddPaymentMethodScreen(),
       ),
     );
 

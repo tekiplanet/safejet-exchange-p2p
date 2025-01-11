@@ -9,11 +9,8 @@ import '../../widgets/payment_method_type_picker.dart';
 import '../../providers/auth_provider.dart';
 
 class AddPaymentMethodScreen extends StatefulWidget {
-  final bool isDark;
-  
   const AddPaymentMethodScreen({
     super.key,
-    required this.isDark,
   });
 
   @override
@@ -27,6 +24,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
   bool _isLoading = false;
   Map<String, TextEditingController> _detailControllers = {};
   PaymentMethodType? _selectedType;
+  late bool _isDark;
 
   @override
   void initState() {
@@ -40,9 +38,10 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    _isDark = themeProvider.isDark;
 
     return Scaffold(
-      backgroundColor: widget.isDark 
+      backgroundColor: _isDark 
           ? SafeJetColors.darkGradientStart
           : SafeJetColors.lightGradientStart,
       appBar: P2PAppBar(
@@ -86,7 +85,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
-                            color: widget.isDark ? Colors.white : Colors.black87,
+                            color: _isDark ? Colors.white : Colors.black87,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -98,7 +97,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                               backgroundColor: Colors.transparent,
                               builder: (context) => PaymentMethodTypePicker(
                                 types: provider.paymentMethodTypes,
-                                isDark: widget.isDark,
+                                isDark: _isDark,
                                 onSelect: (type) {
                                   setState(() {
                                     _selectedType = type;
@@ -118,7 +117,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                               vertical: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: widget.isDark 
+                              color: _isDark 
                                   ? Colors.white.withOpacity(0.05)
                                   : Colors.black.withOpacity(0.05),
                               borderRadius: BorderRadius.circular(12),
@@ -128,7 +127,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                 if (_selectedType != null) ...[
                                   Icon(
                                     _getIconData(_selectedType!.icon),
-                                    color: widget.isDark ? Colors.white70 : Colors.black87,
+                                    color: _isDark ? Colors.white70 : Colors.black87,
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -136,7 +135,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                       _selectedType!.name,
                                       style: TextStyle(
                                         fontSize: 16,
-                                        color: widget.isDark ? Colors.white : Colors.black,
+                                        color: _isDark ? Colors.white : Colors.black,
                                       ),
                                     ),
                                   ),
@@ -145,7 +144,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                     'Select payment method type',
                                     style: TextStyle(
                                       fontSize: 16,
-                                      color: widget.isDark 
+                                      color: _isDark 
                                           ? Colors.white.withOpacity(0.5)
                                           : Colors.black.withOpacity(0.5),
                                     ),
@@ -180,7 +179,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
-                            color: widget.isDark ? Colors.white : Colors.black87,
+                            color: _isDark ? Colors.white : Colors.black87,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -188,7 +187,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           'This payment method will be registered under your name',
                           style: TextStyle(
                             fontSize: 14,
-                            color: widget.isDark 
+                            color: _isDark 
                                 ? Colors.white.withOpacity(0.7)
                                 : Colors.black.withOpacity(0.7),
                           ),
@@ -208,11 +207,11 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                               enabled: false,
                               style: TextStyle(
                                 fontSize: 16,
-                                color: widget.isDark ? Colors.white : Colors.black,
+                                color: _isDark ? Colors.white : Colors.black,
                               ),
                               decoration: InputDecoration(
                                 filled: true,
-                                fillColor: widget.isDark 
+                                fillColor: _isDark 
                                     ? Colors.white.withOpacity(0.05)
                                     : Colors.black.withOpacity(0.05),
                                 border: OutlineInputBorder(
@@ -225,7 +224,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                                 ),
                                 prefixIcon: Icon(
                                   Icons.person_outline,
-                                  color: widget.isDark 
+                                  color: _isDark 
                                       ? Colors.white.withOpacity(0.7)
                                       : Colors.black.withOpacity(0.7),
                                 ),
@@ -258,7 +257,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
-                              color: widget.isDark ? Colors.white : Colors.black87,
+                              color: _isDark ? Colors.white : Colors.black87,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -295,7 +294,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                             'Set as Default',
                             style: TextStyle(
                               fontSize: 16,
-                              color: widget.isDark ? Colors.white : Colors.black87,
+                              color: _isDark ? Colors.white : Colors.black87,
                             ),
                           ),
                           Switch(
@@ -361,31 +360,28 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: widget.isDark ? Colors.white70 : Colors.black87,
-            ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: _isDark ? Colors.white70 : Colors.black87,
           ),
         ),
         TextFormField(
           controller: controller,
           style: TextStyle(
             fontSize: 16,
-            color: widget.isDark ? Colors.white : Colors.black,
+            color: _isDark ? Colors.white : Colors.black,
           ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(
-              color: widget.isDark 
+              color: _isDark 
                   ? Colors.white.withOpacity(0.3)
                   : Colors.black.withOpacity(0.3),
             ),
             filled: true,
-            fillColor: widget.isDark 
+            fillColor: _isDark 
                 ? Colors.white.withOpacity(0.05)
                 : Colors.black.withOpacity(0.05),
             border: OutlineInputBorder(
