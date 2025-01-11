@@ -6,4 +6,4 @@ export class Verify2FADto {
 
   @IsString()
   code: string;
-} 
+}

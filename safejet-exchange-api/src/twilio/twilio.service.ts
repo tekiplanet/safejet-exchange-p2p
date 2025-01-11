@@ -14,8 +14,10 @@ export class TwilioService {
 
   async sendVerificationCode(phoneNumber: string): Promise<string> {
     try {
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      
+      const verificationCode = Math.floor(
+        100000 + Math.random() * 900000,
+      ).toString();
+
       await this.client.messages.create({
         body: `Your SafeJet verification code is: ${verificationCode}`,
         from: this.configService.get('TWILIO_PHONE_NUMBER'),
@@ -28,4 +30,4 @@ export class TwilioService {
       throw new Error('Failed to send verification code');
     }
   }
-} 
+}

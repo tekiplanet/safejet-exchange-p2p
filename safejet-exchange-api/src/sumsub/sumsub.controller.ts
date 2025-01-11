@@ -1,13 +1,13 @@
-import { 
-  Controller, 
-  Post, 
-  UseGuards, 
-  Get, 
-  Body, 
-  Headers, 
-  HttpException, 
+import {
+  Controller,
+  Post,
+  UseGuards,
+  Get,
+  Body,
+  Headers,
+  HttpException,
   HttpStatus,
-  Req
+  Req,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -36,7 +36,7 @@ export class SumsubController {
   async handleWebhook(
     @Headers('x-payload-digest') signature: string,
     @Body() payload: SumsubWebhookPayload,
-    @Req() request: Request & { rawBody: string }
+    @Req() request: Request & { rawBody: string },
   ) {
     try {
       if (!signature) {
@@ -60,12 +60,15 @@ export class SumsubController {
       const isValid = await this.sumsubService.verifyWebhookSignature(
         signature,
         payload,
-        request.rawBody
+        request.rawBody,
       );
 
       if (!isValid) {
         console.error('Invalid webhook signature');
-        throw new HttpException('Invalid webhook signature', HttpStatus.UNAUTHORIZED);
+        throw new HttpException(
+          'Invalid webhook signature',
+          HttpStatus.UNAUTHORIZED,
+        );
       }
 
       await this.sumsubService.handleWebhookEvent(payload);
@@ -75,4 +78,4 @@ export class SumsubController {
       throw error;
     }
   }
-} 
+}

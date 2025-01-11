@@ -18,4 +18,4 @@ import { PaymentMethodField } from './entities/payment-method-field.entity';
   providers: [PaymentMethodsService],
   exports: [PaymentMethodsService],
 })
-export class PaymentMethodsModule {} 
+export class PaymentMethodsModule {}

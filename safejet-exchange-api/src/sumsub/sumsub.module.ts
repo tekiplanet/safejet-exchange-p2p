@@ -17,4 +17,4 @@ import { ConfigModule } from '@nestjs/config';
   controllers: [SumsubController],
   exports: [SumsubService],
 })
-export class SumsubModule {} 
+export class SumsubModule {}

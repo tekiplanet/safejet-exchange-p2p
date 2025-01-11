@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { PaymentMethodsService } from './payment-methods.service';
 import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
 import { UpdatePaymentMethodDto } from './dto/update-payment-method.dto';
@@ -47,7 +56,9 @@ export class PaymentMethodsController {
   }
 
   @Get('types/:id')
-  async getPaymentMethodType(@Param('id') id: string): Promise<PaymentMethodTypeDto> {
+  async getPaymentMethodType(
+    @Param('id') id: string,
+  ): Promise<PaymentMethodTypeDto> {
     return this.paymentMethodsService.findOneType(id);
   }
-} 
+}

@@ -15,8 +15,8 @@ export const paymentMethodTypes = [
         validationRules: {
           required: true,
           minLength: 2,
-          maxLength: 100
-        }
+          maxLength: 100,
+        },
       },
       {
         name: 'account_number',
@@ -28,11 +28,11 @@ export const paymentMethodTypes = [
         order: 2,
         validationRules: {
           required: true,
-          pattern: '^[0-9]{8,20}$'
-        }
+          pattern: '^[0-9]{8,20}$',
+        },
       },
       // More fields...
-    ]
+    ],
   },
   {
     name: 'Mobile Money',
@@ -49,8 +49,8 @@ export const paymentMethodTypes = [
         order: 1,
         validationRules: {
           required: true,
-          options: ['M-Pesa', 'MTN Mobile Money', 'Airtel Money']
-        }
+          options: ['M-Pesa', 'MTN Mobile Money', 'Airtel Money'],
+        },
       },
       {
         name: 'phone_number',
@@ -62,10 +62,10 @@ export const paymentMethodTypes = [
         order: 2,
         validationRules: {
           required: true,
-          pattern: '^[0-9]{10,12}$'
-        }
-      }
-    ]
-  }
+          pattern: '^[0-9]{10,12}$',
+        },
+      },
+    ],
+  },
   // More payment method types...
-]; 
+];

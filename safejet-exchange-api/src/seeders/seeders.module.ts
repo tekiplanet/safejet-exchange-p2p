@@ -5,10 +5,8 @@ import { PaymentMethodField } from '../payment-methods/entities/payment-method-f
 import { PaymentMethodsSeederService } from './payment-methods.seeder.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([PaymentMethodType, PaymentMethodField]),
-  ],
+  imports: [TypeOrmModule.forFeature([PaymentMethodType, PaymentMethodField])],
   providers: [PaymentMethodsSeederService],
   exports: [PaymentMethodsSeederService],
 })
-export class SeedersModule {} 
+export class SeedersModule {}

@@ -1,10 +1,10 @@
-import { 
-  Entity, 
-  PrimaryGeneratedColumn, 
-  Column, 
-  CreateDateColumn, 
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
   UpdateDateColumn,
-  OneToMany
+  OneToMany,
 } from 'typeorm';
 import { PaymentMethodField } from './payment-method-field.entity';
 
@@ -25,7 +25,7 @@ export class PaymentMethodType {
   @Column({ default: true })
   isActive: boolean;
 
-  @OneToMany(() => PaymentMethodField, field => field.paymentMethodType)
+  @OneToMany(() => PaymentMethodField, (field) => field.paymentMethodType)
   fields: PaymentMethodField[];
 
   @CreateDateColumn()
@@ -33,4 +33,4 @@ export class PaymentMethodType {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

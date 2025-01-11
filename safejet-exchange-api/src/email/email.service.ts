@@ -25,13 +25,13 @@ export class EmailService {
       secure: false,
       auth: {
         user: this.configService.get<string>('SMTP_USER'),
-        pass: this.configService.get<string>('SMTP_PASSWORD')
+        pass: this.configService.get<string>('SMTP_PASSWORD'),
       },
       debug: true,
       tls: {
         rejectUnauthorized: false,
-        ciphers: 'SSLv3'
-      }
+        ciphers: 'SSLv3',
+      },
     });
 
     // Verify connection
@@ -81,7 +81,10 @@ export class EmailService {
     }
   }
 
-  async sendPasswordChangedEmail(email: string, userName: string): Promise<void> {
+  async sendPasswordChangedEmail(
+    email: string,
+    userName: string,
+  ): Promise<void> {
     try {
       await this.transporter.sendMail({
         from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
@@ -121,33 +124,50 @@ export class EmailService {
     });
   }
 
-  async sendKYCLevelUpgradeEmail(email: string, userName: string, newLevel: number) {
+  async sendKYCLevelUpgradeEmail(
+    email: string,
+    userName: string,
+    newLevel: number,
+  ) {
     try {
       await this.transporter.sendMail({
         from: '"SafeJet Exchange" <noreply@safejet.com>',
         to: email,
         subject: `KYC Level ${newLevel} Achieved - SafeJet Exchange`,
-        html: this.emailTemplatesService.kycLevelUpgradeEmail(userName, newLevel),
+        html: this.emailTemplatesService.kycLevelUpgradeEmail(
+          userName,
+          newLevel,
+        ),
       });
     } catch (error) {
       console.error('KYC upgrade email failed:', error);
     }
   }
 
-  async sendVerificationFailedEmail(email: string, fullName: string, reason: string): Promise<void> {
+  async sendVerificationFailedEmail(
+    email: string,
+    fullName: string,
+    reason: string,
+  ): Promise<void> {
     try {
       await this.transporter.sendMail({
         from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: 'Identity Verification Failed - SafeJet Exchange',
-        html: this.emailTemplatesService.verificationFailedEmail(fullName, reason),
+        html: this.emailTemplatesService.verificationFailedEmail(
+          fullName,
+          reason,
+        ),
       });
     } catch (error) {
       console.error('Verification failed email error:', error);
     }
   }
 
-  async sendVerificationSuccessEmail(email: string, fullName: string): Promise<void> {
+  async sendVerificationSuccessEmail(
+    email: string,
+    fullName: string,
+  ): Promise<void> {
     try {
       await this.transporter.sendMail({
         from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
@@ -165,25 +185,31 @@ export class EmailService {
     fullName: string,
     status: 'completed' | 'failed',
     rejectLabels?: string[],
-    level: 'identity' | 'advanced' = 'identity'
+    level: 'identity' | 'advanced' = 'identity',
   ): Promise<void> {
     try {
-      const subject = status === 'completed'
-        ? `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Successful - SafeJet Exchange`
-        : `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Failed - SafeJet Exchange`;
+      const subject =
+        status === 'completed'
+          ? `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Successful - SafeJet Exchange`
+          : `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Failed - SafeJet Exchange`;
 
-      const text = status === 'completed'
-        ? `Congratulations ${fullName}! Your ${level === 'advanced' ? 'advanced' : 'identity'} verification has been successfully completed.`
-        : `Hello ${fullName}, unfortunately your ${level === 'advanced' ? 'advanced' : 'identity'} verification was not successful. ${rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''}`;
+      const text =
+        status === 'completed'
+          ? `Congratulations ${fullName}! Your ${level === 'advanced' ? 'advanced' : 'identity'} verification has been successfully completed.`
+          : `Hello ${fullName}, unfortunately your ${level === 'advanced' ? 'advanced' : 'identity'} verification was not successful. ${rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''}`;
 
       await this.transporter.sendMail({
         from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject,
-        html: this.emailTemplatesService.verificationStatusEmail(status, text, fullName),
+        html: this.emailTemplatesService.verificationStatusEmail(
+          status,
+          text,
+          fullName,
+        ),
       });
     } catch (error) {
       console.error('Verification status email error:', error);
     }
   }
-} 
+}

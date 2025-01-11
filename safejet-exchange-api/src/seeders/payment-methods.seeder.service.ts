@@ -113,23 +113,23 @@ export class PaymentMethodsSeederService {
 
     for (const typeData of paymentMethodTypes) {
       const { fields, ...paymentMethodTypeData } = typeData;
-      
+
       // Create payment method type
       const paymentMethodType = await this.paymentMethodTypeRepository.save(
-        this.paymentMethodTypeRepository.create(paymentMethodTypeData)
+        this.paymentMethodTypeRepository.create(paymentMethodTypeData),
       );
 
       // Create fields for this payment method type
-      const fieldPromises = fields.map(fieldData =>
+      const fieldPromises = fields.map((fieldData) =>
         this.paymentMethodFieldRepository.save(
           this.paymentMethodFieldRepository.create({
             ...fieldData,
             paymentMethodType,
-          })
-        )
+          }),
+        ),
       );
 
       await Promise.all(fieldPromises);
     }
   }
-} 
+}

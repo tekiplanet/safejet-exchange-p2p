@@ -14,4 +14,4 @@ export class AddOnfidoApplicantId1710100000000 implements MigrationInterface {
       DROP COLUMN "onfidoApplicantId"
     `);
   }
-} 
+}

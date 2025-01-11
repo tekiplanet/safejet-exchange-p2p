@@ -3,7 +3,7 @@ export interface SumsubWebhookPayload {
   inspectionId: string;
   correlationId: string;
   levelName: string;
-  type: 
+  type:
     | 'applicantCreated'
     | 'applicantPending'
     | 'applicantReviewed'
@@ -24,4 +24,4 @@ export interface SumsubWebhookPayload {
     clientComment?: string;
     buttonIds?: string[];
   };
-} 
+}

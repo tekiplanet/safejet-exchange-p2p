@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Get, UseGuards, Req, Put, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  UseGuards,
+  Req,
+  Put,
+  BadRequestException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -36,9 +45,7 @@ export class AuthController {
   }
 
   @Post('verify-email')
-  async verifyEmail(
-    @Body() verifyEmailDto: VerifyEmailDto,
-  ) {
+  async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
     return this.authService.verifyEmail(verifyEmailDto);
   }
 
@@ -62,18 +69,12 @@ export class AuthController {
 
   @Post('2fa/enable')
   @UseGuards(JwtAuthGuard)
-  enable2FA(
-    @GetUser() user: User,
-    @Body() enable2FADto: Enable2FADto,
-  ) {
+  enable2FA(@GetUser() user: User, @Body() enable2FADto: Enable2FADto) {
     return this.authService.enable2FA(user.id, enable2FADto);
   }
 
   @Post('verify-2fa')
-  async verify2FA(
-    @Body() verify2FADto: Verify2FADto,
-    @Req() req: Request,
-  ) {
+  async verify2FA(@Body() verify2FADto: Verify2FADto, @Req() req: Request) {
     return this.authService.verify2FA(verify2FADto, req);
   }
 
@@ -88,7 +89,7 @@ export class AuthController {
     console.log('User:', user.id);
     console.log('Code:', code);
     console.log('Code Type:', codeType);
-    
+
     const result = await this.authService.disable2FA(user.id, code, codeType);
     console.log('Disable 2FA Result:', result);
     return result;
@@ -115,10 +116,7 @@ export class AuthController {
 
   @Put('update-phone')
   @UseGuards(JwtAuthGuard)
-  async updatePhone(
-    @Req() req,
-    @Body() updatePhoneDto: UpdatePhoneDto,
-  ) {
+  async updatePhone(@Req() req, @Body() updatePhoneDto: UpdatePhoneDto) {
     return this.authService.updatePhone(req.user.id, updatePhoneDto);
   }
 
@@ -130,10 +128,7 @@ export class AuthController {
 
   @Post('verify-phone')
   @UseGuards(JwtAuthGuard)
-  async verifyPhone(
-    @GetUser() user: User,
-    @Body('code') code: string,
-  ) {
+  async verifyPhone(@GetUser() user: User, @Body('code') code: string) {
     return this.authService.verifyPhone(user.id, code);
   }
 
@@ -148,7 +143,10 @@ export class AuthController {
     @GetUser() user: User,
     @Body() updateIdentityDetailsDto: UpdateIdentityDetailsDto,
   ) {
-    return this.authService.updateIdentityDetails(user.id, updateIdentityDetailsDto);
+    return this.authService.updateIdentityDetails(
+      user.id,
+      updateIdentityDetailsDto,
+    );
   }
 
   @Post('verify-password')
@@ -194,4 +192,4 @@ export class AuthController {
     }
     await this.authService.verify2FAAction(code, user);
   }
-} 
+}

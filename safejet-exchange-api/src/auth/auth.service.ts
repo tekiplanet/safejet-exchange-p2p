@@ -1,4 +1,11 @@
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  NotFoundException,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -46,7 +53,14 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-    const { email, phone, password, fullName, countryCode: rawCountryCode, countryName } = registerDto;
+    const {
+      email,
+      phone,
+      password,
+      fullName,
+      countryCode: rawCountryCode,
+      countryName,
+    } = registerDto;
 
     // Check if user exists
     const existingUser = await this.userRepository.findOne({
@@ -65,7 +79,7 @@ export class AuthService {
       try {
         // Remove the exact country code from the phone number
         phoneWithoutCode = phone.substring(formattedCountryCode.length); // This will remove +234 from +2348166700169
-        
+
         // Remove any leading zeros
         while (phoneWithoutCode.startsWith('0')) {
           phoneWithoutCode = phoneWithoutCode.substring(1);
@@ -156,7 +170,7 @@ export class AuthService {
   async verifyEmail(verifyEmailDto: VerifyEmailDto) {
     const { userId, code } = verifyEmailDto;
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -173,28 +187,30 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired verification code.');
     }
 
-    const isCodeValid = await bcrypt.compare(
-      code,
-      user.verificationCode,
-    );
+    const isCodeValid = await bcrypt.compare(code, user.verificationCode);
 
     if (!isCodeValid) {
-      throw new BadRequestException('Incorrect verification code. Please try again.');
+      throw new BadRequestException(
+        'Incorrect verification code. Please try again.',
+      );
     }
 
     // Get the level 0 KYC level
     const unverifiedKycLevel = await this.kycLevelRepository.findOne({
-      where: { level: 0 }
+      where: { level: 0 },
     });
 
     user.emailVerified = true;
     user.verificationCode = null;
     user.verificationCodeExpires = null;
-    user.kycLevelDetails = unverifiedKycLevel;  // Set the KYC level relationship
+    user.kycLevelDetails = unverifiedKycLevel; // Set the KYC level relationship
     await this.userRepository.save(user);
 
     // Send welcome email after successful verification
-    await this.emailService.sendWelcomeEmail(user.email, user.email.split('@')[0]);
+    await this.emailService.sendWelcomeEmail(
+      user.email,
+      user.email.split('@')[0],
+    );
 
     // Generate tokens for automatic login after verification
     const tokens = await this.generateTokens(user);
@@ -231,7 +247,10 @@ export class AuthService {
       const user = await this.userRepository.findOne({ where: { email } });
 
       if (!user) {
-        return { message: 'If your email is registered, you will receive a password reset code.' };
+        return {
+          message:
+            'If your email is registered, you will receive a password reset code.',
+        };
       }
 
       // Generate and save reset code
@@ -249,10 +268,11 @@ export class AuthService {
         console.error('Failed to send password reset email:', error);
       }
 
-      return { 
-        message: 'If your email is registered, you will receive a password reset code.',
+      return {
+        message:
+          'If your email is registered, you will receive a password reset code.',
         // Always return code in development for testing
-        code: resetCode // Remove the condition
+        code: resetCode, // Remove the condition
       };
     } catch (error) {
       console.error('Forgot password error:', error);
@@ -291,7 +311,7 @@ export class AuthService {
 
   async generate2FASecret(userId: string) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -324,20 +344,20 @@ export class AuthService {
       const key = crypto.scryptSync(this.ENCRYPTION_KEY, 'salt', 32);
       const iv = crypto.randomBytes(16);
       const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-      
+
       const encrypted = Buffer.concat([
         cipher.update(JSON.stringify(codes), 'utf8'),
-        cipher.final()
+        cipher.final(),
       ]);
-      
+
       const authTag = cipher.getAuthTag();
-      
+
       const result = {
         iv: iv.toString('hex'),
         data: encrypted.toString('hex'),
-        tag: authTag.toString('hex')
+        tag: authTag.toString('hex'),
       };
-      
+
       return JSON.stringify(result);
     } catch (error) {
       console.error('Encryption error:', error);
@@ -353,16 +373,16 @@ export class AuthService {
       const decipher = crypto.createDecipheriv(
         'aes-256-gcm',
         key,
-        Buffer.from(iv, 'hex')
+        Buffer.from(iv, 'hex'),
       );
-      
+
       decipher.setAuthTag(Buffer.from(tag, 'hex'));
-      
+
       const decrypted = Buffer.concat([
         decipher.update(Buffer.from(data, 'hex')),
-        decipher.final()
+        decipher.final(),
       ]);
-      
+
       return JSON.parse(decrypted.toString('utf8'));
     } catch (error) {
       console.error('Decryption error:', error);
@@ -386,13 +406,13 @@ export class AuthService {
 
     // Generate backup codes
     const backupCodes = this.generateBackupCodes();
-    
+
     // Encrypt the backup codes
     const encryptedData = this.encryptBackupCodes(backupCodes);
-    
+
     user.twoFactorEnabled = true;
     user.twoFactorBackupCodes = encryptedData;
-    
+
     await this.userRepository.save(user);
 
     // Test decryption to verify it worked
@@ -455,7 +475,7 @@ export class AuthService {
   async disable2FA(userId: string, code: string, codeType: DisableCodeType) {
     try {
       console.log('Starting 2FA disable process for user:', userId);
-      
+
       // Fetch complete user data
       const user = await this.userRepository.findOne({ where: { id: userId } });
       if (!user) {
@@ -465,7 +485,7 @@ export class AuthService {
       console.log('Current 2FA status:', {
         enabled: user.twoFactorEnabled,
         hasSecret: !!user.twoFactorSecret,
-        hasBackupCodes: !!user.twoFactorBackupCodes
+        hasBackupCodes: !!user.twoFactorBackupCodes,
       });
 
       if (!user.twoFactorEnabled) {
@@ -483,7 +503,7 @@ export class AuthService {
           secret: user.twoFactorSecret,
           encoding: 'base32',
           token: code,
-          window: 1
+          window: 1,
         });
         console.log('Authenticator code verification result:', isValid);
       } else if (codeType === DisableCodeType.BACKUP) {
@@ -498,9 +518,9 @@ export class AuthService {
 
       if (!isValid) {
         throw new UnauthorizedException(
-          codeType === DisableCodeType.AUTHENTICATOR 
-            ? 'Invalid authenticator code' 
-            : 'Invalid backup code'
+          codeType === DisableCodeType.AUTHENTICATOR
+            ? 'Invalid authenticator code'
+            : 'Invalid backup code',
         );
       }
 
@@ -513,7 +533,7 @@ export class AuthService {
         .set({
           twoFactorEnabled: false,
           twoFactorSecret: null,
-          twoFactorBackupCodes: null
+          twoFactorBackupCodes: null,
         })
         .where('id = :id', { id: userId })
         .execute();
@@ -521,11 +541,13 @@ export class AuthService {
       console.log('Database update result:', updateResult);
 
       // Verify the update
-      const updatedUser = await this.userRepository.findOne({ where: { id: userId } });
+      const updatedUser = await this.userRepository.findOne({
+        where: { id: userId },
+      });
       console.log('User status after update:', {
         enabled: updatedUser.twoFactorEnabled,
         hasSecret: !!updatedUser.twoFactorSecret,
-        hasBackupCodes: !!updatedUser.twoFactorBackupCodes
+        hasBackupCodes: !!updatedUser.twoFactorBackupCodes,
       });
 
       // Send email notification
@@ -534,12 +556,16 @@ export class AuthService {
       return { message: '2FA disabled successfully' };
     } catch (error) {
       console.error('Disable 2FA error:', error);
-      if (error instanceof BadRequestException || 
-          error instanceof UnauthorizedException || 
-          error instanceof NotFoundException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
-      throw new InternalServerErrorException('Unable to disable 2FA. Please try again later.');
+      throw new InternalServerErrorException(
+        'Unable to disable 2FA. Please try again later.',
+      );
     }
   }
 
@@ -570,7 +596,10 @@ export class AuthService {
 
     if (!user) {
       // Return success even if user doesn't exist (security best practice)
-      return { message: 'If your email is registered, you will receive a verification code.' };
+      return {
+        message:
+          'If your email is registered, you will receive a verification code.',
+      };
     }
 
     if (user.emailVerified) {
@@ -586,7 +615,10 @@ export class AuthService {
     // Send verification email
     await this.emailService.sendVerificationEmail(user.email, verificationCode);
 
-    return { message: 'If your email is registered, you will receive a verification code.' };
+    return {
+      message:
+        'If your email is registered, you will receive a verification code.',
+    };
   }
 
   async logout(userId: string) {
@@ -595,10 +627,10 @@ export class AuthService {
       // 1. Add the current token to a blacklist
       // 2. Clear any refresh tokens for this user
       // 3. Log the logout event
-      
+
       return {
         status: 'success',
-        message: 'Logged out successfully'
+        message: 'Logged out successfully',
       };
     } catch (error) {
       throw new BadRequestException('Failed to logout');
@@ -606,7 +638,7 @@ export class AuthService {
   }
 
   private sanitizeUser(user: User) {
-    const { 
+    const {
       passwordHash,
       verificationCode,
       verificationCodeExpires,
@@ -614,7 +646,7 @@ export class AuthService {
       twoFactorBackupCodes,
       passwordResetCode,
       passwordResetExpires,
-      ...sanitizedUser 
+      ...sanitizedUser
     } = user;
     return sanitizedUser;
   }
@@ -631,7 +663,7 @@ export class AuthService {
       user.countryCode = updatePhoneDto.countryCode;
       user.countryName = updatePhoneDto.countryName;
       user.phoneWithoutCode = updatePhoneDto.phoneWithoutCode;
-      user.phoneVerified = false;  // Reset phone verification status
+      user.phoneVerified = false; // Reset phone verification status
 
       await this.userRepository.save(user);
 
@@ -651,8 +683,10 @@ export class AuthService {
     }
 
     try {
-      const verificationCode = await this.twilioService.sendVerificationCode(user.phone);
-      
+      const verificationCode = await this.twilioService.sendVerificationCode(
+        user.phone,
+      );
+
       // Hash and save the verification code
       user.verificationCode = await bcrypt.hash(verificationCode, 10);
       user.verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
@@ -660,7 +694,9 @@ export class AuthService {
 
       return { message: 'Verification code sent successfully' };
     } catch (error) {
-      throw new InternalServerErrorException('Failed to send verification code');
+      throw new InternalServerErrorException(
+        'Failed to send verification code',
+      );
     }
   }
 
@@ -689,7 +725,9 @@ export class AuthService {
 
     // Update KYC level if this completes level 1
     if (user.emailVerified && user.phoneVerified && user.kycLevel < 1) {
-      const level1 = await this.kycLevelRepository.findOne({ where: { level: 1 } });
+      const level1 = await this.kycLevelRepository.findOne({
+        where: { level: 1 },
+      });
       if (level1) {
         user.kycLevel = 1;
         user.kycLevelDetails = level1;
@@ -697,7 +735,7 @@ export class AuthService {
         await this.emailService.sendKYCLevelUpgradeEmail(
           user.email,
           user.fullName,
-          1
+          1,
         );
       }
     }
@@ -738,7 +776,10 @@ export class AuthService {
     }
   }
 
-  async updateIdentityDetails(userId: string, details: UpdateIdentityDetailsDto) {
+  async updateIdentityDetails(
+    userId: string,
+    details: UpdateIdentityDetailsDto,
+  ) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -761,7 +802,10 @@ export class AuthService {
     return this.userRepository.save(user);
   }
 
-  async verifyPassword(password: string, user: User): Promise<{ valid: boolean }> {
+  async verifyPassword(
+    password: string,
+    user: User,
+  ): Promise<{ valid: boolean }> {
     try {
       console.log('=== Password Verification Debug ===');
       console.log('Initial user object:', JSON.stringify(user, null, 2));
@@ -773,18 +817,23 @@ export class AuthService {
 
       // Fetch complete user data from database
       const completeUser = await this.userRepository.findOne({
-        where: { id: user.id }
+        where: { id: user.id },
       });
 
       if (!completeUser) {
         throw new BadRequestException('User not found');
       }
 
-      console.log('Complete user data fetched:', JSON.stringify(completeUser, null, 2));
+      console.log(
+        'Complete user data fetched:',
+        JSON.stringify(completeUser, null, 2),
+      );
 
       if (!completeUser.passwordHash) {
         console.log('Password hash is missing from complete user data');
-        throw new InternalServerErrorException('User password data is corrupted. Please contact support.');
+        throw new InternalServerErrorException(
+          'User password data is corrupted. Please contact support.',
+        );
       }
 
       console.log('Password hash exists:', completeUser.passwordHash);
@@ -794,10 +843,15 @@ export class AuthService {
       return { valid: isValid };
     } catch (error) {
       console.error('Password verification detailed error:', error);
-      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
-      throw new InternalServerErrorException('Unable to verify password. Please try again later.');
+      throw new InternalServerErrorException(
+        'Unable to verify password. Please try again later.',
+      );
     }
   }
 
@@ -827,7 +881,7 @@ export class AuthService {
 
       // Fetch complete user data from database
       const completeUser = await this.userRepository.findOne({
-        where: { id: user.id }
+        where: { id: user.id },
       });
 
       if (!completeUser) {
@@ -835,17 +889,26 @@ export class AuthService {
       }
 
       if (!completeUser.passwordHash) {
-        throw new InternalServerErrorException('User password data is corrupted. Please contact support.');
+        throw new InternalServerErrorException(
+          'User password data is corrupted. Please contact support.',
+        );
       }
 
       // Verify current password using complete user data
-      const isValid = await bcrypt.compare(currentPassword, completeUser.passwordHash);
+      const isValid = await bcrypt.compare(
+        currentPassword,
+        completeUser.passwordHash,
+      );
       if (!isValid) {
-        throw new UnauthorizedException('Current password is incorrect. Please try again.');
+        throw new UnauthorizedException(
+          'Current password is incorrect. Please try again.',
+        );
       }
 
       if (currentPassword === newPassword) {
-        throw new BadRequestException('New password must be different from current password');
+        throw new BadRequestException(
+          'New password must be different from current password',
+        );
       }
 
       // Hash new password
@@ -856,15 +919,22 @@ export class AuthService {
       await this.userRepository.update(completeUser.id, { passwordHash });
 
       // Send email notification
-      await this.emailService.sendPasswordChangedEmail(completeUser.email, completeUser.fullName);
+      await this.emailService.sendPasswordChangedEmail(
+        completeUser.email,
+        completeUser.fullName,
+      );
     } catch (error) {
       console.error('Change password error:', error);
-      if (error instanceof BadRequestException || 
-          error instanceof UnauthorizedException || 
-          error instanceof InternalServerErrorException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException ||
+        error instanceof InternalServerErrorException
+      ) {
         throw error;
       }
-      throw new InternalServerErrorException('Unable to change password. Please try again later.');
+      throw new InternalServerErrorException(
+        'Unable to change password. Please try again later.',
+      );
     }
   }
 
@@ -879,7 +949,12 @@ export class AuthService {
     }
 
     // Remove sensitive data
-    const { passwordHash, passwordResetCode, passwordResetExpires, ...safeUser } = user;
+    const {
+      passwordHash,
+      passwordResetCode,
+      passwordResetExpires,
+      ...safeUser
+    } = user;
     return safeUser;
   }
 
@@ -887,7 +962,7 @@ export class AuthService {
     try {
       // Fetch complete user data to get 2FA secret
       const completeUser = await this.userRepository.findOne({
-        where: { id: user.id }
+        where: { id: user.id },
       });
 
       if (!completeUser) {
@@ -907,20 +982,24 @@ export class AuthService {
         secret: completeUser.twoFactorSecret,
         encoding: 'base32',
         token: code,
-        window: 1  // Allow 30 seconds window
+        window: 1, // Allow 30 seconds window
       });
 
       if (!isValid) {
         throw new UnauthorizedException('Invalid 2FA code');
       }
     } catch (error) {
-      if (error instanceof BadRequestException || 
-          error instanceof UnauthorizedException || 
-          error instanceof NotFoundException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
       console.error('2FA action verification error:', error);
-      throw new InternalServerErrorException('Unable to verify 2FA code. Please try again later.');
+      throw new InternalServerErrorException(
+        'Unable to verify 2FA code. Please try again later.',
+      );
     }
   }
-} 
+}

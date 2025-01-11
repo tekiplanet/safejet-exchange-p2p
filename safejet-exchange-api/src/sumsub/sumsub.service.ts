@@ -30,7 +30,7 @@ export class SumsubService {
     alpha2: string;
     alpha3: string;
   }>;
-  
+
   constructor(
     private configService: ConfigService,
     @InjectRepository(User)
@@ -51,15 +51,19 @@ export class SumsubService {
   // Helper method to convert alpha2 to alpha3
   private getAlpha3Code(alpha2: string): string {
     const alpha3Map: { [key: string]: string } = {
-      'NG': 'NGA', // Nigeria
-      'US': 'USA', // United States
-      'GB': 'GBR', // United Kingdom
+      NG: 'NGA', // Nigeria
+      US: 'USA', // United States
+      GB: 'GBR', // United Kingdom
       // Add more as needed, or implement a more comprehensive solution
     };
     return alpha3Map[alpha2] || alpha2;
   }
 
-  private generateSignature(method: string, url: string, body: string = ''): string {
+  private generateSignature(
+    method: string,
+    url: string,
+    body: string = '',
+  ): string {
     const ts = Math.floor(Date.now() / 1000).toString();
     const secretKey = this.configService.get<string>('SUMSUB_SECRET_KEY');
     const signature = crypto
@@ -84,7 +88,7 @@ export class SumsubService {
         const applicantId = await this.createApplicant(userId);
         user.kycData = {
           ...user.kycData,
-          sumsubApplicantId: applicantId
+          sumsubApplicantId: applicantId,
         };
         await this.userRepository.save(user);
       }
@@ -95,7 +99,7 @@ export class SumsubService {
       // Add parameters as query string
       const url = `/resources/accessTokens?userId=${userId}&levelName=id-and-liveness`;
       const method = 'POST';
-      
+
       try {
         console.log('Making request to Sumsub API:', `${this.baseUrl}${url}`);
         const response = await axios({
@@ -113,11 +117,12 @@ export class SumsubService {
           headers: error.response?.headers,
           url: `${this.baseUrl}${url}`,
           method,
-          requestHeaders: this.getHeaders(method, url)
+          requestHeaders: this.getHeaders(method, url),
         });
 
         throw new HttpException(
-          error.response?.data?.description || 'Failed to generate access token',
+          error.response?.data?.description ||
+            'Failed to generate access token',
           error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
@@ -142,11 +147,11 @@ export class SumsubService {
         type,
         reviewStatus,
         reviewResult,
-        fullPayload: payload
+        fullPayload: payload,
       });
 
       const user = await this.userRepository.findOne({
-        where: { id: externalUserId }
+        where: { id: externalUserId },
       });
 
       if (!user) {
@@ -159,9 +164,15 @@ export class SumsubService {
           if (reviewResult) {
             const typedReviewResult = {
               ...reviewResult,
-              reviewRejectType: reviewResult.reviewRejectType as 'RETRY' | 'FINAL'
+              reviewRejectType: reviewResult.reviewRejectType as
+                | 'RETRY'
+                | 'FINAL',
             };
-            await this.handleVerificationComplete(user, reviewStatus, typedReviewResult);
+            await this.handleVerificationComplete(
+              user,
+              reviewStatus,
+              typedReviewResult,
+            );
           } else {
             await this.handleVerificationComplete(user, reviewStatus);
           }
@@ -197,7 +208,7 @@ export class SumsubService {
   }
 
   private async handleVerificationComplete(
-    user: User, 
+    user: User,
     reviewStatus: string,
     reviewResult?: {
       reviewAnswer: 'GREEN' | 'RED';
@@ -207,13 +218,13 @@ export class SumsubService {
       clientComment?: string;
       buttonIds?: string[];
     },
-    level: 'identity' | 'advanced' = 'identity'
+    level: 'identity' | 'advanced' = 'identity',
   ): Promise<void> {
-    const status = reviewResult?.reviewAnswer === 'GREEN' 
-      ? 'completed' 
-      : 'failed';
+    const status =
+      reviewResult?.reviewAnswer === 'GREEN' ? 'completed' : 'failed';
 
-    const finalReviewAnswer = status === 'completed' ? 'GREEN' : reviewResult?.reviewAnswer;
+    const finalReviewAnswer =
+      status === 'completed' ? 'GREEN' : reviewResult?.reviewAnswer;
 
     await this.updateVerificationStatus(user, {
       status,
@@ -223,13 +234,13 @@ export class SumsubService {
       reviewRejectDetails: reviewResult?.rejectLabels?.join(', '),
       moderationComment: reviewResult?.moderationComment,
       clientComment: reviewResult?.clientComment,
-      level
+      level,
     });
 
     if (status === 'completed') {
       // Get appropriate KYC Level based on verification level
       const kycLevel = await this.kycLevelRepository.findOne({
-        where: { level: level === 'advanced' ? 3 : 2 }
+        where: { level: level === 'advanced' ? 3 : 2 },
       });
 
       if (!kycLevel) {
@@ -239,7 +250,7 @@ export class SumsubService {
       // Update user's KYC level
       await this.userRepository.update(user.id, {
         kycLevel: level === 'advanced' ? 3 : 2,
-        kycLevelDetails: kycLevel
+        kycLevelDetails: kycLevel,
       });
     }
 
@@ -248,21 +259,26 @@ export class SumsubService {
       user.email,
       user.fullName,
       status as 'completed' | 'failed',
-      reviewResult?.clientComment ? [reviewResult.clientComment] : reviewResult?.rejectLabels,
-      level
+      reviewResult?.clientComment
+        ? [reviewResult.clientComment]
+        : reviewResult?.rejectLabels,
+      level,
     );
   }
 
-  private async updateVerificationStatus(user: User, status: {
-    status: 'pending' | 'processing' | 'completed' | 'failed';
-    lastAttempt: Date;
-    reviewAnswer?: 'GREEN' | 'RED' | 'ON_HOLD';
-    reviewRejectType?: 'RETRY' | 'FINAL';
-    reviewRejectDetails?: string;
-    moderationComment?: string;
-    clientComment?: string;
-    level?: 'identity' | 'advanced';
-  }): Promise<void> {
+  private async updateVerificationStatus(
+    user: User,
+    status: {
+      status: 'pending' | 'processing' | 'completed' | 'failed';
+      lastAttempt: Date;
+      reviewAnswer?: 'GREEN' | 'RED' | 'ON_HOLD';
+      reviewRejectType?: 'RETRY' | 'FINAL';
+      reviewRejectDetails?: string;
+      moderationComment?: string;
+      clientComment?: string;
+      level?: 'identity' | 'advanced';
+    },
+  ): Promise<void> {
     user.kycData = {
       ...user.kycData,
       verificationStatus: {
@@ -275,9 +291,9 @@ export class SumsubService {
           reviewRejectType: status.reviewRejectType,
           reviewRejectDetails: status.reviewRejectDetails,
           moderationComment: status.moderationComment,
-          clientComment: status.clientComment
-        }
-      }
+          clientComment: status.clientComment,
+        },
+      },
     };
 
     await this.userRepository.save(user);
@@ -292,14 +308,16 @@ export class SumsubService {
 
       console.log('Creating applicant for user:', {
         userId,
-        kycData: user.kycData
+        kycData: user.kycData,
       });
 
-      const countryCode = this.getCountryCode(user.kycData?.identityDetails?.country);
+      const countryCode = this.getCountryCode(
+        user.kycData?.identityDetails?.country,
+      );
       if (!countryCode) {
         throw new HttpException(
           `Invalid or unsupported country: ${user.kycData?.identityDetails?.country}`,
-          HttpStatus.BAD_REQUEST
+          HttpStatus.BAD_REQUEST,
         );
       }
 
@@ -317,10 +335,12 @@ export class SumsubService {
           email: user.email,
         },
         requiredIdDocs: {
-          docSets: [{
-            idDocSetType: 'IDENTITY',
-            types: ['PASSPORT', 'ID_CARD', 'DRIVERS'],
-          }],
+          docSets: [
+            {
+              idDocSetType: 'IDENTITY',
+              types: ['PASSPORT', 'ID_CARD', 'DRIVERS'],
+            },
+          ],
         },
       });
 
@@ -338,7 +358,8 @@ export class SumsubService {
       } catch (error) {
         // Check if error is due to existing applicant
         if (error.response?.status === 409) {
-          const existingApplicantId = error.response.data.description.match(/(\w+)$/)[0];
+          const existingApplicantId =
+            error.response.data.description.match(/(\w+)$/)[0];
           console.log('Using existing applicant ID:', existingApplicantId);
           return existingApplicantId;
         }
@@ -347,7 +368,7 @@ export class SumsubService {
           error: error.response?.data,
           status: error.response?.status,
           headers: error.response?.headers,
-          fullError: error
+          fullError: error,
         });
         throw new HttpException(
           `Failed to create applicant: ${error.response?.data?.description || error.message}`,
@@ -369,8 +390,8 @@ export class SumsubService {
     if (!countryName) return null;
 
     // Try to find the country (case-insensitive)
-    const country = this.countryList.find(c => 
-      c.name.toLowerCase() === countryName.toLowerCase()
+    const country = this.countryList.find(
+      (c) => c.name.toLowerCase() === countryName.toLowerCase(),
     );
 
     if (country) {
@@ -378,9 +399,10 @@ export class SumsubService {
     }
 
     // If exact match not found, try fuzzy matching
-    const fuzzyMatch = this.countryList.find(c => 
-      c.name.toLowerCase().includes(countryName.toLowerCase()) ||
-      countryName.toLowerCase().includes(c.name.toLowerCase())
+    const fuzzyMatch = this.countryList.find(
+      (c) =>
+        c.name.toLowerCase().includes(countryName.toLowerCase()) ||
+        countryName.toLowerCase().includes(c.name.toLowerCase()),
     );
 
     return fuzzyMatch ? fuzzyMatch.alpha3 : null;
@@ -389,9 +411,9 @@ export class SumsubService {
   private getHeaders(method: string, url: string, body: string = '') {
     const ts = Math.floor(Date.now() / 1000).toString();
     const appToken = this.configService.get<string>('SUMSUB_APP_TOKEN');
-    
+
     return {
-      'Accept': 'application/json',
+      Accept: 'application/json',
       'Content-Type': 'application/json',
       'X-App-Token': appToken,
       'X-App-Access-Sig': this.generateSignature(method, url, body),
@@ -420,7 +442,9 @@ export class SumsubService {
     }
   }
 
-  private mapReviewStatus(reviewStatus: string): 'pending' | 'completed' | 'failed' {
+  private mapReviewStatus(
+    reviewStatus: string,
+  ): 'pending' | 'completed' | 'failed' {
     switch (reviewStatus) {
       case 'approved':
         return 'completed';
@@ -431,10 +455,16 @@ export class SumsubService {
     }
   }
 
-  async verifyWebhookSignature(signature: string, payload: any, rawBody?: string): Promise<boolean> {
+  async verifyWebhookSignature(
+    signature: string,
+    payload: any,
+    rawBody?: string,
+  ): Promise<boolean> {
     try {
-      const webhookSecret = this.configService.get<string>('SUMSUB_WEBHOOK_SECRET');
-      
+      const webhookSecret = this.configService.get<string>(
+        'SUMSUB_WEBHOOK_SECRET',
+      );
+
       // Important: Use rawBody directly without any modifications
       if (!rawBody) {
         console.error('Raw body is missing');
@@ -443,7 +473,7 @@ export class SumsubService {
 
       const calculatedSignature = crypto
         .createHmac('sha256', webhookSecret)
-        .update(rawBody)  // Use rawBody directly
+        .update(rawBody) // Use rawBody directly
         .digest('hex');
 
       console.log('Detailed signature verification:', {
@@ -458,8 +488,8 @@ export class SumsubService {
         signatureType: typeof signature,
         firstFewChars: {
           rawBody: rawBody.substring(0, 20),
-          signature: signature.substring(0, 20)
-        }
+          signature: signature.substring(0, 20),
+        },
       });
 
       return signature === calculatedSignature;
@@ -468,7 +498,7 @@ export class SumsubService {
       console.error('Full error:', {
         name: error.name,
         message: error.message,
-        stack: error.stack
+        stack: error.stack,
       });
       return false;
     }
@@ -477,11 +507,18 @@ export class SumsubService {
   async handleWebhookEvent(payload: SumsubWebhookPayload) {
     try {
       const { type, applicantId, reviewStatus, reviewResult } = payload;
-      console.log('Received webhook event:', { type, applicantId, reviewStatus, reviewResult });
+      console.log('Received webhook event:', {
+        type,
+        applicantId,
+        reviewStatus,
+        reviewResult,
+      });
 
       const user = await this.userRepository
         .createQueryBuilder('user')
-        .where(`"user"."kycData"->>'sumsubApplicantId' = :applicantId`, { applicantId })
+        .where(`"user"."kycData"->>'sumsubApplicantId' = :applicantId`, {
+          applicantId,
+        })
         .getOne();
 
       if (!user) {
@@ -498,7 +535,7 @@ export class SumsubService {
           await this.updateVerificationStatus(user, {
             status: 'pending',
             lastAttempt: new Date(),
-            level: verificationType
+            level: verificationType,
           });
           break;
 
@@ -508,7 +545,7 @@ export class SumsubService {
             lastAttempt: new Date(),
             reviewAnswer: 'ON_HOLD',
             reviewRejectDetails: 'Application is on hold for review',
-            level: verificationType
+            level: verificationType,
           });
           break;
 
@@ -517,20 +554,22 @@ export class SumsubService {
           if (reviewResult) {
             const typedReviewResult = {
               ...reviewResult,
-              reviewRejectType: reviewResult.reviewRejectType as 'RETRY' | 'FINAL'
+              reviewRejectType: reviewResult.reviewRejectType as
+                | 'RETRY'
+                | 'FINAL',
             };
             await this.handleVerificationComplete(
-              user, 
-              reviewStatus, 
+              user,
+              reviewStatus,
               typedReviewResult,
-              verificationType
+              verificationType,
             );
           } else {
             await this.handleVerificationComplete(
-              user, 
-              reviewStatus, 
+              user,
+              reviewStatus,
               undefined,
-              verificationType
+              verificationType,
             );
           }
           break;
@@ -541,7 +580,7 @@ export class SumsubService {
       console.error('Error handling webhook event:', error);
       throw new HttpException(
         'Failed to process webhook event',
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -551,7 +590,7 @@ export class SumsubService {
     console.log('Webhook secret details:', {
       original: secret,
       decoded: decodeURIComponent(secret),
-      encoded: encodeURIComponent(secret)
+      encoded: encodeURIComponent(secret),
     });
     return secret;
   }
@@ -563,16 +602,21 @@ export class SumsubService {
     }
 
     // Check if Level 2 is completed
-    if (user.kycLevel < 2 || 
-        user.kycData?.verificationStatus?.identity?.status !== 'completed' ||
-        user.kycData?.verificationStatus?.identity?.reviewAnswer !== 'GREEN') {
-      throw new HttpException('Complete Level 2 verification first', HttpStatus.BAD_REQUEST);
+    if (
+      user.kycLevel < 2 ||
+      user.kycData?.verificationStatus?.identity?.status !== 'completed' ||
+      user.kycData?.verificationStatus?.identity?.reviewAnswer !== 'GREEN'
+    ) {
+      throw new HttpException(
+        'Complete Level 2 verification first',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     // Generate token for advanced verification
     const url = `/resources/accessTokens?userId=${userId}&levelName=advanced-verification`;
     const method = 'POST';
-    
+
     try {
       const response = await axios({
         method,
@@ -585,4 +629,4 @@ export class SumsubService {
       // ... error handling
     }
   }
-} 
+}

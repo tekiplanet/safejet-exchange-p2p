@@ -10,17 +10,9 @@ import { EmailService } from '../email/email.service';
 import { EmailTemplatesService } from '../email/email-templates.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([User, KYCLevel]),
-    ConfigModule,
-  ],
-  providers: [
-    KYCService,
-    SumsubService,
-    EmailService,
-    EmailTemplatesService,
-  ],
+  imports: [TypeOrmModule.forFeature([User, KYCLevel]), ConfigModule],
+  providers: [KYCService, SumsubService, EmailService, EmailTemplatesService],
   controllers: [KYCController],
   exports: [KYCService],
 })
-export class KYCModule {} 
+export class KYCModule {}

@@ -12,7 +12,7 @@ import { catchError } from 'rxjs/operators';
 export class AuthInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
-      catchError(error => {
+      catchError((error) => {
         if (error instanceof UnauthorizedException) {
           // Return a standardized error response
           return throwError(() => ({
@@ -25,4 +25,4 @@ export class AuthInterceptor implements NestInterceptor {
       }),
     );
   }
-} 
+}

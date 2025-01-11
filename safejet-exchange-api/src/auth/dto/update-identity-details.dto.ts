@@ -27,4 +27,4 @@ export class UpdateIdentityDetailsDto {
   @IsString()
   @IsNotEmpty()
   country: string;
-} 
+}

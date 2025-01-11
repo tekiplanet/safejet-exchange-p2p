@@ -8,4 +8,4 @@ export class VerifyEmailDto {
   @IsString()
   @IsNotEmpty()
   userId: string;
-} 
+}

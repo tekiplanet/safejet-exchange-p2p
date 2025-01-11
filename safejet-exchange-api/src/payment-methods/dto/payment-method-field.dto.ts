@@ -1,4 +1,10 @@
-import { IsString, IsBoolean, IsNumber, IsObject, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsBoolean,
+  IsNumber,
+  IsObject,
+  IsOptional,
+} from 'class-validator';
 
 export class PaymentMethodFieldDto {
   @IsString()
@@ -36,4 +42,4 @@ export class PaymentMethodFieldDto {
 
   @IsNumber()
   order: number;
-} 
+}

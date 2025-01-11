@@ -27,4 +27,4 @@ export class LoginTrackerService {
       timestamp: new Date(),
     };
   }
-} 
+}

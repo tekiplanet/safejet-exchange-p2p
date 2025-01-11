@@ -19,12 +19,12 @@ export class CreateKYCLevels1710000000000 implements MigrationInterface {
 
     // Add KYC columns to users table
     // await queryRunner.query(`
-    //   ALTER TABLE "users" 
+    //   ALTER TABLE "users"
     //     ADD COLUMN "kyc_level" integer NOT NULL DEFAULT 0,
     //     ADD COLUMN "kyc_level_id" uuid,
     //     ADD COLUMN "kyc_data" jsonb,
-    //     ADD CONSTRAINT "fk_kyc_level" 
-    //     FOREIGN KEY ("kyc_level_id") 
+    //     ADD CONSTRAINT "fk_kyc_level"
+    //     FOREIGN KEY ("kyc_level_id")
     //     REFERENCES "kyc_levels"("id")
     // `);
 
@@ -66,7 +66,7 @@ export class CreateKYCLevels1710000000000 implements MigrationInterface {
 
     // // Remove KYC columns from users table
     // await queryRunner.query(`
-    //   ALTER TABLE "users" 
+    //   ALTER TABLE "users"
     //     DROP COLUMN "kyc_level",
     //     DROP COLUMN "kyc_level_id",
     //     DROP COLUMN "kyc_data"
@@ -75,4 +75,4 @@ export class CreateKYCLevels1710000000000 implements MigrationInterface {
     // Drop KYC Levels table
     await queryRunner.query(`DROP TABLE "kyc_levels"`);
   }
-} 
+}

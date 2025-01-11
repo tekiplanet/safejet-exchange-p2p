@@ -1,4 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('kyc_levels')
 export class KYCLevel {
@@ -49,4 +55,4 @@ export class KYCLevel {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

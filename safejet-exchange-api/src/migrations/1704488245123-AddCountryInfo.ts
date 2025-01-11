@@ -14,4 +14,4 @@
 //         await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "countryName"`);
 //         await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "countryCode"`);
 //     }
-// } 
+// }

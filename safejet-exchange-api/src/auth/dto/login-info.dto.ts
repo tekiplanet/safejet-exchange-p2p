@@ -11,4 +11,4 @@ export class LoginInfoDto {
     device?: string;
   };
   timestamp: Date;
-} 
+}

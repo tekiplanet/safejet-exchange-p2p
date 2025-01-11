@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+  JoinColumn,
+} from 'typeorm';
 import { User } from '../../auth/entities/user.entity';
 import { PaymentMethodType } from './payment-method-type.entity';
 
@@ -35,4 +43,4 @@ export class PaymentMethod {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

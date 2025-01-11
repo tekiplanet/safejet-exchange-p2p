@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { KYCLevel } from './kyc-level.entity';
 
 export interface KYCData {
@@ -126,4 +134,4 @@ export class User {
 
   @Column('json', { nullable: true })
   kycData: KYCData;
-} 
+}

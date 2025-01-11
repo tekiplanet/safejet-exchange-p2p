@@ -1,4 +1,9 @@
-import { MigrationInterface, QueryRunner, TableColumn, TableForeignKey } from 'typeorm';
+import {
+  MigrationInterface,
+  QueryRunner,
+  TableColumn,
+  TableForeignKey,
+} from 'typeorm';
 
 export class UpdatePaymentMethods1704470002000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -20,7 +25,7 @@ export class UpdatePaymentMethods1704470002000 implements MigrationInterface {
       const table = await queryRunner.getTable('payment_methods');
       if (table) {
         const foreignKey = table.foreignKeys.find(
-          fk => fk.columnNames.indexOf('paymentMethodTypeId') !== -1,
+          (fk) => fk.columnNames.indexOf('paymentMethodTypeId') !== -1,
         );
         if (foreignKey) {
           await queryRunner.dropForeignKey('payment_methods', foreignKey);
@@ -30,4 +35,4 @@ export class UpdatePaymentMethods1704470002000 implements MigrationInterface {
       console.log('Foreign key not found, continuing...');
     }
   }
-} 
+}

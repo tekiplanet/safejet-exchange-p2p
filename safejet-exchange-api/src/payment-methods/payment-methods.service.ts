@@ -95,7 +95,7 @@ export class PaymentMethodsService {
       },
     });
 
-    return types.map(type => this.mapToDto(type));
+    return types.map((type) => this.mapToDto(type));
   }
 
   async findOneType(id: string): Promise<PaymentMethodTypeDto> {
@@ -118,7 +118,7 @@ export class PaymentMethodsService {
       icon: type.icon,
       description: type.description,
       isActive: type.isActive,
-      fields: type.fields.map(field => ({
+      fields: type.fields.map((field) => ({
         id: field.id,
         name: field.name,
         label: field.label,
@@ -131,4 +131,4 @@ export class PaymentMethodsService {
       })),
     };
   }
-} 
+}

@@ -301,7 +301,11 @@ export class EmailTemplatesService {
     return nextSteps[level] || '';
   }
 
-  verificationFailedEmail(fullName: string, reason: string, isDark = true): string {
+  verificationFailedEmail(
+    fullName: string,
+    reason: string,
+    isDark = true,
+  ): string {
     const content = `
       <h1>Identity Verification Failed ❌</h1>
       <p>Hello ${fullName},</p>
@@ -348,7 +352,12 @@ export class EmailTemplatesService {
     return baseTemplate(content, isDark);
   }
 
-  verificationStatusEmail(status: string, text: string, fullName: string, isDark = true): string {
+  verificationStatusEmail(
+    status: string,
+    text: string,
+    fullName: string,
+    isDark = true,
+  ): string {
     const content = `
       <h1>${status === 'completed' ? 'Verification Complete! 🎉' : 'Verification Update ⚠️'}</h1>
       <p>Hello ${fullName},</p>
@@ -362,4 +371,4 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
-} 
+}

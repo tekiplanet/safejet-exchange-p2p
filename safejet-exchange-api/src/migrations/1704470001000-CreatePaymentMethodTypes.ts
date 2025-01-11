@@ -1,6 +1,13 @@
-import { MigrationInterface, QueryRunner, Table, TableForeignKey } from 'typeorm';
+import {
+  MigrationInterface,
+  QueryRunner,
+  Table,
+  TableForeignKey,
+} from 'typeorm';
 
-export class CreatePaymentMethodTypes1704470001000 implements MigrationInterface {
+export class CreatePaymentMethodTypes1704470001000
+  implements MigrationInterface
+{
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create payment_method_types table
     await queryRunner.createTable(
@@ -133,7 +140,7 @@ export class CreatePaymentMethodTypes1704470001000 implements MigrationInterface
       const table = await queryRunner.getTable(tableName);
       if (table) {
         const foreignKeys = table.foreignKeys.filter(
-          fk => fk.referencedTableName === 'payment_method_types'
+          (fk) => fk.referencedTableName === 'payment_method_types',
         );
         for (const foreignKey of foreignKeys) {
           await queryRunner.dropForeignKey(tableName, foreignKey);
@@ -145,4 +152,4 @@ export class CreatePaymentMethodTypes1704470001000 implements MigrationInterface
     await queryRunner.dropTable('payment_method_fields', true);
     await queryRunner.dropTable('payment_method_types', true);
   }
-} 
+}

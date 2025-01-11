@@ -16,4 +16,4 @@ export class UpdatePhoneDto {
   @IsString()
   @IsNotEmpty()
   phoneWithoutCode: string;
-} 
+}

@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  JoinColumn
+  JoinColumn,
 } from 'typeorm';
 import { PaymentMethodType } from './payment-method-type.entity';
 
@@ -47,7 +47,7 @@ export class PaymentMethodField {
   @Column()
   paymentMethodTypeId: string;
 
-  @ManyToOne(() => PaymentMethodType, type => type.fields)
+  @ManyToOne(() => PaymentMethodType, (type) => type.fields)
   @JoinColumn({ name: 'paymentMethodTypeId' })
   paymentMethodType: PaymentMethodType;
 
@@ -56,4 +56,4 @@ export class PaymentMethodField {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

@@ -28,17 +28,19 @@ import { SeedersModule } from './seeders/seeders.module';
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         migrations: ['dist/src/migrations/*.js'],
         migrationsRun: false,
-        migrationsTableName: 'migrations'
+        migrationsTableName: 'migrations',
       }),
     }),
     AuthModule,
     EmailModule,
     KYCModule,
     SumsubModule,
-    ThrottlerModule.forRoot([{
-      ttl: 60, // time in seconds
-      limit: 10, // number of requests per ttl
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60, // time in seconds
+        limit: 10, // number of requests per ttl
+      },
+    ]),
     PaymentMethodsModule,
     SeedersModule,
   ],

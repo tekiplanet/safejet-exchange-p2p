@@ -134,4 +134,4 @@ export const baseTemplate = (content: string, isDark = true) => `
     </div>
 </body>
 </html>
-`; 
+`;

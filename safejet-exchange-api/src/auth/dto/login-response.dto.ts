@@ -4,4 +4,4 @@ export class LoginResponseDto {
   refreshToken?: string;
   requires2FA?: boolean;
   tempToken?: string;
-} 
+}

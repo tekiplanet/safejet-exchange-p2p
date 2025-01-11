@@ -22,4 +22,4 @@ export class PaymentMethodTypeDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentMethodFieldDto)
   fields: PaymentMethodFieldDto[];
-} 
+}

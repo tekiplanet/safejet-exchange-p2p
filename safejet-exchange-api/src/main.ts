@@ -6,26 +6,29 @@ import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
-  // Important: This must come before any other middleware
-  app.use(bodyParser.json({
-    verify: (req: any, res, buf) => {
-      // Store the raw body string
-      req.rawBody = buf.toString();
-    }
-  }));
 
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    transform: true,
-    forbidNonWhitelisted: true,
-  }));
+  // Important: This must come before any other middleware
+  app.use(
+    bodyParser.json({
+      verify: (req: any, res, buf) => {
+        // Store the raw body string
+        req.rawBody = buf.toString();
+      },
+    }),
+  );
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
 
   app.enableCors();
 
+  // Enable CORS
 
-    // Enable CORS
-  
   // Add raw body parser
   // app.use(express.json({
   //   verify: (req: any, res, buf) => {

@@ -54,4 +54,4 @@ export class CreatePaymentMethods1704470000000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.dropTable('payment_methods', true);
   }
-} 
+}

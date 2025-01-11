@@ -28,7 +28,8 @@
     "db:drop": "npm run typeorm schema:drop -- -d src/config/typeorm.config.ts",
     "db:drop-all": "ts-node ./scripts/drop-schema.ts",
     "db:fresh": "npm run db:drop-all && npm run migration:run",
-    "seed:payment-methods": "ts-node src/scripts/seed-payment-methods.ts"
+    "seed:payment-methods": "ts-node src/scripts/seed-payment-methods.ts",
+    "clean": "rimraf dist"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -79,6 +80,7 @@
     "eslint-plugin-prettier": "^5.0.0",
     "jest": "^29.5.0",
     "prettier": "^3.0.0",
+    "rimraf": "^6.0.1",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.1.0",
