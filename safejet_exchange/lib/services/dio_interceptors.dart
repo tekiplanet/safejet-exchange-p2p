@@ -10,9 +10,9 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401) {
+    if (err.response?.statusCode == 401 || err.response?.statusCode == 403) {
       // Session expired
-      if (context != null) {
+      if (context != null && context!.mounted) {
         await authProvider.handleUnauthorized(context!);
       } else {
         // If no context, just clear the auth state

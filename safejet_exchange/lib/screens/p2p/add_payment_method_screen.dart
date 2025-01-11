@@ -422,15 +422,66 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
     );
   }
 
-  void _handleSubmit() {
+  void _handleSubmit() async {
     if (_formKey.currentState?.validate() ?? false) {
-      final data = {
-        'name': _nameController.text,
-        'isDefault': _isDefault,
-        'paymentMethodTypeId': _selectedType?.id,
-        'details': _details,
-      };
-      Navigator.pop(context, data);
+      try {
+        setState(() => _isLoading = true);
+        
+        final details = {
+          'name': _nameController.text,
+          ..._details,
+        };
+
+        final data = {
+          'isDefault': _isDefault,
+          'paymentMethodTypeId': _selectedType?.id,
+          'details': details,
+        };
+
+        final provider = Provider.of<PaymentMethodsProvider>(context, listen: false);
+        
+        await provider.createPaymentMethod(data);
+
+        if (!mounted) return;
+
+        // Show success message and navigate back
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Payment method added successfully'),
+              ],
+            ),
+            backgroundColor: SafeJetColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        Navigator.pop(context);
+      } catch (e) {
+        if (!mounted) return;
+        
+        // Show error message but don't navigate
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(child: Text(e.toString())),
+              ],
+            ),
+            backgroundColor: SafeJetColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
   }
 

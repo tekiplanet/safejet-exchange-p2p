@@ -23,12 +23,25 @@ class PaymentMethodsService {
     try {
       final response = await _dio.get(
         '/payment-methods',
-        options: Options(headers: await _getAuthHeaders()),
+        options: Options(
+          headers: await _getAuthHeaders(),
+          responseType: ResponseType.json,
+        ),
       );
 
-      return (response.data as List)
-          .map((json) => PaymentMethod.fromJson(json))
-          .toList();
+      if (response.data == null) {
+        return [];
+      }
+
+      try {
+        return (response.data as List)
+            .map((json) => PaymentMethod.fromJson(Map<String, dynamic>.from(json)))
+            .toList();
+      } catch (e) {
+        print('Error parsing payment methods: $e');
+        print('Response data: ${response.data}');
+        throw 'Failed to parse payment methods data';
+      }
     } catch (e) {
       if (e is DioException) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
@@ -39,23 +52,24 @@ class PaymentMethodsService {
         final message = e.response?.data['message'];
         throw message ?? 'Failed to fetch payment methods';
       }
+      print('Error getting payment methods: $e');
       throw 'Failed to fetch payment methods';
     }
   }
 
-  Future<PaymentMethod> createPaymentMethod(Map<String, dynamic> data) async {
+  Future<void> createPaymentMethod(Map<String, dynamic> data) async {
     try {
-      final response = await _dio.post(
+      await _dio.post(
         '/payment-methods',
         data: data,
         options: Options(headers: await _getAuthHeaders()),
       );
-
-      return PaymentMethod.fromJson(response.data);
     } catch (e) {
       if (e is DioException) {
-        final message = e.response?.data['message'];
-        throw message ?? 'Failed to create payment method';
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          throw 'Session expired';
+        }
+        throw e.response?.data['message'] ?? 'Failed to create payment method';
       }
       throw 'Failed to create payment method';
     }

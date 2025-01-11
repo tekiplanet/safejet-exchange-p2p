@@ -35,7 +35,7 @@ void main() async {
       responseBody: true,
       error: true,
     ),
-    AuthInterceptor(authProvider),  // Add auth interceptor
+    AuthInterceptor(authProvider, navigatorKey.currentContext),  // Pass global context
   ]);
 
   await setupServices();

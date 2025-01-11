@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/payment_methods_service.dart';
 import '../models/payment_method.dart';
 import '../models/payment_method_type.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 
 class PaymentMethodsProvider with ChangeNotifier {
   final PaymentMethodsService _service;
@@ -48,7 +50,9 @@ class PaymentMethodsProvider with ChangeNotifier {
         throw 'Context not set';
       }
 
-      _paymentMethods = await _service.getPaymentMethods(_context!);
+      if (_context!.mounted) {
+        _paymentMethods = await _service.getPaymentMethods(_context!);
+      }
       
       _isLoading = false;
       notifyListeners();
@@ -56,6 +60,11 @@ class PaymentMethodsProvider with ChangeNotifier {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+
+      if (e.toString().contains('Session expired') && _context != null && _context!.mounted) {
+        await Provider.of<AuthProvider>(_context!, listen: false)
+            .handleUnauthorized(_context!);
+      }
       rethrow;
     }
   }
@@ -66,15 +75,31 @@ class PaymentMethodsProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      final newMethod = await _service.createPaymentMethod(data);
-      _paymentMethods = [..._paymentMethods, newMethod];
+      if (_context == null) {
+        throw 'Context not set';
+      }
+
+      await _service.createPaymentMethod(data);
+      
+      if (_context!.mounted) {
+        await loadPaymentMethods();
+      }
 
       _isLoading = false;
       notifyListeners();
+
+      return;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+
+      if (e.toString().contains('Session expired')) {
+        if (_context != null && _context!.mounted) {
+          await Provider.of<AuthProvider>(_context!, listen: false)
+              .handleUnauthorized(_context!);
+        }
+      }
       rethrow;
     }
   }

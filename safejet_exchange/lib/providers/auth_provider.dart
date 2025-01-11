@@ -508,6 +508,13 @@ class AuthProvider with ChangeNotifier {
       await refreshUserData();
     } catch (e) {
       print('Error loading user data: $e');
+      // Handle unauthorized error
+      if (e is DioException && 
+          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
+        if (_context != null && _context!.mounted) {
+          await handleUnauthorized(_context!);
+        }
+      }
     }
   }
 
@@ -523,7 +530,7 @@ class AuthProvider with ChangeNotifier {
         notifyListeners();
       }
     } on DioException catch (e) {
-      if (e.response?.statusCode == 401) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         // Let the interceptor handle it
         rethrow;
       }
