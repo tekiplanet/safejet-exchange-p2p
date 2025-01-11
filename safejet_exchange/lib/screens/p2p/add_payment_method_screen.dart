@@ -9,6 +9,9 @@ import '../../widgets/payment_method_type_picker.dart';
 import '../../providers/auth_provider.dart';
 import 'dart:convert';
 import '../../models/payment_method_field.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:intl/intl.dart';
 
 class AddPaymentMethodScreen extends StatefulWidget {
   const AddPaymentMethodScreen({
@@ -266,13 +269,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
                           ..._selectedType!.fields.map((field) {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 16),
-                              child: _buildInputField(
-                                controller: _detailControllers[field.name]!,
-                                label: field.label,
-                                hint: field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
-                                isDark: isDark,
-                                validationRules: field.validationRules,
-                              ),
+                              child: _buildFieldInput(field),
                             );
                           }).toList(),
                         ],
@@ -570,17 +567,34 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
 
   // Add new field type widgets
   Widget _buildDateInput(PaymentMethodField field) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(field.label),
+        Text(field.label, style: _getLabelStyle(isDark)),
         const SizedBox(height: 8),
         TextFormField(
           controller: _detailControllers[field.name],
           readOnly: true,
-          decoration: InputDecoration(
-            hintText: field.placeholder ?? 'Select date',
-            suffixIcon: const Icon(Icons.calendar_today),
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontSize: 16,
+          ),
+          decoration: _getInputDecoration(
+            field.placeholder ?? 'Select date',
+            isDark,
+            suffixIcon: Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.calendar_today,
+                color: SafeJetColors.primaryAccent,
+              ),
+            ),
           ),
           onTap: () async {
             final date = await showDatePicker(
@@ -588,9 +602,24 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
               initialDate: DateTime.now(),
               firstDate: DateTime(1900),
               lastDate: DateTime.now(),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: ColorScheme.light(
+                      primary: SafeJetColors.primaryAccent,
+                      onPrimary: Colors.white,
+                      surface: isDark ? Colors.grey[900]! : Colors.white,
+                      onSurface: isDark ? Colors.white : Colors.black,
+                    ),
+                    dialogBackgroundColor: isDark ? Colors.grey[900] : Colors.white,
+                  ),
+                  child: child!,
+                );
+              },
             );
             if (date != null) {
-              _detailControllers[field.name]?.text = date.toIso8601String().split('T')[0];
+              _detailControllers[field.name]?.text = 
+                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
             }
           },
           validator: field.isRequired ? (value) {
@@ -603,34 +632,58 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
   }
 
   Widget _buildNumberInput(PaymentMethodField field) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final min = field.validationRules?['min'] as num?;
     final max = field.validationRules?['max'] as num?;
-
+    final format = NumberFormat("#,##0", "en_US");
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(field.label),
+        Text(field.label, style: _getLabelStyle(isDark)),
         const SizedBox(height: 8),
         TextFormField(
           controller: _detailControllers[field.name],
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+          keyboardType: const TextInputType.numberWithOptions(decimal: false),
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontSize: 16,
           ),
+          decoration: _getInputDecoration(
+            field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+            isDark,
+          ),
+          onChanged: (value) {
+            if (value.isNotEmpty) {
+              // Remove any non-digit characters
+              final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+              if (numericValue.isNotEmpty) {
+                final number = int.parse(numericValue);
+                // Format the number with commas
+                final formatted = format.format(number);
+                // Update the text field without triggering onChanged
+                _detailControllers[field.name]?.value = TextEditingValue(
+                  text: formatted,
+                  selection: TextSelection.collapsed(offset: formatted.length),
+                );
+              }
+            }
+          },
           validator: (value) {
             if (field.isRequired && (value?.isEmpty ?? true)) {
               return '${field.label} is required';
             }
             if (value != null && value.isNotEmpty) {
-              final number = num.tryParse(value);
+              final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+              final number = int.tryParse(numericValue);
               if (number == null) {
                 return 'Please enter a valid number';
               }
               if (min != null && number < min) {
-                return '${field.label} must be at least $min';
+                return '${field.label} must be at least ${format.format(min)}';
               }
               if (max != null && number > max) {
-                return '${field.label} must not exceed $max';
+                return '${field.label} must not exceed ${format.format(max)}';
               }
             }
             return null;
@@ -700,20 +753,66 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
     );
   }
 
-  // Update _buildTextInput to handle multiline text
+  // Common input decoration for all fields
+  InputDecoration _getInputDecoration(String hint, bool isDark, {Widget? suffixIcon}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(
+        color: isDark ? Colors.white.withOpacity(0.3) : Colors.black.withOpacity(0.3),
+      ),
+      filled: true,
+      fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: SafeJetColors.primaryAccent,
+          width: 1.5,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      suffixIcon: suffixIcon,
+    );
+  }
+
+  // Common text style for field labels
+  TextStyle _getLabelStyle(bool isDark) {
+    return TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+      color: isDark ? Colors.white70 : Colors.black87,
+    );
+  }
+
+  // Update the input fields with new styling
   Widget _buildTextInput(PaymentMethodField field) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final maxLines = field.validationRules?['maxLines'] as int? ?? 1;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(field.label),
+        Text(field.label, style: _getLabelStyle(isDark)),
         const SizedBox(height: 8),
         TextFormField(
           controller: _detailControllers[field.name],
           maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontSize: 16,
+          ),
+          decoration: _getInputDecoration(
+            field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
+            isDark,
           ),
           validator: (value) {
             if (field.isRequired && (value?.isEmpty ?? true)) {
@@ -727,38 +826,25 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
     );
   }
 
-  Widget _buildImageInput(PaymentMethodField field) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(field.label),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _detailControllers[field.name],
-          readOnly: true,
-          decoration: InputDecoration(
-            hintText: field.placeholder ?? 'Select image',
-            suffixIcon: const Icon(Icons.image),
-          ),
-          onTap: () async {
-            // TODO: Implement image picking
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildSelectInput(PaymentMethodField field) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final options = field.validationRules?['options'] as List<dynamic>?;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(field.label),
+        Text(field.label, style: _getLabelStyle(isDark)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          decoration: InputDecoration(
-            hintText: field.placeholder ?? 'Select ${field.label.toLowerCase()}',
+          decoration: _getInputDecoration(
+            field.placeholder ?? 'Select ${field.label.toLowerCase()}',
+            isDark,
+            suffixIcon: const Icon(Icons.arrow_drop_down),
+          ),
+          dropdownColor: isDark ? Colors.grey[900] : Colors.white,
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontSize: 16,
           ),
           value: _detailControllers[field.name]?.text.isEmpty ?? true 
               ? null 
@@ -775,6 +861,140 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
             if (value?.isEmpty ?? true) return '${field.label} is required';
             return null;
           } : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImageInput(PaymentMethodField field) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    Future<void> pickAndCropImage() async {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+      );
+
+      if (image != null) {
+        final croppedFile = await ImageCropper().cropImage(
+          sourcePath: image.path,
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Crop Image',
+              toolbarColor: SafeJetColors.primaryAccent,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.square,
+              lockAspectRatio: true,
+              backgroundColor: isDark ? Colors.grey[900]! : Colors.white,
+            ),
+            IOSUiSettings(
+              title: 'Crop Image',
+              aspectRatioLockEnabled: true,
+              resetAspectRatioEnabled: false,
+            ),
+          ],
+        );
+
+        if (croppedFile != null) {
+          final bytes = await croppedFile.readAsBytes();
+          // Check file size (max 5MB)
+          if (bytes.length > 5 * 1024 * 1024) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Image size must be less than 5MB'),
+                backgroundColor: SafeJetColors.error,
+              ),
+            );
+            return;
+          }
+          final base64Image = base64Encode(bytes);
+          _detailControllers[field.name]?.text = base64Image;
+          setState(() {});
+        }
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(field.label, style: _getLabelStyle(isDark)),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+            ),
+          ),
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _detailControllers[field.name],
+                readOnly: true,
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
+                  fontSize: 16,
+                ),
+                decoration: _getInputDecoration(
+                  field.placeholder ?? 'Select image',
+                  isDark,
+                  suffixIcon: Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.image,
+                      color: SafeJetColors.primaryAccent,
+                    ),
+                  ),
+                ),
+                onTap: pickAndCropImage,
+                validator: field.isRequired ? (value) {
+                  if (value?.isEmpty ?? true) return '${field.label} is required';
+                  return null;
+                } : null,
+              ),
+              if (_detailControllers[field.name]?.text.isNotEmpty ?? false) ...[
+                const SizedBox(height: 8),
+                Stack(
+                  children: [
+                    Container(
+                      height: 150,
+                      width: double.infinity,
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: DecorationImage(
+                          image: MemoryImage(
+                            base64Decode(_detailControllers[field.name]!.text),
+                          ),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () {
+                          setState(() {
+                            _detailControllers[field.name]?.text = '';
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
         ),
       ],
     );
