@@ -3,7 +3,7 @@ import '../config/theme/colors.dart';
 import '../models/payment_method.dart';
 
 class PaymentMethodDialog extends StatefulWidget {
-  final PaymentMethod? method; // null for add, non-null for edit
+  final PaymentMethod? method;
   final bool isDark;
 
   const PaymentMethodDialog({
@@ -21,24 +21,7 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
   final _nameController = TextEditingController();
   bool _isDefault = false;
   bool _isLoading = false;
-  String _selectedIcon = 'account_balance'; // default icon
-  Map<String, dynamic> _details = {};
-
-  final List<Map<String, dynamic>> _availableIcons = [
-    {'icon': Icons.account_balance, 'name': 'Bank'},
-    {'icon': Icons.payment, 'name': 'Card'},
-    {'icon': Icons.attach_money, 'name': 'Cash'},
-    {'icon': Icons.mobile_friendly, 'name': 'Mobile Money'},
-    {'icon': Icons.currency_exchange, 'name': 'Exchange'},
-  ];
-
-  final List<String> _availableDetailFields = [
-    'Bank Name',
-    'Account Number',
-    'Account Name',
-    'Email',
-    'Phone Number',
-  ];
+  Map<String, TextEditingController> _detailControllers = {};
 
   @override
   void initState() {
@@ -46,254 +29,248 @@ class _PaymentMethodDialogState extends State<PaymentMethodDialog> {
     if (widget.method != null) {
       _nameController.text = widget.method!.name;
       _isDefault = widget.method!.isDefault;
-      _selectedIcon = widget.method!.icon;
-      _details = Map<String, dynamic>.from(widget.method!.details);
+      
+      // Initialize detail controllers with existing values
+      widget.method!.details.forEach((key, value) {
+        _detailControllers[key] = TextEditingController(text: value.toString());
+      });
+    } else {
+      // Initialize empty controllers for new payment method
+      ['Bank Name', 'Account Number', 'Account Name'].forEach((field) {
+        _detailControllers[field] = TextEditingController();
+      });
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
+  Map<String, dynamic> get _details {
+    final details = <String, dynamic>{};
+    _detailControllers.forEach((key, controller) {
+      details[key] = controller.text;
+    });
+    return details;
   }
 
   @override
   Widget build(BuildContext context) {
+    final backgroundColor = widget.isDark 
+        ? SafeJetColors.darkGradientStart
+        : SafeJetColors.lightGradientStart;
+
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.method == null ? 'Add Payment Method' : 'Edit Payment Method',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Name Field
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter a name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Icon Selection
-              Text(
-                'Select Icon',
-                style: TextStyle(
-                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 80,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _availableIcons.length,
-                  itemBuilder: (context, index) {
-                    final iconData = _availableIcons[index];
-                    final isSelected = _selectedIcon == iconData['icon'].toString();
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 12),
-                      child: Column(
-                        children: [
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _selectedIcon = iconData['icon'].toString();
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? SafeJetColors.secondaryHighlight
-                                    : (widget.isDark
-                                        ? Colors.white.withOpacity(0.05)
-                                        : Colors.black.withOpacity(0.05)),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                iconData['icon'] as IconData,
-                                color: isSelected ? Colors.black : null,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            iconData['name'],
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Details Section
-              Text(
-                'Payment Details',
-                style: TextStyle(
-                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: widget.isDark 
-                      ? Colors.white.withOpacity(0.05)
-                      : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: _availableDetailFields.map((field) {
-                    final key = field.toLowerCase().replaceAll(' ', '_');
-                    return Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: TextFormField(
-                        initialValue: _details[key],
-                        onChanged: (value) {
-                          setState(() {
-                            _details[key] = value;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          labelText: field,
-                          filled: true,
-                          fillColor: widget.isDark 
-                              ? Colors.black.withOpacity(0.2)
-                              : Colors.white,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter $field';
-                          }
-                          return null;
-                        },
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Default Payment Method Switch
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: widget.isDark 
-                      ? Colors.white.withOpacity(0.05)
-                      : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Set as Default',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          Text(
-                            'Use this as your primary payment method',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _isDefault,
-                      onChanged: _handleDefaultToggle,
-                      activeColor: SafeJetColors.secondaryHighlight,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Action Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _isLoading ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: widget.isDark
+                ? [SafeJetColors.darkGradientStart, SafeJetColors.darkGradientEnd]
+                : [SafeJetColors.lightGradientStart, SafeJetColors.lightGradientEnd],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: widget.isDark 
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Text(
+                  widget.method == null ? 'Add Payment Method' : 'Edit Payment Method',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(width: 16),
-                  ElevatedButton(
+                ),
+                const SizedBox(height: 24),
+
+                // Name Field
+                _buildInputField(
+                  controller: _nameController,
+                  label: 'Payment Method Name',
+                  hint: 'e.g., Primary Bank Account',
+                ),
+                const SizedBox(height: 24),
+
+                // Payment Details Section
+                Text(
+                  'Payment Details',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: widget.isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Detail Fields
+                ..._detailControllers.entries.map((entry) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildInputField(
+                      controller: entry.value,
+                      label: entry.key,
+                      hint: 'Enter ${entry.key.toLowerCase()}',
+                    ),
+                  );
+                }).toList(),
+
+                // Set as Default Switch
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: SafeJetColors.primaryAccent.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Set as Default',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: widget.isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      Switch(
+                        value: _isDefault,
+                        onChanged: _handleDefaultToggle,
+                        activeColor: SafeJetColors.secondaryHighlight,
+                        inactiveTrackColor: Colors.grey.withOpacity(0.3),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Submit Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
                     onPressed: _isLoading ? null : _handleSubmit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: SafeJetColors.secondaryHighlight,
                       foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(16),
                       ),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                     child: _isLoading
                         ? const SizedBox(
-                            height: 20,
-                            width: 20,
+                            width: 24,
+                            height: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                             ),
                           )
-                        : Text(widget.method == null ? 'Add' : 'Save'),
+                        : Text(
+                            widget.method == null ? 'Add' : 'Save',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: widget.isDark ? Colors.white70 : Colors.black87,
+            ),
+          ),
+        ),
+        TextFormField(
+          controller: controller,
+          style: TextStyle(
+            fontSize: 16,
+            color: widget.isDark ? Colors.white : Colors.black,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: widget.isDark 
+                  ? Colors.white.withOpacity(0.3)
+                  : Colors.black.withOpacity(0.3),
+            ),
+            filled: true,
+            fillColor: SafeJetColors.primaryAccent.withOpacity(0.1),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: SafeJetColors.primaryAccent.withOpacity(0.2),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: SafeJetColors.primaryAccent.withOpacity(0.2),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: SafeJetColors.secondaryHighlight,
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 16,
+            ),
+          ),
+          validator: (value) {
+            if (value?.isEmpty ?? true) {
+              return 'Please enter $label';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
   void _handleSubmit() {
     if (_formKey.currentState?.validate() ?? false) {
       final data = {
-        'name': _nameController.text,
-        'icon': _selectedIcon,
-        'isDefault': _isDefault,
-        'details': _details,
+        'Name': _nameController.text,
+        'IsDefault': _isDefault,
+        'Details': _details,
       };
       Navigator.pop(context, data);
     }

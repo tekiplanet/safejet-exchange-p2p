@@ -21,27 +21,27 @@ class PaymentMethod {
 
   factory PaymentMethod.fromJson(Map<String, dynamic> json) {
     return PaymentMethod(
-      id: json['id'],
-      name: json['name'],
-      icon: json['icon'],
-      isDefault: json['isDefault'] ?? false,
-      isVerified: json['isVerified'] ?? false,
-      details: json['details'] ?? {},
-      createdAt: DateTime.parse(json['createdAt']),
-      updatedAt: DateTime.parse(json['updatedAt']),
+      id: json['Id'],
+      name: json['Name'],
+      icon: json['Icon'],
+      isDefault: json['IsDefault'],
+      isVerified: json['IsVerified'],
+      details: json['Details'],
+      createdAt: DateTime.parse(json['CreatedAt']),
+      updatedAt: DateTime.parse(json['UpdatedAt']),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'name': name,
-      'icon': icon,
-      'isDefault': isDefault,
-      'isVerified': isVerified,
-      'details': details,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      'Id': id,
+      'Name': name,
+      'Icon': icon,
+      'IsDefault': isDefault,
+      'IsVerified': isVerified,
+      'Details': details,
+      'CreatedAt': createdAt.toIso8601String(),
+      'UpdatedAt': updatedAt.toIso8601String(),
     };
   }
 } 
