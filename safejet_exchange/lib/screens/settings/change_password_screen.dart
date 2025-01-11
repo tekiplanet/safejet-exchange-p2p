@@ -329,7 +329,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       );
       
       if (!isCurrentPasswordValid) {
-        throw Exception('Current password is incorrect');
+        throw Exception('Current password is incorrect. Please try again.');
       }
 
       // If 2FA is enabled, show verification dialog
@@ -347,7 +347,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         );
         
         if (verified != true) {
-          throw Exception('2FA verification failed');
+          throw Exception('2FA verification failed. Please try again.');
         }
       }
 
@@ -363,6 +363,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         const SnackBar(
           content: Text('Password changed successfully'),
           backgroundColor: SafeJetColors.success,
+          duration: Duration(seconds: 3),
         ),
       );
       Navigator.pop(context);
@@ -370,8 +371,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: const TextStyle(color: Colors.white),
+          ),
           backgroundColor: SafeJetColors.error,
+          duration: const Duration(seconds: 4),
         ),
       );
     } finally {

@@ -715,8 +715,24 @@ export class AuthService {
   }
 
   async verifyPassword(password: string, user: User): Promise<{ valid: boolean }> {
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    return { valid: isValid };
+    try {
+      if (!password) {
+        throw new BadRequestException('Please enter your current password');
+      }
+
+      if (!user.passwordHash) {
+        throw new InternalServerErrorException('User password data is corrupted. Please contact support.');
+      }
+
+      const isValid = await bcrypt.compare(password, user.passwordHash);
+      return { valid: isValid };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      console.error('Password verification error:', error);
+      throw new InternalServerErrorException('Unable to verify password. Please try again later.');
+    }
   }
 
   async changePassword(
@@ -725,20 +741,61 @@ export class AuthService {
   ): Promise<void> {
     const { currentPassword, newPassword } = changePasswordDto;
 
-    // Verify current password
-    const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!isValid) {
-      throw new UnauthorizedException('Current password is incorrect');
+    try {
+      if (!currentPassword) {
+        throw new BadRequestException('Please enter your current password');
+      }
+
+      if (!newPassword) {
+        throw new BadRequestException('Please enter a new password');
+      }
+
+      if (!user.passwordHash) {
+        throw new InternalServerErrorException('User password data is corrupted. Please contact support.');
+      }
+
+      // Verify current password
+      const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isValid) {
+        throw new UnauthorizedException('Current password is incorrect. Please try again.');
+      }
+
+      if (currentPassword === newPassword) {
+        throw new BadRequestException('New password must be different from current password');
+      }
+
+      // Hash new password
+      const salt = await bcrypt.genSalt();
+      const passwordHash = await bcrypt.hash(newPassword, salt);
+
+      // Update password
+      await this.userRepository.update(user.id, { passwordHash });
+
+      // Send email notification
+      await this.emailService.sendPasswordChangedEmail(user.email, user.fullName);
+    } catch (error) {
+      if (error instanceof BadRequestException || 
+          error instanceof UnauthorizedException || 
+          error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      console.error('Change password error:', error);
+      throw new InternalServerErrorException('Unable to change password. Please try again later.');
+    }
+  }
+
+  async getCurrentUser(userId: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['kycLevelDetails'], // Include any related entities you need
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    // Hash new password
-    const salt = await bcrypt.genSalt();
-    const passwordHash = await bcrypt.hash(newPassword, salt);
-
-    // Update password
-    await this.userRepository.update(user.id, { passwordHash });
-
-    // Send email notification with user's name
-    await this.emailService.sendPasswordChangedEmail(user.email, user.fullName);
+    // Remove sensitive data
+    const { passwordHash, passwordResetCode, passwordResetExpires, ...safeUser } = user;
+    return safeUser;
   }
 } 

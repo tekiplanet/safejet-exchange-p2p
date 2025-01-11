@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, UseGuards, Req, Put } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Req, Put, BadRequestException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -152,6 +152,9 @@ export class AuthController {
     @Body('password') password: string,
     @GetUser() user: User,
   ): Promise<{ valid: boolean }> {
+    if (!password) {
+      throw new BadRequestException('Password is required');
+    }
     return this.authService.verifyPassword(password, user);
   }
 
@@ -162,5 +165,11 @@ export class AuthController {
     @GetUser() user: User,
   ): Promise<void> {
     await this.authService.changePassword(changePasswordDto, user);
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  async getCurrentUser(@GetUser() user: User) {
+    return this.authService.getCurrentUser(user.id);
   }
 } 

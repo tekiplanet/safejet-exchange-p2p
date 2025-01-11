@@ -397,12 +397,38 @@ class AuthService {
 
   Future<Map<String, dynamic>> getCurrentUser() async {
     try {
+      // First try to get from storage
+      final userJson = await storage.read(key: 'user');
+      if (userJson != null) {
+        final localUser = json.decode(userJson);
+        
+        // Try to get fresh data from server
+        try {
+          final response = await _dio.get(
+            '/me',
+            options: Options(headers: await _getAuthHeaders()),
+          );
+          
+          // Update stored user data
+          final freshUserData = response.data;
+          await storage.write(key: 'user', value: json.encode(freshUserData));
+          return freshUserData;
+        } catch (e) {
+          print('Error fetching fresh user data: $e');
+          // Return cached data if server request fails
+          return localUser;
+        }
+      }
+      
+      // If no local data, must get from server
       final response = await _dio.get(
         '/me',
         options: Options(headers: await _getAuthHeaders()),
       );
       
-      return response.data;
+      final userData = response.data;
+      await storage.write(key: 'user', value: json.encode(userData));
+      return userData;
     } catch (e) {
       print('Get current user error: $e');
       rethrow;
@@ -576,6 +602,10 @@ class AuthService {
 
   Future<bool> verifyCurrentPassword(String currentPassword) async {
     try {
+      if (currentPassword.isEmpty) {
+        throw Exception('Please enter your current password');
+      }
+
       final response = await _dio.post(
         '/verify-password',
         data: {
@@ -587,17 +617,32 @@ class AuthService {
       return response.data['valid'] == true;
     } catch (e) {
       if (e is DioException) {
-        if (e.response?.statusCode == 401) {
-          throw Exception('Current password is incorrect');
+        final message = e.response?.data['message'];
+        switch (e.response?.statusCode) {
+          case 401:
+            throw Exception('Current password is incorrect. Please try again.');
+          case 400:
+            throw Exception(message ?? 'Please enter a valid password');
+          case 429:
+            throw Exception('Too many attempts. Please try again later.');
+          default:
+            print('Verify password error details: ${e.response?.data}');
+            throw Exception('Unable to verify password. Please try again later.');
         }
-        print('Verify password error details: ${e.response?.data}');
       }
-      throw Exception('Failed to verify password');
+      throw Exception(e.toString());
     }
   }
 
   Future<void> changePassword(String currentPassword, String newPassword) async {
     try {
+      if (currentPassword.isEmpty) {
+        throw Exception('Please enter your current password');
+      }
+      if (newPassword.isEmpty) {
+        throw Exception('Please enter a new password');
+      }
+
       await _dio.post(
         '/change-password',
         data: {
@@ -608,15 +653,23 @@ class AuthService {
       );
     } catch (e) {
       if (e is DioException) {
-        if (e.response?.statusCode == 401) {
-          throw Exception('Current password is incorrect');
+        final message = e.response?.data['message'];
+        switch (e.response?.statusCode) {
+          case 401:
+            throw Exception('Current password is incorrect. Please try again.');
+          case 400:
+            if (message?.contains('must be different') ?? false) {
+              throw Exception('New password must be different from current password');
+            }
+            throw Exception(message ?? 'Please check your password requirements');
+          case 429:
+            throw Exception('Too many attempts. Please try again later.');
+          default:
+            print('Change password error details: ${e.response?.data}');
+            throw Exception('Unable to change password. Please try again later.');
         }
-        if (e.response?.statusCode == 400) {
-          throw Exception(e.response?.data['message'] ?? 'Invalid password format');
-        }
-        print('Change password error details: ${e.response?.data}');
       }
-      throw Exception('Failed to change password');
+      throw Exception(e.toString());
     }
   }
 
@@ -629,6 +682,13 @@ class AuthService {
 
   Future<void> verify2FAForAction(String code) async {
     try {
+      if (code.isEmpty) {
+        throw Exception('Please enter the 2FA code');
+      }
+      if (code.length != 6) {
+        throw Exception('2FA code must be 6 digits');
+      }
+
       final response = await _dio.post(
         '/verify-2fa-action',
         data: {
@@ -642,11 +702,20 @@ class AuthService {
       }
     } catch (e) {
       if (e is DioException) {
-        print('2FA action verification error details: ${e.response?.data}');
-        throw e.response?.data['message'] ?? 'Failed to verify 2FA code';
+        final message = e.response?.data['message'];
+        switch (e.response?.statusCode) {
+          case 400:
+            throw Exception(message ?? 'Invalid 2FA code');
+          case 401:
+            throw Exception('Invalid or expired 2FA code');
+          case 429:
+            throw Exception('Too many attempts. Please try again later.');
+          default:
+            print('2FA verification error details: ${e.response?.data}');
+            throw Exception('Unable to verify 2FA code. Please try again later.');
+        }
       }
-      print('2FA action verification error: $e');
-      rethrow;
+      throw Exception(e.toString());
     }
   }
 } 

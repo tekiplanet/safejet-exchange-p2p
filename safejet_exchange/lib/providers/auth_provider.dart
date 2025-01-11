@@ -407,23 +407,43 @@ class AuthProvider with ChangeNotifier {
 class User {
   final String id;
   final String email;
-  final bool twoFactorEnabled;
   final String fullName;
-  // Add other fields as needed
+  final bool emailVerified;
+  final bool phoneVerified;
+  final bool twoFactorEnabled;
+  final String? phone;
+  final String? countryCode;
+  final String? countryName;
+  final int kycLevel;
+  final Map<String, dynamic>? kycData;
 
   User({
     required this.id,
     required this.email,
-    required this.twoFactorEnabled,
     required this.fullName,
+    required this.emailVerified,
+    required this.phoneVerified,
+    required this.twoFactorEnabled,
+    this.phone,
+    this.countryCode,
+    this.countryName,
+    required this.kycLevel,
+    this.kycData,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'],
       email: json['email'],
+      fullName: json['fullName'],
+      emailVerified: json['emailVerified'] ?? false,
+      phoneVerified: json['phoneVerified'] ?? false,
       twoFactorEnabled: json['twoFactorEnabled'] ?? false,
-      fullName: json['fullName'] ?? '',
+      phone: json['phone'],
+      countryCode: json['countryCode'],
+      countryName: json['countryName'],
+      kycLevel: json['kycLevel'] ?? 0,
+      kycData: json['kycData'],
     );
   }
 } 
