@@ -702,30 +702,62 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
   }
 
   Widget _buildPhoneInput(PaymentMethodField field) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(field.label),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _detailControllers[field.name],
-          keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            hintText: field.placeholder ?? 'Enter phone number',
-            prefixIcon: const Icon(Icons.phone),
+        Text(
+          field.label,
+          style: TextStyle(
+            fontSize: 14,
+            color: isDark ? Colors.white70 : Colors.black54,
           ),
-          validator: (value) {
-            if (field.isRequired && (value?.isEmpty ?? true)) {
-              return '${field.label} is required';
-            }
-            if (value != null && value.isNotEmpty) {
-              // Basic phone number validation
-              if (!RegExp(r'^\+?[\d\s-]+$').hasMatch(value)) {
-                return 'Please enter a valid phone number';
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: TextFormField(
+            controller: _detailControllers[field.name],
+            keyboardType: TextInputType.phone,
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black,
+              fontSize: 16,
+            ),
+            decoration: InputDecoration(
+              hintText: field.placeholder ?? 'Enter phone number',
+              hintStyle: TextStyle(
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              prefixIcon: Container(
+                margin: const EdgeInsets.all(12),
+                child: Icon(
+                  Icons.phone_outlined,
+                  color: SafeJetColors.primaryAccent,
+                  size: 22,
+                ),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(16),
+            ),
+            validator: (value) {
+              if (field.isRequired && (value?.isEmpty ?? true)) {
+                return '${field.label} is required';
               }
-            }
-            return null;
-          },
+              if (value != null && value.isNotEmpty) {
+                if (!RegExp(r'^\+?[\d\s-]+$').hasMatch(value)) {
+                  return 'Please enter a valid phone number';
+                }
+              }
+              return null;
+            },
+          ),
         ),
       ],
     );
@@ -898,34 +930,60 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(field.label, style: _getLabelStyle(isDark)),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          decoration: _getInputDecoration(
-            field.placeholder ?? 'Select ${field.label.toLowerCase()}',
-            isDark,
-            suffixIcon: const Icon(Icons.arrow_drop_down),
-          ),
-          dropdownColor: isDark ? Colors.grey[900] : Colors.white,
+        Text(
+          field.label,
           style: TextStyle(
-            color: isDark ? Colors.white : Colors.black,
-            fontSize: 16,
+            fontSize: 14,
+            color: isDark ? Colors.white70 : Colors.black54,
           ),
-          value: _detailControllers[field.name]?.text.isEmpty ?? true 
-              ? null 
-              : _detailControllers[field.name]?.text,
-          items: options?.map((option) {
-            final value = option['value'].toString();
-            final label = option['label'].toString();
-            return DropdownMenuItem(value: value, child: Text(label));
-          }).toList() ?? [],
-          onChanged: (value) {
-            _detailControllers[field.name]?.text = value ?? '';
-          },
-          validator: field.isRequired ? (value) {
-            if (value?.isEmpty ?? true) return '${field.label} is required';
-            return null;
-          } : null,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonFormField<String>(
+            decoration: InputDecoration(
+              hintText: field.placeholder ?? 'Select ${field.label.toLowerCase()}',
+              hintStyle: TextStyle(
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              // Remove the suffix icon since DropdownButtonFormField adds its own
+            ),
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: isDark ? Colors.white70 : Colors.black54,
+            ),
+            dropdownColor: isDark ? Colors.grey[900] : Colors.white,
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black,
+              fontSize: 16,
+            ),
+            value: _detailControllers[field.name]?.text.isEmpty ?? true 
+                ? null 
+                : _detailControllers[field.name]?.text,
+            items: options?.map((option) {
+              final value = option['value'].toString();
+              final label = option['label'].toString();
+              return DropdownMenuItem(
+                value: value,
+                child: Text(label),
+              );
+            }).toList() ?? [],
+            onChanged: (value) {
+              _detailControllers[field.name]?.text = value ?? '';
+            },
+            validator: field.isRequired ? (value) {
+              if (value?.isEmpty ?? true) return '${field.label} is required';
+              return null;
+            } : null,
+          ),
         ),
       ],
     );
