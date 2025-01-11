@@ -27,7 +27,8 @@
     "typeorm:create-migration": "npx typeorm-ts-node-commonjs migration:create",
     "db:drop": "npm run typeorm schema:drop -- -d src/config/typeorm.config.ts",
     "db:drop-all": "ts-node ./scripts/drop-schema.ts",
-    "db:fresh": "npm run db:drop-all && npm run migration:run"
+    "db:fresh": "npm run db:drop-all && npm run migration:run",
+    "seed:payment-methods": "ts-node src/scripts/seed-payment-methods.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

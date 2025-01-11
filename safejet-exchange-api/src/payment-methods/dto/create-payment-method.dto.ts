@@ -1,16 +1,13 @@
-import { IsString, IsBoolean, IsObject, IsOptional } from 'class-validator';
+import { IsString, IsUUID, IsObject, IsBoolean, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreatePaymentMethodDto {
-  @IsString()
-  Name: string;
-
-  @IsString()
-  Icon: string;
+  @IsUUID()
+  paymentMethodTypeId: string;
 
   @IsBoolean()
-  @IsOptional()
-  IsDefault?: boolean;
+  isDefault: boolean;
 
   @IsObject()
-  Details: Record<string, any>;
+  details: Record<string, any>;
 } 

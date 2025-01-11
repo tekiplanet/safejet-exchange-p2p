@@ -1,36 +1,38 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn } from 'typeorm';
 import { User } from '../../auth/entities/user.entity';
+import { PaymentMethodType } from './payment-method-type.entity';
 
 @Entity('payment_methods')
 export class PaymentMethod {
   @PrimaryGeneratedColumn('uuid')
-  Id: string;
+  id: string;
+
+  @Column()
+  userId: string;
 
   @ManyToOne(() => User)
-  @JoinColumn({ name: 'UserId' })
-  User: User;
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @Column()
-  UserId: string;
+  paymentMethodTypeId: string;
 
-  @Column()
-  Name: string;
-
-  @Column()
-  Icon: string;
+  @ManyToOne(() => PaymentMethodType)
+  @JoinColumn({ name: 'paymentMethodTypeId' })
+  paymentMethodType: PaymentMethodType;
 
   @Column({ default: false })
-  IsDefault: boolean;
+  isDefault: boolean;
 
   @Column({ default: false })
-  IsVerified: boolean;
+  isVerified: boolean;
 
-  @Column('jsonb')
-  Details: Record<string, any>;
+  @Column({ type: 'jsonb' })
+  details: Record<string, any>;
 
   @CreateDateColumn()
-  CreatedAt: Date;
+  createdAt: Date;
 
   @UpdateDateColumn()
-  UpdatedAt: Date;
+  updatedAt: Date;
 } 

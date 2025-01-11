@@ -72,26 +72,71 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.payment_outlined,
-                    size: 64,
-                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 48,
+                      color: isDark 
+                          ? SafeJetColors.secondaryHighlight
+                          : SafeJetColors.secondaryHighlight.withOpacity(0.8),
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   Text(
-                    'No payment methods added yet',
+                    'No Payment Methods Yet',
                     style: TextStyle(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _showAddPaymentMethodDialog(isDark),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: SafeJetColors.secondaryHighlight,
-                      foregroundColor: Colors.black,
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Text(
+                      'Add your preferred payment methods to start trading on SafeJet',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        height: 1.4,
+                      ),
                     ),
-                    child: const Text('Add Payment Method'),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: 200,
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: () => _showAddPaymentMethodDialog(isDark),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.secondaryHighlight,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.add, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Add Method',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),

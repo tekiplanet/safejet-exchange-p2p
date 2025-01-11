@@ -5,6 +5,7 @@ import { UpdatePaymentMethodDto } from './dto/update-payment-method.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { User } from '../auth/entities/user.entity';
+import { PaymentMethodTypeDto } from './dto/payment-method-type.dto';
 
 @Controller('payment-methods')
 @UseGuards(JwtAuthGuard)
@@ -38,5 +39,15 @@ export class PaymentMethodsController {
   @Delete(':id')
   remove(@GetUser() user: User, @Param('id') id: string) {
     return this.paymentMethodsService.remove(user.id, id);
+  }
+
+  @Get('types')
+  async getPaymentMethodTypes(): Promise<PaymentMethodTypeDto[]> {
+    return this.paymentMethodsService.findAllTypes();
+  }
+
+  @Get('types/:id')
+  async getPaymentMethodType(@Param('id') id: string): Promise<PaymentMethodTypeDto> {
+    return this.paymentMethodsService.findOneType(id);
   }
 } 

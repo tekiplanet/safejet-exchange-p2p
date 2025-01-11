@@ -12,6 +12,7 @@ import { SumsubModule } from './sumsub/sumsub.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthInterceptor } from './auth/auth.interceptor';
+import { SeedersModule } from './seeders/seeders.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { AuthInterceptor } from './auth/auth.interceptor';
       limit: 10, // number of requests per ttl
     }]),
     PaymentMethodsModule,
+    SeedersModule,
   ],
   controllers: [AppController],
   providers: [

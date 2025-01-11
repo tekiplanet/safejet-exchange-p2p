@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table, TableForeignKey } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
 export class CreatePaymentMethods1704470000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -7,65 +7,51 @@ export class CreatePaymentMethods1704470000000 implements MigrationInterface {
         name: 'payment_methods',
         columns: [
           {
-            name: 'Id',
+            name: 'id',
             type: 'uuid',
             isPrimary: true,
             generationStrategy: 'uuid',
             default: 'uuid_generate_v4()',
           },
           {
-            name: 'UserId',
+            name: 'userId',
             type: 'uuid',
           },
           {
-            name: 'Name',
-            type: 'varchar',
+            name: 'paymentMethodTypeId',
+            type: 'uuid',
           },
           {
-            name: 'Icon',
-            type: 'varchar',
-          },
-          {
-            name: 'IsDefault',
+            name: 'isDefault',
             type: 'boolean',
             default: false,
           },
           {
-            name: 'IsVerified',
+            name: 'isVerified',
             type: 'boolean',
             default: false,
           },
           {
-            name: 'Details',
+            name: 'details',
             type: 'jsonb',
           },
           {
-            name: 'CreatedAt',
+            name: 'createdAt',
             type: 'timestamp',
-            default: 'now()',
+            default: 'CURRENT_TIMESTAMP',
           },
           {
-            name: 'UpdatedAt',
+            name: 'updatedAt',
             type: 'timestamp',
-            default: 'now()',
+            default: 'CURRENT_TIMESTAMP',
           },
         ],
       }),
       true,
     );
-
-    await queryRunner.createForeignKey(
-      'payment_methods',
-      new TableForeignKey({
-        columnNames: ['UserId'],
-        referencedColumnNames: ['id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropTable('PaymentMethods');
+    await queryRunner.dropTable('payment_methods', true);
   }
 } 
