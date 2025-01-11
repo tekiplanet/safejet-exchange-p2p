@@ -7,6 +7,7 @@ import '../../providers/payment_methods_provider.dart';
 import '../../models/payment_method.dart';
 import '../../widgets/payment_method_dialog.dart';
 import 'package:animate_do/animate_do.dart';
+import 'add_payment_method_screen.dart';
 
 class P2PPaymentMethodsScreen extends StatefulWidget {
   const P2PPaymentMethodsScreen({super.key});
@@ -114,7 +115,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                     width: 200,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: () => _showAddPaymentMethodDialog(isDark),
+                      onPressed: () => _navigateToAddPaymentMethod(isDark),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: SafeJetColors.secondaryHighlight,
                         foregroundColor: Colors.black,
@@ -163,7 +164,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddPaymentMethodDialog(isDark),
+        onPressed: () => _navigateToAddPaymentMethod(isDark),
         backgroundColor: SafeJetColors.secondaryHighlight,
         child: const Icon(Icons.add),
       ),
@@ -303,7 +304,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     }).toList();
   }
 
-  void _showAddPaymentMethodDialog(bool isDark) async {
+  void _navigateToAddPaymentMethod(bool isDark) async {
     final provider = context.read<PaymentMethodsProvider>();
     if (provider.paymentMethodTypes.isEmpty) {
       await provider.loadPaymentMethodTypes();
@@ -311,16 +312,17 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
 
     if (!mounted) return;
 
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => PaymentMethodDialog(isDark: isDark),
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddPaymentMethodScreen(isDark: isDark),
+      ),
     );
 
     if (result != null && mounted) {
       try {
         setState(() => _isLoading = true);
-        await context.read<PaymentMethodsProvider>().createPaymentMethod(result);
+        await provider.createPaymentMethod(result);
         
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

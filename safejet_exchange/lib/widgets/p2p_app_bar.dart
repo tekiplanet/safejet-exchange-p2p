@@ -4,29 +4,34 @@ import 'package:provider/provider.dart';
 import '../config/theme/theme_provider.dart';
 
 class P2PAppBar extends StatelessWidget implements PreferredSizeWidget {
-  final VoidCallback? onNotificationTap;
-  final VoidCallback? onThemeToggle;
-  final String? title;
-  final Widget? trailing;
+  final String title;
   final bool hasNotification;
+  final VoidCallback? onThemeToggle;
+  final VoidCallback? onBack;
+  final VoidCallback? onNotificationTap;
+  final Widget? trailing;
 
   const P2PAppBar({
     super.key,
-    this.onNotificationTap,
-    this.onThemeToggle,
-    this.title,
-    this.trailing,
+    required this.title,
     this.hasNotification = false,
+    this.onThemeToggle,
+    this.onBack,
+    this.onNotificationTap,
+    this.trailing,
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(70);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
+    
+    // Check if we can go back (not on root screen)
+    final canPop = Navigator.of(context).canPop();
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -40,12 +45,15 @@ class P2PAppBar extends StatelessWidget implements PreferredSizeWidget {
           height: 56,
           child: Row(
             children: [
-              // Back Button
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                color: isDark ? Colors.white : SafeJetColors.lightText,
-                onPressed: () => Navigator.pop(context),
-              ),
+              // Back Button - show automatically if we can pop
+              if (canPop)
+                IconButton(
+                  icon: Icon(
+                    Icons.arrow_back,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
               
               // Title with flex
               Expanded(
@@ -63,8 +71,10 @@ class P2PAppBar extends StatelessWidget implements PreferredSizeWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (trailing != null) trailing!,
-                  if (trailing != null) const SizedBox(width: 8),
+                  if (trailing != null) ...[
+                    trailing!,
+                    const SizedBox(width: 8),
+                  ],
                   IconButton(
                     onPressed: onNotificationTap,
                     icon: Stack(
