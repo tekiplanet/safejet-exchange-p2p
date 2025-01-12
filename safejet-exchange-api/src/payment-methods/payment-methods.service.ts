@@ -102,6 +102,9 @@ export class PaymentMethodsService {
     return this.paymentMethodRepository.find({
       where: { userId },
       relations: ['paymentMethodType', 'paymentMethodType.fields'],
+      order: {
+        updatedAt: 'DESC'
+      }
     });
   }
 
