@@ -107,32 +107,19 @@ class PaymentMethodsProvider with ChangeNotifier {
 
   Future<void> updatePaymentMethod(String id, Map<String, dynamic> data) async {
     try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
       if (_context == null) {
         throw 'Context not set';
       }
 
-      final response = await _service.updatePaymentMethod(id, data, _context!);
-      if (response.statusCode == 200) {
-        await loadPaymentMethods();
-      } else {
-        throw HttpException(response.data['message'] ?? 'Failed to update payment method');
-      }
+      // Verify payment method exists
+      final methodExists = _paymentMethods.any((method) => method.id == id);
+      print('Payment method exists: $methodExists');
+      print('Available payment methods: ${_paymentMethods.map((m) => m.id).toList()}');
 
-      _isLoading = false;
-      notifyListeners();
+      await _service.updatePaymentMethod(id, data, _context!);
+      await loadPaymentMethods();
     } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
-
-      if (e.toString().contains('Session expired') && _context != null && _context!.mounted) {
-        await Provider.of<AuthProvider>(_context!, listen: false)
-            .handleUnauthorized(_context!);
-      }
+      print('Provider error updating payment method: $e');
       rethrow;
     }
   }

@@ -499,8 +499,28 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
     try {
       setState(() => _isLoading = true);
 
+      // Print method ID and type for debugging
+      print('Editing payment method:');
+      print('ID: ${widget.method.id}');
+      print('Type: ${widget.method.paymentMethodType?.name}');
+
+      // Create details map from controllers
+      final details = <String, Map<String, dynamic>>{};
+      for (var field in widget.method.paymentMethodType?.fields ?? []) {
+        details[field.name] = {
+          'value': _detailControllers[field.name]?.text ?? '',
+          'fieldId': field.id,
+          'fieldName': field.name,
+          'fieldType': field.type,
+        };
+        // Print each field for debugging
+        print('Field ${field.name}: ${_detailControllers[field.name]?.text}');
+      }
+
       final data = {
         'isDefault': _isDefault,
+        'details': details,
+        'paymentMethodTypeId': widget.method.paymentMethodType?.id,
       };
 
       await context.read<PaymentMethodsProvider>().updatePaymentMethod(

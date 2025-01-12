@@ -120,12 +120,47 @@ export class PaymentMethodsService {
 
   async update(userId: string, id: string, updateDto: UpdatePaymentMethodDto) {
     const paymentMethod = await this.findOne(userId, id);
+    const paymentMethodType = await this.paymentMethodTypeRepository.findOne({
+      where: { id: paymentMethod.paymentMethodTypeId },
+      relations: ['fields'],
+    });
 
     if (updateDto.isDefault) {
       await this.resetDefaultStatus(userId);
     }
 
-    Object.assign(paymentMethod, updateDto);
+    // Process image fields
+    const processedDetails = { ...updateDto.details };
+    if (processedDetails) {
+      for (const field of paymentMethodType.fields) {
+        if (field.type === 'image') {
+          const detail = processedDetails[field.name];
+          if (detail?.value) {
+            try {
+              // Validate base64 image
+              if (!this.isValidBase64Image(detail.value)) {
+                throw new BadRequestException(`Invalid image format for ${field.name}`);
+              }
+
+              // Save image and store filename
+              const filename = await this.fileService.saveBase64Image(detail.value);
+              processedDetails[field.name] = {
+                ...detail,
+                value: filename,
+              };
+            } catch (error) {
+              throw new BadRequestException(`Failed to process image for ${field.name}`);
+            }
+          }
+        }
+      }
+    }
+
+    Object.assign(paymentMethod, {
+      ...updateDto,
+      details: processedDetails
+    });
+    
     return this.paymentMethodRepository.save(paymentMethod);
   }
 

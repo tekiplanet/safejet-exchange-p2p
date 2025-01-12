@@ -63,6 +63,7 @@ dependencies:
   flutter_idensic_mobile_sdk_plugin: ^1.33.1
   image_picker: ^1.0.4
   image_cropper: ^5.0.1
+  flutter_image_compress: ^1.1.0  
 
 dev_dependencies:
   flutter_test:

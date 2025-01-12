@@ -1,11 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'dart:io' show File;
+import 'dart:convert';
 import '../models/payment_method.dart';
 import '../models/payment_method_type.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import 'dart:convert' show base64Encode;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class PaymentMethodsService {
   final Dio _dio;
@@ -93,13 +95,33 @@ class PaymentMethodsService {
 
   Future<dynamic> updatePaymentMethod(String id, Map<String, dynamic> data, BuildContext context) async {
     try {
-      final response = await _dio.put(
+      // Process image fields if present
+      if (data['details'] != null) {
+        final details = data['details'] as Map<String, dynamic>;
+        for (final entry in details.entries) {
+          if (entry.value is Map && entry.value['value'] is String) {
+            final value = entry.value['value'] as String;
+            if (value.startsWith('data:image/')) {
+              // Compress image before sending
+              details[entry.key]['value'] = await compressAndEncodeImage(value);
+            }
+          }
+        }
+      }
+
+      final response = await _dio.patch(
         '/payment-methods/$id',
         data: data,
         options: Options(headers: await _getAuthHeaders()),
       );
-      return response;
+
+      if (response.statusCode == 200) {
+        return PaymentMethod.fromJson(response.data);
+      } else {
+        throw 'Failed to update payment method';
+      }
     } catch (e) {
+      print('Error updating payment method: $e');
       if (e is DioException) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
           await Provider.of<AuthProvider>(context, listen: false)
@@ -196,7 +218,7 @@ class PaymentMethodsService {
 
       // Convert response to base64
       final bytes = response.data as List<int>;
-      final base64Image = base64Encode(bytes);
+      final base64Image = base64.encode(bytes);
       return 'data:image/jpeg;base64,$base64Image';
     } catch (e) {
       print('Image loading error: $e');
@@ -209,6 +231,32 @@ class PaymentMethodsService {
         throw e.response?.data['message'] ?? 'Failed to load image';
       }
       rethrow;
+    }
+  }
+
+  Future<String> compressAndEncodeImage(String base64Image) async {
+    try {
+      // Extract image data
+      final String mimeType = base64Image.split(',')[0].split(':')[1].split(';')[0];
+      final String base64Data = base64Image.split(',')[1];
+      
+      // Decode base64 to bytes
+      final bytes = base64.decode(base64Data);
+      
+      // Compress image
+      final compressedBytes = await FlutterImageCompress.compressWithList(
+        bytes,
+        minHeight: 800,
+        minWidth: 800,
+        quality: 70,
+      );
+      
+      // Convert back to base64
+      final compressedBase64 = base64.encode(compressedBytes);
+      return 'data:$mimeType;base64,$compressedBase64';
+    } catch (e) {
+      print('Error compressing image: $e');
+      return base64Image; // Return original if compression fails
     }
   }
 } 
