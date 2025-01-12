@@ -127,6 +127,8 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
         const SizedBox(height: 8),
         TextFormField(
           controller: _detailControllers[field.name],
+          maxLines: field.validationRules?['maxLines'] ?? 1,
+          maxLength: field.validationRules?['maxLength'],
           style: TextStyle(
             color: isDark ? Colors.white : Colors.black,
             fontSize: 16,
@@ -135,10 +137,37 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
             field.placeholder ?? 'Enter ${field.label.toLowerCase()}',
             isDark,
           ),
-          validator: field.isRequired ? (value) {
-            if (value?.isEmpty ?? true) return '${field.label} is required';
+          validator: (value) {
+            if (field.isRequired && (value?.isEmpty ?? true)) {
+              return '${field.label} is required';
+            }
+            
+            // Minimum length validation
+            if (field.validationRules?['minLength'] != null) {
+              final minLength = field.validationRules!['minLength'] as int;
+              if ((value?.length ?? 0) < minLength) {
+                return '${field.label} must be at least $minLength characters';
+              }
+            }
+
+            // Maximum length validation
+            if (field.validationRules?['maxLength'] != null) {
+              final maxLength = field.validationRules!['maxLength'] as int;
+              if ((value?.length ?? 0) > maxLength) {
+                return '${field.label} must not exceed $maxLength characters';
+              }
+            }
+
+            // Pattern validation
+            if (field.validationRules?['pattern'] != null) {
+              final pattern = RegExp(field.validationRules!['pattern']);
+              if (!pattern.hasMatch(value ?? '')) {
+                return field.validationRules?['patternError'] ?? 'Invalid format';
+              }
+            }
+
             return null;
-          } : null,
+          },
         ),
       ],
     );
@@ -209,11 +238,21 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
               color: isDark ? Colors.white70 : Colors.black54,
             ),
           ),
-          validator: field.isRequired ? (value) {
-            if (value?.isEmpty ?? true) return '${field.label} is required';
-            // Add phone number validation if needed
+          validator: (value) {
+            if (field.isRequired && (value?.isEmpty ?? true)) {
+              return '${field.label} is required';
+            }
+
+            // Phone pattern validation
+            if (field.validationRules?['pattern'] != null) {
+              final pattern = RegExp(field.validationRules!['pattern']);
+              if (!pattern.hasMatch(value ?? '')) {
+                return field.validationRules?['patternError'] ?? 'Invalid phone number format';
+              }
+            }
+
             return null;
-          } : null,
+          },
         ),
       ],
     );
