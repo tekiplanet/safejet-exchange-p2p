@@ -95,10 +95,8 @@ class PaymentMethod {
       'paymentMethodTypeId': paymentMethodTypeId,
       'isDefault': isDefault,
       'isVerified': isVerified,
-      'details': details,
-      'createdAt': createdAt,
-      'updatedAt': updatedAt,
-      'paymentMethodType': paymentMethodType?.toJson(),
+      'details': details.map((key, value) => MapEntry(key, value.toJson())),
+      'name': name,
     };
   }
 } 

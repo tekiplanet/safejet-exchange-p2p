@@ -546,8 +546,18 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
         return Icons.mobile_friendly;
       case 'currency_exchange':
         return Icons.currency_exchange;
+      case 'qr_code':
+        return Icons.qr_code;
+      case 'phone_android':
+        return Icons.phone_android;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'account_balance_wallet':
+        return Icons.account_balance_wallet;
+      case 'money':
+        return Icons.money;
       default:
-        return Icons.account_balance; // default icon
+        return Icons.account_balance; // Default icon
     }
   }
 

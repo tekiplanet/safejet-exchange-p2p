@@ -11,6 +11,8 @@ import 'add_payment_method_screen.dart';
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
+import 'edit_payment_method_screen.dart';
+import 'package:collection/collection.dart';
 
 class P2PPaymentMethodsScreen extends StatefulWidget {
   const P2PPaymentMethodsScreen({super.key});
@@ -299,7 +301,12 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                         color: isDark ? Colors.white70 : Colors.black54,
                       ),
                       onPressed: () {
-                        // TODO: Implement edit functionality
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => EditPaymentMethodScreen(method: method),
+                          ),
+                        );
                       },
                     ),
                     IconButton(
@@ -384,7 +391,12 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     );
   }
 
-  IconData _getIconData(String iconString) {
+  IconData _getIconData(String? iconString) {
+    if (iconString == null || iconString.isEmpty) {
+      return Icons.account_balance; // Default icon
+    }
+
+    // Map string names to Icons
     switch (iconString) {
       case 'account_balance':
         return Icons.account_balance;
@@ -396,12 +408,53 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
         return Icons.mobile_friendly;
       case 'currency_exchange':
         return Icons.currency_exchange;
+      case 'qr_code':
+        return Icons.qr_code;
+      case 'phone_android':
+        return Icons.phone_android;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'account_balance_wallet':
+        return Icons.account_balance_wallet;
+      case 'money':
+        return Icons.money;
       default:
-        return Icons.account_balance; // default icon
+        return Icons.account_balance; // Default icon
     }
   }
 
   Widget _buildDetailValue(PaymentMethodDetail detail, bool isDark, PaymentMethod method) {
+    // Handle select type fields
+    if (detail.fieldType == 'select') {
+      // Find the corresponding field in payment method type using ID
+      final field = method.paymentMethodType?.fields.firstWhereOrNull(
+        (f) => f.id == detail.fieldId,
+      );
+      
+      if (field != null) {
+        final options = field.validationRules?['options'] as List<dynamic>?;
+        if (options != null) {
+          try {
+            final selectedOption = options.firstWhere(
+              (option) => option['value'].toString().toLowerCase() == detail.value.toLowerCase(),
+              orElse: () => {'label': detail.value},
+            );
+            return Text(
+              selectedOption['label'].toString(),
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontSize: 16,
+              ),
+            );
+          } catch (e) {
+            print('Error finding option: $e');
+            return Text(detail.value);
+          }
+        }
+      }
+    }
+
+    // Handle other field types as before
     if (detail.fieldType == 'image') {
       final baseUrl = dotenv.get('API_URL', fallback: '');
       return Image.network(

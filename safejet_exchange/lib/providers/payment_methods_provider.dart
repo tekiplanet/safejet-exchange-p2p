@@ -5,6 +5,7 @@ import '../models/payment_method.dart';
 import '../models/payment_method_type.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import 'dart:io';
 
 class PaymentMethodsProvider with ChangeNotifier {
   final PaymentMethodsService _service;
@@ -110,10 +111,16 @@ class PaymentMethodsProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      final updatedMethod = await _service.updatePaymentMethod(id, data);
-      _paymentMethods = _paymentMethods.map((method) {
-        return method.id == id ? updatedMethod : method;
-      }).toList();
+      if (_context == null) {
+        throw 'Context not set';
+      }
+
+      final response = await _service.updatePaymentMethod(id, data, _context!);
+      if (response.statusCode == 200) {
+        await loadPaymentMethods();
+      } else {
+        throw HttpException(response.data['message'] ?? 'Failed to update payment method');
+      }
 
       _isLoading = false;
       notifyListeners();
@@ -121,6 +128,11 @@ class PaymentMethodsProvider with ChangeNotifier {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+
+      if (e.toString().contains('Session expired') && _context != null && _context!.mounted) {
+        await Provider.of<AuthProvider>(_context!, listen: false)
+            .handleUnauthorized(_context!);
+      }
       rethrow;
     }
   }
@@ -131,8 +143,16 @@ class PaymentMethodsProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      await _service.deletePaymentMethod(id);
-      _paymentMethods = _paymentMethods.where((method) => method.id != id).toList();
+      if (_context == null) {
+        throw 'Context not set';
+      }
+
+      final response = await _service.deletePaymentMethod(id, _context!);
+      if (response.statusCode == 200) {
+        await loadPaymentMethods();
+      } else {
+        throw HttpException(response.data['message'] ?? 'Failed to delete payment method');
+      }
 
       _isLoading = false;
       notifyListeners();
@@ -140,6 +160,28 @@ class PaymentMethodsProvider with ChangeNotifier {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
+
+      if (e.toString().contains('Session expired') && _context != null && _context!.mounted) {
+        await Provider.of<AuthProvider>(_context!, listen: false)
+            .handleUnauthorized(_context!);
+      }
+      rethrow;
+    }
+  }
+
+  Future<String> getImageUrl(String filename) async {
+    try {
+      if (_context == null) {
+        throw 'Context not set';
+      }
+
+      final response = await _service.getImageUrl(filename, _context!);
+      return response;
+    } catch (e) {
+      if (e.toString().contains('Session expired') && _context != null && _context!.mounted) {
+        await Provider.of<AuthProvider>(_context!, listen: false)
+            .handleUnauthorized(_context!);
+      }
       rethrow;
     }
   }
