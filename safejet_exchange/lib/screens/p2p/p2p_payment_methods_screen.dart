@@ -267,7 +267,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
               children: [
                 Icon(
                   _getIconData(method.icon),
-                  color: SafeJetColors.primaryAccent,
+                  color: SafeJetColors.secondaryHighlight,
                   size: 24,
                 ),
                 const SizedBox(width: 16),
@@ -275,13 +275,41 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        method.paymentMethodType?.name ?? '',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              method.paymentMethodType?.name ?? '',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (method.isDefault) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: SafeJetColors.secondaryHighlight.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Default',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: SafeJetColors.secondaryHighlight,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       Text(
                         method.displayName,

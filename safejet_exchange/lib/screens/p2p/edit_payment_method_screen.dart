@@ -711,7 +711,8 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _handleSubmit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: SafeJetColors.primaryAccent,
+                          backgroundColor: SafeJetColors.secondaryHighlight,
+                          foregroundColor: Colors.black,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -733,7 +734,6 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
                             : const Text(
                                 'Update Payment Method',
                                 style: TextStyle(
-                                  color: Colors.white,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                 ),
