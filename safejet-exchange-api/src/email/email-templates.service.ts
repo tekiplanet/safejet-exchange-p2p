@@ -371,4 +371,88 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  paymentMethodAddedEmail(userName: string, methodName: string, isDark = true) {
+    const content = `
+      <h1>New Payment Method Added 💳</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A new payment method has been added to your account:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${methodName}</h3>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Security Tips 🔒</h2>
+        <ul>
+          <li>Regularly review your payment methods</li>
+          <li>Enable 2FA for enhanced security</li>
+          <li>Never share your payment details</li>
+        </ul>
+      </div>
+
+      <p>If you didn't add this payment method, please contact our support team immediately:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  paymentMethodUpdatedEmail(userName: string, methodName: string, isDark = true) {
+    const content = `
+      <h1>Payment Method Updated ✏️</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>Your payment method has been updated:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${methodName}</h3>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>If you didn't make this change, please:</p>
+        <ol>
+          <li>Review your payment methods immediately</li>
+          <li>Change your password</li>
+          <li>Contact our support team</li>
+        </ol>
+      </div>
+
+      <p>Need help? Contact us:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  paymentMethodDeletedEmail(userName: string, methodName: string, isDark = true) {
+    const content = `
+      <h1>Payment Method Deleted 🗑️</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A payment method has been removed from your account:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${methodName}</h3>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>If you didn't delete this payment method, please:</p>
+        <ol>
+          <li>Change your password immediately</li>
+          <li>Enable 2FA if not already enabled</li>
+          <li>Contact our support team</li>
+        </ol>
+      </div>
+
+      <p>Need assistance? We're here to help:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }

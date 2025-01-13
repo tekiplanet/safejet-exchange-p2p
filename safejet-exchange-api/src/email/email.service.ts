@@ -212,4 +212,43 @@ export class EmailService {
       console.error('Verification status email error:', error);
     }
   }
+
+  async sendPaymentMethodAddedEmail(email: string, userName: string, methodName: string): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'New Payment Method Added - SafeJet Exchange',
+        html: this.emailTemplatesService.paymentMethodAddedEmail(userName, methodName),
+      });
+    } catch (error) {
+      console.error('Payment method added email error:', error);
+    }
+  }
+
+  async sendPaymentMethodUpdatedEmail(email: string, userName: string, methodName: string): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'Payment Method Updated - SafeJet Exchange',
+        html: this.emailTemplatesService.paymentMethodUpdatedEmail(userName, methodName),
+      });
+    } catch (error) {
+      console.error('Payment method updated email error:', error);
+    }
+  }
+
+  async sendPaymentMethodDeletedEmail(email: string, userName: string, methodName: string): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'Payment Method Deleted - SafeJet Exchange',
+        html: this.emailTemplatesService.paymentMethodDeletedEmail(userName, methodName),
+      });
+    } catch (error) {
+      console.error('Payment method deleted email error:', error);
+    }
+  }
 }

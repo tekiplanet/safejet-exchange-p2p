@@ -7,6 +7,8 @@ import { PaymentMethod } from './entities/payment-method.entity';
 import { PaymentMethodType } from './entities/payment-method-type.entity';
 import { PaymentMethodTypeDto } from './dto/payment-method-type.dto';
 import { FileService } from '../common/services/file.service';
+import { EmailService } from '../email/email.service';
+import { User } from '../auth/entities/user.entity';
 
 @Injectable()
 export class PaymentMethodsService {
@@ -16,6 +18,9 @@ export class PaymentMethodsService {
     @InjectRepository(PaymentMethodType)
     private paymentMethodTypeRepository: Repository<PaymentMethodType>,
     private fileService: FileService,
+    private emailService: EmailService,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
 
   async create(userId: string, createDto: CreatePaymentMethodDto) {
@@ -70,7 +75,19 @@ export class PaymentMethodsService {
         details: processedDetails,
       });
 
-      return this.paymentMethodRepository.save(paymentMethod);
+      const savedMethod = await this.paymentMethodRepository.save(paymentMethod);
+
+      // Get user details for email
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      if (user) {
+        await this.emailService.sendPaymentMethodAddedEmail(
+          user.email,
+          user.fullName,
+          savedMethod.name,
+        );
+      }
+
+      return savedMethod;
     } catch (error) {
       console.error('Payment method creation error:', error);
       throw error;
@@ -164,11 +181,27 @@ export class PaymentMethodsService {
       details: processedDetails
     });
     
-    return this.paymentMethodRepository.save(paymentMethod);
+    const updatedMethod = await this.paymentMethodRepository.save(paymentMethod);
+
+    // Send email notification
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (user) {
+      await this.emailService.sendPaymentMethodUpdatedEmail(
+        user.email,
+        user.fullName,
+        updatedMethod.name,
+      );
+    }
+
+    return updatedMethod;
   }
 
   async remove(userId: string, id: string) {
     const paymentMethod = await this.findOne(userId, id);
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    
+    // Store the name before deletion
+    const methodName = paymentMethod.name;
     
     // Delete associated image files
     const paymentMethodType = await this.paymentMethodTypeRepository.findOne({
@@ -187,7 +220,18 @@ export class PaymentMethodsService {
       }
     }
 
-    return this.paymentMethodRepository.remove(paymentMethod);
+    await this.paymentMethodRepository.remove(paymentMethod);
+
+    // Send email notification
+    if (user) {
+      await this.emailService.sendPaymentMethodDeletedEmail(
+        user.email,
+        user.fullName,
+        methodName,
+      );
+    }
+
+    return { success: true };
   }
 
   private async resetDefaultStatus(userId: string) {
