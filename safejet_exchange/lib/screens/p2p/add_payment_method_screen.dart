@@ -472,6 +472,8 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
 
       await context.read<PaymentMethodsProvider>().createPaymentMethod(data);
 
+      await context.read<PaymentMethodsProvider>().loadPaymentMethods();
+
       if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(

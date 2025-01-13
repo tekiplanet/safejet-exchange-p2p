@@ -7,6 +7,7 @@ import { PaymentMethodType } from './entities/payment-method-type.entity';
 import { PaymentMethodField } from './entities/payment-method-field.entity';
 import { FileService } from '../common/services/file.service';
 import { EmailModule } from '../email/email.module';
+import { User } from '../auth/entities/user.entity';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { EmailModule } from '../email/email.module';
       PaymentMethod,
       PaymentMethodType,
       PaymentMethodField,
+      User,
     ]),
     EmailModule,
   ],

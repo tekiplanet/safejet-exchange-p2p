@@ -84,77 +84,77 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
           
           Expanded(
             child: Consumer<PaymentMethodsProvider>(
-              builder: (context, provider, child) {
-                if (provider.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                if (provider.error != null) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          provider.error!,
-                          style: TextStyle(color: SafeJetColors.error),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => provider.loadPaymentMethods(),
-                          child: const Text('Retry'),
-                        ),
-                      ],
+          if (provider.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    provider.error!,
+                    style: TextStyle(color: SafeJetColors.error),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => provider.loadPaymentMethods(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (provider.paymentMethods.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                      shape: BoxShape.circle,
                     ),
-                  );
-                }
-
-                if (provider.paymentMethods.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: SafeJetColors.primaryAccent.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.account_balance_wallet_outlined,
-                            size: 48,
-                            color: isDark 
-                                ? SafeJetColors.secondaryHighlight
-                                : SafeJetColors.secondaryHighlight.withOpacity(0.8),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'No Payment Methods Yet',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 40),
-                          child: Text(
-                            'Add your preferred payment methods to start trading on SafeJet',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: isDark ? Colors.white70 : Colors.black54,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        SizedBox(
-                          width: 200,
-                          height: 48,
-                          child: ElevatedButton(
+                    child: Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 48,
+                      color: isDark 
+                          ? SafeJetColors.secondaryHighlight
+                          : SafeJetColors.secondaryHighlight.withOpacity(0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'No Payment Methods Yet',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Text(
+                      'Add your preferred payment methods to start trading on SafeJet',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: 200,
+                    height: 48,
+                    child: ElevatedButton(
                             onPressed: () {
                               Navigator.push(
                                 context,
@@ -163,52 +163,52 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                                 ),
                               );
                             },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: SafeJetColors.secondaryHighlight,
-                              foregroundColor: Colors.black,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.add, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Add Method',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.secondaryHighlight,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.add, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'Add Method',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: provider.paymentMethods.length,
-                  itemBuilder: (context, index) {
-                    final method = provider.paymentMethods[index];
-                    return FadeInUp(
-                      duration: const Duration(milliseconds: 300),
-                      delay: Duration(milliseconds: index * 100),
-                      child: SlideInLeft(
-                        duration: const Duration(milliseconds: 300),
-                        delay: Duration(milliseconds: index * 100),
-                        child: _buildPaymentMethodCard(method, isDark),
+                        ],
                       ),
-                    );
-                  },
-                );
-              },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: provider.paymentMethods.length,
+            itemBuilder: (context, index) {
+              final method = provider.paymentMethods[index];
+              return FadeInUp(
+                duration: const Duration(milliseconds: 300),
+                delay: Duration(milliseconds: index * 100),
+                child: SlideInLeft(
+                  duration: const Duration(milliseconds: 300),
+                  delay: Duration(milliseconds: index * 100),
+                  child: _buildPaymentMethodCard(method, isDark),
+                ),
+              );
+            },
+          );
+        },
             ),
           ),
         ],
@@ -232,7 +232,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDark 
+        color: isDark
             ? Colors.white.withOpacity(0.05)
             : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -245,7 +245,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
             ),
         ],
         border: Border.all(
-          color: isDark 
+          color: isDark
               ? Colors.white.withOpacity(0.1)
               : Colors.grey.withOpacity(0.2),
         ),
@@ -266,14 +266,14 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
             child: Row(
               children: [
                 Icon(
-                  _getIconData(method.icon),
+                        _getIconData(method.icon),
                   color: SafeJetColors.secondaryHighlight,
                   size: 24,
-                ),
+                      ),
                 const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
@@ -281,33 +281,33 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                             child: Text(
                               method.paymentMethodType?.name ?? '',
                               style: TextStyle(
-                                fontSize: 16,
+                              fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: isDark ? Colors.white : Colors.black87,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (method.isDefault) ...[
+                              if (method.isDefault) ...[
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
                                 color: SafeJetColors.secondaryHighlight.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(12),
-                              ),
+                                  ),
                               child: Text(
-                                'Default',
-                                style: TextStyle(
-                                  fontSize: 12,
+                                    'Default',
+                                    style: TextStyle(
+                                      fontSize: 12,
                                   color: SafeJetColors.secondaryHighlight,
                                   fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
                           ],
                         ],
                       ),
@@ -317,9 +317,9 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                           fontSize: 14,
                           color: isDark ? Colors.white70 : Colors.black54,
                         ),
-                      ),
-                    ],
-                  ),
+                                ),
+                            ],
+                          ),
                 ),
                 Row(
                   children: [
@@ -479,10 +479,10 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                     
                     try {
                       // Show loading indicator
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Row(
-                            children: [
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
                               SizedBox(
                                 width: 20,
                                 height: 20,
@@ -500,8 +500,8 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                       );
 
                       // Delete the payment method
-                      await context
-                          .read<PaymentMethodsProvider>()
+        await context
+            .read<PaymentMethodsProvider>()
                           .deletePaymentMethod(method.id);
                       
                       // Show success message
@@ -509,26 +509,26 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
                         ScaffoldMessenger.of(context)
                           ..clearSnackBars()
                           ..showSnackBar(
-                            const SnackBar(
+          const SnackBar(
                               content: Text('Payment method deleted successfully'),
-                              backgroundColor: SafeJetColors.success,
+            backgroundColor: SafeJetColors.success,
                               duration: Duration(seconds: 2),
-                            ),
-                          );
+          ),
+        );
                       }
-                    } catch (e) {
+      } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context)
                           ..clearSnackBars()
                           ..showSnackBar(
-                            SnackBar(
-                              content: Text(e.toString()),
-                              backgroundColor: SafeJetColors.error,
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: SafeJetColors.error,
                               duration: Duration(seconds: 3),
-                            ),
-                          );
-                      }
-                    }
+          ),
+        );
+      }
+    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: SafeJetColors.error,

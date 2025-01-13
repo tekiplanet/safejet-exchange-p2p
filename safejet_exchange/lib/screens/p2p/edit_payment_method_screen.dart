@@ -526,6 +526,7 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
         ),
       );
 
+      await context.read<PaymentMethodsProvider>().loadPaymentMethods();
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;

@@ -65,9 +65,9 @@ export class PaymentMethodsService {
             }
           }
         }
-      }
+    }
 
-      const paymentMethod = this.paymentMethodRepository.create({
+    const paymentMethod = this.paymentMethodRepository.create({
         userId,
         name: createDto.name,
         paymentMethodType,
