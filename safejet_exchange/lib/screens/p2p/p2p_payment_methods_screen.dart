@@ -372,49 +372,186 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
   }
 
   void _handleDelete(PaymentMethod method) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Payment Method'),
-        content: Text(
-          'Are you sure you want to delete ${method.name}? This action cannot be undone.',
+        backgroundColor: isDark 
+            ? SafeJetColors.darkGradientStart
+            : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: SafeJetColors.error.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.delete_outline,
+                color: SafeJetColors.error,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Delete Payment Method',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Are you sure you want to delete this payment method?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              method.paymentMethodType?.name ?? '',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+            Text(
+              method.displayName,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white70 : Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'This action cannot be undone',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: SafeJetColors.error.withOpacity(0.8),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              try {
-                Navigator.pop(context);
-                await context
-                    .read<PaymentMethodsProvider>()
-                    .deletePaymentMethod(method.id);
-                
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Payment method deleted'),
-                    backgroundColor: SafeJetColors.success,
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(e.toString()),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.black54,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    // Close the dialog first
+                    Navigator.pop(context);
+                    
+                    try {
+                      // Show loading indicator
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Row(
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              ),
+                              SizedBox(width: 16),
+                              Text('Deleting payment method...'),
+                            ],
+                          ),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+
+                      // Delete the payment method
+                      await context
+                          .read<PaymentMethodsProvider>()
+                          .deletePaymentMethod(method.id);
+                      
+                      // Show success message
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                          ..clearSnackBars()
+                          ..showSnackBar(
+                            const SnackBar(
+                              content: Text('Payment method deleted successfully'),
+                              backgroundColor: SafeJetColors.success,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context)
+                          ..clearSnackBars()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(e.toString()),
+                              backgroundColor: SafeJetColors.error,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
                     backgroundColor: SafeJetColors.error,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                );
-              }
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: SafeJetColors.error,
-            ),
-            child: const Text('Delete'),
+                  child: const Text(
+                    'Delete',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
+        actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       ),
     );
   }

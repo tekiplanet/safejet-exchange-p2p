@@ -505,33 +505,90 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
       return;
     }
 
-    final confirm = await showDialog<bool>(
+    _showSetDefaultDialog(context, Theme.of(context).brightness == Brightness.dark);
+  }
+
+  void _showSetDefaultDialog(BuildContext context, bool isDark) {
+    showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Set as Default'),
-        content: const Text(
+        backgroundColor: isDark 
+            ? SafeJetColors.darkGradientStart
+            : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          'Set as Default',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        content: Text(
           'This will make this payment method your default option for all transactions. Continue?',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            color: isDark ? Colors.white70 : Colors.black54,
+          ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: SafeJetColors.secondaryHighlight,
-              foregroundColor: Colors.black,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SafeJetColors.secondaryHighlight,
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text(
+                      'Set as Default',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            child: const Text('Set as Default'),
           ),
         ],
       ),
-    );
-
-    if (confirm == true && mounted) {
-      setState(() => _isDefault = true);
-    }
+    ).then((confirm) {
+      if (confirm == true && mounted) {
+        setState(() => _isDefault = true);
+      }
+    });
   }
 
   IconData _getIconData(String iconString) {
@@ -614,30 +671,9 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
             ),
           ),
           onTap: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: DateTime.now(),
-              firstDate: DateTime(1900),
-              // Allow dates up to 10 years in the future
-              lastDate: DateTime.now().add(const Duration(days: 3650)),
-              builder: (context, child) {
-                return Theme(
-                  data: Theme.of(context).copyWith(
-                    colorScheme: ColorScheme.light(
-                      primary: SafeJetColors.primaryAccent,
-                      onPrimary: Colors.white,
-                      surface: isDark ? Colors.grey[900]! : Colors.white,
-                      onSurface: isDark ? Colors.white : Colors.black,
-                    ),
-                    dialogBackgroundColor: isDark ? Colors.grey[900] : Colors.white,
-                  ),
-                  child: child!,
-                );
-              },
-            );
-            if (date != null) {
-              _detailControllers[field.name]?.text = 
-                  "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+            final controller = _detailControllers[field.name];
+            if (controller != null) {
+              await _selectDate(context, controller);
             }
           },
           validator: field.isRequired ? (value) {
@@ -647,6 +683,41 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _selectDate(BuildContext context, TextEditingController controller) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: now,  // Start from today for future dates
+      lastDate: DateTime(2100),  // Allow dates up to year 2100
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: SafeJetColors.secondaryHighlight,
+              onPrimary: Colors.black,
+              surface: isDark ? SafeJetColors.darkGradientStart : Colors.white,
+              onSurface: isDark ? Colors.white : Colors.black,
+            ),
+            dialogBackgroundColor: isDark ? SafeJetColors.darkGradientStart : Colors.white,
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final formattedDate = DateFormat('dd/MM/yyyy').format(picked);
+      controller.text = formattedDate;
+    }
   }
 
   Widget _buildNumberInput(PaymentMethodField field) {

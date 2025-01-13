@@ -126,32 +126,18 @@ class PaymentMethodsProvider with ChangeNotifier {
 
   Future<void> deletePaymentMethod(String id) async {
     try {
-      _isLoading = true;
-      _error = null;
+      // Delete the payment method first
+      await _service.deletePaymentMethod(id, _context!);
+      
+      // Remove the deleted method from the local list immediately
+      _paymentMethods.removeWhere((method) => method.id == id);
       notifyListeners();
-
-      if (_context == null) {
-        throw 'Context not set';
-      }
-
-      final response = await _service.deletePaymentMethod(id, _context!);
-      if (response.statusCode == 200) {
-        await loadPaymentMethods();
-      } else {
-        throw HttpException(response.data['message'] ?? 'Failed to delete payment method');
-      }
-
-      _isLoading = false;
-      notifyListeners();
+      
+      // Then reload the list in the background
+      await loadPaymentMethods();
     } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
-
-      if (e.toString().contains('Session expired') && _context != null && _context!.mounted) {
-        await Provider.of<AuthProvider>(_context!, listen: false)
-            .handleUnauthorized(_context!);
-      }
+      // If there's an error, reload the list to ensure consistency
+      await loadPaymentMethods();
       rethrow;
     }
   }

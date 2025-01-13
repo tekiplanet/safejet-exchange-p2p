@@ -280,20 +280,9 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
             ),
           ),
           onTap: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: _detailControllers[field.name]?.text.isNotEmpty == true
-                  ? DateFormat('yyyy-MM-dd').parse(_detailControllers[field.name]!.text)
-                  : DateTime.now(),
-              firstDate: DateTime(2000),
-              lastDate: DateTime(2100),
-            );
-
-            if (date != null) {
-              setState(() {
-                _detailControllers[field.name]?.text = 
-                    DateFormat('yyyy-MM-dd').format(date);
-              });
+            final controller = _detailControllers[field.name];
+            if (controller != null) {
+              await _selectDate(context, controller);
             }
           },
           validator: field.isRequired ? (value) {
@@ -584,6 +573,41 @@ class _EditPaymentMethodScreenState extends State<EditPaymentMethodScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _selectDate(BuildContext context, TextEditingController controller) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: now,  // Start from today for future dates
+      firstDate: now,  // Allow dates up to year 2100
+      lastDate: DateTime(2100),  // Allow dates up to year 2100
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: SafeJetColors.secondaryHighlight,
+              onPrimary: Colors.black,
+              surface: isDark ? SafeJetColors.darkGradientStart : Colors.white,
+              onSurface: isDark ? Colors.white : Colors.black,
+            ),
+            dialogBackgroundColor: isDark ? SafeJetColors.darkGradientStart : Colors.white,
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      final formattedDate = DateFormat('dd/MM/yyyy').format(picked);
+      controller.text = formattedDate;
+    }
   }
 
   @override

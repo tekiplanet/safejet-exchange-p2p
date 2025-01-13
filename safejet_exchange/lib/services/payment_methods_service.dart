@@ -140,7 +140,7 @@ class PaymentMethodsService {
         '/payment-methods/$id',
         options: Options(headers: await _getAuthHeaders()),
       );
-      return response;
+      return response.data;
     } catch (e) {
       if (e is DioException) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
