@@ -54,9 +54,14 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
             content: Text(
               e.toString().contains('not enabled') 
                 ? '2FA is not enabled for this account'
-                : 'Unable to retrieve backup codes. Please try again.',
+                : e.toString().contains('Session expired')
+                  ? 'Session expired. Please login again.'
+                  : e.toString().contains('Connection')
+                    ? 'Connection error. Please check your internet and try again.'
+                    : 'Unable to retrieve backup codes. Please try again.',
             ),
             backgroundColor: SafeJetColors.error,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

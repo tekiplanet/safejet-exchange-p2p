@@ -472,29 +472,44 @@ class AuthService {
 
   Future<Map<String, dynamic>> getBackupCodes() async {
     try {
-      final token = await storage.read(key: 'accessToken');
-      print('Getting backup codes with token: $token'); // Debug log
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/2fa/backup-codes'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+      final response = await _dio.get(
+        '/2fa/backup-codes',
+        options: Options(
+          headers: await _getAuthHeaders(),
+          sendTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+          validateStatus: (status) => status! < 500,
+        ),
       );
 
-      print('Backup codes response status: ${response.statusCode}'); // Debug log
-      print('Backup codes response body: ${response.body}'); // Debug log
-      
-      final data = json.decode(response.body);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return data;
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw response.data['message'] ?? 'Failed to get backup codes';
       }
-
-      throw data['message'] ?? 'Failed to get backup codes';
     } catch (e) {
       print('Get backup codes error: $e');
-      rethrow;
+      if (e is DioException) {
+        // Handle specific error cases
+        switch (e.type) {
+          case DioExceptionType.connectionTimeout:
+          case DioExceptionType.sendTimeout:
+          case DioExceptionType.receiveTimeout:
+            throw 'Connection timed out. Please try again.';
+          case DioExceptionType.connectionError:
+            throw 'Connection error. Please check your internet connection.';
+          default:
+            if (e.response?.statusCode == 401) {
+              throw 'Session expired. Please login again.';
+            } else if (e.response?.statusCode == 403) {
+              throw '2FA is not enabled for this account';
+            } else if (e.response?.statusCode == 404) {
+              throw 'Backup codes not available';
+            }
+            throw e.response?.data?['message'] ?? 'Failed to get backup codes';
+        }
+      }
+      throw 'Unable to connect to server. Please try again.';
     }
   }
 
@@ -733,10 +748,12 @@ class AuthService {
     }
   }
 
-  Future<Map<String, dynamic>> _getAuthHeaders() async {
-    final accessToken = await storage.read(key: 'accessToken');
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await storage.read(key: 'accessToken');
     return {
-      'Authorization': 'Bearer $accessToken',
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
   }
 
