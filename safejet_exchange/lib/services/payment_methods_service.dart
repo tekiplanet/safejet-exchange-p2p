@@ -75,12 +75,17 @@ class PaymentMethodsService {
     }
   }
 
-  Future<void> createPaymentMethod(Map<String, dynamic> data) async {
+  Future<void> createPaymentMethod(Map<String, dynamic> data, {String? twoFactorCode}) async {
     try {
+      final headers = await _getAuthHeaders();
+      if (twoFactorCode != null) {
+        headers['x-2fa-code'] = twoFactorCode;
+      }
+
       await _dio.post(
         '/payment-methods',
         data: data,
-        options: Options(headers: await _getAuthHeaders()),
+        options: Options(headers: headers),
       );
     } catch (e) {
       if (e is DioException) {
@@ -129,11 +134,16 @@ class PaymentMethodsService {
     }
   }
 
-  Future<dynamic> deletePaymentMethod(String id, BuildContext context) async {
+  Future<dynamic> deletePaymentMethod(String id, BuildContext context, {String? twoFactorCode}) async {
     try {
+      final headers = await _getAuthHeaders();
+      if (twoFactorCode != null) {
+        headers['x-2fa-code'] = twoFactorCode;
+      }
+
       final response = await _dio.delete(
         '/payment-methods/$id',
-        options: Options(headers: await _getAuthHeaders()),
+        options: Options(headers: headers),
       );
       return response.data;
     } catch (e) {

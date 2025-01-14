@@ -81,7 +81,36 @@ class PaymentMethodsProvider with ChangeNotifier {
         throw 'Context not set';
       }
 
-      await _service.createPaymentMethod(data);
+      // Check if user has 2FA enabled
+      final authProvider = Provider.of<AuthProvider>(_context!, listen: false);
+      String? twoFactorCode;
+      
+      if (authProvider.user?.twoFactorEnabled == true) {
+        if (_context!.mounted) {
+          // Show 2FA dialog first
+          final verified = await showDialog<bool>(
+            context: _context!,
+            barrierDismissible: false,
+            builder: (context) => const TwoFactorDialog(
+              action: 'createPaymentMethod',
+              title: 'Verify 2FA',
+              message: 'Enter the 6-digit code to add payment method',
+            ),
+          );
+          
+          if (verified != true) {
+            throw 'Two-factor authentication required';
+          }
+          
+          // Get the verification code
+          twoFactorCode = authProvider.getLastVerificationToken();
+        }
+      }
+
+      await _service.createPaymentMethod(
+        data,
+        twoFactorCode: twoFactorCode,
+      );
       
       if (_context!.mounted) {
         await loadPaymentMethods();
@@ -89,19 +118,10 @@ class PaymentMethodsProvider with ChangeNotifier {
 
       _isLoading = false;
       notifyListeners();
-
-      return;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
-
-      if (e.toString().contains('Session expired')) {
-        if (_context != null && _context!.mounted) {
-          await Provider.of<AuthProvider>(_context!, listen: false)
-              .handleUnauthorized(_context!);
-        }
-      }
       rethrow;
     }
   }
@@ -156,8 +176,42 @@ class PaymentMethodsProvider with ChangeNotifier {
 
   Future<void> deletePaymentMethod(String id) async {
     try {
-      // Delete the payment method first
-      await _service.deletePaymentMethod(id, _context!);
+      if (_context == null) {
+        throw 'Context not set';
+      }
+
+      // Check if user has 2FA enabled
+      final authProvider = Provider.of<AuthProvider>(_context!, listen: false);
+      String? twoFactorCode;
+      
+      if (authProvider.user?.twoFactorEnabled == true) {
+        if (_context!.mounted) {
+          // Show 2FA dialog first
+          final verified = await showDialog<bool>(
+            context: _context!,
+            barrierDismissible: false,
+            builder: (context) => const TwoFactorDialog(
+              action: 'deletePaymentMethod',
+              title: 'Verify 2FA',
+              message: 'Enter the 6-digit code to delete payment method',
+            ),
+          );
+          
+          if (verified != true) {
+            throw 'Two-factor authentication required';
+          }
+          
+          // Get the verification code
+          twoFactorCode = authProvider.getLastVerificationToken();
+        }
+      }
+
+      // Delete the payment method with 2FA code
+      await _service.deletePaymentMethod(
+        id, 
+        _context!,
+        twoFactorCode: twoFactorCode,
+      );
       
       // Remove the deleted method from the local list immediately
       _paymentMethods.removeWhere((method) => method.id == id);
