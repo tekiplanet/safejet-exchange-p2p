@@ -17,6 +17,7 @@ class AuthProvider with ChangeNotifier {
   Timer? _refreshTimer;
   Timer? _tokenRefreshTimer;
   DateTime? _tokenExpiryTime;
+  String? _lastVerificationToken;
 
   AuthProvider() {
     _startPeriodicRefresh();
@@ -175,26 +176,39 @@ class AuthProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      if (email != null) {
-        // This is for login verification
+      if (email == null) {
+        print('🔐 Auth Provider: Verifying action with 2FA');
+        await _authService.verify2FAForAction(code);
+      } else {
+        print('🔐 Auth Provider: Verifying login with 2FA');
         final response = await _authService.verify2FA(email, code);
         
+        if (response['accessToken'] == null) {
+          throw 'Invalid server response: No access token provided';
+        }
+
         // Store tokens after successful 2FA verification
-        await _authService.storage.write(key: 'accessToken', value: response['accessToken']);
-        await _authService.storage.write(key: 'refreshToken', value: response['refreshToken']);
-        await _authService.storage.write(key: 'user', value: json.encode(response['user']));
+        await _authService.storage.write(
+          key: 'accessToken', 
+          value: response['accessToken']
+        );
+        await _authService.storage.write(
+          key: 'refreshToken', 
+          value: response['refreshToken']
+        );
+        await _authService.storage.write(
+          key: 'user', 
+          value: json.encode(response['user'])
+        );
         
         _isLoggedIn = true;
-      } else {
-        // This is for password change verification
-        await _authService.verify2FAForAction(code);
+        _user = User.fromJson(response['user']);
       }
 
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      print('2FA Provider error: $e');
-      // Clean up error message before setting it
+      print('❌ Auth Provider: 2FA verification failed: $e');
       _error = e.toString()
           .replaceAll('Exception: ', '')
           .replaceAll('Error: ', '');
@@ -449,6 +463,7 @@ class AuthProvider with ChangeNotifier {
       
       _isLoading = false;
       notifyListeners();
+      _lastVerificationToken = code;  // Store the code after successful verification
     } catch (e) {
       _error = e.toString()
           .replaceAll('Exception: ', '')
@@ -460,13 +475,10 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> handleUnauthorized(BuildContext context) async {
-    // Cancel the refresh timer
+    // Only handle actual session expiration
     _refreshTimer?.cancel();
-    
-    // Clear all stored data
     await _authService.storage.deleteAll();
     
-    // Reset state
     _user = null;
     _isLoggedIn = false;
     _error = null;
@@ -474,7 +486,6 @@ class AuthProvider with ChangeNotifier {
     
     if (!context.mounted) return;
 
-    // Show session expired message and navigate to login
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Session expired. Please login again.'),
@@ -605,6 +616,39 @@ class AuthProvider with ChangeNotifier {
         }
       });
     }
+  }
+
+  Future<void> refreshToken() async {
+    try {
+      final refreshToken = await _authService.storage.read(key: 'refreshToken');
+      if (refreshToken == null) throw 'No refresh token';
+
+      final response = await _authService.refreshToken();
+      
+      // Update stored tokens
+      await _authService.storage.write(
+        key: 'accessToken',
+        value: response['accessToken'],
+      );
+      
+      // Update token expiry
+      _updateTokenExpiry(response['accessToken']);
+      
+    } catch (e) {
+      // Only clear auth state if refresh actually failed
+      if (e is DioException && e.response?.statusCode == 401) {
+        await logout();
+        rethrow;
+      }
+      // Other errors might be temporary
+      rethrow;
+    }
+  }
+
+  String? getLastVerificationToken() {
+    final token = _lastVerificationToken;
+    _lastVerificationToken = null;  // Clear it after use
+    return token;
   }
 }
 

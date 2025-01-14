@@ -14,10 +14,29 @@ export class AuthInterceptor implements NestInterceptor {
     return next.handle().pipe(
       catchError((error) => {
         if (error instanceof UnauthorizedException) {
-          // Return a standardized error response
+          // Get the original error message
+          const originalMessage = error.message;
+          
+          // Only convert specific JWT-related errors to "Session expired"
+          const jwtErrors = [
+            'Invalid token',
+            'Token expired',
+            'Token malformed',
+            'No auth token',
+          ];
+
+          if (jwtErrors.some(msg => originalMessage.toLowerCase().includes(msg.toLowerCase()))) {
+            return throwError(() => ({
+              statusCode: 401,
+              message: 'Session expired. Please login again.',
+              error: 'Unauthorized',
+            }));
+          }
+          
+          // For all other unauthorized errors, preserve the original message
           return throwError(() => ({
             statusCode: 401,
-            message: 'Session expired. Please login again.',
+            message: originalMessage,
             error: 'Unauthorized',
           }));
         }

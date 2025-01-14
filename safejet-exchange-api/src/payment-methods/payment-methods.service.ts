@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
@@ -10,6 +10,7 @@ import { FileService } from '../common/services/file.service';
 import { EmailService } from '../email/email.service';
 import { User } from '../auth/entities/user.entity';
 import * as fs from 'fs';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class PaymentMethodsService {
@@ -22,9 +23,27 @@ export class PaymentMethodsService {
     private emailService: EmailService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    private authService: AuthService,
   ) {}
 
-  async create(userId: string, createDto: CreatePaymentMethodDto) {
+  private async verify2FAIfEnabled(userId: string, code?: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.twoFactorEnabled) {
+      if (!code) {
+        throw new BadRequestException('2FA verification required');
+      }
+      await this.authService.verify2FAAction(code, user);
+    }
+  }
+
+  async create(userId: string, createDto: CreatePaymentMethodDto, twoFactorCode?: string) {
+    // Verify 2FA first if enabled
+    await this.verify2FAIfEnabled(userId, twoFactorCode);
+
     try {
       if (createDto.isDefault) {
         await this.resetDefaultStatus(userId);
@@ -150,7 +169,10 @@ export class PaymentMethodsService {
     }
   }
 
-  async update(userId: string, id: string, updateDto: UpdatePaymentMethodDto) {
+  async update(userId: string, id: string, updateDto: UpdatePaymentMethodDto, twoFactorCode?: string) {
+    // Verify 2FA first if enabled
+    await this.verify2FAIfEnabled(userId, twoFactorCode);
+
     const paymentMethod = await this.findOne(userId, id);
     const paymentMethodType = await this.paymentMethodTypeRepository.findOne({
       where: { id: paymentMethod.paymentMethodTypeId },
@@ -209,7 +231,10 @@ export class PaymentMethodsService {
     return updatedMethod;
   }
 
-  async remove(userId: string, id: string) {
+  async remove(userId: string, id: string, twoFactorCode?: string) {
+    // Verify 2FA first if enabled
+    await this.verify2FAIfEnabled(userId, twoFactorCode);
+
     const paymentMethod = await this.findOne(userId, id);
     const user = await this.userRepository.findOne({ where: { id: userId } });
     

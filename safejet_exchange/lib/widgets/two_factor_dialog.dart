@@ -169,6 +169,7 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
                           print('disable2FA completed');
                           break;
                         case 'changePassword':
+                        case 'updatePaymentMethod':
                           print('=== TwoFactorDialog Debug ===');
                           print('Action: ${widget.action}');
                           print('Code: $_code');

@@ -93,26 +93,17 @@ class PaymentMethodsService {
     }
   }
 
-  Future<dynamic> updatePaymentMethod(String id, Map<String, dynamic> data, BuildContext context) async {
+  Future<dynamic> updatePaymentMethod(String id, Map<String, dynamic> data, BuildContext context, {String? twoFactorCode}) async {
     try {
-      // Process image fields if present
-      if (data['details'] != null) {
-        final details = data['details'] as Map<String, dynamic>;
-        for (final entry in details.entries) {
-          if (entry.value is Map && entry.value['value'] is String) {
-            final value = entry.value['value'] as String;
-            if (value.startsWith('data:image/')) {
-              // Compress image before sending
-              details[entry.key]['value'] = await compressAndEncodeImage(value);
-            }
-          }
-        }
+      final headers = await _getAuthHeaders();
+      if (twoFactorCode != null) {
+        headers['x-2fa-code'] = twoFactorCode;
       }
 
       final response = await _dio.patch(
         '/payment-methods/$id',
         data: data,
-        options: Options(headers: await _getAuthHeaders()),
+        options: Options(headers: headers),
       );
 
       if (response.statusCode == 200) {
@@ -121,8 +112,12 @@ class PaymentMethodsService {
         throw 'Failed to update payment method';
       }
     } catch (e) {
-      print('Error updating payment method: $e');
       if (e is DioException) {
+        if (e.response?.statusCode == 400 && 
+            e.response?.data['message'] == '2FA verification required') {
+          // Return special value to indicate 2FA is needed
+          return '2FA_REQUIRED';
+        }
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
           await Provider.of<AuthProvider>(context, listen: false)
               .handleUnauthorized(context);

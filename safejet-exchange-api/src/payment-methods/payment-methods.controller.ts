@@ -9,6 +9,7 @@ import {
   UseGuards,
   NotFoundException,
   Res,
+  Headers,
 } from '@nestjs/common';
 import { PaymentMethodsService } from './payment-methods.service';
 import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
@@ -43,8 +44,12 @@ export class PaymentMethodsController {
   }
 
   @Post()
-  create(@GetUser() user: User, @Body() createDto: CreatePaymentMethodDto) {
-    return this.paymentMethodsService.create(user.id, createDto);
+  create(
+    @GetUser() user: User, 
+    @Body() createDto: CreatePaymentMethodDto,
+    @Headers('x-2fa-code') twoFactorCode?: string,
+  ) {
+    return this.paymentMethodsService.create(user.id, createDto, twoFactorCode);
   }
 
   @Get()
@@ -62,13 +67,18 @@ export class PaymentMethodsController {
     @GetUser() user: User,
     @Param('id') id: string,
     @Body() updateDto: UpdatePaymentMethodDto,
+    @Headers('x-2fa-code') twoFactorCode?: string,
   ) {
-    return this.paymentMethodsService.update(user.id, id, updateDto);
+    return this.paymentMethodsService.update(user.id, id, updateDto, twoFactorCode);
   }
 
   @Delete(':id')
-  remove(@GetUser() user: User, @Param('id') id: string) {
-    return this.paymentMethodsService.remove(user.id, id);
+  remove(
+    @GetUser() user: User, 
+    @Param('id') id: string,
+    @Headers('x-2fa-code') twoFactorCode?: string,
+  ) {
+    return this.paymentMethodsService.remove(user.id, id, twoFactorCode);
   }
 
   @Get('images/:filename')

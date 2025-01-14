@@ -8,6 +8,7 @@ import { PaymentMethodField } from './entities/payment-method-field.entity';
 import { FileService } from '../common/services/file.service';
 import { EmailModule } from '../email/email.module';
 import { User } from '../auth/entities/user.entity';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { User } from '../auth/entities/user.entity';
       User,
     ]),
     EmailModule,
+    AuthModule,
   ],
   controllers: [PaymentMethodsController],
   providers: [PaymentMethodsService, FileService],

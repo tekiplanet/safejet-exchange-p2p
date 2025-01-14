@@ -132,43 +132,55 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto, req: Request) {
-    const { email, password } = loginDto;
-    const user = await this.userRepository.findOne({ where: { email } });
+    try {
+      const { email, password } = loginDto;
+      console.log('Login attempt for:', email);
+      
+      const user = await this.userRepository.findOne({ where: { email } });
+      console.log('User found:', !!user);
 
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+      if (!user) {
+        console.log('No user found with email:', email);
+        throw new UnauthorizedException('Invalid credentials');
+      }
 
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      console.log('Password validation result:', isPasswordValid);
+      
+      if (!isPasswordValid) {
+        console.log('Invalid password for user:', email);
+        throw new UnauthorizedException('Invalid credentials');
+      }
 
-    // Check if 2FA is enabled
-    if (user.twoFactorEnabled) {
-      console.log('2FA is enabled for user:', user.email); // Debug log
-      const tempToken = await this.jwtService.signAsync(
-        { sub: user.id, email: user.email, temp: true },
-        { expiresIn: '5m' },
-      );
+      // Check if 2FA is enabled
+      if (user.twoFactorEnabled) {
+        console.log('2FA is enabled for user:', user.email);
+        const tempToken = await this.jwtService.signAsync(
+          { sub: user.id, email: user.email, temp: true },
+          { expiresIn: '5m' },
+        );
+        return {
+          requires2FA: true,
+          tempToken,
+        };
+      }
+
+      // Generate tokens for non-2FA users
+      const tokens = await this.generateTokens(user);
+
+      // Send login notification
+      const loginInfo = this.loginTrackerService.getLoginInfo(req);
+      await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
+
       return {
-        requires2FA: true,
-        tempToken,
+        ...tokens,
+        user,
+        requires2FA: false,
       };
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
     }
-
-    // Generate tokens for non-2FA users
-    const tokens = await this.generateTokens(user);
-
-    // Send login notification
-    const loginInfo = this.loginTrackerService.getLoginInfo(req);
-    await this.emailService.sendLoginNotificationEmail(user.email, loginInfo);
-
-    return {
-      ...tokens,
-      user,
-      requires2FA: false,
-    };
   }
 
   async verifyEmail(verifyEmailDto: VerifyEmailDto) {

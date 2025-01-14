@@ -6,6 +6,7 @@ import '../models/payment_method_type.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'dart:io';
+import '../widgets/two_factor_dialog.dart';
 
 class PaymentMethodsProvider with ChangeNotifier {
   final PaymentMethodsService _service;
@@ -111,12 +112,41 @@ class PaymentMethodsProvider with ChangeNotifier {
         throw 'Context not set';
       }
 
-      // Verify payment method exists
-      final methodExists = _paymentMethods.any((method) => method.id == id);
-      print('Payment method exists: $methodExists');
-      print('Available payment methods: ${_paymentMethods.map((m) => m.id).toList()}');
+      // Check if user has 2FA enabled
+      final authProvider = Provider.of<AuthProvider>(_context!, listen: false);
+      String? twoFactorCode;
+      
+      if (authProvider.user?.twoFactorEnabled == true) {
+        if (_context!.mounted) {
+          // Show 2FA dialog first
+          final verified = await showDialog<bool>(
+            context: _context!,
+            barrierDismissible: false,
+            builder: (context) => const TwoFactorDialog(
+              action: 'updatePaymentMethod',
+              title: 'Verify 2FA',
+              message: 'Enter the 6-digit code to update payment method',
+            ),
+          );
+          
+          if (verified != true) {
+            throw 'Two-factor authentication required';
+          }
+          
+          // Get the verification code
+          twoFactorCode = authProvider.getLastVerificationToken();
+        }
+      }
 
-      await _service.updatePaymentMethod(id, data, _context!);
+      // After 2FA verification, proceed with the update
+      await _service.updatePaymentMethod(
+        id, 
+        data, 
+        _context!,
+        twoFactorCode: twoFactorCode, // Pass the 2FA code to the service
+      );
+      
+      // Reload payment methods after successful update
       await loadPaymentMethods();
     } catch (e) {
       print('Provider error updating payment method: $e');

@@ -12,8 +12,9 @@ class AuthService {
   AuthService() {
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 3),
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+      sendTimeout: const Duration(seconds: 10),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -33,38 +34,95 @@ class AuthService {
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
+      print('🔐 Auth Service: Attempting login for $email');
+      final response = await _dio.post(
+        '/login',
+        data: {
           'email': email,
           'password': password,
-        }),
+        },
       );
 
-      final data = json.decode(response.body);
-      print('Raw Response Status Code: ${response.statusCode}');
-      print('Raw Response Body: ${response.body}');
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Handle 2FA case
-        if (data['requires2FA'] == true) {
-          await storage.write(key: 'tempToken', value: data['tempToken']);
-          return {'requires2FA': true, 'email': email};
+      final data = response.data;
+      print('✅ Auth Service: Login response received: ${response.statusCode}');
+      
+      // Handle 2FA requirement (403)
+      if (data['requires2FA'] == true) {
+        print('🔒 Auth Service: 2FA required, storing temp token');
+        if (data['tempToken'] == null) {
+          throw 'Server error: No temporary token provided';
         }
-
-        // Store tokens and user data for successful login
-        await storage.write(key: 'accessToken', value: data['accessToken']);
-        await storage.write(key: 'refreshToken', value: data['refreshToken']);
-        await storage.write(key: 'user', value: json.encode(data['user']));
-
-        return data;
+        await storage.write(key: 'tempToken', value: data['tempToken']);
+        return {'requires2FA': true, 'email': email};
       }
 
-      throw data['message'] ?? 'Login failed';
+      print('✅ Auth Service: Login successful, storing tokens');
+      await storage.write(key: 'accessToken', value: data['accessToken']);
+      await storage.write(key: 'refreshToken', value: data['refreshToken']);
+      await storage.write(key: 'user', value: json.encode(data['user']));
+
+      return data;
     } catch (e) {
-      print('Login error details: $e');
-      rethrow;
+      print('❌ Auth Service: Login error: $e');
+      
+      if (e is DioException) {
+        // Handle connection timeouts
+        if (e.type == DioExceptionType.connectionTimeout) {
+          throw 'Connection timed out. Please check your internet connection.';
+        }
+        
+        // Handle no internet connection
+        if (e.type == DioExceptionType.connectionError) {
+          throw 'No internet connection. Please check your network.';
+        }
+
+        // Handle server errors with status codes
+        if (e.response != null) {
+          print('❌ Auth Service: Server response: ${e.response?.data}');
+          
+          switch (e.response?.statusCode) {
+            case 400:
+              throw 'Invalid email or password format';
+            case 401:
+              // Check if it's actually an invalid credentials error
+              if (e.response?.data['message'] == 'Invalid credentials') {
+                throw 'Invalid email or password';
+              }
+              // For actual session expired cases
+              if (e.response?.data['message']?.toString().toLowerCase().contains('session expired') == true) {
+                throw 'Session expired. Please try again.';
+              }
+              throw e.response?.data['message'] ?? 'Authentication failed';
+            case 403:
+              if (e.response?.data['requires2FA'] == true) {
+                print('🔒 Auth Service: 2FA required from error response');
+                return {
+                  'requires2FA': true,
+                  'email': email,
+                  'tempToken': e.response?.data['tempToken']
+                };
+              }
+              throw 'Access denied';
+            case 429:
+              throw 'Too many attempts. Please try again later';
+            default:
+              throw e.response?.data['message'] ?? 'Login failed. Please try again';
+          }
+        }
+        
+        // Handle other Dio errors
+        switch (e.type) {
+          case DioExceptionType.receiveTimeout:
+            throw 'Server is not responding. Please try again later.';
+          case DioExceptionType.sendTimeout:
+            throw 'Unable to send request. Please check your connection.';
+          default:
+            throw 'Connection error. Please check your internet.';
+        }
+      }
+      
+      // Handle any other errors
+      throw 'An unexpected error occurred. Please try again.';
     }
   }
 
@@ -203,34 +261,55 @@ class AuthService {
   Future<Map<String, dynamic>> verify2FA(String email, String code) async {
     try {
       final tempToken = await storage.read(key: 'tempToken');
-      print('Verifying 2FA with token: $tempToken');
+      print('🔐 2FA Service: Verifying with temp token: ${tempToken?.substring(0, 10)}...');
 
-      final response = await _dio.post(
-        '/verify-2fa',
-        data: {
-          'email': email,
-          'code': code,
-        },
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $tempToken',
-            'Content-Type': 'application/json',
-          },
-        ),
-      );
-
-      print('2FA verification response: ${response.data}');
-      
-      // Clean up temp token after successful verification
-      await storage.delete(key: 'tempToken');
-      
-      return response.data;
-    } catch (e) {
-      if (e is DioException) {
-        print('2FA verification error: ${e.response?.data['message']}');
-        throw e.response?.data['message'] ?? 'Failed to verify 2FA code';
+      if (tempToken == null) {
+        print('❌ 2FA Service: No temp token found');
+        throw 'Session expired. Please restart login process.';
       }
-      print('2FA verification error: $e');
+
+      try {
+        final response = await _dio.post(
+          '/verify-2fa',
+          data: {
+            'email': email,
+            'code': code,
+          },
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $tempToken',
+            },
+          ),
+        );
+
+        print('✅ 2FA Service: Verification successful');
+        print('🔑 2FA Service: Received new tokens');
+        
+        await storage.delete(key: 'tempToken');
+        return response.data;
+        
+      } on DioException catch (e) {
+        print('❌ 2FA Service: Verification failed with status ${e.response?.statusCode}');
+        print('Error response: ${e.response?.data}');
+        
+        final errorMessage = e.response?.data['message'] as String?;
+        
+        if (e.response?.statusCode == 401) {
+          // Check specific error messages
+          if (errorMessage == 'Invalid 2FA code') {
+            throw 'Incorrect verification code. Please try again.';
+          } else if (errorMessage?.toLowerCase().contains('session expired') == true) {
+            await storage.delete(key: 'tempToken');
+            throw 'Your session has expired. Please restart the login process.';
+          }
+          // Default 401 error
+          throw errorMessage ?? 'Authentication failed';
+        }
+        
+        throw errorMessage ?? 'Failed to verify 2FA code';
+      }
+    } catch (e) {
+      print('❌ 2FA Service: Error: $e');
       rethrow;
     }
   }
