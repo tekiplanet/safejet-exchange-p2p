@@ -7,6 +7,11 @@ import * as sharp from 'sharp';
 @Injectable()
 export class FileService {
   private readonly uploadDir: string;
+  private readonly validImageExtensions = [
+    '.jpg', '.jpeg', '.png', '.webp', 
+    '.avif', '.heic', '.heif', '.gif', 
+    '.bmp', '.tiff', '.tif'
+  ];
 
   constructor() {
     // Use public directory for uploads
@@ -18,13 +23,30 @@ export class FileService {
     }
   }
 
+  private isValidImageFilename(filename: string): boolean {
+    const ext = path.extname(filename).toLowerCase();
+    return this.validImageExtensions.includes(ext);
+  }
+
   async saveBase64Image(base64String: string): Promise<string> {
     try {
+      // If it's just a filename and has valid image extension, return it as is
+      if (!base64String.includes('base64,') && this.isValidImageFilename(base64String)) {
+        return base64String;
+      }
+
       // Validate base64 string format
       if (!base64String.includes('base64,')) {
         throw new Error('Invalid base64 image format');
       }
 
+      // Extract MIME type and base64 data
+      const matches = base64String.match(/^data:image\/([a-zA-Z0-9-+/]+);base64,/);
+      if (!matches) {
+        throw new Error('Invalid image format');
+      }
+
+      const imageFormat = matches[1].toLowerCase();
       const base64Data = base64String.split('base64,')[1];
       const buffer = Buffer.from(base64Data, 'base64');
       
@@ -32,20 +54,48 @@ export class FileService {
         throw new Error('Image size exceeds 5MB limit');
       }
 
-      const filename = `${crypto.randomBytes(16).toString('hex')}.jpg`;
+      // Generate random filename with original format if supported, fallback to webp
+      const outputFormat = ['jpeg', 'png', 'webp', 'avif'].includes(imageFormat) 
+        ? imageFormat 
+        : 'webp';
+      
+      const filename = `${crypto.randomBytes(16).toString('hex')}.${outputFormat}`;
       const filepath = path.join(this.uploadDir, filename);
 
       try {
-        await sharp(buffer)
+        const sharpInstance = sharp(buffer)
           .resize(800, 800, {
             fit: 'inside',
             withoutEnlargement: true
-          })
-          .jpeg({
-            quality: 80,
-            progressive: true
-          })
-          .toFile(filepath);
+          });
+
+        // Apply format-specific processing
+        switch (outputFormat) {
+          case 'jpeg':
+            await sharpInstance
+              .jpeg({ quality: 80, progressive: true })
+              .toFile(filepath);
+            break;
+          case 'png':
+            await sharpInstance
+              .png({ compressionLevel: 9 })
+              .toFile(filepath);
+            break;
+          case 'webp':
+            await sharpInstance
+              .webp({ quality: 80 })
+              .toFile(filepath);
+            break;
+          case 'avif':
+            await sharpInstance
+              .avif({ quality: 80 })
+              .toFile(filepath);
+            break;
+          default:
+            await sharpInstance
+              .webp({ quality: 80 })
+              .toFile(filepath);
+        }
 
         console.log(`Image saved successfully at: ${filepath}`);
         return filename;

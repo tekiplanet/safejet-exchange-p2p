@@ -9,6 +9,7 @@ import { PaymentMethodTypeDto } from './dto/payment-method-type.dto';
 import { FileService } from '../common/services/file.service';
 import { EmailService } from '../email/email.service';
 import { User } from '../auth/entities/user.entity';
+import * as fs from 'fs';
 
 @Injectable()
 export class PaymentMethodsService {
@@ -65,9 +66,9 @@ export class PaymentMethodsService {
             }
           }
         }
-    }
+      }
 
-    const paymentMethod = this.paymentMethodRepository.create({
+      const paymentMethod = this.paymentMethodRepository.create({
         userId,
         name: createDto.name,
         paymentMethodType,
@@ -87,7 +88,8 @@ export class PaymentMethodsService {
         );
       }
 
-      return savedMethod;
+      // Return the complete payment method with all relations, just like in update
+      return this.findOne(userId, savedMethod.id);
     } catch (error) {
       console.error('Payment method creation error:', error);
       throw error;
@@ -138,6 +140,16 @@ export class PaymentMethodsService {
     return paymentMethod;
   }
 
+  private isExistingFile(filename: string): boolean {
+    try {
+      // Check if the file exists in our uploads directory
+      const filepath = this.fileService.getFilePath(filename);
+      return fs.existsSync(filepath);
+    } catch (error) {
+      return false;
+    }
+  }
+
   async update(userId: string, id: string, updateDto: UpdatePaymentMethodDto) {
     const paymentMethod = await this.findOne(userId, id);
     const paymentMethodType = await this.paymentMethodTypeRepository.findOne({
@@ -156,19 +168,20 @@ export class PaymentMethodsService {
         if (field.type === 'image') {
           const detail = processedDetails[field.name];
           if (detail?.value) {
-            try {
-              // Validate base64 image
-              if (!this.isValidBase64Image(detail.value)) {
-                throw new BadRequestException(`Invalid image format for ${field.name}`);
-              }
+            // If it's an existing file, keep it as is
+            if (this.isExistingFile(detail.value)) {
+              continue;
+            }
 
-              // Save image and store filename
+            try {
+              // Try to process as new image
               const filename = await this.fileService.saveBase64Image(detail.value);
               processedDetails[field.name] = {
                 ...detail,
                 value: filename,
               };
             } catch (error) {
+              console.error(`Error processing image for ${field.name}:`, error);
               throw new BadRequestException(`Failed to process image for ${field.name}`);
             }
           }
