@@ -21,6 +21,9 @@ class _WalletsTabState extends State<WalletsTab> {
 
   final double _ngnRate = 1200.0;
 
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   String _formatNumber(double number) {
     return number.toStringAsFixed(2).replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -39,11 +42,31 @@ class _WalletsTabState extends State<WalletsTab> {
   List<int> _getFilteredAssets() {
     return List.generate(10, (index) {
       final hasBalance = index % 2 == 0;
+      final assetName = 'Bitcoin'; // Replace with actual asset name
+      final assetSymbol = 'BTC'; // Replace with actual asset symbol
+      
+      // Filter by balance
       if (!_showZeroBalances && !hasBalance) {
-        return -1; // Mark as filtered
+        return -1;
       }
+      
+      // Filter by search
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery.toLowerCase();
+        if (!assetName.toLowerCase().contains(query) && 
+            !assetSymbol.toLowerCase().contains(query)) {
+          return -1;
+        }
+      }
+      
       return index;
     }).where((index) => index != -1).toList();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -267,7 +290,6 @@ class _WalletsTabState extends State<WalletsTab> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      // Zero Balance Toggle
                       Row(
                         children: [
                           Text(
@@ -289,6 +311,42 @@ class _WalletsTabState extends State<WalletsTab> {
                     ],
                   ),
                   const SizedBox(height: 16),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                          : SafeJetColors.lightCardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _searchQuery = value),
+                      style: TextStyle(
+                        color: isDark ? Colors.white : SafeJetColors.lightText,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Search assets',
+                        hintStyle: TextStyle(
+                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
