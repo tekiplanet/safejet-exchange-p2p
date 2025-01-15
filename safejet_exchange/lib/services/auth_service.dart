@@ -870,8 +870,12 @@ class AuthService {
     }
   }
 
+  Future<String?> getRefreshToken() async {
+    return await storage.read(key: 'refreshToken');
+  }
+
   Future<String?> getAccessToken() async {
-    final storage = FlutterSecureStorage();
+    final storage = FlutterSecureStorage();    
     return await storage.read(key: 'accessToken');
   }
 } 

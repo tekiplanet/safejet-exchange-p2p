@@ -706,6 +706,18 @@ class AuthProvider with ChangeNotifier {
     _lastVerificationToken = null;  // Clear it after use
     return token;
   }
+
+  Future<void> loginWithTokens(String token, String refreshToken) async {
+    try {
+      await _authService.storage.write(key: 'token', value: token);
+      await _authService.storage.write(key: 'refreshToken', value: refreshToken);
+      _isLoggedIn = true;
+      notifyListeners();
+    } catch (e) {
+      print('Error in token login: $e');
+      rethrow;
+    }
+  }
 }
 
 class User {

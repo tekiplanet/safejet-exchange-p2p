@@ -5,7 +5,9 @@ import 'registration_screen.dart';
 import 'forgot_password_screen.dart';
 import '../main/home_screen.dart';
 import 'package:provider/provider.dart';
-import 'package:safejet_exchange/providers/auth_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/biometric_settings_provider.dart';
+import '../../services/biometric_settings_service.dart';
 import 'two_factor_auth_screen.dart';
 import 'email_verification_screen.dart';
 
@@ -24,10 +26,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
     super.initState();
+    _checkBiometricAvailability();
     if (widget.message != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -38,6 +42,70 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       });
+    }
+  }
+
+  Future<void> _checkBiometricAvailability() async {
+    try {
+      final biometricService = BiometricSettingsService();
+      final isAvailable = await biometricService.isBiometricAvailable();
+      
+      if (isAvailable) {
+        final tokens = await biometricService.getBiometricTokens();
+        if (tokens['token'] != null && mounted) {
+          _showBiometricPrompt();
+        } else {
+          print('No valid biometric tokens found');
+        }
+      }
+    } catch (e) {
+      print('Error checking biometric availability: $e');
+    }
+  }
+
+  Future<void> _showBiometricPrompt() async {
+    final biometricService = BiometricSettingsService();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    try {
+      final success = await biometricService.authenticateAndGetTokens();
+      if (success && mounted) {
+        final tokens = await biometricService.getBiometricTokens();
+        if (tokens['token'] == null || tokens['refreshToken'] == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric login expired. Please log in with password'),
+              backgroundColor: SafeJetColors.warning,
+            ),
+          );
+          return;
+        }
+
+        await authProvider.loginWithTokens(
+          tokens['token']!,
+          tokens['refreshToken']!,
+        );
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().contains('expired')
+                  ? 'Biometric login expired. Please log in with password'
+                  : 'Biometric authentication failed',
+            ),
+            backgroundColor: SafeJetColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -201,6 +269,19 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
+      floatingActionButton: Consumer<BiometricSettingsProvider>(
+        builder: (context, provider, child) {
+          if (!provider.isAvailable || !provider.isEnabled) {
+            return const SizedBox.shrink();
+          }
+
+          return FloatingActionButton(
+            onPressed: _showBiometricPrompt,
+            backgroundColor: SafeJetColors.secondaryHighlight,
+            child: const Icon(Icons.fingerprint),
+          );
+        },
       ),
     );
   }
