@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../providers/auto_response_provider.dart';
 
 class P2PAutoResponseScreen extends StatefulWidget {
   const P2PAutoResponseScreen({super.key});
@@ -67,6 +69,24 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
     const Color(0xFF607D8B),
   ];
 
+  final Map<String, IconData> _iconMap = {
+    'payment': Icons.payment,
+    'request_page': Icons.request_page,
+    'check_circle': Icons.check_circle,
+    'favorite': Icons.favorite,
+    'warning': Icons.warning,
+    'info': Icons.info,
+    'message': Icons.message,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AutoResponseProvider>().loadResponses();
+    });
+  }
+
   @override
   void dispose() {
     _messageController.dispose();
@@ -91,14 +111,40 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
         children: [
           _buildHeader(isDark),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _responses.length,
-              itemBuilder: (context, index) {
-                return FadeInUp(
-                  duration: const Duration(milliseconds: 300),
-                  delay: Duration(milliseconds: index * 100),
-                  child: _buildResponseCard(_responses[index], isDark),
+            child: Consumer<AutoResponseProvider>(
+              builder: (context, provider, child) {
+                if (provider.isLoading) {
+                  return _buildShimmerLoading(isDark);
+                }
+
+                if (provider.error != null) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          provider.error!,
+                          style: TextStyle(color: SafeJetColors.error),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => provider.loadResponses(),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: provider.responses.length,
+                  itemBuilder: (context, index) {
+                    return FadeInUp(
+                      duration: const Duration(milliseconds: 300),
+                      delay: Duration(milliseconds: index * 100),
+                      child: _buildResponseCard(provider.responses[index], isDark),
+                    );
+                  },
                 );
               },
             ),
@@ -174,6 +220,12 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   }
 
   Widget _buildResponseCard(Map<String, dynamic> response, bool isDark) {
+    final icon = _getIconData(response['icon'] as String);
+    final color = Color(int.parse(
+      (response['color'] as String).replaceFirst('#', 'FF'),
+      radix: 16,
+    ));
+
     return Dismissible(
       key: Key(response['id']),
       background: Container(
@@ -234,16 +286,12 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: response['color'].withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
+                          color: color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(
-                          response['icon'],
-                          color: response['color'],
-                          size: 20,
-                        ),
+                        child: Icon(icon, color: color),
                       ),
                       const SizedBox(width: 12),
                       Container(
@@ -252,13 +300,13 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: response['color'].withOpacity(0.2),
+                          color: color.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           response['type'],
                           style: TextStyle(
-                            color: response['color'],
+                            color: color,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -291,21 +339,19 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   void _showAddResponseDialog(bool isDark) {
     _messageController.clear();
     _typeController.clear();
-    _selectedIcon = _availableIcons[0]['icon'] as IconData;
-    _selectedColor = _availableColors[0];
+    _selectedIcon = Icons.message;
+    _selectedColor = const Color(0xFF4CAF50);
     
     _showResponseDialog(
       isDark,
       isEdit: false,
       onSave: (message, type) {
-        setState(() {
-          _responses.add({
-            'id': DateTime.now().toString(),
-            'message': message,
-            'type': type,
-            'icon': _selectedIcon ?? Icons.message,
-            'color': _selectedColor,
-          });
+        context.read<AutoResponseProvider>().addResponse({
+          'id': DateTime.now().toString(),
+          'message': message,
+          'type': type,
+          'icon': _getIconString(_selectedIcon ?? Icons.message),
+          'color': '#${_selectedColor.value.toRadixString(16).substring(2)}',
         });
       },
     );
@@ -314,19 +360,26 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   void _showEditResponseDialog(Map<String, dynamic> response, bool isDark) {
     _messageController.text = response['message'];
     _typeController.text = response['type'];
-    _selectedIcon = response['icon'] as IconData;
-    _selectedColor = response['color'] as Color;
+    _selectedIcon = _getIconData(response['icon']);
+    _selectedColor = Color(int.parse(
+      response['color'].replaceFirst('#', 'FF'),
+      radix: 16,
+    ));
     
     _showResponseDialog(
       isDark,
       isEdit: true,
       onSave: (message, type) {
-        setState(() {
-          response['message'] = message;
-          response['type'] = type;
-          response['icon'] = _selectedIcon ?? Icons.message;
-          response['color'] = _selectedColor;
-        });
+        context.read<AutoResponseProvider>().updateResponse(
+          response['id'],
+          {
+            'id': response['id'],
+            'message': message,
+            'type': type,
+            'icon': _getIconString(_selectedIcon ?? Icons.message),
+            'color': '#${_selectedColor.value.toRadixString(16).substring(2)}',
+          },
+        );
       },
     );
   }
@@ -339,154 +392,353 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(isEdit ? 'Edit Response' : 'Add Response'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    labelText: 'Message',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _typeController,
-                  decoration: InputDecoration(
-                    labelText: 'Type',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Select Icon',
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 56,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _availableIcons.length,
-                    itemBuilder: (context, index) {
-                      final icon = _availableIcons[index]['icon'] as IconData;
-                      final isSelected = icon == _selectedIcon;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: InkWell(
-                          onTap: () {
-                            setDialogState(() {
-                              _selectedIcon = icon;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: 56,
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? _selectedColor.withOpacity(0.2)
-                                  : isDark
-                                      ? Colors.white.withOpacity(0.05)
-                                      : Colors.black.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(8),
-                              border: isSelected
-                                  ? Border.all(color: _selectedColor)
-                                  : null,
-                            ),
-                            child: Icon(
-                              icon,
-                              color: isSelected ? _selectedColor : null,
-                            ),
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 400),
+            padding: const EdgeInsets.all(24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _selectedColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _selectedIcon ?? Icons.message,
+                          color: _selectedColor,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          isEdit ? 'Edit Response' : 'Add New Response',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      );
-                    },
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: Icon(
+                          Icons.close,
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Select Color',
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                  const SizedBox(height: 24),
+
+                  // Type Field
+                  Text(
+                    'Response Type',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 56,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _availableColors.length,
-                    itemBuilder: (context, index) {
-                      final color = _availableColors[index];
-                      final isSelected = color == _selectedColor;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: InkWell(
-                          onTap: () {
-                            setDialogState(() {
-                              _selectedColor = color;
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: 56,
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(0.2),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _typeController,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., Payment, Request, Confirmation',
+                      filled: true,
+                      fillColor: isDark 
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.05),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.label_outline,
+                        color: _selectedColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Message Field
+                  Text(
+                    'Message',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _messageController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Enter your response message',
+                      filled: true,
+                      fillColor: isDark 
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.05),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Icon Selection
+                  Text(
+                    'Select Icon',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 56,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _availableIcons.length,
+                      itemBuilder: (context, index) {
+                        final icon = _availableIcons[index]['icon'] as IconData;
+                        final isSelected = icon == _selectedIcon;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Tooltip(
+                            message: _availableIcons[index]['label'] as String,
+                            child: InkWell(
+                              onTap: () {
+                                setDialogState(() {
+                                  _selectedIcon = icon;
+                                });
+                              },
                               borderRadius: BorderRadius.circular(8),
-                              border: isSelected
-                                  ? Border.all(color: color)
-                                  : null,
-                            ),
-                            child: Center(
                               child: Container(
-                                width: 24,
-                                height: 24,
+                                width: 56,
                                 decoration: BoxDecoration(
-                                  color: color,
-                                  shape: BoxShape.circle,
+                                  color: isSelected
+                                      ? _selectedColor.withOpacity(0.2)
+                                      : isDark
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.black.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: isSelected
+                                      ? Border.all(color: _selectedColor)
+                                      : null,
+                                ),
+                                child: Icon(
+                                  icon,
+                                  color: isSelected ? _selectedColor : null,
                                 ),
                               ),
                             ),
                           ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Color Selection
+                  Text(
+                    'Select Color',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 56,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _availableColors.length,
+                      itemBuilder: (context, index) {
+                        final color = _availableColors[index];
+                        final isSelected = color == _selectedColor;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: InkWell(
+                            onTap: () {
+                              setDialogState(() {
+                                _selectedColor = color;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              width: 56,
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: isSelected
+                                    ? Border.all(color: color)
+                                    : null,
+                              ),
+                              child: Center(
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: isSelected
+                                      ? const Icon(
+                                          Icons.check,
+                                          color: Colors.white,
+                                          size: 16,
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : Colors.black54,
+                            ),
+                          ),
                         ),
-                      );
-                    },
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (_messageController.text.isNotEmpty && 
+                                _typeController.text.isNotEmpty) {
+                              onSave(_messageController.text, _typeController.text);
+                              Navigator.pop(context);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _selectedColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(isEdit ? 'Save Changes' : 'Add Response'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleDelete(Map<String, dynamic> response) {
+    // ... your existing delete dialog code ...
+    // When confirmed:
+    context.read<AutoResponseProvider>().deleteResponse(response['id']);
+  }
+
+  Widget _buildShimmerLoading(bool isDark) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 4,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: _buildShimmerCard(isDark),
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard(bool isDark) {
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 80,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (_messageController.text.isNotEmpty && _typeController.text.isNotEmpty) {
-                  onSave(_messageController.text, _typeController.text);
-                  Navigator.pop(context);
-                }
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: SafeJetColors.secondaryHighlight,
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(isEdit ? 'Save' : 'Add'),
             ),
           ],
         ),
       ),
     );
+  }
+
+  IconData _getIconData(String iconName) {
+    return _iconMap[iconName] ?? Icons.message;
+  }
+
+  String _getIconString(IconData icon) {
+    return _iconMap.entries
+        .firstWhere(
+          (entry) => entry.value == icon,
+          orElse: () => const MapEntry('message', Icons.message),
+        )
+        .key;
   }
 } 

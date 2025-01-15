@@ -16,6 +16,8 @@ import 'providers/payment_methods_provider.dart';
 import 'services/payment_methods_service.dart';
 import './widgets/auth_wrapper.dart';
 import './services/dio_interceptors.dart';
+import 'providers/auto_response_provider.dart';
+import '../services/p2p_settings_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -55,6 +57,11 @@ void main() async {
         ChangeNotifierProvider(
           create: (context) => PaymentMethodsProvider(
             PaymentMethodsService(dio),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => AutoResponseProvider(
+            P2PSettingsService(),
           ),
         ),
       ],

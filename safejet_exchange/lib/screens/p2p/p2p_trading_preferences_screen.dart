@@ -657,25 +657,25 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
       onTap: showTimezoneDialog,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.1)
-              : SafeJetColors.lightCardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
+          decoration: BoxDecoration(
             color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                : SafeJetColors.lightCardBorder,
+                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                : SafeJetColors.lightCardBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
           ),
-        ),
-        child: Column(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                 Row(
-                  children: [
+                    children: [
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -689,23 +689,23 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Text(
+                        Text(
                       'Time Zone',
-                      style: TextStyle(
+                          style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                         color: Theme.of(context).textTheme.bodyLarge?.color,
-                      ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
                 IconButton(
                   icon: const Icon(Icons.edit, size: 20),
                   color: Colors.grey,
                   onPressed: showTimezoneDialog,
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.only(left: 40),
@@ -714,12 +714,12 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 style: TextStyle(
                   color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
                   fontSize: 14,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
     );
   }
 

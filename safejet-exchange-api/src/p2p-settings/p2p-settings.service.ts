@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { P2PTraderSettings } from './entities/p2p-trader-settings.entity';
 import { UpdateP2PSettingsDto } from './dto/update-p2p-settings.dto';
 import { CurrenciesService } from '../currencies/currencies.service';
+import { UpdateAutoResponsesDto } from './dto/update-auto-responses.dto';
 
 @Injectable()
 export class P2PSettingsService {
@@ -79,6 +80,20 @@ export class P2PSettingsService {
       return this.settingsRepository.save(settings);
     } catch (error) {
       console.error('Error updating settings:', error);
+      throw error;
+    }
+  }
+
+  async updateAutoResponses(
+    userId: string,
+    updateDto: UpdateAutoResponsesDto,
+  ): Promise<P2PTraderSettings> {
+    try {
+      const settings = await this.getSettings(userId);
+      settings.autoResponses = updateDto.autoResponses;
+      return this.settingsRepository.save(settings);
+    } catch (error) {
+      console.error('Error updating auto responses:', error);
       throw error;
     }
   }

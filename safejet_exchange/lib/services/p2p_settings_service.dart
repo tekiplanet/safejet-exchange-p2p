@@ -84,4 +84,26 @@ class P2PSettingsService {
       rethrow;
     }
   }
+
+  Future<List<Map<String, dynamic>>> getAutoResponses() async {
+    try {
+      final settings = await getSettings();
+      return List<Map<String, dynamic>>.from(settings['autoResponses'] ?? []);
+    } catch (e) {
+      print('Error fetching auto responses: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateAutoResponses(List<Map<String, dynamic>> responses) async {
+    try {
+      await _dio.put(
+        '/p2p-settings/auto-responses',
+        data: {'autoResponses': responses},
+      );
+    } catch (e) {
+      print('Error updating auto responses: $e');
+      rethrow;
+    }
+  }
 } 

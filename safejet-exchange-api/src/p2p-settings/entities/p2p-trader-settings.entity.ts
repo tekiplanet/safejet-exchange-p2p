@@ -39,9 +39,53 @@ export class P2PTraderSettings {
   @Column({ default: 'Africa/Lagos' })
   timezone: string;
 
+  @Column('jsonb', { 
+    name: 'auto_responses',
+    nullable: true,
+    default: () => `'[
+      {
+        "id": "1",
+        "message": "I have made the payment, please check.",
+        "type": "Payment",
+        "icon": "payment",
+        "color": "#4CAF50"
+      },
+      {
+        "id": "2",
+        "message": "Please provide your payment details.",
+        "type": "Request",
+        "icon": "request_page",
+        "color": "#2196F3"
+      },
+      {
+        "id": "3",
+        "message": "Payment received, releasing crypto now.",
+        "type": "Confirmation",
+        "icon": "check_circle",
+        "color": "#9C27B0"
+      },
+      {
+        "id": "4",
+        "message": "Thank you for trading with me!",
+        "type": "Thanks",
+        "icon": "favorite",
+        "color": "#E91E63"
+      }
+    ]'` 
+  })
+  autoResponses: AutoResponse[];
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+}
+
+export interface AutoResponse {
+  id: string;
+  message: string;
+  type: string;
+  icon: string;
+  color: string;
 } 
