@@ -19,6 +19,8 @@ import '../../../widgets/two_factor_dialog.dart';
 import '../../../screens/settings/two_factor_manage_screen.dart';
 import '../../../providers/kyc_provider.dart';
 import '../../../providers/language_settings_provider.dart';
+import '../../../providers/biometric_settings_provider.dart';
+import '../../../screens/settings/biometric_settings_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -327,16 +329,19 @@ class _ProfileTabState extends State<ProfileTab> {
                       context,
                       icon: Icons.fingerprint,
                       title: 'Biometric Authentication',
-                      subtitle: 'Enable fingerprint/face login',
-                      trailing: Switch(
-                        value: true,
-                        onChanged: (value) async {
-                          if (value) {
-                            await BiometricService.authenticate();
-                          }
-                        },
-                      ),
-                      delay: 100,
+                      subtitle: context.select((BiometricSettingsProvider p) =>
+                          p.isAvailable
+                              ? (p.isEnabled ? 'Enabled' : 'Disabled')
+                              : 'Not Available'),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const BiometricSettingsScreen(),
+                          ),
+                        );
+                      },
+                      delay: 300,
                     ),
                     _buildAnimatedSettingCard(
                       context,

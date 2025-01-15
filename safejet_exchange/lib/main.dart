@@ -22,6 +22,8 @@ import 'providers/notification_settings_provider.dart';
 import '../services/notification_settings_service.dart';
 import 'providers/language_settings_provider.dart';
 import '../services/language_settings_service.dart';
+import 'providers/biometric_settings_provider.dart';
+import '../services/biometric_settings_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -76,6 +78,11 @@ void main() async {
         ChangeNotifierProvider(
           create: (context) => LanguageSettingsProvider(
             LanguageSettingsService(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => BiometricSettingsProvider(
+            BiometricSettingsService(),
           ),
         ),
       ],
