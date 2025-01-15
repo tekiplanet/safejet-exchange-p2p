@@ -14,23 +14,18 @@ class P2PTradingPreferencesScreen extends StatefulWidget {
 
 class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScreen> {
   String _selectedCurrency = 'NGN';
-  String _selectedPaymentMethod = 'bank';
   bool _autoAcceptOrders = false;
   bool _onlyVerifiedUsers = true;
+  bool _showOnlineStatus = true;
+  bool _enableInstantTrade = false;
   double _sliderValue = 50000;
+  String _selectedTimeZone = 'UTC+1 (West Africa Time)';
   
   final List<Map<String, dynamic>> _currencies = const [
     {'code': 'NGN', 'name': 'Nigerian Naira', 'symbol': '₦'},
     {'code': 'USD', 'name': 'US Dollar', 'symbol': '\$'},
     {'code': 'EUR', 'name': 'Euro', 'symbol': '€'},
     {'code': 'GBP', 'name': 'British Pound', 'symbol': '£'},
-  ];
-
-  final List<Map<String, dynamic>> _paymentMethods = const [
-    {'id': 'bank', 'name': 'Bank Transfer', 'icon': Icons.account_balance},
-    {'id': 'paypal', 'name': 'PayPal', 'icon': Icons.payment},
-    {'id': 'cashapp', 'name': 'Cash App', 'icon': Icons.attach_money},
-    {'id': 'wise', 'name': 'Wise', 'icon': Icons.currency_exchange},
   ];
 
   @override
@@ -42,37 +37,222 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
       appBar: P2PAppBar(
         title: 'Trading Preferences',
         hasNotification: false,
-        onThemeToggle: () {
-          themeProvider.toggleTheme();
-        },
+        onThemeToggle: () => themeProvider.toggleTheme(),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
+          const SizedBox(height: 16),
+          // Stats Card
           FadeInDown(
             duration: const Duration(milliseconds: 600),
-            child: _buildCurrencySection(isDark),
+            child: _buildStatsCard(isDark),
+          ),
+          const SizedBox(height: 32),
+
+          // Main Content Container
+          Container(
+            decoration: BoxDecoration(
+              color: isDark 
+                  ? Colors.black.withOpacity(0.3)
+                  : Colors.grey.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(32),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            child: Column(
+              children: [
+                // Currency Section
+                FadeInDown(
+                  duration: const Duration(milliseconds: 600),
+                  delay: const Duration(milliseconds: 200),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                            : Colors.grey.withOpacity(0.1),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark 
+                              ? Colors.black.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildCurrencySection(isDark),
+                  ),
+                ),
+
+                // Trading Settings
+                FadeInDown(
+                  duration: const Duration(milliseconds: 600),
+                  delay: const Duration(milliseconds: 400),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                            : Colors.grey.withOpacity(0.1),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark 
+                              ? Colors.black.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildTradingSettingsSection(isDark),
+                  ),
+                ),
+
+                // Trading Limits
+                FadeInDown(
+                  duration: const Duration(milliseconds: 600),
+                  delay: const Duration(milliseconds: 600),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                            : Colors.grey.withOpacity(0.1),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark 
+                              ? Colors.black.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildLimitsSection(isDark),
+                  ),
+                ),
+
+                // Time Zone Settings
+                FadeInDown(
+                  duration: const Duration(milliseconds: 600),
+                  delay: const Duration(milliseconds: 800),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                            : Colors.grey.withOpacity(0.1),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark 
+                              ? Colors.black.withOpacity(0.1)
+                              : Colors.grey.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildTimeZoneSettings(isDark),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
-          FadeInDown(
-            duration: const Duration(milliseconds: 600),
-            delay: const Duration(milliseconds: 200),
-            child: _buildPaymentMethodSection(isDark),
-          ),
-          const SizedBox(height: 24),
-          FadeInDown(
-            duration: const Duration(milliseconds: 600),
-            delay: const Duration(milliseconds: 400),
-            child: _buildTradingSettingsSection(isDark),
-          ),
-          const SizedBox(height: 24),
-          FadeInDown(
-            duration: const Duration(milliseconds: 600),
-            delay: const Duration(milliseconds: 600),
-            child: _buildLimitsSection(isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsCard(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            SafeJetColors.secondaryHighlight,
+            SafeJetColors.secondaryHighlight.withOpacity(0.8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: SafeJetColors.secondaryHighlight.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildStatItem('30 Day Volume', '₦2.5M', Icons.bar_chart),
+          _buildStatItem('Success Rate', '98%', Icons.verified),
+          _buildStatItem('Total Trades', '145', Icons.swap_horiz),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String title, String value, IconData icon) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: Colors.black),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.black.withOpacity(0.7),
+          ),
+        ),
+      ],
     );
   }
 
@@ -173,105 +353,6 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
     );
   }
 
-  Widget _buildPaymentMethodSection(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(
-          'Default Payment Method',
-          'Choose your primary payment method',
-          Icons.payments_outlined,
-          isDark,
-        ),
-        const SizedBox(height: 16),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.5,
-          ),
-          itemCount: _paymentMethods.length,
-          itemBuilder: (context, index) {
-            final method = _paymentMethods[index];
-            final isSelected = method['id'] == _selectedPaymentMethod;
-            return InkWell(
-              onTap: () => setState(() => _selectedPaymentMethod = method['id']),
-              borderRadius: BorderRadius.circular(16),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
-                      : (isDark
-                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                          : SafeJetColors.lightCardBackground),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: isSelected
-                        ? SafeJetColors.secondaryHighlight
-                        : (isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder),
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    if (isSelected)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: SafeJetColors.secondaryHighlight,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.check,
-                            size: 12,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            method['icon'],
-                            size: 32,
-                            color: isSelected
-                                ? SafeJetColors.secondaryHighlight
-                                : null,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            method['name'],
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isSelected
-                                  ? SafeJetColors.secondaryHighlight
-                                  : null,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _buildTradingSettingsSection(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,13 +388,32 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 ),
                 isDark,
               ),
-              const Divider(),
               _buildSettingTile(
                 'Only Verified Users',
                 'Only trade with KYC verified users',
                 Switch(
                   value: _onlyVerifiedUsers,
                   onChanged: (value) => setState(() => _onlyVerifiedUsers = value),
+                  activeColor: SafeJetColors.secondaryHighlight,
+                ),
+                isDark,
+              ),
+              _buildSettingTile(
+                'Show Online Status',
+                'Let other traders see when you\'re online',
+                Switch(
+                  value: _showOnlineStatus,
+                  onChanged: (value) => setState(() => _showOnlineStatus = value),
+                  activeColor: SafeJetColors.secondaryHighlight,
+                ),
+                isDark,
+              ),
+              _buildSettingTile(
+                'Instant Trade',
+                'Enable one-click trading for faster transactions',
+                Switch(
+                  value: _enableInstantTrade,
+                  onChanged: (value) => setState(() => _enableInstantTrade = value),
                   activeColor: SafeJetColors.secondaryHighlight,
                 ),
                 isDark,
@@ -448,47 +548,137 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
     );
   }
 
+  Widget _buildTimeZoneSettings(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          'Time Zone',
+          'Set your trading time zone',
+          Icons.access_time,
+          isDark,
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark
+                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                : SafeJetColors.lightCardBackground,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _selectedTimeZone,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Current time zone for all trading activities',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      // TODO: Implement time zone selection
+                    },
+                    icon: const Icon(Icons.edit),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSectionHeader(
     String title,
     String subtitle,
     IconData icon,
     bool isDark,
   ) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: SafeJetColors.secondaryHighlight.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            icon,
-            color: SafeJetColors.secondaryHighlight,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  SafeJetColors.secondaryHighlight,
+                  SafeJetColors.secondaryHighlight.withOpacity(0.8),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-            ],
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: Colors.black,
+              size: 20,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark 
+                        ? Colors.grey[400] 
+                        : SafeJetColors.lightTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

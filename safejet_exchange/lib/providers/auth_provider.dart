@@ -20,12 +20,19 @@ class AuthProvider with ChangeNotifier {
   String? _lastVerificationToken;
 
   AuthProvider() {
-    _startPeriodicRefresh();
+    // Only check auth status on startup, don't start refresh timer yet
+    checkAuthStatus().then((_) {
+      // Only start refresh timer if user is logged in
+      if (_isLoggedIn) {
+        _startPeriodicRefresh();
+      }
+    });
   }
 
   void _startPeriodicRefresh() {
     _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      loadUserData();
+      // Don't make API calls, just check stored data
+      checkAuthStatus();
     });
   }
 
@@ -107,8 +114,58 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> checkAuthStatus() async {
-    _isLoggedIn = await _authService.isLoggedIn();
-    notifyListeners();
+    try {
+      final token = await _authService.storage.read(key: 'accessToken');
+      
+      if (token == null) {
+        _isLoggedIn = false;
+        _user = null;
+        notifyListeners();
+        return;
+      }
+
+      // Try to get user from storage first
+      final userJson = await _authService.storage.read(key: 'user');
+      if (userJson != null) {
+        _user = User.fromJson(json.decode(userJson));
+        _isLoggedIn = true;
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error checking auth status: $e');
+      _isLoggedIn = false;
+      _user = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchFreshUserData() async {
+    try {
+      final token = await _authService.storage.read(key: 'accessToken');
+      
+      // Don't make the request if there's no token
+      if (token == null) {
+        _isLoggedIn = false;
+        _user = null;
+        notifyListeners();
+        return;
+      }
+
+      final userData = await _authService.getCurrentUser();
+      _user = User.fromJson(userData);
+      _isLoggedIn = true;
+      notifyListeners();
+    } catch (e) {
+      print('Error fetching fresh user data: $e');
+      // Only clear auth state if it's an auth error
+      if (e is DioException && e.response?.statusCode == 401) {
+        _isLoggedIn = false;
+        _user = null;
+        await _authService.storage.delete(key: 'accessToken');
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
   Future<void> register(String fullName, String email, String phone, String password, String countryCode, String countryName) async {
@@ -514,18 +571,9 @@ class AuthProvider with ChangeNotifier {
         _user = User.fromJson(userData);
         notifyListeners();
       }
-
-      // Then refresh from API
-      await refreshUserData();
     } catch (e) {
       print('Error loading user data: $e');
-      // Handle unauthorized error
-      if (e is DioException && 
-          (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
-        if (_context != null && _context!.mounted) {
-          await handleUnauthorized(_context!);
-        }
-      }
+      rethrow;
     }
   }
 
