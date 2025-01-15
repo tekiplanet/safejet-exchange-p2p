@@ -869,4 +869,9 @@ class AuthService {
       throw 'Session expired. Please login again.';
     }
   }
+
+  Future<String?> getAccessToken() async {
+    final storage = FlutterSecureStorage();
+    return await storage.read(key: 'accessToken');
+  }
 } 

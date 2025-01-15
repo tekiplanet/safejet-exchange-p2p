@@ -134,4 +134,36 @@ export class User {
 
   @Column('json', { nullable: true })
   kycData: KYCData;
+
+  @Column('jsonb', {
+    name: 'notification_settings',
+    nullable: false,
+    default: {
+      Trading: {
+        'Order Updates': true,
+        'Price Alerts': true,
+        'Trade Confirmations': true,
+        'Market Updates': false,
+      },
+      P2P: {
+        'New Messages': true,
+        'Order Status': true,
+        'Payment Confirmations': true,
+        'Dispute Updates': true,
+      },
+      Security: {
+        'Login Alerts': true,
+        'Device Changes': true,
+        'Password Changes': true,
+        'Suspicious Activity': true,
+      },
+      Wallet: {
+        'Deposits': true,
+        'Withdrawals': true,
+        'Transfer Confirmations': false,
+        'Balance Updates': true,
+      },
+    },
+  })
+  notificationSettings: Record<string, Record<string, boolean>>;
 }

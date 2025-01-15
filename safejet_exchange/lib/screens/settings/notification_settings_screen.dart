@@ -4,6 +4,8 @@ import 'package:animate_do/animate_do.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../providers/notification_settings_provider.dart';
+import 'package:shimmer/shimmer.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -13,52 +15,27 @@ class NotificationSettingsScreen extends StatefulWidget {
 }
 
 class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
-  final Map<String, Map<String, bool>> _settings = {
-    'Trading': {
-      'Order Updates': true,
-      'Price Alerts': true,
-      'Trade Confirmations': true,
-      'Market Updates': false,
-    },
-    'P2P': {
-      'New Messages': true,
-      'Order Status': true,
-      'Payment Confirmations': true,
-      'Dispute Updates': true,
-    },
-    'Security': {
-      'Login Alerts': true,
-      'Device Changes': true,
-      'Password Changes': true,
-      'Suspicious Activity': true,
-    },
-    'Wallet': {
-      'Deposits': true,
-      'Withdrawals': true,
-      'Transfer Confirmations': false,
-      'Balance Updates': true,
-    },
-  };
-
-  bool _masterToggle = true;
+  bool get _masterToggle {
+    if (context.read<NotificationSettingsProvider>().settings.isEmpty) {
+      return false;
+    }
+    
+    for (var category in context.read<NotificationSettingsProvider>().settings.values) {
+      for (var enabled in category.values) {
+        if (!enabled) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
 
   @override
   void initState() {
     super.initState();
-    _updateMasterToggle();
-  }
-
-  void _updateMasterToggle() {
-    bool allEnabled = true;
-    for (var category in _settings.values) {
-      for (var enabled in category.values) {
-        if (!enabled) {
-          allEnabled = false;
-          break;
-        }
-      }
-    }
-    setState(() => _masterToggle = allEnabled);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationSettingsProvider>().loadSettings();
+    });
   }
 
   @override
@@ -74,24 +51,61 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           themeProvider.toggleTheme();
         },
       ),
-      body: Column(
-        children: [
-          _buildHeader(isDark),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-              itemCount: _settings.length,
-              itemBuilder: (context, index) {
-                final category = _settings.keys.elementAt(index);
-                return FadeInUp(
-                  duration: const Duration(milliseconds: 300),
-                  delay: Duration(milliseconds: index * 100),
-                  child: _buildCategory(category, _settings[category]!, isDark),
-                );
-              },
-            ),
-          ),
-        ],
+      body: Consumer<NotificationSettingsProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return Column(
+              children: [
+                _buildHeader(isDark),
+                Expanded(
+                  child: _buildShimmerLoading(isDark),
+                ),
+              ],
+            );
+          }
+
+          if (provider.error != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    provider.error!,
+                    style: TextStyle(color: SafeJetColors.error),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => provider.loadSettings(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Column(
+            children: [
+              _buildHeader(isDark),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                  itemCount: provider.settings.length,
+                  itemBuilder: (context, index) {
+                    final category = provider.settings.keys.elementAt(index);
+                    return FadeInUp(
+                      duration: const Duration(milliseconds: 300),
+                      delay: Duration(milliseconds: index * 100),
+                      child: _buildCategory(
+                        category,
+                        provider.settings[category]!,
+                        isDark,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -153,62 +167,64 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   }
 
   Widget _buildMasterToggle(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.black.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            _masterToggle ? Icons.notifications_active : Icons.notifications_off,
-            color: _masterToggle
-                ? SafeJetColors.success
-                : (isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary),
+    return Consumer<NotificationSettingsProvider>(
+      builder: (context, provider, child) {
+        final masterToggle = provider.settings.isNotEmpty && 
+          !provider.settings.values
+            .expand((map) => map.values)
+            .contains(false);
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'All Notifications',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: _masterToggle
-                        ? null
-                        : (isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary),
-                  ),
+          child: Row(
+            children: [
+              Icon(
+                masterToggle 
+                  ? Icons.notifications_active 
+                  : Icons.notifications_off,
+                color: masterToggle
+                    ? SafeJetColors.success
+                    : (isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'All Notifications',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: masterToggle
+                            ? null
+                            : (isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary),
+                      ),
+                    ),
+                    Text(
+                      masterToggle ? 'Enabled' : 'Disabled',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  _masterToggle ? 'Enabled' : 'Disabled',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              Switch(
+                value: masterToggle,
+                onChanged: _onMasterToggleChanged,
+                activeColor: SafeJetColors.secondaryHighlight,
+              ),
+            ],
           ),
-          Switch(
-            value: _masterToggle,
-            onChanged: (value) {
-              setState(() {
-                _masterToggle = value;
-                for (var category in _settings.keys) {
-                  for (var key in _settings[category]!.keys) {
-                    _settings[category]![key] = value;
-                  }
-                }
-              });
-            },
-            activeColor: SafeJetColors.secondaryHighlight,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -271,10 +287,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                 ),
                 value: entry.value,
                 onChanged: (value) {
-                  setState(() {
-                    _settings[category]![entry.key] = value;
-                    _updateMasterToggle();
-                  });
+                  _onCategoryToggleChanged(category, entry.key, value);
                 },
                 activeColor: SafeJetColors.secondaryHighlight,
               ),
@@ -314,5 +327,128 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       default:
         return SafeJetColors.secondaryHighlight;
     }
+  }
+
+  void _onMasterToggleChanged(bool value) async {
+    try {
+      await context.read<NotificationSettingsProvider>().updateAllSettings(value);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to update settings'),
+            backgroundColor: SafeJetColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _onMasterToggleChanged(value),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _onCategoryToggleChanged(String category, String setting, bool value) async {
+    try {
+      await context.read<NotificationSettingsProvider>().updateSingleSetting(
+        category,
+        setting,
+        value,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to update setting'),
+            backgroundColor: SafeJetColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _onCategoryToggleChanged(category, setting, value),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildShimmerLoading(bool isDark) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+      itemCount: 4,  // Number of shimmer cards to show
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: _buildShimmerCard(isDark),
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard(bool isDark) {
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 100,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Shimmer for list items
+            ...List.generate(3, (index) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    width: 40,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ],
+              ),
+            )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 } 

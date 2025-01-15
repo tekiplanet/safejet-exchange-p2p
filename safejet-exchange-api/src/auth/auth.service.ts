@@ -1034,4 +1034,18 @@ export class AuthService {
       );
     }
   }
+
+  async updateNotificationSettings(
+    userId: string,
+    settings: Record<string, Record<string, boolean>>,
+  ) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.notificationSettings = settings;
+    await this.userRepository.save(user);
+    return user;
+  }
 }

@@ -7,6 +7,7 @@ import {
   Req,
   Put,
   BadRequestException,
+  Request as ExpressRequest,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -28,6 +29,7 @@ import { TwilioService } from '../twilio/twilio.service';
 import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DisableCodeType } from './enums/disable-code-type.enum';
+import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -199,5 +201,17 @@ export class AuthController {
       throw new BadRequestException('2FA code is required');
     }
     await this.authService.verify2FAAction(code, user);
+  }
+
+  @Put('notification-settings')
+  @UseGuards(JwtAuthGuard)
+  async updateNotificationSettings(
+    @GetUser() user: User,
+    @Body() updateDto: UpdateNotificationSettingsDto,
+  ) {
+    return this.authService.updateNotificationSettings(
+      user.id,
+      updateDto.notificationSettings,
+    );
   }
 }
