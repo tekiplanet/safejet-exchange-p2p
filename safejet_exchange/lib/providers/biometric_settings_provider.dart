@@ -10,7 +10,10 @@ class BiometricSettingsProvider with ChangeNotifier {
   String? _error;
   List<BiometricType> _availableBiometrics = [];
 
-  BiometricSettingsProvider(this._service);
+  BiometricSettingsProvider(this._service) {
+    // Check availability on creation
+    checkAvailability();
+  }
 
   bool get isEnabled => _isEnabled;
   bool get isAvailable => _isAvailable;
@@ -41,10 +44,16 @@ class BiometricSettingsProvider with ChangeNotifier {
 
       await checkAvailability();
       if (_isAvailable) {
-        _isEnabled = await _service.getBiometricStatus();
+        // Load both server status and check stored tokens
+        final serverStatus = await _service.getBiometricStatus();
+        final tokens = await _service.getBiometricTokens();
+        
+        // Only consider enabled if both server says yes and we have valid tokens
+        _isEnabled = serverStatus && tokens['token'] != null;
       }
     } catch (e) {
       _error = e.toString();
+      _isEnabled = false;
     } finally {
       _isLoading = false;
       notifyListeners();

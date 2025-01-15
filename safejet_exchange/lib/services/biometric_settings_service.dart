@@ -63,15 +63,17 @@ class BiometricSettingsService {
 
   Future<bool> authenticate() async {
     try {
+      print('Showing biometric prompt...');
       return await _localAuth.authenticate(
-        localizedReason: 'Authenticate to enable biometric login',
+        localizedReason: 'Please authenticate to login',
         options: const AuthenticationOptions(
           stickyAuth: true,
           biometricOnly: true,
+          useErrorDialogs: true,
         ),
       );
     } catch (e) {
-      print('Error authenticating: $e');
+      print('Error in authenticate(): $e');
       return false;
     }
   }
@@ -88,39 +90,53 @@ class BiometricSettingsService {
 
   Future<void> storeBiometricTokens(String token, String refreshToken) async {
     try {
-      await _storage.write(key: _tokenKey, value: token);
-      await _storage.write(key: _refreshTokenKey, value: refreshToken);
+      print('Storing biometric tokens...');
+      
+      // Store tokens with encryption
+      final encryptedToken = base64.encode(utf8.encode(token));
+      final encryptedRefreshToken = base64.encode(utf8.encode(refreshToken));
+      
+      await _storage.write(key: _tokenKey, value: encryptedToken);
+      await _storage.write(key: _refreshTokenKey, value: encryptedRefreshToken);
+      
+      print('Tokens stored successfully with keys: $_tokenKey, $_refreshTokenKey');
+      
+      // Verify storage
+      final storedToken = await _storage.read(key: _tokenKey);
+      final storedRefreshToken = await _storage.read(key: _refreshTokenKey);
+      
+      if (storedToken == null || storedRefreshToken == null) {
+        throw 'Failed to verify token storage';
+      }
+      
+      print('Token storage verified successfully');
     } catch (e) {
       print('Error storing biometric tokens: $e');
+      await clearBiometricTokens();
       rethrow;
     }
   }
 
   Future<Map<String, String?>> getBiometricTokens() async {
     try {
-      final token = await _storage.read(key: _tokenKey);
-      final refreshToken = await _storage.read(key: _refreshTokenKey);
-
-      // If either token is missing, clear both
-      if (token == null || refreshToken == null) {
+      print('Getting biometric tokens...');
+      final encryptedToken = await _storage.read(key: _tokenKey);
+      final encryptedRefreshToken = await _storage.read(key: _refreshTokenKey);
+      
+      print('Retrieved encrypted tokens - token exists: ${encryptedToken != null}, refresh exists: ${encryptedRefreshToken != null}');
+      
+      if (encryptedToken == null || encryptedRefreshToken == null) {
+        print('Missing tokens, clearing storage');
         await clearBiometricTokens();
-        return {
-          'token': null,
-          'refreshToken': null,
-        };
+        return {'token': null, 'refreshToken': null};
       }
-
-      // Check token validity
-      final isValid = await isTokenValid(token);
-      if (!isValid) {
-        print('Clearing expired biometric tokens');
-        await clearBiometricTokens();
-        return {
-          'token': null,
-          'refreshToken': null,
-        };
-      }
-
+      
+      // Decrypt tokens
+      final token = utf8.decode(base64.decode(encryptedToken));
+      final refreshToken = utf8.decode(base64.decode(encryptedRefreshToken));
+      
+      print('Tokens decrypted successfully');
+      
       return {
         'token': token,
         'refreshToken': refreshToken,
@@ -128,20 +144,18 @@ class BiometricSettingsService {
     } catch (e) {
       print('Error getting biometric tokens: $e');
       await clearBiometricTokens();
-      return {
-        'token': null,
-        'refreshToken': null,
-      };
+      return {'token': null, 'refreshToken': null};
     }
   }
 
   Future<void> clearBiometricTokens() async {
     try {
+      print('Clearing biometric tokens...');
       await _storage.delete(key: _tokenKey);
       await _storage.delete(key: _refreshTokenKey);
+      print('Biometric tokens cleared successfully');
     } catch (e) {
       print('Error clearing biometric tokens: $e');
-      rethrow;
     }
   }
 
@@ -166,51 +180,97 @@ class BiometricSettingsService {
 
   Future<bool> authenticateAndGetTokens() async {
     try {
+      // First check if we have valid biometric tokens
       final tokens = await getBiometricTokens();
+      print('Checking stored biometric tokens: ${tokens['token'] != null}');
+      
       if (tokens['token'] == null || tokens['refreshToken'] == null) {
+        print('No stored biometric tokens found');
         return false;
       }
 
-      // Check if token is valid
+      // Then prompt for biometric
+      final authenticated = await authenticate();
+      print('Biometric authentication result: $authenticated');
+      
+      if (!authenticated) {
+        print('Biometric authentication failed or cancelled');
+        return false;
+      }
+
+      // Verify token validity
       final isValid = await isTokenValid(tokens['token']!);
       if (!isValid) {
-        print('Biometric token expired');
+        print('Stored biometric token is invalid or expired');
         await clearBiometricTokens();
         return false;
       }
 
-      // Only prompt for biometric if tokens are valid
-      final authenticated = await authenticate();
-      return authenticated;
+      return true;
     } catch (e) {
-      print('Error in biometric authentication: $e');
+      print('Error in authenticateAndGetTokens: $e');
       return false;
     }
   }
 
   Future<void> updateBiometricStatus(bool enabled) async {
     try {
+      print('Updating biometric status: $enabled');
+      
       if (enabled) {
-        // Store current tokens when enabling biometric
+        // First update server before getting tokens
+        await _dio.put(
+          '/biometric',
+          data: {
+            'enabled': enabled,
+          },
+        );
+        print('Server status updated');
+
+        // Then get current auth tokens
         final token = await _authService.getAccessToken();
         final refreshToken = await _authService.getRefreshToken();
-        if (token != null && refreshToken != null) {
-          await storeBiometricTokens(token, refreshToken);
+        
+        if (token == null || refreshToken == null) {
+          throw 'No valid tokens available to store';
         }
+
+        // Finally store tokens in biometric storage
+        await storeBiometricTokens(token, refreshToken);
+        print('Tokens stored in biometric storage');
       } else {
-        // Clear stored tokens when disabling biometric
+        // For disable, first update server
+        await _dio.put(
+          '/biometric',
+          data: {
+            'enabled': enabled,
+          },
+        );
+        print('Server status updated');
+
+        // Then clear biometric tokens
+        await clearBiometricTokens();
+        print('Biometric tokens cleared');
+      }
+    } catch (e) {
+      print('Error in updateBiometricStatus: $e');
+      if (!enabled) {
         await clearBiometricTokens();
       }
-
-      await _dio.put(
-        '/biometric',
-        data: {
-          'enabled': enabled,
-        },
-      );
-    } catch (e) {
-      print('Error updating biometric status: $e');
       rethrow;
+    }
+  }
+
+  Future<void> storeTokensAfterLogin(String token, String refreshToken) async {
+    try {
+      // Check if biometric is enabled on server
+      final status = await getBiometricStatus();
+      if (status) {
+        print('Biometric enabled, storing login tokens');
+        await storeBiometricTokens(token, refreshToken);
+      }
+    } catch (e) {
+      print('Error storing tokens after login: $e');
     }
   }
 } 

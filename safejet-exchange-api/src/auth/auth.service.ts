@@ -973,20 +973,22 @@ export class AuthService {
   async getCurrentUser(userId: string) {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['kycLevelDetails'], // Include any related entities you need
+      relations: ['kycLevelDetails'],
     });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    // Remove sensitive data
+    // Remove sensitive data but include biometricEnabled
     const {
       passwordHash,
       passwordResetCode,
       passwordResetExpires,
       ...safeUser
     } = user;
+    
+    console.log('Returning user with biometric status:', safeUser.biometricEnabled);
     return safeUser;
   }
 
@@ -1061,13 +1063,15 @@ export class AuthService {
   }
 
   async updateBiometric(userId: string, enabled: boolean) {
+    console.log(`Updating biometric status for user ${userId} to ${enabled}`);
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
     user.biometricEnabled = enabled;
-    await this.userRepository.save(user);
-    return user;
+    const updatedUser = await this.userRepository.save(user);
+    console.log('Updated user biometric status:', updatedUser.biometricEnabled);
+    return updatedUser;
   }
 }

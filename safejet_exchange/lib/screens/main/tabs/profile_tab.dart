@@ -38,6 +38,7 @@ class _ProfileTabState extends State<ProfileTab> {
     _check2FAStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<KYCProvider>().loadKYCDetails();
+      context.read<BiometricSettingsProvider>().loadSettings();
     });
   }
 

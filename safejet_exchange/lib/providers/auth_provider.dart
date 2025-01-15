@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../screens/auth/login_screen.dart';
 import 'dart:async';
 import 'package:dio/dio.dart';
+import '../services/biometric_settings_service.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -79,9 +80,26 @@ class AuthProvider with ChangeNotifier {
         return response;
       }
 
-      // Store tokens and user data only if 2FA is not required or after 2FA verification
+      // Store tokens
       await _authService.storage.write(key: 'accessToken', value: response['accessToken']);
       await _authService.storage.write(key: 'refreshToken', value: response['refreshToken']);
+      
+      // Store for biometric if enabled (with error handling)
+      try {
+        final biometricService = BiometricSettingsService();
+        final biometricEnabled = await biometricService.getBiometricStatus();
+        if (biometricEnabled) {
+          print('Storing tokens for biometric auth...');
+          await biometricService.storeBiometricTokens(
+            response['accessToken'],
+            response['refreshToken'],
+          );
+        }
+      } catch (e) {
+        print('Error handling biometric storage: $e');
+      }
+
+      // Store user data only if 2FA is not required or after 2FA verification
       await _authService.storage.write(key: 'user', value: json.encode(response['user']));
 
       _user = User.fromJson(response['user']);
@@ -102,13 +120,23 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> logout() async {
     try {
-      await _authService.logout();
-      _refreshTimer?.cancel();  // Stop refresh timer on logout
+      print('Starting logout...');
+      _refreshTimer?.cancel();
+      _tokenRefreshTimer?.cancel();
+      
+      // Only clear auth tokens, not biometric tokens
+      await _authService.storage.delete(key: 'accessToken');
+      await _authService.storage.delete(key: 'refreshToken');
+      await _authService.storage.delete(key: 'user');
+      
+      _isLoggedIn = false;
       _user = null;
+      _error = null;
+      
+      print('Logout complete - auth tokens cleared');
       notifyListeners();
     } catch (e) {
-      _error = e.toString();
-      notifyListeners();
+      print('Error during logout: $e');
       rethrow;
     }
   }
@@ -532,32 +560,15 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> handleUnauthorized(BuildContext context) async {
-    // Only handle actual session expiration
-    _refreshTimer?.cancel();
-    await _authService.storage.deleteAll();
+    print('Handling unauthorized access...');
+    await logout();
     
-    _user = null;
-    _isLoggedIn = false;
-    _error = null;
-    notifyListeners();
-    
-    if (!context.mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Session expired. Please login again.'),
-        backgroundColor: Colors.red,
-      ),
-    );
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (context) => const LoginScreen(
-          message: 'Session expired. Please login again.',
-        ),
-      ),
-      (route) => false,
-    );
+    if (context.mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   Future<void> loadUserData() async {
@@ -709,12 +720,28 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> loginWithTokens(String token, String refreshToken) async {
     try {
-      await _authService.storage.write(key: 'token', value: token);
+      print('Starting biometric login...');
+      // Store in normal auth storage
+      await _authService.storage.write(key: 'accessToken', value: token);
       await _authService.storage.write(key: 'refreshToken', value: refreshToken);
+      
+      print('Auth tokens stored, fetching user data...');
+      final userData = await _authService.getCurrentUser();
+      if (userData != null) {
+        _user = User.fromJson(userData);
+        await _authService.storage.write(
+          key: 'user',
+          value: json.encode(userData),
+        );
+      }
+      
       _isLoggedIn = true;
+      _startPeriodicRefresh();
       notifyListeners();
+      
+      print('Biometric login successful');
     } catch (e) {
-      print('Error in token login: $e');
+      print('Error in biometric login: $e');
       rethrow;
     }
   }

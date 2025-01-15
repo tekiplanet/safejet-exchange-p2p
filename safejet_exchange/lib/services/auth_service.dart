@@ -875,7 +875,6 @@ class AuthService {
   }
 
   Future<String?> getAccessToken() async {
-    final storage = FlutterSecureStorage();    
     return await storage.read(key: 'accessToken');
   }
 } 

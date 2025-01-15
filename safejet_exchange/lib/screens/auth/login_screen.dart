@@ -64,14 +64,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _showBiometricPrompt() async {
+    print('=== Starting Biometric Login ===');
     final biometricService = BiometricSettingsService();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
+      print('Attempting to authenticate with biometrics...');
       final success = await biometricService.authenticateAndGetTokens();
+      print('Authentication result: $success');
+
       if (success && mounted) {
+        print('Getting biometric tokens...');
         final tokens = await biometricService.getBiometricTokens();
+        print('Tokens retrieved: ${tokens['token'] != null}');
+
         if (tokens['token'] == null || tokens['refreshToken'] == null) {
+          print('No valid tokens found');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Biometric login expired. Please log in with password'),
@@ -81,12 +89,14 @@ class _LoginScreenState extends State<LoginScreen> {
           return;
         }
 
+        print('Logging in with tokens...');
         await authProvider.loginWithTokens(
           tokens['token']!,
           tokens['refreshToken']!,
         );
 
         if (mounted) {
+          print('Navigation to home screen...');
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -94,6 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
+      print('Error in biometric login: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
