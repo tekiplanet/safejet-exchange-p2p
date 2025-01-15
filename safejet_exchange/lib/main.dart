@@ -20,6 +20,8 @@ import 'providers/auto_response_provider.dart';
 import '../services/p2p_settings_service.dart';
 import 'providers/notification_settings_provider.dart';
 import '../services/notification_settings_service.dart';
+import 'providers/language_settings_provider.dart';
+import '../services/language_settings_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -69,6 +71,11 @@ void main() async {
         ChangeNotifierProvider(
           create: (context) => NotificationSettingsProvider(
             NotificationSettingsService(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => LanguageSettingsProvider(
+            LanguageSettingsService(),
           ),
         ),
       ],

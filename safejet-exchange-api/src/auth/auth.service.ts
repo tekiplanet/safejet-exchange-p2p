@@ -1048,4 +1048,26 @@ export class AuthService {
     await this.userRepository.save(user);
     return user;
   }
+
+  async updateLanguage(userId: string, language: string) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.language = language;
+    await this.userRepository.save(user);
+    return user;
+  }
+
+  async updateBiometric(userId: string, enabled: boolean) {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.biometricEnabled = enabled;
+    await this.userRepository.save(user);
+    return user;
+  }
 }

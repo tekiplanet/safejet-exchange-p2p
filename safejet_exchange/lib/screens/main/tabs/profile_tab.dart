@@ -11,12 +11,14 @@ import '../../../screens/settings/change_password_screen.dart';
 import '../../../screens/settings/two_factor_screen.dart';
 import '../../../screens/settings/identity_verification_screen.dart';
 import '../../../screens/settings/kyc_levels_screen.dart';
+import '../../../screens/settings/language_settings_screen.dart';
 import 'package:animate_do/animate_do.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../screens/auth/login_screen.dart';
 import '../../../widgets/two_factor_dialog.dart';
 import '../../../screens/settings/two_factor_manage_screen.dart';
 import '../../../providers/kyc_provider.dart';
+import '../../../providers/language_settings_provider.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -519,9 +521,28 @@ class _ProfileTabState extends State<ProfileTab> {
                 context,
                 icon: Icons.language,
                 title: 'Language',
-                subtitle: 'English',
+                subtitle: context.select((LanguageSettingsProvider p) {
+                  final code = p.currentLanguage;
+                  switch (code) {
+                    case 'en': return 'English';
+                    case 'es': return 'Español';
+                    case 'fr': return 'Français';
+                    case 'de': return 'Deutsch';
+                    case 'zh': return '中文';
+                    case 'ja': return '日本語';
+                    case 'ko': return '한국어';
+                    case 'ru': return 'Русский';
+                    case 'ar': return 'العربية';
+                    default: return 'English';
+                  }
+                }),
                 onTap: () {
-                  // TODO: Show language selection
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LanguageSettingsScreen(),
+                    ),
+                  );
                 },
               ),
               _buildSettingCard(

@@ -30,6 +30,7 @@ import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DisableCodeType } from './enums/disable-code-type.enum';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
+import { UpdateLanguageDto } from './dto/update-language.dto';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -213,5 +214,23 @@ export class AuthController {
       user.id,
       updateDto.notificationSettings,
     );
+  }
+
+  @Put('language')
+  @UseGuards(JwtAuthGuard)
+  async updateLanguage(
+    @GetUser() user: User,
+    @Body() updateDto: UpdateLanguageDto,
+  ) {
+    return this.authService.updateLanguage(user.id, updateDto.language);
+  }
+
+  @Put('biometric')
+  @UseGuards(JwtAuthGuard)
+  async updateBiometric(
+    @GetUser() user: User,
+    @Body('enabled') enabled: boolean,
+  ) {
+    return this.authService.updateBiometric(user.id, enabled);
   }
 }

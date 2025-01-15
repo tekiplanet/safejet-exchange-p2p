@@ -166,4 +166,17 @@ export class User {
     },
   })
   notificationSettings: Record<string, Record<string, boolean>>;
+
+  @Column({ 
+    type: 'varchar',
+    length: 10,
+    default: 'en'
+  })
+  language: string;
+
+  @Column({ 
+    type: 'boolean',
+    default: false 
+  })
+  biometricEnabled: boolean;
 }
