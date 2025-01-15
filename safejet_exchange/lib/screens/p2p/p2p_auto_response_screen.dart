@@ -249,31 +249,76 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
       key: Key(response['id']),
       background: Container(
         margin: const EdgeInsets.only(bottom: 16),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         decoration: BoxDecoration(
-          color: SafeJetColors.error,
+          color: SafeJetColors.error.withOpacity(0.8),
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.centerRight,
-        child: const Icon(
-          Icons.delete_outline,
-          color: Colors.white,
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(width: 8),
+            Icon(
+              Icons.delete_outline,
+              color: Colors.white,
+            ),
+          ],
         ),
       ),
       direction: DismissDirection.endToStart,
+      confirmDismiss: (direction) async {
+        return await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Delete Response'),
+              content: const Text(
+                'Are you sure you want to delete this response?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: TextButton.styleFrom(
+                    foregroundColor: SafeJetColors.error,
+                  ),
+                  child: const Text('Delete'),
+                ),
+              ],
+            );
+          },
+        );
+      },
       onDismissed: (direction) {
-        setState(() {
-          _responses.remove(response);
-        });
+        context.read<AutoResponseProvider>().deleteResponse(response['id']);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Response deleted'),
+            backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.black87,
             action: SnackBarAction(
               label: 'Undo',
               onPressed: () {
-                setState(() {
-                  _responses.add(response);
-                });
+                context.read<AutoResponseProvider>().addResponse(response);
               },
             ),
           ),
@@ -332,10 +377,79 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                         ),
                       ),
                       const Spacer(),
-                      IconButton(
-                        onPressed: () => _showEditResponseDialog(response, isDark),
-                        icon: const Icon(Icons.edit_outlined),
-                        iconSize: 20,
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => _showEditResponseDialog(response, isDark),
+                            icon: Icon(
+                              Icons.edit_outlined,
+                              color: isDark ? Colors.white70 : Colors.black54,
+                            ),
+                            iconSize: 20,
+                            tooltip: 'Edit',
+                          ),
+                          IconButton(
+                            onPressed: () async {
+                              final shouldDelete = await showDialog<bool>(
+                                context: context,
+                                builder: (BuildContext context) {
+                                  return AlertDialog(
+                                    backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    title: const Text('Delete Response'),
+                                    content: const Text(
+                                      'Are you sure you want to delete this response?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(false),
+                                        child: Text(
+                                          'Cancel',
+                                          style: TextStyle(
+                                            color: isDark ? Colors.white70 : Colors.black54,
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.of(context).pop(true),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: SafeJetColors.error,
+                                        ),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+
+                              if (shouldDelete == true) {
+                                if (context.mounted) {
+                                  context.read<AutoResponseProvider>().deleteResponse(response['id']);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: const Text('Response deleted'),
+                                      backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.black87,
+                                      action: SnackBarAction(
+                                        label: 'Undo',
+                                        onPressed: () {
+                                          context.read<AutoResponseProvider>().addResponse(response);
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: Icon(
+                              Icons.delete_outline,
+                              color: SafeJetColors.error.withOpacity(0.7),
+                            ),
+                            iconSize: 20,
+                            tooltip: 'Delete',
+                          ),
+                        ],
                       ),
                     ],
                   ),
