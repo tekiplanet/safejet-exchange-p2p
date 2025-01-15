@@ -290,9 +290,20 @@ class _LoginScreenState extends State<LoginScreen> {
           }
 
           return FloatingActionButton(
-            onPressed: _handleBiometricLogin,
-            backgroundColor: SafeJetColors.secondaryHighlight,
-            child: const Icon(Icons.fingerprint),
+            onPressed: _isLoading ? null : _handleBiometricLogin,
+            backgroundColor: _isLoading 
+              ? Colors.grey 
+              : SafeJetColors.secondaryHighlight,
+            child: _isLoading 
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(Icons.fingerprint),
           );
         },
       ),
