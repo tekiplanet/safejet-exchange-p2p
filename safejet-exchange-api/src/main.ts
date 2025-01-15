@@ -11,12 +11,18 @@ async function bootstrap() {
   // Important: This must come before any other middleware
   app.use(
     bodyParser.json({
+      limit: '10mb',
       verify: (req: any, res, buf) => {
         // Store the raw body string
         req.rawBody = buf.toString();
       },
     }),
   );
+
+  app.use(bodyParser.urlencoded({
+    limit: '10mb',
+    extended: true
+  }));
 
   app.useGlobalPipes(
     new ValidationPipe({

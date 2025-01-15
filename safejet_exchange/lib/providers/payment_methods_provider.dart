@@ -77,8 +77,8 @@ class PaymentMethodsProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      if (_context == null) {
-        throw 'Context not set';
+      if (_context == null || !_context!.mounted) {
+        throw 'Context not set or widget disposed';
       }
 
       // Check if user has 2FA enabled
@@ -87,7 +87,6 @@ class PaymentMethodsProvider with ChangeNotifier {
       
       if (authProvider.user?.twoFactorEnabled == true) {
         if (_context!.mounted) {
-          // Show 2FA dialog first
           final verified = await showDialog<bool>(
             context: _context!,
             barrierDismissible: false,
@@ -102,13 +101,13 @@ class PaymentMethodsProvider with ChangeNotifier {
             throw 'Two-factor authentication required';
           }
           
-          // Get the verification code
           twoFactorCode = authProvider.getLastVerificationToken();
         }
       }
 
       await _service.createPaymentMethod(
         data,
+        _context!,
         twoFactorCode: twoFactorCode,
       );
       
@@ -116,29 +115,31 @@ class PaymentMethodsProvider with ChangeNotifier {
         await loadPaymentMethods();
       }
 
-      _isLoading = false;
-      notifyListeners();
+      if (_context!.mounted) {
+        _isLoading = false;
+        notifyListeners();
+      }
     } catch (e) {
-      _error = e.toString();
-      _isLoading = false;
-      notifyListeners();
+      if (_context?.mounted ?? false) {
+        _error = e.toString();
+        _isLoading = false;
+        notifyListeners();
+      }
       rethrow;
     }
   }
 
   Future<void> updatePaymentMethod(String id, Map<String, dynamic> data) async {
     try {
-      if (_context == null) {
-        throw 'Context not set';
+      if (_context == null || !_context!.mounted) {
+        throw 'Context not set or widget disposed';
       }
 
-      // Check if user has 2FA enabled
       final authProvider = Provider.of<AuthProvider>(_context!, listen: false);
       String? twoFactorCode;
       
       if (authProvider.user?.twoFactorEnabled == true) {
         if (_context!.mounted) {
-          // Show 2FA dialog first
           final verified = await showDialog<bool>(
             context: _context!,
             barrierDismissible: false,
@@ -153,21 +154,20 @@ class PaymentMethodsProvider with ChangeNotifier {
             throw 'Two-factor authentication required';
           }
           
-          // Get the verification code
           twoFactorCode = authProvider.getLastVerificationToken();
         }
       }
 
-      // After 2FA verification, proceed with the update
       await _service.updatePaymentMethod(
         id, 
         data, 
         _context!,
-        twoFactorCode: twoFactorCode, // Pass the 2FA code to the service
+        twoFactorCode: twoFactorCode,
       );
       
-      // Reload payment methods after successful update
-      await loadPaymentMethods();
+      if (_context!.mounted) {
+        await loadPaymentMethods();
+      }
     } catch (e) {
       print('Provider error updating payment method: $e');
       rethrow;
@@ -176,17 +176,15 @@ class PaymentMethodsProvider with ChangeNotifier {
 
   Future<void> deletePaymentMethod(String id) async {
     try {
-      if (_context == null) {
-        throw 'Context not set';
+      if (_context == null || !_context!.mounted) {
+        throw 'Context not set or widget disposed';
       }
 
-      // Check if user has 2FA enabled
       final authProvider = Provider.of<AuthProvider>(_context!, listen: false);
       String? twoFactorCode;
       
       if (authProvider.user?.twoFactorEnabled == true) {
         if (_context!.mounted) {
-          // Show 2FA dialog first
           final verified = await showDialog<bool>(
             context: _context!,
             barrierDismissible: false,
@@ -201,27 +199,26 @@ class PaymentMethodsProvider with ChangeNotifier {
             throw 'Two-factor authentication required';
           }
           
-          // Get the verification code
           twoFactorCode = authProvider.getLastVerificationToken();
         }
       }
 
-      // Delete the payment method with 2FA code
       await _service.deletePaymentMethod(
         id, 
         _context!,
         twoFactorCode: twoFactorCode,
       );
       
-      // Remove the deleted method from the local list immediately
-      _paymentMethods.removeWhere((method) => method.id == id);
-      notifyListeners();
-      
-      // Then reload the list in the background
-      await loadPaymentMethods();
+      if (_context!.mounted) {
+        _paymentMethods.removeWhere((method) => method.id == id);
+        notifyListeners();
+        
+        await loadPaymentMethods();
+      }
     } catch (e) {
-      // If there's an error, reload the list to ensure consistency
-      await loadPaymentMethods();
+      if (_context?.mounted ?? false) {
+        await loadPaymentMethods();
+      }
       rethrow;
     }
   }

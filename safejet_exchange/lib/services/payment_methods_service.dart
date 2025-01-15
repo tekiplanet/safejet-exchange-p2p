@@ -75,7 +75,11 @@ class PaymentMethodsService {
     }
   }
 
-  Future<void> createPaymentMethod(Map<String, dynamic> data, {String? twoFactorCode}) async {
+  Future<void> createPaymentMethod(
+    Map<String, dynamic> data, 
+    BuildContext context, {
+    String? twoFactorCode,
+  }) async {
     try {
       final headers = await _getAuthHeaders();
       if (twoFactorCode != null) {
@@ -89,10 +93,16 @@ class PaymentMethodsService {
       );
     } catch (e) {
       if (e is DioException) {
-        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
-          throw 'Session expired';
+        switch (e.response?.statusCode) {
+          case 401:
+            await Provider.of<AuthProvider>(context, listen: false)
+                .handleUnauthorized(context);
+            throw 'Session expired';
+          case 413:
+            throw 'Image size is too large. Please use a smaller image (max 10MB).';
+          default:
+            throw e.response?.data['message'] ?? 'Failed to create payment method';
         }
-        throw e.response?.data['message'] ?? 'Failed to create payment method';
       }
       throw 'Failed to create payment method';
     }
@@ -118,17 +128,22 @@ class PaymentMethodsService {
       }
     } catch (e) {
       if (e is DioException) {
-        if (e.response?.statusCode == 400 && 
-            e.response?.data['message'] == '2FA verification required') {
-          // Return special value to indicate 2FA is needed
-          return '2FA_REQUIRED';
+        switch (e.response?.statusCode) {
+          case 400:
+            if (e.response?.data['message'] == '2FA verification required') {
+              return '2FA_REQUIRED';
+            }
+            throw e.response?.data['message'] ?? 'Failed to update payment method';
+          case 401:
+            await Provider.of<AuthProvider>(context, listen: false)
+                .handleUnauthorized(context);
+            throw 'Session expired';
+          case 413:
+            throw 'Image size is too large. Please use a smaller image (max 10MB).';
+          default:
+            print('Update error details: ${e.response?.data}');
+            throw e.response?.data['message'] ?? 'Failed to update payment method';
         }
-        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
-          await Provider.of<AuthProvider>(context, listen: false)
-              .handleUnauthorized(context);
-          throw 'Session expired';
-        }
-        throw e.response?.data['message'] ?? 'Failed to update payment method';
       }
       rethrow;
     }
