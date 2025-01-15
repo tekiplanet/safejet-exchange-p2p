@@ -27,11 +27,14 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _showBiometricButton = false;
 
   @override
   void initState() {
     super.initState();
-    _checkBiometricAvailability();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkBiometricAvailability();
+    });
     if (widget.message != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -49,73 +52,72 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final biometricService = BiometricSettingsService();
       final isAvailable = await biometricService.isBiometricAvailable();
-      
-      if (isAvailable) {
-        final tokens = await biometricService.getBiometricTokens();
-        if (tokens['token'] != null && mounted) {
-          _showBiometricPrompt();
-        } else {
-          print('No valid biometric tokens found');
-        }
+      if (mounted) {
+        setState(() {
+          _showBiometricButton = isAvailable;
+        });
       }
     } catch (e) {
       print('Error checking biometric availability: $e');
     }
   }
 
-  Future<void> _showBiometricPrompt() async {
-    print('=== Starting Biometric Login ===');
-    final biometricService = BiometricSettingsService();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
+  Future<void> _handleBiometricLogin() async {
     try {
-      print('Attempting to authenticate with biometrics...');
-      final success = await biometricService.authenticateAndGetTokens();
-      print('Authentication result: $success');
-
-      if (success && mounted) {
-        print('Getting biometric tokens...');
-        final tokens = await biometricService.getBiometricTokens();
-        print('Tokens retrieved: ${tokens['token'] != null}');
-
-        if (tokens['token'] == null || tokens['refreshToken'] == null) {
-          print('No valid tokens found');
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Biometric login expired. Please log in with password'),
-              backgroundColor: SafeJetColors.warning,
-            ),
-          );
-          return;
-        }
-
-        print('Logging in with tokens...');
-        await authProvider.loginWithTokens(
-          tokens['token']!,
-          tokens['refreshToken']!,
-        );
-
+      setState(() => _isLoading = true);
+      
+      print('=== Starting Biometric Login ===');
+      final biometricService = BiometricSettingsService();
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // Authenticate and get tokens
+      final authenticated = await biometricService.authenticateAndGetTokens();
+      if (!authenticated) {
         if (mounted) {
-          print('Navigation to home screen...');
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Biometric authentication failed')),
           );
         }
+        return;
+      }
+
+      // Get tokens after successful authentication
+      final tokens = await biometricService.getBiometricTokens();
+      if (tokens['token'] == null || tokens['refreshToken'] == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No valid tokens found')),
+          );
+        }
+        return;
+      }
+
+      // Login with the tokens
+      await authProvider.loginWithTokens(
+        tokens['token']!,
+        tokens['refreshToken']!,
+      );
+
+      // Navigate to home screen
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
       }
     } catch (e) {
       print('Error in biometric login: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              e.toString().contains('expired')
-                  ? 'Biometric login expired. Please log in with password'
-                  : 'Biometric authentication failed',
-            ),
+            content: Text(e.toString()),
             backgroundColor: SafeJetColors.error,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -288,7 +290,7 @@ class _LoginScreenState extends State<LoginScreen> {
           }
 
           return FloatingActionButton(
-            onPressed: _showBiometricPrompt,
+            onPressed: _handleBiometricLogin,
             backgroundColor: SafeJetColors.secondaryHighlight,
             child: const Icon(Icons.fingerprint),
           );
