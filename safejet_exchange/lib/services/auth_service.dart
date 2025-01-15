@@ -804,13 +804,30 @@ class AuthService {
       final refreshToken = await storage.read(key: 'refreshToken');
       if (refreshToken == null) throw 'No refresh token found';
 
+      print('Refreshing token with: $refreshToken');
       final response = await _dio.post(
-        '/refresh',
+        '/refresh-token',
         data: {'refreshToken': refreshToken},
       );
+      
+      print('Refresh token response: ${response.data}');
+      if (response.data == null) {
+        throw 'Invalid response from server';
+      }
+
+      // Store new tokens
+      await storage.write(key: 'accessToken', value: response.data['accessToken']);
+      if (response.data['refreshToken'] != null) {
+        await storage.write(key: 'refreshToken', value: response.data['refreshToken']);
+      }
 
       return response.data;
     } catch (e) {
+      print('Error refreshing token: $e');
+      if (e is DioException) {
+        print('Response data: ${e.response?.data}');
+        print('Status code: ${e.response?.statusCode}');
+      }
       throw 'Failed to refresh token';
     }
   }
@@ -834,12 +851,21 @@ class AuthService {
 
   Future<void> _handleTokenRefresh() async {
     try {
+      print('Handling token refresh...');
       final refreshResponse = await refreshToken();
+      print('Token refresh successful');
+      
+      if (refreshResponse['accessToken'] == null) {
+        throw 'No access token in refresh response';
+      }
+      
       await storage.write(
         key: 'accessToken',
         value: refreshResponse['accessToken'],
       );
     } catch (e) {
+      print('Token refresh failed: $e');
+      await storage.deleteAll(); // Clear all stored data
       throw 'Session expired. Please login again.';
     }
   }

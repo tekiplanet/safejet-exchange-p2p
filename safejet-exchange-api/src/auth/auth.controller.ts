@@ -134,7 +134,15 @@ export class AuthController {
 
   @Post('refresh-token')
   async refreshToken(@Body('refreshToken') refreshToken: string) {
-    return this.authService.refreshToken(refreshToken);
+    console.log('Refresh token request received:', refreshToken);
+    try {
+      const result = await this.authService.refreshToken(refreshToken);
+      console.log('Refresh token successful');
+      return result;
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      throw error;
+    }
   }
 
   @Put('identity-details')

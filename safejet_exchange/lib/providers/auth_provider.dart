@@ -52,9 +52,9 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> handleSessionExpiration() async {
+    print('Handling session expiration...');
     await logout();
     if (_context != null && _context!.mounted) {
-      // Clear navigation stack and go to login
       Navigator.of(_context!).pushNamedAndRemoveUntil(
         '/login',
         (route) => false,
@@ -631,38 +631,46 @@ class AuthProvider with ChangeNotifier {
   void _scheduleTokenRefresh() {
     _tokenRefreshTimer?.cancel();
     
-    if (_tokenExpiryTime != null) {
-      final now = DateTime.now();
-      final timeUntilExpiry = _tokenExpiryTime!.difference(now);
-      final refreshTime = timeUntilExpiry - const Duration(minutes: 5);
-
-      if (refreshTime.isNegative) {
-        handleUnauthorized(_context!);
+    try {
+      if (_tokenExpiryTime == null) {
+        print('No token expiry time set');
         return;
       }
 
+      final timeUntilExpiry = _tokenExpiryTime!.difference(DateTime.now());
+      if (timeUntilExpiry.isNegative) {
+        print('Token already expired');
+        handleSessionExpiration();
+        return;
+      }
+
+      // Refresh 5 minutes before expiry
+      final refreshTime = timeUntilExpiry - const Duration(minutes: 5);
+      if (refreshTime.isNegative) {
+        print('Token too close to expiry');
+        handleSessionExpiration();
+        return;
+      }
+
+      print('Scheduling token refresh in ${refreshTime.inMinutes} minutes');
       _tokenRefreshTimer = Timer(refreshTime, () async {
         try {
-          // Attempt to refresh the token
           final response = await _authService.refreshToken();
-          
-          // Update stored tokens
-          await _authService.storage.write(
-            key: 'accessToken',
-            value: response['accessToken'] as String,
-          );
-          await _authService.storage.write(
-            key: 'refreshToken',
-            value: response['refreshToken'] as String,
-          );
-
-          // Update expiry time for new token
-          _updateTokenExpiry(response['accessToken'] as String);
+          if (response['accessToken'] != null) {
+            _updateTokenExpiry(response['accessToken']);
+            print('Token refreshed successfully');
+          } else {
+            print('No access token in refresh response');
+            await handleSessionExpiration();
+          }
         } catch (e) {
-          print('Error refreshing token: $e');
-          handleUnauthorized(_context!);
+          print('Error during scheduled token refresh: $e');
+          await handleSessionExpiration();
         }
       });
+    } catch (e) {
+      print('Error scheduling token refresh: $e');
+      handleSessionExpiration();
     }
   }
 

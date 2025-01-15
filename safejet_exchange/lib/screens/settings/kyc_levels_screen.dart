@@ -9,6 +9,7 @@ import '../../providers/kyc_provider.dart';
 import '../../models/kyc_level.dart';
 import 'phone_verification_screen.dart';
 import 'advanced_verification_screen.dart';
+import 'package:shimmer/shimmer.dart';
 
 class KYCLevelsScreen extends StatefulWidget {
   const KYCLevelsScreen({super.key});
@@ -48,15 +49,23 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         children: [
           _buildHeader(isDark),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildCurrentLevel(isDark),
-                  const SizedBox(height: 24),
-                  _buildLevelsList(context, isDark),
-                ],
-              ),
+            child: Consumer<KYCProvider>(
+              builder: (context, kycProvider, child) {
+                if (kycProvider.loading) {
+                  return _buildShimmerLoading(isDark);
+                }
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      _buildCurrentLevel(isDark),
+                      const SizedBox(height: 24),
+                      _buildLevelsList(context, isDark),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -592,5 +601,97 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Widget _buildShimmerLoading(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Current Level Card Shimmer
+          Shimmer.fromColors(
+            baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+            highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+            child: Container(
+              width: double.infinity,
+              height: 160,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Level Cards Shimmer
+          ...List.generate(3, (index) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Shimmer.fromColors(
+              baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+              highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+              child: Container(
+                width: double.infinity,
+                height: 200,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    // Header
+                    Container(
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                      ),
+                    ),
+                    // Content
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(height: 12),
+                            ...List.generate(3, (index) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    width: 200,
+                                    height: 12,
+                                    color: Colors.white,
+                                  ),
+                                ],
+                              ),
+                            )),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )),
+        ],
+      ),
+    );
   }
 } 

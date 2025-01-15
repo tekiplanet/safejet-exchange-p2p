@@ -13,6 +13,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import 'edit_payment_method_screen.dart';
 import 'package:collection/collection.dart';
+import 'package:shimmer/shimmer.dart';
 
 class P2PPaymentMethodsScreen extends StatefulWidget {
   const P2PPaymentMethodsScreen({super.key});
@@ -33,6 +34,86 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
       provider.loadPaymentMethods();
       provider.loadPaymentMethodTypes();
     });
+  }
+
+  Widget _buildShimmerLoading() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 3, // Show 3 shimmer items
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: Colors.grey[800]!,
+          highlightColor: Colors.grey[700]!,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 20,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: 80,
+                            height: 16,
+                            color: Colors.white,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  height: 1,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      width: 60,
+                      height: 16,
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -84,131 +165,131 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
           
           Expanded(
             child: Consumer<PaymentMethodsProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+              builder: (context, provider, child) {
+                if (provider.isLoading) {
+                  return _buildShimmerLoading(); // Use shimmer loading instead of CircularProgressIndicator
+                }
 
-          if (provider.error != null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    provider.error!,
-                    style: TextStyle(color: SafeJetColors.error),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => provider.loadPaymentMethods(),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (provider.paymentMethods.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: SafeJetColors.primaryAccent.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.account_balance_wallet_outlined,
-                      size: 48,
-                      color: isDark 
-                          ? SafeJetColors.secondaryHighlight
-                          : SafeJetColors.secondaryHighlight.withOpacity(0.8),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'No Payment Methods Yet',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40),
-                    child: Text(
-                      'Add your preferred payment methods to start trading on SafeJet',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark ? Colors.white70 : Colors.black54,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: 200,
-                    height: 48,
-                    child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const AddPaymentMethodScreen(),
-                                ),
-                              );
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: SafeJetColors.secondaryHighlight,
-                        foregroundColor: Colors.black,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                if (provider.error != null) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          provider.error!,
+                          style: TextStyle(color: SafeJetColors.error),
+                          textAlign: TextAlign.center,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.add, size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Add Method',
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => provider.loadPaymentMethods(),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                if (provider.paymentMethods.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: SafeJetColors.primaryAccent.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.account_balance_wallet_outlined,
+                            size: 48,
+                            color: isDark 
+                                ? SafeJetColors.secondaryHighlight
+                                : SafeJetColors.secondaryHighlight.withOpacity(0.8),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'No Payment Methods Yet',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
+                          child: Text(
+                            'Add your preferred payment methods to start trading on SafeJet',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white70 : Colors.black54,
+                              height: 1.4,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 32),
+                        SizedBox(
+                          width: 200,
+                          height: 48,
+                          child: ElevatedButton(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => const AddPaymentMethodScreen(),
+                                      ),
+                                    );
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: SafeJetColors.secondaryHighlight,
+                              foregroundColor: Colors.black,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.add, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Add Method',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
+                  );
+                }
 
-          return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: provider.paymentMethods.length,
-            itemBuilder: (context, index) {
-              final method = provider.paymentMethods[index];
-              return FadeInUp(
-                duration: const Duration(milliseconds: 300),
-                delay: Duration(milliseconds: index * 100),
-                child: SlideInLeft(
-                  duration: const Duration(milliseconds: 300),
-                  delay: Duration(milliseconds: index * 100),
-                  child: _buildPaymentMethodCard(method, isDark),
-                ),
-              );
-            },
-          );
-        },
+                return ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: provider.paymentMethods.length,
+                  itemBuilder: (context, index) {
+                    final method = provider.paymentMethods[index];
+                    return FadeInUp(
+                      duration: const Duration(milliseconds: 300),
+                      delay: Duration(milliseconds: index * 100),
+                      child: SlideInLeft(
+                        duration: const Duration(milliseconds: 300),
+                        delay: Duration(milliseconds: index * 100),
+                        child: _buildPaymentMethodCard(method, isDark),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
