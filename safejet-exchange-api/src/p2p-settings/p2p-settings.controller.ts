@@ -14,10 +14,13 @@ import { UpdateP2PSettingsDto } from './dto/update-p2p-settings.dto';
 @Controller('p2p-settings')
 @UseGuards(JwtAuthGuard)
 export class P2PSettingsController {
-  constructor(private readonly p2pSettingsService: P2PSettingsService) {}
+  constructor(private readonly p2pSettingsService: P2PSettingsService) {
+    console.log('P2PSettingsController initialized');
+  }
 
   @Get()
   getSettings(@GetUser() user: User) {
+    console.log('GET /p2p-settings called for user:', user.id);
     return this.p2pSettingsService.getSettings(user.id);
   }
 

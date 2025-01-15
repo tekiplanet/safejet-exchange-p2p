@@ -10,11 +10,19 @@ export class CurrenciesService {
     private readonly currencyRepository: Repository<Currency>,
   ) {}
 
-  findAll() {
-    return this.currencyRepository.find({
-      where: { isActive: true },
-      order: { code: 'ASC' },
-    });
+  async findAll() {
+    try {
+      console.log('Finding all currencies...');
+      const currencies = await this.currencyRepository.find({
+        where: { isActive: true },
+        order: { code: 'ASC' },
+      });
+      console.log('Found currencies:', currencies);
+      return currencies;
+    } catch (error) {
+      console.error('Error finding currencies:', error);
+      throw error;
+    }
   }
 
   async isValidCurrency(code: string): Promise<boolean> {
