@@ -99,7 +99,13 @@ class P2PSettingsService {
     try {
       await _dio.put(
         '/p2p-settings/auto-responses',
-        data: {'autoResponses': responses},
+        data: {
+          'autoResponses': responses.map((response) => {
+            'id': response['id'],
+            'message': response['message'],
+            'type': response['type'],
+          }).toList(),
+        },
       );
     } catch (e) {
       print('Error updating auto responses: $e');

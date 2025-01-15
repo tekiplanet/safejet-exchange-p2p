@@ -69,14 +69,34 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
     const Color(0xFF607D8B),
   ];
 
-  final Map<String, IconData> _iconMap = {
-    'payment': Icons.payment,
-    'request_page': Icons.request_page,
-    'check_circle': Icons.check_circle,
-    'favorite': Icons.favorite,
-    'warning': Icons.warning,
-    'info': Icons.info,
-    'message': Icons.message,
+  final List<String> _responseTypes = [
+    'Payment',
+    'Request',
+    'Confirmation',
+    'Thanks',
+  ];
+
+  final Map<String, Map<String, dynamic>> _responseTypeConfig = {
+    'Payment': {
+      'icon': 'payment',
+      'color': '#4CAF50',
+      'iconData': Icons.payment,
+    },
+    'Request': {
+      'icon': 'request_page',
+      'color': '#2196F3',
+      'iconData': Icons.request_page,
+    },
+    'Confirmation': {
+      'icon': 'check_circle',
+      'color': '#9C27B0',
+      'iconData': Icons.check_circle,
+    },
+    'Thanks': {
+      'icon': 'favorite',
+      'color': '#E91E63',
+      'iconData': Icons.favorite,
+    },
   };
 
   @override
@@ -220,11 +240,10 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   }
 
   Widget _buildResponseCard(Map<String, dynamic> response, bool isDark) {
-    final icon = _getIconData(response['icon'] as String);
-    final color = Color(int.parse(
-      (response['color'] as String).replaceFirst('#', 'FF'),
-      radix: 16,
-    ));
+    final type = response['type'] as String;
+    final config = _responseTypeConfig[type] ?? _responseTypeConfig['Payment']!;
+    final color = _hexToColor(config['color'] as String);
+    final icon = config['iconData'] as IconData;
 
     return Dismissible(
       key: Key(response['id']),
@@ -304,7 +323,7 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          response['type'],
+                          type,
                           style: TextStyle(
                             color: color,
                             fontSize: 12,
@@ -339,8 +358,6 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   void _showAddResponseDialog(bool isDark) {
     _messageController.clear();
     _typeController.clear();
-    _selectedIcon = Icons.message;
-    _selectedColor = const Color(0xFF4CAF50);
     
     _showResponseDialog(
       isDark,
@@ -350,8 +367,6 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
           'id': DateTime.now().toString(),
           'message': message,
           'type': type,
-          'icon': _getIconString(_selectedIcon ?? Icons.message),
-          'color': '#${_selectedColor.value.toRadixString(16).substring(2)}',
         });
       },
     );
@@ -360,11 +375,6 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   void _showEditResponseDialog(Map<String, dynamic> response, bool isDark) {
     _messageController.text = response['message'];
     _typeController.text = response['type'];
-    _selectedIcon = _getIconData(response['icon']);
-    _selectedColor = Color(int.parse(
-      response['color'].replaceFirst('#', 'FF'),
-      radix: 16,
-    ));
     
     _showResponseDialog(
       isDark,
@@ -376,8 +386,6 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
             'id': response['id'],
             'message': message,
             'type': type,
-            'icon': _getIconString(_selectedIcon ?? Icons.message),
-            'color': '#${_selectedColor.value.toRadixString(16).substring(2)}',
           },
         );
       },
@@ -391,55 +399,115 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   }) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => Dialog(
-          backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: const EdgeInsets.all(24),
-            child: SingleChildScrollView(
+        builder: (context, setDialogState) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
+            appBar: AppBar(
+              backgroundColor: isDark ? const Color(0xFF1A1F2E) : Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(
+                  Icons.close,
+                  color: isDark ? Colors.white54 : Colors.black54,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: Text(
+                isEdit ? 'Edit Response' : 'New Response',
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    if (_messageController.text.isNotEmpty && 
+                        _typeController.text.isNotEmpty) {
+                      onSave(_messageController.text, _typeController.text);
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: Text(
+                    isEdit ? 'Save' : 'Add',
+                    style: TextStyle(
+                      color: _selectedColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: _selectedColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          _selectedIcon ?? Icons.message,
-                          color: _selectedColor,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          isEdit ? 'Edit Response' : 'Add New Response',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                  // Preview
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _getSelectedColor().withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            _getSelectedIcon(),
+                            color: _getSelectedColor(),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: Icon(
-                          Icons.close,
-                          color: isDark ? Colors.white54 : Colors.black54,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _getSelectedColor().withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _typeController.text.isEmpty 
+                                      ? 'Type' 
+                                      : _typeController.text,
+                                  style: TextStyle(
+                                    color: _getSelectedColor(),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _messageController.text.isEmpty 
+                                    ? 'Your message will appear here'
+                                    : _messageController.text,
+                                style: TextStyle(
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
 
                   // Type Field
                   Text(
@@ -450,21 +518,65 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    controller: _typeController,
-                    decoration: InputDecoration(
-                      hintText: 'e.g., Payment, Request, Confirmation',
-                      filled: true,
-                      fillColor: isDark 
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDark 
                           ? Colors.white.withOpacity(0.05)
                           : Colors.black.withOpacity(0.05),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonFormField<String>(
+                      value: _typeController.text.isNotEmpty ? _typeController.text : null,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
-                      prefixIcon: Icon(
-                        Icons.label_outline,
-                        color: _selectedColor,
+                      dropdownColor: isDark 
+                          ? const Color(0xFF1A1F2E)
+                          : Colors.white,
+                      items: _responseTypeConfig.keys.map((type) {
+                        final config = _responseTypeConfig[type]!;
+                        return DropdownMenuItem(
+                          value: type,
+                          child: Row(
+                            children: [
+                              Icon(
+                                config['iconData'] as IconData, 
+                                color: _hexToColor(config['color'] as String),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                type,
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          _typeController.text = value;
+                          setDialogState(() {});
+                        }
+                      },
+                      hint: Text(
+                        'Select response type',
+                        style: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: isDark ? Colors.white70 : Colors.black54,
                       ),
                     ),
                   ),
@@ -482,6 +594,7 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                   TextField(
                     controller: _messageController,
                     maxLines: 3,
+                    onChanged: (_) => setDialogState(() {}),
                     decoration: InputDecoration(
                       hintText: 'Enter your response message',
                       filled: true,
@@ -493,166 +606,6 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                         borderSide: BorderSide.none,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Icon Selection
-                  Text(
-                    'Select Icon',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 56,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _availableIcons.length,
-                      itemBuilder: (context, index) {
-                        final icon = _availableIcons[index]['icon'] as IconData;
-                        final isSelected = icon == _selectedIcon;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Tooltip(
-                            message: _availableIcons[index]['label'] as String,
-                            child: InkWell(
-                              onTap: () {
-                                setDialogState(() {
-                                  _selectedIcon = icon;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                width: 56,
-                                decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? _selectedColor.withOpacity(0.2)
-                                      : isDark
-                                          ? Colors.white.withOpacity(0.05)
-                                          : Colors.black.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: isSelected
-                                      ? Border.all(color: _selectedColor)
-                                      : null,
-                                ),
-                                child: Icon(
-                                  icon,
-                                  color: isSelected ? _selectedColor : null,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Color Selection
-                  Text(
-                    'Select Color',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 56,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _availableColors.length,
-                      itemBuilder: (context, index) {
-                        final color = _availableColors[index];
-                        final isSelected = color == _selectedColor;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: InkWell(
-                            onTap: () {
-                              setDialogState(() {
-                                _selectedColor = color;
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              width: 56,
-                              decoration: BoxDecoration(
-                                color: color.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: isSelected
-                                    ? Border.all(color: color)
-                                    : null,
-                              ),
-                              child: Center(
-                                child: Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: isSelected
-                                      ? const Icon(
-                                          Icons.check,
-                                          color: Colors.white,
-                                          size: 16,
-                                        )
-                                      : null,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Action Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(
-                              color: isDark ? Colors.white70 : Colors.black54,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            if (_messageController.text.isNotEmpty && 
-                                _typeController.text.isNotEmpty) {
-                              onSave(_messageController.text, _typeController.text);
-                              Navigator.pop(context);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _selectedColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(isEdit ? 'Save Changes' : 'Add Response'),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -730,15 +683,38 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
   }
 
   IconData _getIconData(String iconName) {
-    return _iconMap[iconName] ?? Icons.message;
+    for (var config in _responseTypeConfig.values) {
+      if (config['icon'] == iconName) {
+        return config['iconData'] as IconData;
+      }
+    }
+    return Icons.message;
   }
 
   String _getIconString(IconData icon) {
-    return _iconMap.entries
-        .firstWhere(
-          (entry) => entry.value == icon,
-          orElse: () => const MapEntry('message', Icons.message),
-        )
-        .key;
+    for (var config in _responseTypeConfig.values) {
+      if (config['iconData'] == icon) {
+        return config['icon'] as String;
+      }
+    }
+    return 'message';
+  }
+
+  Color _getSelectedColor() {
+    if (_typeController.text.isEmpty) return const Color(0xFF4CAF50);
+    final config = _responseTypeConfig[_typeController.text];
+    if (config == null) return const Color(0xFF4CAF50);
+    return _hexToColor(config['color'] as String);
+  }
+
+  IconData _getSelectedIcon() {
+    if (_typeController.text.isEmpty) return Icons.message;
+    final config = _responseTypeConfig[_typeController.text];
+    if (config == null) return Icons.message;
+    return config['iconData'] as IconData;
+  }
+
+  Color _hexToColor(String hex) {
+    return Color(int.parse(hex.replaceFirst('#', 'FF'), radix: 16));
   }
 } 

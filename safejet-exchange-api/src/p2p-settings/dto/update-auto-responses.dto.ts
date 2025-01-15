@@ -1,4 +1,4 @@
-import { IsArray, ValidateNested, IsString, IsHexColor } from 'class-validator';
+import { IsArray, ValidateNested, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AutoResponseDto {
@@ -10,12 +10,6 @@ export class AutoResponseDto {
 
   @IsString()
   type: string;
-
-  @IsString()
-  icon: string;
-
-  @IsHexColor()
-  color: string;
 }
 
 export class UpdateAutoResponsesDto {

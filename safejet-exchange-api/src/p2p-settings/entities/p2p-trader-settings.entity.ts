@@ -46,30 +46,22 @@ export class P2PTraderSettings {
       {
         "id": "1",
         "message": "I have made the payment, please check.",
-        "type": "Payment",
-        "icon": "payment",
-        "color": "#4CAF50"
+        "type": "Payment"
       },
       {
         "id": "2",
         "message": "Please provide your payment details.",
-        "type": "Request",
-        "icon": "request_page",
-        "color": "#2196F3"
+        "type": "Request"
       },
       {
         "id": "3",
         "message": "Payment received, releasing crypto now.",
-        "type": "Confirmation",
-        "icon": "check_circle",
-        "color": "#9C27B0"
+        "type": "Confirmation"
       },
       {
         "id": "4",
         "message": "Thank you for trading with me!",
-        "type": "Thanks",
-        "icon": "favorite",
-        "color": "#E91E63"
+        "type": "Thanks"
       }
     ]'` 
   })
@@ -86,6 +78,4 @@ export interface AutoResponse {
   id: string;
   message: string;
   type: string;
-  icon: string;
-  color: string;
 } 

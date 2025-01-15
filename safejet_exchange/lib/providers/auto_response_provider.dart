@@ -34,9 +34,16 @@ class AutoResponseProvider with ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      await _service.updateAutoResponses(responses);
+      final cleanedResponses = responses.map((response) => {
+        'id': response['id'],
+        'message': response['message'],
+        'type': response['type'],
+      }).toList();
+
+      await _service.updateAutoResponses(cleanedResponses);
       _responses = responses;
     } catch (e) {
+      print('Error updating responses: $e');
       _error = e.toString();
     } finally {
       _isLoading = false;
@@ -45,15 +52,25 @@ class AutoResponseProvider with ChangeNotifier {
   }
 
   Future<void> addResponse(Map<String, dynamic> response) async {
-    final newResponses = [..._responses, response];
+    final cleanedResponse = {
+      'id': response['id'],
+      'message': response['message'],
+      'type': response['type'],
+    };
+    final newResponses = [..._responses, cleanedResponse];
     await updateResponses(newResponses);
   }
 
   Future<void> updateResponse(String id, Map<String, dynamic> updatedResponse) async {
+    final cleanedResponse = {
+      'id': updatedResponse['id'],
+      'message': updatedResponse['message'],
+      'type': updatedResponse['type'],
+    };
     final index = _responses.indexWhere((r) => r['id'] == id);
     if (index != -1) {
       final newResponses = List<Map<String, dynamic>>.from(_responses);
-      newResponses[index] = updatedResponse;
+      newResponses[index] = cleanedResponse;
       await updateResponses(newResponses);
     }
   }
