@@ -31,17 +31,24 @@ export class P2PSettingsService {
     userId: string,
     updateSettingsDto: UpdateP2PSettingsDto,
   ): Promise<P2PTraderSettings> {
-    if (updateSettingsDto.currency) {
-      const isValid = await this.currenciesService.isValidCurrency(
-        updateSettingsDto.currency,
-      );
+    // Get the key and value from the DTO
+    const [[key, value]] = Object.entries(updateSettingsDto);
+
+    // Validate currency if that's what's being updated
+    if (key === 'currency') {
+      const isValid = await this.currenciesService.isValidCurrency(value);
       if (!isValid) {
         throw new BadRequestException('Invalid currency code');
       }
     }
 
+    // Get current settings
     const settings = await this.getSettings(userId);
-    Object.assign(settings, updateSettingsDto);
+
+    // Update only the specific setting
+    settings[key] = value;
+
+    // Save and return updated settings
     return this.settingsRepository.save(settings);
   }
 } 

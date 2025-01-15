@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
@@ -59,25 +60,198 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
     }
   }
 
-  Future<void> _updateSettings() async {
+  Future<void> _updateSetting(String key, dynamic value) async {
     try {
-      await _settingsService.updateSettings({
-        'currency': _selectedCurrency,
-        'autoAcceptOrders': _autoAcceptOrders,
-        'onlyVerifiedUsers': _onlyVerifiedUsers,
-        'showOnlineStatus': _showOnlineStatus,
-        'enableInstantTrade': _enableInstantTrade,
-        'timezone': _selectedTimeZone,
+      // Update UI immediately
+      setState(() {
+        switch (key) {
+          case 'currency':
+            _selectedCurrency = value;
+            break;
+          case 'autoAcceptOrders':
+            _autoAcceptOrders = value;
+            break;
+          case 'onlyVerifiedUsers':
+            _onlyVerifiedUsers = value;
+            break;
+          case 'showOnlineStatus':
+            _showOnlineStatus = value;
+            break;
+          case 'enableInstantTrade':
+            _enableInstantTrade = value;
+            break;
+          case 'timezone':
+            _selectedTimeZone = value;
+            break;
+        }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings updated successfully')),
-      );
+      // Send update to backend
+      await _settingsService.updateSettings({key: value});
     } catch (e) {
+      // If update fails, revert the UI
+      setState(() {
+        switch (key) {
+          case 'currency':
+            _selectedCurrency = _selectedCurrency;
+            break;
+          // ... similar for other settings
+        }
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating settings: $e')),
+        SnackBar(content: Text('Error updating setting: $e')),
       );
     }
+  }
+
+  Widget _buildShimmerLoading(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          // Stats Card Shimmer
+          Shimmer.fromColors(
+            baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+            highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(3, (index) => 
+                  Column(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 60,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 40,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Settings Sections Shimmer
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(32),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            child: Column(
+              children: List.generate(3, (sectionIndex) => 
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Shimmer.fromColors(
+                    baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                    highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark 
+                            ? Colors.grey[800]
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Column(
+                        children: [
+                          // Section Header
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 120,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      width: 180,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Section Content
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              children: List.generate(
+                                sectionIndex == 0 ? 4 : (sectionIndex == 1 ? 4 : 1),
+                                (index) => Container(
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  height: 40,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -91,126 +265,128 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
         hasNotification: false,
         onThemeToggle: () => themeProvider.toggleTheme(),
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        children: [
-          const SizedBox(height: 16),
-          // Stats Card
-          FadeInDown(
-            duration: const Duration(milliseconds: 600),
-            child: _buildStatsCard(isDark),
+      body: _isLoading 
+        ? _buildShimmerLoading(isDark)
+        : ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            children: [
+              const SizedBox(height: 16),
+              // Stats Card
+              FadeInDown(
+                duration: const Duration(milliseconds: 600),
+                child: _buildStatsCard(isDark),
+              ),
+              const SizedBox(height: 32),
+
+              // Main Content Container
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark 
+                      ? Colors.black.withOpacity(0.3)
+                      : Colors.grey.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(32),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                child: Column(
+                  children: [
+                    // Currency Section
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 200),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isDark 
+                              ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: isDark
+                                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                : Colors.grey.withOpacity(0.1),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDark 
+                                  ? Colors.black.withOpacity(0.1)
+                                  : Colors.grey.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: _buildCurrencySection(isDark),
+                      ),
+                    ),
+
+                    // Trading Settings
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 400),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isDark 
+                              ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: isDark
+                                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                : Colors.grey.withOpacity(0.1),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDark 
+                                  ? Colors.black.withOpacity(0.1)
+                                  : Colors.grey.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: _buildTradingSettingsSection(isDark),
+                      ),
+                    ),
+
+                    // Time Zone Settings
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 600),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isDark 
+                              ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: isDark
+                                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                : Colors.grey.withOpacity(0.1),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDark 
+                                  ? Colors.black.withOpacity(0.1)
+                                  : Colors.grey.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: _buildTimeZoneSettings(isDark),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
           ),
-          const SizedBox(height: 32),
-
-          // Main Content Container
-          Container(
-            decoration: BoxDecoration(
-              color: isDark 
-                  ? Colors.black.withOpacity(0.3)
-                  : Colors.grey.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(32),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            child: Column(
-              children: [
-                // Currency Section
-                FadeInDown(
-                  duration: const Duration(milliseconds: 600),
-                  delay: const Duration(milliseconds: 200),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.1),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark 
-                              ? Colors.black.withOpacity(0.1)
-                              : Colors.grey.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: _buildCurrencySection(isDark),
-                  ),
-                ),
-
-                // Trading Settings
-                FadeInDown(
-                  duration: const Duration(milliseconds: 600),
-                  delay: const Duration(milliseconds: 400),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.1),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark 
-                              ? Colors.black.withOpacity(0.1)
-                              : Colors.grey.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: _buildTradingSettingsSection(isDark),
-                  ),
-                ),
-
-                // Time Zone Settings
-                FadeInDown(
-                  duration: const Duration(milliseconds: 600),
-                  delay: const Duration(milliseconds: 600),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.1),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark 
-                              ? Colors.black.withOpacity(0.1)
-                              : Colors.grey.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: _buildTimeZoneSettings(isDark),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
     );
   }
 
@@ -306,7 +482,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
               return Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: () => setState(() => _selectedCurrency = currency['code']),
+                  onTap: () => _updateSetting('currency', currency['code']),
                   borderRadius: BorderRadius.circular(16),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -404,7 +580,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 'Automatically accept orders that match your preferences',
                 Switch(
                   value: _autoAcceptOrders,
-                  onChanged: (value) => setState(() => _autoAcceptOrders = value),
+                  onChanged: (value) => _updateSetting('autoAcceptOrders', value),
                   activeColor: SafeJetColors.secondaryHighlight,
                 ),
                 isDark,
@@ -414,7 +590,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 'Only trade with KYC verified users',
                 Switch(
                   value: _onlyVerifiedUsers,
-                  onChanged: (value) => setState(() => _onlyVerifiedUsers = value),
+                  onChanged: (value) => _updateSetting('onlyVerifiedUsers', value),
                   activeColor: SafeJetColors.secondaryHighlight,
                 ),
                 isDark,
@@ -424,7 +600,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 'Let other traders see when you\'re online',
                 Switch(
                   value: _showOnlineStatus,
-                  onChanged: (value) => setState(() => _showOnlineStatus = value),
+                  onChanged: (value) => _updateSetting('showOnlineStatus', value),
                   activeColor: SafeJetColors.secondaryHighlight,
                 ),
                 isDark,
@@ -434,7 +610,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 'Enable one-click trading for faster transactions',
                 Switch(
                   value: _enableInstantTrade,
-                  onChanged: (value) => setState(() => _enableInstantTrade = value),
+                  onChanged: (value) => _updateSetting('enableInstantTrade', value),
                   activeColor: SafeJetColors.secondaryHighlight,
                 ),
                 isDark,

@@ -1,8 +1,36 @@
 import 'package:dio/dio.dart';
-import '../config/api_config.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../services/auth_service.dart';
 
 class P2PSettingsService {
-  final Dio _dio = ApiConfig.dio;
+  late final Dio _dio;
+  final storage = const FlutterSecureStorage();
+  final AuthService _authService = AuthService();
+
+  P2PSettingsService() {
+    _dio = Dio(BaseOptions(
+      baseUrl: _authService.baseUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ));
+    _setupInterceptors();
+  }
+
+  void _setupInterceptors() {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final token = await storage.read(key: 'accessToken');
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+          return handler.next(options);
+        },
+      ),
+    );
+  }
 
   Future<List<Map<String, dynamic>>> getCurrencies() async {
     try {
