@@ -59,7 +59,7 @@ class CustomBottomNav extends StatelessWidget {
                   _buildNavItem(1, Icons.sync_alt_rounded, Icons.sync_alt_rounded, 'Trade', isDark),
                   const SizedBox(width: 60),
                   _buildNavItem(3, Icons.account_balance_wallet_rounded, Icons.account_balance_wallet_rounded, 'Wallets', isDark),
-                  _buildNavItem(4, Icons.person_rounded, Icons.person_rounded, 'Profile', isDark),
+                  _buildNavItem(4, Icons.settings_rounded, Icons.settings_rounded, 'Settings', isDark),
                 ],
               ),
             ),

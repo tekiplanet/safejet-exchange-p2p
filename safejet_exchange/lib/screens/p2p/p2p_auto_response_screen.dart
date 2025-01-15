@@ -156,12 +156,12 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
                   itemCount: provider.responses.length,
-                  itemBuilder: (context, index) {
-                    return FadeInUp(
-                      duration: const Duration(milliseconds: 300),
-                      delay: Duration(milliseconds: index * 100),
+              itemBuilder: (context, index) {
+                return FadeInUp(
+                  duration: const Duration(milliseconds: 300),
+                  delay: Duration(milliseconds: index * 100),
                       child: _buildResponseCard(provider.responses[index], isDark),
                     );
                   },
@@ -267,8 +267,8 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
             ),
             SizedBox(width: 8),
             Icon(
-              Icons.delete_outline,
-              color: Colors.white,
+          Icons.delete_outline,
+          color: Colors.white,
             ),
           ],
         ),
@@ -379,8 +379,8 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                       const Spacer(),
                       Row(
                         children: [
-                          IconButton(
-                            onPressed: () => _showEditResponseDialog(response, isDark),
+                      IconButton(
+                        onPressed: () => _showEditResponseDialog(response, isDark),
                             icon: Icon(
                               Icons.edit_outlined,
                               color: isDark ? Colors.white70 : Colors.black54,
@@ -446,7 +446,7 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                               Icons.delete_outline,
                               color: SafeJetColors.error.withOpacity(0.7),
                             ),
-                            iconSize: 20,
+                        iconSize: 20,
                             tooltip: 'Delete',
                           ),
                         ],
@@ -478,9 +478,9 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
       isEdit: false,
       onSave: (message, type) {
         context.read<AutoResponseProvider>().addResponse({
-          'id': DateTime.now().toString(),
-          'message': message,
-          'type': type,
+            'id': DateTime.now().toString(),
+            'message': message,
+            'type': type,
         });
       },
     );
@@ -599,14 +599,14 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                                   _typeController.text.isEmpty 
                                       ? 'Type' 
                                       : _typeController.text,
-                                  style: TextStyle(
+                  style: TextStyle(
                                     color: _getSelectedColor(),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 12,
                                   ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
+                  ),
+                ),
+                const SizedBox(height: 8),
                               Text(
                                 _messageController.text.isEmpty 
                                     ? 'Your message will appear here'
@@ -624,16 +624,16 @@ class _P2PAutoResponseScreenState extends State<P2PAutoResponseScreen> {
                   const SizedBox(height: 32),
 
                   // Type Field
-                  Text(
+                Text(
                     'Response Type',
-                    style: TextStyle(
+                  style: TextStyle(
                       fontWeight: FontWeight.w500,
                       color: isDark ? Colors.white70 : Colors.black87,
-                    ),
                   ),
-                  const SizedBox(height: 8),
+                ),
+                const SizedBox(height: 8),
                   Container(
-                    decoration: BoxDecoration(
+                            decoration: BoxDecoration(
                       color: isDark 
                           ? Colors.white.withOpacity(0.05)
                           : Colors.black.withOpacity(0.05),
