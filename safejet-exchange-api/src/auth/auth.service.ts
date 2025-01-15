@@ -34,6 +34,7 @@ import { TwilioService } from '../twilio/twilio.service';
 import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
+import { P2PSettingsService } from '../p2p-settings/p2p-settings.service';
 
 @Injectable()
 export class AuthService {
@@ -50,6 +51,7 @@ export class AuthService {
     private readonly twilioService: TwilioService,
     @Inject(ConfigService)
     private readonly configService: ConfigService,
+    private readonly p2pSettingsService: P2PSettingsService,
   ) {}
 
   private generateVerificationCode(): string {
@@ -124,6 +126,9 @@ export class AuthService {
 
     // Generate tokens
     const tokens = await this.generateTokens(user);
+
+    // Create P2P trader settings for the new user
+    await this.p2pSettingsService.getSettings(user.id); // This will create default settings
 
     return {
       user,

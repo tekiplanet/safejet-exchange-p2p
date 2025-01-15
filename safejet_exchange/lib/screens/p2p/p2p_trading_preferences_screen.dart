@@ -4,6 +4,7 @@ import 'package:animate_do/animate_do.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../services/p2p_settings_service.dart';
 
 class P2PTradingPreferencesScreen extends StatefulWidget {
   const P2PTradingPreferencesScreen({super.key});
@@ -13,20 +14,71 @@ class P2PTradingPreferencesScreen extends StatefulWidget {
 }
 
 class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScreen> {
+  final P2PSettingsService _settingsService = P2PSettingsService();
+  List<Map<String, dynamic>> _currencies = [];
+  bool _isLoading = true;
   String _selectedCurrency = 'NGN';
   bool _autoAcceptOrders = false;
   bool _onlyVerifiedUsers = true;
   bool _showOnlineStatus = true;
   bool _enableInstantTrade = false;
-  double _sliderValue = 50000;
   String _selectedTimeZone = 'UTC+1 (West Africa Time)';
   
-  final List<Map<String, dynamic>> _currencies = const [
-    {'code': 'NGN', 'name': 'Nigerian Naira', 'symbol': '₦'},
-    {'code': 'USD', 'name': 'US Dollar', 'symbol': '\$'},
-    {'code': 'EUR', 'name': 'Euro', 'symbol': '€'},
-    {'code': 'GBP', 'name': 'British Pound', 'symbol': '£'},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      // Load currencies
+      final currencies = await _settingsService.getCurrencies();
+      
+      // Load user settings
+      final settings = await _settingsService.getSettings();
+      
+      setState(() {
+        _currencies = currencies;
+        _selectedCurrency = settings['currency'] ?? 'NGN';
+        _autoAcceptOrders = settings['autoAcceptOrders'] ?? false;
+        _onlyVerifiedUsers = settings['onlyVerifiedUsers'] ?? true;
+        _showOnlineStatus = settings['showOnlineStatus'] ?? true;
+        _enableInstantTrade = settings['enableInstantTrade'] ?? false;
+        _selectedTimeZone = settings['timezone'] ?? 'UTC+1 (West Africa Time)';
+      });
+    } catch (e) {
+      // Handle error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading settings: $e')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateSettings() async {
+    try {
+      await _settingsService.updateSettings({
+        'currency': _selectedCurrency,
+        'autoAcceptOrders': _autoAcceptOrders,
+        'onlyVerifiedUsers': _onlyVerifiedUsers,
+        'showOnlineStatus': _showOnlineStatus,
+        'enableInstantTrade': _enableInstantTrade,
+        'timezone': _selectedTimeZone,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Settings updated successfully')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating settings: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,41 +175,10 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                   ),
                 ),
 
-                // Trading Limits
-                FadeInDown(
-                  duration: const Duration(milliseconds: 600),
-                  delay: const Duration(milliseconds: 600),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? SafeJetColors.primaryAccent.withOpacity(0.05)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.1),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDark 
-                              ? Colors.black.withOpacity(0.1)
-                              : Colors.grey.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: _buildLimitsSection(isDark),
-                  ),
-                ),
-
                 // Time Zone Settings
                 FadeInDown(
                   duration: const Duration(milliseconds: 600),
-                  delay: const Duration(milliseconds: 800),
+                  delay: const Duration(milliseconds: 600),
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
@@ -417,129 +438,6 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                   activeColor: SafeJetColors.secondaryHighlight,
                 ),
                 isDark,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLimitsSection(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(
-          'Trading Limits',
-          'View and manage your trading limits',
-          Icons.bar_chart,
-          isDark,
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                : SafeJetColors.lightCardBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                  : SafeJetColors.lightCardBorder,
-            ),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Current Limit',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₦${_sliderValue.toStringAsFixed(0)}',
-                        style: TextStyle(
-                          color: SafeJetColors.secondaryHighlight,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 24,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: SafeJetColors.success.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.verified,
-                          color: SafeJetColors.success,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Level 2',
-                          style: TextStyle(
-                            color: SafeJetColors.success,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  activeTrackColor: SafeJetColors.secondaryHighlight,
-                  inactiveTrackColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                  thumbColor: SafeJetColors.secondaryHighlight,
-                  overlayColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                ),
-                child: Slider(
-                  value: _sliderValue,
-                  min: 10000,
-                  max: 100000,
-                  divisions: 9,
-                  label: '₦${_sliderValue.toStringAsFixed(0)}',
-                  onChanged: (value) {
-                    setState(() => _sliderValue = value);
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-              OutlinedButton.icon(
-                onPressed: () {
-                  // TODO: Navigate to verification screen
-                },
-                icon: const Icon(Icons.arrow_upward),
-                label: const Text('Increase Limits'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: SafeJetColors.secondaryHighlight,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
               ),
             ],
           ),

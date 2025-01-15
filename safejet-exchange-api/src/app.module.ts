@@ -13,6 +13,8 @@ import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthInterceptor } from './auth/auth.interceptor';
 import { SeedersModule } from './seeders/seeders.module';
+import { CurrenciesModule } from './currencies/currencies.module';
+import { P2PSettingsModule } from './p2p-settings/p2p-settings.module';
 
 @Module({
   imports: [
@@ -43,6 +45,8 @@ import { SeedersModule } from './seeders/seeders.module';
     ]),
     PaymentMethodsModule,
     SeedersModule,
+    CurrenciesModule,
+    P2PSettingsModule,
   ],
   controllers: [AppController],
   providers: [
