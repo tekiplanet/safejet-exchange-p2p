@@ -6,6 +6,7 @@ import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../services/p2p_settings_service.dart';
+import '../../widgets/timezone_selector_dialog.dart';
 
 class P2PTradingPreferencesScreen extends StatefulWidget {
   const P2PTradingPreferencesScreen({super.key});
@@ -269,11 +270,11 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
         ? _buildShimmerLoading(isDark)
         : ListView(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            children: [
+        children: [
               const SizedBox(height: 16),
               // Stats Card
-              FadeInDown(
-                duration: const Duration(milliseconds: 600),
+          FadeInDown(
+            duration: const Duration(milliseconds: 600),
                 child: _buildStatsCard(isDark),
               ),
               const SizedBox(height: 32),
@@ -290,9 +291,9 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 child: Column(
                   children: [
                     // Currency Section
-                    FadeInDown(
-                      duration: const Duration(milliseconds: 600),
-                      delay: const Duration(milliseconds: 200),
+          FadeInDown(
+            duration: const Duration(milliseconds: 600),
+            delay: const Duration(milliseconds: 200),
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
@@ -321,9 +322,9 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                     ),
 
                     // Trading Settings
-                    FadeInDown(
-                      duration: const Duration(milliseconds: 600),
-                      delay: const Duration(milliseconds: 400),
+          FadeInDown(
+            duration: const Duration(milliseconds: 600),
+            delay: const Duration(milliseconds: 400),
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
@@ -347,14 +348,14 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                             ),
                           ],
                         ),
-                        child: _buildTradingSettingsSection(isDark),
-                      ),
+            child: _buildTradingSettingsSection(isDark),
+          ),
                     ),
 
                     // Time Zone Settings
-                    FadeInDown(
-                      duration: const Duration(milliseconds: 600),
-                      delay: const Duration(milliseconds: 600),
+          FadeInDown(
+            duration: const Duration(milliseconds: 600),
+            delay: const Duration(milliseconds: 600),
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
@@ -378,7 +379,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                             ),
                           ],
                         ),
-                        child: _buildTimeZoneSettings(isDark),
+                        child: _buildTimezoneSection(isDark),
                       ),
                     ),
                   ],
@@ -622,70 +623,103 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
     );
   }
 
-  Widget _buildTimeZoneSettings(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(
-          'Time Zone',
-          'Set your trading time zone',
-          Icons.access_time,
-          isDark,
+  Widget _buildTimezoneSection(bool isDark) {
+    Future<void> showTimezoneDialog() async {
+      final selectedTimezone = await showDialog<String>(
+        context: context,
+        builder: (context) => TimezoneSelectorDialog(
+          currentTimezone: _selectedTimeZone,
         ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+      );
+      
+      if (selectedTimezone != null) {
+        setState(() => _isLoading = true);
+        try {
+          await _settingsService.updateSettings({
+            'timezone': selectedTimezone,
+          });
+          await _loadData();
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString())),
+            );
+          }
+        } finally {
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
+        }
+      }
+    }
+
+    return InkWell(
+      onTap: showTimezoneDialog,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+              : SafeJetColors.lightCardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
             color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                : SafeJetColors.lightCardBackground,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                  : SafeJetColors.lightCardBorder,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _selectedTimeZone,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Current time zone for all trading activities',
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      // TODO: Implement time zone selection
-                    },
-                    icon: const Icon(Icons.edit),
-                  ),
-                ],
-              ),
-            ],
+                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                : SafeJetColors.lightCardBorder,
           ),
         ),
-      ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.schedule,
+                        color: Colors.amber,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Time Zone',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 20),
+                  color: Colors.grey,
+                  onPressed: showTimezoneDialog,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 40),
+              child: Text(
+                _selectedTimeZone,
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -698,10 +732,10 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   SafeJetColors.secondaryHighlight,
@@ -710,7 +744,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-              borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
                   color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
@@ -718,40 +752,40 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
                   offset: const Offset(0, 4),
                 ),
               ],
-            ),
-            child: Icon(
-              icon,
+          ),
+          child: Icon(
+            icon,
               color: Colors.black,
               size: 20,
-            ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
                   style: TextStyle(
-                    fontSize: 18,
+                  fontSize: 18,
                     fontWeight: FontWeight.w600,
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
+              Text(
+                subtitle,
+                style: TextStyle(
                     fontSize: 13,
                     color: isDark 
                         ? Colors.grey[400] 
                         : SafeJetColors.lightTextSecondary,
-                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ],
       ),
     );
   }

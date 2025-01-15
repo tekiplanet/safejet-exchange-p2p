@@ -805,7 +805,7 @@ class AuthService {
       if (refreshToken == null) throw 'No refresh token found';
 
       final response = await _dio.post(
-        '/auth/refresh',
+        '/refresh',
         data: {'refreshToken': refreshToken},
       );
 
