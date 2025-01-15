@@ -143,9 +143,13 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> checkAuthStatus() async {
     try {
+      _isLoading = true;
+      notifyListeners();
+
       final token = await _authService.storage.read(key: 'accessToken');
       
       if (token == null) {
+        _isLoading = false;
         _isLoggedIn = false;
         _user = null;
         notifyListeners();
@@ -157,21 +161,24 @@ class AuthProvider with ChangeNotifier {
       if (userJson != null) {
         _user = User.fromJson(json.decode(userJson));
         _isLoggedIn = true;
-        notifyListeners();
       }
     } catch (e) {
       print('Error checking auth status: $e');
       _isLoggedIn = false;
       _user = null;
+    } finally {
+      _isLoading = false;
       notifyListeners();
     }
   }
 
   Future<void> fetchFreshUserData() async {
     try {
+      _isLoading = true;
+      notifyListeners();
+
       final token = await _authService.storage.read(key: 'accessToken');
       
-      // Don't make the request if there's no token
       if (token == null) {
         _isLoggedIn = false;
         _user = null;
@@ -182,17 +189,17 @@ class AuthProvider with ChangeNotifier {
       final userData = await _authService.getCurrentUser();
       _user = User.fromJson(userData);
       _isLoggedIn = true;
-      notifyListeners();
     } catch (e) {
       print('Error fetching fresh user data: $e');
-      // Only clear auth state if it's an auth error
       if (e is DioException && e.response?.statusCode == 401) {
         _isLoggedIn = false;
         _user = null;
         await _authService.storage.delete(key: 'accessToken');
-        notifyListeners();
       }
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 

@@ -21,6 +21,7 @@ import '../../../providers/kyc_provider.dart';
 import '../../../providers/language_settings_provider.dart';
 import '../../../providers/biometric_settings_provider.dart';
 import '../../../screens/settings/biometric_settings_screen.dart';
+import 'package:shimmer/shimmer.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -37,6 +38,8 @@ class _ProfileTabState extends State<ProfileTab> {
     super.initState();
     _check2FAStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Trigger loading state by fetching fresh data
+      context.read<AuthProvider>().fetchFreshUserData();
       context.read<KYCProvider>().loadKYCDetails();
       context.read<BiometricSettingsProvider>().loadSettings();
     });
@@ -193,409 +196,489 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  Widget _buildShimmer() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Profile Header Shimmer
+            Row(
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 150,
+                        height: 20,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 100,
+                        height: 16,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+
+            // Settings Sections Shimmer
+            ...List.generate(4, (sectionIndex) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 120,
+                  height: 24,
+                  color: Colors.white,
+                ),
+                const SizedBox(height: 16),
+                ...List.generate(3, (itemIndex) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Container(
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                )),
+                const SizedBox(height: 32),
+              ],
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Profile Header with animation
-              FadeInDown(
-                duration: const Duration(milliseconds: 400),
-                child: Consumer<KYCProvider>(
-                  builder: (context, kycProvider, child) {
-                    final kycDetails = kycProvider.kycDetails;
-                    return Row(
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Text(
-                              kycDetails?.userDetails.fullName.substring(0, 2).toUpperCase() ?? 'JD',
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                color: SafeJetColors.secondaryHighlight,
-                                fontWeight: FontWeight.bold,
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        if (authProvider.isLoading) {
+          return _buildShimmer();
+        }
+        
+        return Scaffold(
+          backgroundColor: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Profile Header with animation
+                  FadeInDown(
+                    duration: const Duration(milliseconds: 400),
+                    child: Consumer<KYCProvider>(
+                      builder: (context, kycProvider, child) {
+                        final kycDetails = kycProvider.kycDetails;
+                        return Row(
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
+                                shape: BoxShape.circle,
                               ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                kycDetails?.userDetails.fullName ?? 'Loading...',
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                kycDetails?.userDetails.email ?? 'Loading...',
-                                style: TextStyle(
-                                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _getVerificationColor(kycDetails?.currentLevel ?? 0).withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: GestureDetector(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => const KYCLevelsScreen(),
-                                      ),
-                                    );
-                                  },
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        _getVerificationIcon(kycDetails?.currentLevel ?? 0),
-                                        size: 14,
-                                        color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _getVerificationText(kycDetails?.currentLevel ?? 0),
-                                        style: TextStyle(
-                                          color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        Icons.arrow_forward_ios,
-                                        size: 12,
-                                        color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
-                                      ),
-                                    ],
+                              child: Center(
+                                child: Text(
+                                  kycDetails?.userDetails.fullName.substring(0, 2).toUpperCase() ?? 'JD',
+                                  style: theme.textTheme.headlineMedium?.copyWith(
+                                    color: SafeJetColors.secondaryHighlight,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    kycDetails?.userDetails.fullName ?? 'Loading...',
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    kycDetails?.userDetails.email ?? 'Loading...',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _getVerificationColor(kycDetails?.currentLevel ?? 0).withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => const KYCLevelsScreen(),
+                                          ),
+                                        );
+                                      },
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            _getVerificationIcon(kycDetails?.currentLevel ?? 0),
+                                            size: 14,
+                                            color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            _getVerificationText(kycDetails?.currentLevel ?? 0),
+                                            style: TextStyle(
+                                              color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                            size: 12,
+                                            color: _getVerificationColor(kycDetails?.currentLevel ?? 0),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Security Settings Section
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 400),
+                    delay: const Duration(milliseconds: 100),
+                    child: _buildSection(
+                      context,
+                      title: 'Security',
+                      children: [
+                        _buildAnimatedSettingCard(
+                          context,
+                          icon: Icons.lock_outline,
+                          title: 'Change Password',
+                          subtitle: 'Update your password',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ChangePasswordScreen(),
+                              ),
+                            );
+                          },
+                          delay: 0,
+                        ),
+                        _buildAnimatedSettingCard(
+                          context,
+                          icon: Icons.fingerprint,
+                          title: 'Biometric Authentication',
+                          subtitle: context.select((BiometricSettingsProvider p) =>
+                              p.isAvailable
+                                  ? (p.isEnabled ? 'Enabled' : 'Disabled')
+                                  : 'Not Available'),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const BiometricSettingsScreen(),
+                              ),
+                            );
+                          },
+                          delay: 300,
+                        ),
+                        _buildAnimatedSettingCard(
+                          context,
+                          icon: Icons.security,
+                          title: 'Two-Factor Authentication',
+                          subtitle: _is2FAEnabled ? 'Enabled' : 'Disabled',
+                          trailing: _is2FAEnabled 
+                            ? Icon(
+                                Icons.chevron_right,
+                                color: isDark ? Colors.grey[600] : Colors.grey[400],
+                              )
+                            : Switch(
+                                value: false,
+                                onChanged: (value) => _handle2FAToggle(),
+                                activeColor: SafeJetColors.secondaryHighlight,
+                              ),
+                          onTap: () async {
+                            if (_is2FAEnabled) {
+                              final disabled = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const TwoFactorManageScreen(),
+                                ),
+                              );
+                              
+                              if (disabled == true && mounted) {
+                                setState(() => _is2FAEnabled = false);
+                              }
+                            } else {
+                              _handle2FAToggle();
+                            }
+                          },
+                          delay: 200,
                         ),
                       ],
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Security Settings Section
-              FadeInUp(
-                duration: const Duration(milliseconds: 400),
-                delay: const Duration(milliseconds: 100),
-                child: _buildSection(
-                  context,
-                  title: 'Security',
-                  children: [
-                    _buildAnimatedSettingCard(
-                      context,
-                      icon: Icons.lock_outline,
-                      title: 'Change Password',
-                      subtitle: 'Update your password',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ChangePasswordScreen(),
-                          ),
-                        );
-                      },
-                      delay: 0,
                     ),
-                    _buildAnimatedSettingCard(
-                      context,
-                      icon: Icons.fingerprint,
-                      title: 'Biometric Authentication',
-                      subtitle: context.select((BiometricSettingsProvider p) =>
-                          p.isAvailable
-                              ? (p.isEnabled ? 'Enabled' : 'Disabled')
-                              : 'Not Available'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const BiometricSettingsScreen(),
-                          ),
-                        );
-                      },
-                      delay: 300,
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Verification
+                  Text(
+                    'Verification',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    _buildAnimatedSettingCard(
-                      context,
-                      icon: Icons.security,
-                      title: 'Two-Factor Authentication',
-                      subtitle: _is2FAEnabled ? 'Enabled' : 'Disabled',
-                      trailing: _is2FAEnabled 
-                        ? Icon(
-                            Icons.chevron_right,
-                            color: isDark ? Colors.grey[600] : Colors.grey[400],
-                          )
-                        : Switch(
-                            value: false,
-                            onChanged: (value) => _handle2FAToggle(),
-                            activeColor: SafeJetColors.secondaryHighlight,
+                  ),
+                  const SizedBox(height: 16),
+                  Consumer<KYCProvider>(
+                    builder: (context, kycProvider, child) {
+                      final kycLevel = kycProvider.kycDetails?.currentLevel ?? 0;
+                      return _buildSettingCard(
+                        context,
+                        icon: Icons.person_outline,
+                        title: 'Identity Verification',
+                        subtitle: 'Complete KYC to increase limits',
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _getVerificationStatusColor(kycLevel).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                      onTap: () async {
-                        if (_is2FAEnabled) {
-                          final disabled = await Navigator.push<bool>(
+                          child: Text(
+                            _getVerificationStatus(kycLevel),
+                            style: TextStyle(
+                              color: _getVerificationStatusColor(kycLevel),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const TwoFactorManageScreen(),
+                              builder: (context) => const KYCLevelsScreen(),
                             ),
                           );
-                          
-                          if (disabled == true && mounted) {
-                            setState(() => _is2FAEnabled = false);
-                          }
-                        } else {
-                          _handle2FAToggle();
-                        }
-                      },
-                      delay: 200,
+                        },
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // // API Management
+                  // Text(
+                  //   'API Management',
+                  //   style: theme.textTheme.titleMedium?.copyWith(
+                  //     fontWeight: FontWeight.bold,
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 16),
+                  // _buildSettingCard(
+                  //   context,
+                  //   icon: Icons.key,
+                  //   title: 'API Keys',
+                  //   subtitle: 'Manage your API keys',
+                  //   onTap: () {
+                  //     // TODO: Show API keys management
+                  //   },
+                  // ),
+
+                  const SizedBox(height: 32),
+
+                  // P2P Settings Section
+                  Text(
+                    'P2P Settings',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Verification
-              Text(
-                'Verification',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Consumer<KYCProvider>(
-                builder: (context, kycProvider, child) {
-                  final kycLevel = kycProvider.kycDetails?.currentLevel ?? 0;
-                  return _buildSettingCard(
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSettingCard(
                     context,
-                    icon: Icons.person_outline,
-                    title: 'Identity Verification',
-                    subtitle: 'Complete KYC to increase limits',
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _getVerificationStatusColor(kycLevel).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        _getVerificationStatus(kycLevel),
-                        style: TextStyle(
-                          color: _getVerificationStatusColor(kycLevel),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
+                    icon: Icons.payment,
+                    title: 'Payment Methods',
+                    subtitle: 'Manage your P2P payment methods',
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const KYCLevelsScreen(),
+                          builder: (context) => const P2PPaymentMethodsScreen(),
                         ),
                       );
                     },
-                  );
-                },
-              ),
-
-              const SizedBox(height: 32),
-
-              // // API Management
-              // Text(
-              //   'API Management',
-              //   style: theme.textTheme.titleMedium?.copyWith(
-              //     fontWeight: FontWeight.bold,
-              //   ),
-              // ),
-              // const SizedBox(height: 16),
-              // _buildSettingCard(
-              //   context,
-              //   icon: Icons.key,
-              //   title: 'API Keys',
-              //   subtitle: 'Manage your API keys',
-              //   onTap: () {
-              //     // TODO: Show API keys management
-              //   },
-              // ),
-
-              const SizedBox(height: 32),
-
-              // P2P Settings Section
-              Text(
-                'P2P Settings',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildSettingCard(
-                context,
-                icon: Icons.payment,
-                title: 'Payment Methods',
-                subtitle: 'Manage your P2P payment methods',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const P2PPaymentMethodsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildSettingCard(
-                context,
-                icon: Icons.attach_money_outlined,
-                title: 'Trading Preferences',
-                subtitle: 'Set default currency and payment methods',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const P2PTradingPreferencesScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildSettingCard(
-                context,
-                icon: Icons.message_outlined,
-                title: 'Auto-Response Messages',
-                subtitle: 'Manage quick responses for P2P chat',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const P2PAutoResponseScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 32),
-
-              // Preferences
-              Text(
-                'Preferences',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildSettingCard(
-                context,
-                icon: Icons.notifications_outlined,
-                title: 'Notifications',
-                subtitle: 'Manage push notifications',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationSettingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildSettingCard(
-                context,
-                icon: Icons.language,
-                title: 'Language',
-                subtitle: context.select((LanguageSettingsProvider p) {
-                  final code = p.currentLanguage;
-                  switch (code) {
-                    case 'en': return 'English';
-                    case 'es': return 'Español';
-                    case 'fr': return 'Français';
-                    case 'de': return 'Deutsch';
-                    case 'zh': return '中文';
-                    case 'ja': return '日本語';
-                    case 'ko': return '한국어';
-                    case 'ru': return 'Русский';
-                    case 'ar': return 'العربية';
-                    default: return 'English';
-                  }
-                }),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LanguageSettingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildSettingCard(
-                context,
-                icon: isDark ? Icons.light_mode : Icons.dark_mode,
-                title: 'Theme',
-                subtitle: isDark ? 'Dark Mode' : 'Light Mode',
-                trailing: Switch(
-                  value: isDark,
-                  onChanged: (value) {
-                    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-                    themeProvider.toggleTheme();
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Sign Out Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    _handleLogout();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: SafeJetColors.error,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
                   ),
-                  child: const Text(
-                    'Sign Out',
-                    style: TextStyle(
+                  _buildSettingCard(
+                    context,
+                    icon: Icons.attach_money_outlined,
+                    title: 'Trading Preferences',
+                    subtitle: 'Set default currency and payment methods',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const P2PTradingPreferencesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildSettingCard(
+                    context,
+                    icon: Icons.message_outlined,
+                    title: 'Auto-Response Messages',
+                    subtitle: 'Manage quick responses for P2P chat',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const P2PAutoResponseScreen(),
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Preferences
+                  Text(
+                    'Preferences',
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  _buildSettingCard(
+                    context,
+                    icon: Icons.notifications_outlined,
+                    title: 'Notifications',
+                    subtitle: 'Manage push notifications',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationSettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildSettingCard(
+                    context,
+                    icon: Icons.language,
+                    title: 'Language',
+                    subtitle: context.select((LanguageSettingsProvider p) {
+                      final code = p.currentLanguage;
+                      switch (code) {
+                        case 'en': return 'English';
+                        case 'es': return 'Español';
+                        case 'fr': return 'Français';
+                        case 'de': return 'Deutsch';
+                        case 'zh': return '中文';
+                        case 'ja': return '日本語';
+                        case 'ko': return '한국어';
+                        case 'ru': return 'Русский';
+                        case 'ar': return 'العربية';
+                        default: return 'English';
+                      }
+                    }),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LanguageSettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildSettingCard(
+                    context,
+                    icon: isDark ? Icons.light_mode : Icons.dark_mode,
+                    title: 'Theme',
+                    subtitle: isDark ? 'Dark Mode' : 'Light Mode',
+                    trailing: Switch(
+                      value: isDark,
+                      onChanged: (value) {
+                        final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+                        themeProvider.toggleTheme();
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Sign Out Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        _handleLogout();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.error,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Sign Out',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
