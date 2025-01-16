@@ -235,7 +235,21 @@ export class WalletService {
         where: { userId, status: 'active' }
       });
 
+      console.log('Found wallets:', wallets);
+
+      // If no wallets found, return empty response
+      if (!wallets || wallets.length === 0) {
+        console.log('No wallets found for user:', userId);
+        return {
+          balances: [],
+          total: 0,
+          change24h: 0,
+          changePercent24h: 0
+        };
+      }
+
       const walletIds = wallets.map(w => w.id);
+      console.log('Wallet IDs:', walletIds);
 
       // Then get balances for all wallets
       const query = this.walletBalanceRepository
@@ -249,28 +263,7 @@ export class WalletService {
       }
 
       const balances = await query.getMany();
-
-      // If type is not specified (All filter), aggregate balances by token
-      if (!type) {
-        const aggregatedBalances = new Map<string, WalletBalance>();
-        
-        balances.forEach(balance => {
-          const key = balance.token.symbol;
-          if (aggregatedBalances.has(key)) {
-            // Add to existing balance
-            const existing = aggregatedBalances.get(key);
-            existing.balance = (
-              parseFloat(existing.balance) + 
-              parseFloat(balance.balance)
-            ).toString();
-          } else {
-            // Create new aggregated balance
-            aggregatedBalances.set(key, {...balance});
-          }
-        });
-
-        return Array.from(aggregatedBalances.values());
-      }
+      console.log('Found balances:', balances);
 
       // Get price changes for all tokens
       const priceChanges = await Promise.all(
@@ -285,29 +278,73 @@ export class WalletService {
         })
       );
 
-      // Calculate total portfolio change
+      // Add prices to balance objects
+      let processedBalances = balances.map(balance => {
+        const priceData = priceChanges.find(p => p.symbol === balance.token.symbol);
+        return {
+          id: balance.id,
+          balance: balance.balance,
+          type: balance.type,
+          token: {
+            id: balance.token.id,
+            name: balance.token.name,
+            symbol: balance.token.symbol,
+            blockchain: balance.token.blockchain,
+            contractAddress: balance.token.contractAddress,
+            metadata: balance.token.metadata
+          },
+          price: priceData?.price ?? 0
+        };
+      });
+
+      // If type is not specified (All filter), aggregate balances by token
+      if (!type) {
+        const aggregatedBalances = new Map<string, any>();
+        
+        processedBalances.forEach(balance => {
+          const key = balance.token.symbol;
+          if (aggregatedBalances.has(key)) {
+            // Add to existing balance
+            const existing = aggregatedBalances.get(key);
+            existing.balance = (
+              parseFloat(existing.balance) + 
+              parseFloat(balance.balance)
+            ).toString();
+          } else {
+            // Create new aggregated balance
+            aggregatedBalances.set(key, {...balance});
+          }
+        });
+
+        processedBalances = Array.from(aggregatedBalances.values());
+      }
+
+      // Calculate totals
+      const totalValue = processedBalances.reduce((acc, curr) => {
+        const balance = parseFloat(curr.balance);
+        const price = curr.price ?? 0;
+        return acc + (balance * price);
+      }, 0);
+
       const totalChange = priceChanges.reduce((acc, curr, index) => {
         const balance = parseFloat(balances[index].balance);
         const valueChange = balance * curr.change24h;
         return acc + valueChange;
       }, 0);
 
-      const totalValue = balances.reduce((acc, curr, index) => {
-        const balance = parseFloat(curr.balance);
-        const price = priceChanges.find(p => p.symbol === curr.token.symbol)?.price ?? 0;
-        return acc + (balance * price);
-      }, 0);
-
       const totalChangePercent = totalValue > 0 
         ? (totalChange / totalValue) * 100 
         : 0;
 
-      return {
-        balances,
+      const response = {
+        balances: processedBalances,
         total: totalValue,
         change24h: totalChange,
         changePercent24h: totalChangePercent
       };
+
+      console.log('Backend response:', JSON.stringify(response, null, 2));
+      return response;
     } catch (error) {
       this.logger.error(`Failed to get wallet balances: ${error.message}`);
       throw new Error('Failed to fetch wallet balances');
@@ -317,7 +354,20 @@ export class WalletService {
   async getTotalBalance(userId: string, currency: string, type?: string): Promise<number> {
     try {
       // Get balances filtered by type if specified
-      const balances = await this.getBalances(userId, type);
+      const data = await this.getBalances(userId, type);
+      
+      // If data already has total, use it
+      if (data.total !== undefined) {
+        // Only convert if currency is not USD
+        if (currency.toUpperCase() === 'USD') {
+          return data.total;
+        }
+        const exchangeRate = await this.exchangeService.getRateForCurrency(currency);
+        return data.total * exchangeRate.rate;
+      }
+
+      // Otherwise calculate total from balances (for backward compatibility)
+      const balances = Array.isArray(data) ? data : data.balances;
       
       // Only get exchange rate if currency is not USD
       const exchangeRate = currency.toUpperCase() === 'USD' 

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, Request, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
@@ -16,14 +16,15 @@ export class WalletController {
     @Query('type') type?: string,
     @Query('currency') currency: string = 'USD',
   ) {
-    const balances = await this.walletService.getBalances(user.id, type);
-    const total = await this.walletService.getTotalBalance(user.id, currency, type);
-
-    return {
-      balances,
-      total,
-      currency
-    };
+    try {
+      const balances = await this.walletService.getBalances(user.id, type);
+      return balances;
+    } catch (error) {
+      throw new HttpException(
+        'Failed to fetch wallet balances',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Post()

@@ -107,41 +107,38 @@ class _WalletsTabState extends State<WalletsTab> {
         currency: _showInUSD ? 'USD' : _userCurrency,
       );
       
+      print('WalletsTab received data: $data');
+
       if (!mounted) return;
 
       setState(() {
-        _balances = List<Map<String, dynamic>>.from(data['balances'] ?? [])
-            .where((b) => b != null && b['token'] != null)
-            .toList();
+        // Extract balances array from the response
+        _balances = List<Map<String, dynamic>>.from(data['balances'] ?? []);
         _totalBalance = (data['total'] ?? 0.0).toDouble();
         _change24h = (data['change24h'] ?? 0.0).toDouble();
         _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
+        
+        // Update token prices
+        _tokenPrices = Map.fromEntries(
+          _balances.map((b) => MapEntry(
+            b['token']['symbol'] as String,
+            (b['price'] ?? 0.0).toDouble(),
+          )),
+        );
+        
         _isLoading = false;
         _isPriceLoading = false;
       });
     } catch (e) {
-      print('Error loading balances: $e');
+      print('Error in _loadBalances: $e');
       if (!mounted) return;
       
       setState(() {
-        _balances = [];
-        _totalBalance = 0.0;
         _isLoading = false;
+        _isPriceLoading = false;
         _hasError = true;
         _errorMessage = 'Failed to load balances';
-        _isPriceLoading = false;
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading balances. Please try again.'),
-          behavior: SnackBarBehavior.floating,
-          action: SnackBarAction(
-            label: 'Retry',
-            onPressed: _loadBalances,
-          ),
-        ),
-      );
     }
   }
 
@@ -852,6 +849,9 @@ class _WalletsTabState extends State<WalletsTab> {
     double balance,
     String? iconUrl,
   ) {
+    final price = _tokenPrices[symbol] ?? 0.0;
+    final fiatValue = balance * price * (_showInUSD ? 1.0 : _userCurrencyRate);
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(16),
@@ -928,7 +928,7 @@ class _WalletsTabState extends State<WalletsTab> {
               ),
               const SizedBox(height: 4),
               _buildAssetBalance(
-                _formatBalance(_showInUSD, balance * (_tokenPrices[symbol] ?? 0)),
+                _formatBalance(_showInUSD, fiatValue),
                 isDark,
               ),
             ],

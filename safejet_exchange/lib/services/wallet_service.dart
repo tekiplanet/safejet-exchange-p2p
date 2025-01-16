@@ -55,43 +55,36 @@ class WalletService {
         },
       );
 
+      print('Frontend raw response: ${response.data}');
+      
       // Ensure we have a valid response
       if (response.data == null) {
         return {
           'balances': [],
           'total': 0.0,
-          'currency': currency,
+          'change24h': 0.0,
+          'changePercent24h': 0.0,
         };
       }
 
-      // Handle both array and map responses
-      if (response.data is List) {
+      // Handle the nested balances structure
+      if (response.data['balances'] is Map && response.data['balances']['balances'] is List) {
         return {
-          'balances': response.data,
-          'total': 0.0,
-          'currency': currency,
+          'balances': response.data['balances']['balances'],
+          'total': response.data['balances']['total'] ?? 0.0,
+          'change24h': response.data['balances']['change24h'] ?? 0.0,
+          'changePercent24h': response.data['balances']['changePercent24h'] ?? 0.0,
         };
       }
 
-      if (response.data is! Map<String, dynamic>) {
-        return {
-          'balances': [],
-          'total': 0.0,
-          'currency': currency,
-        };
-      }
-
-      return {
-        'balances': response.data['balances'] ?? [],
-        'total': (response.data['total'] ?? 0.0).toDouble(),
-        'currency': currency,
-      };
+      return response.data;
     } catch (e) {
       print('Error fetching wallet balances: $e');
       return {
         'balances': [],
         'total': 0.0,
-        'currency': currency,
+        'change24h': 0.0,
+        'changePercent24h': 0.0,
       };
     }
   }
