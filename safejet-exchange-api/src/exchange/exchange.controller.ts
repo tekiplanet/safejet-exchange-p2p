@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ExchangeService } from './exchange.service';
 
 @Controller('exchange-rates')
@@ -6,7 +6,22 @@ export class ExchangeController {
   constructor(private readonly exchangeService: ExchangeService) {}
 
   @Get(':currency')
-  async getRate(@Param('currency') currency: string) {
-    return this.exchangeService.getRateForCurrency(currency);
+  async getRateForCurrency(@Param('currency') currency: string) {
+    console.log(`Getting rate for currency: ${currency}`);
+    const rate = await this.exchangeService.getRateForCurrency(currency);
+    return {
+      currency: rate.currency,
+      rate: rate.rate,
+      lastUpdated: rate.lastUpdated
+    };
+  }
+
+  @Get('crypto-price')
+  async getCryptoPrice(
+    @Query('symbol') symbol: string,
+    @Query('currency') currency: string,
+  ) {
+    const price = await this.exchangeService.getCryptoPrice(symbol, currency);
+    return { price };
   }
 } 

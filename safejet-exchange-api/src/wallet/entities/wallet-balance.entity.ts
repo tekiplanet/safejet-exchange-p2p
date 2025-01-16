@@ -4,7 +4,8 @@ import {
   Column, 
   ManyToOne, 
   CreateDateColumn, 
-  UpdateDateColumn 
+  UpdateDateColumn, 
+  JoinColumn 
 } from 'typeorm';
 import { Wallet } from './wallet.entity';
 import { Token } from './token.entity';
@@ -17,27 +18,25 @@ export class WalletBalance {
   @Column()
   walletId: string;
 
-  @ManyToOne(() => Wallet)
-  wallet: Wallet;
-
   @Column()
   tokenId: string;
 
-  @ManyToOne(() => Token)
-  token: Token;
-
-  @Column('decimal', { precision: 36, scale: 18 })
+  @Column('decimal', { precision: 36, scale: 18, default: '0' })
   balance: string;
 
-  @Column()
+  @Column({ type: 'enum', enum: ['spot', 'funding'] })
   type: 'spot' | 'funding';
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column('jsonb', { nullable: true })
   metadata: Record<string, any>;
+
+  @ManyToOne(() => Token)
+  @JoinColumn({ name: 'tokenId' })
+  token: Token;
 
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  lastUpdated: Date;
 } 

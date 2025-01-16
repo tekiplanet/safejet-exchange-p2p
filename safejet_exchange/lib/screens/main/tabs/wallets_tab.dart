@@ -5,8 +5,11 @@ import '../../wallet/deposit_screen.dart';
 import '../../wallet/withdraw_screen.dart';
 import '../../wallet/transaction_history_screen.dart';
 import '../../p2p/p2p_screen.dart';
-import '../../services/user_service.dart';
-import '../../services/exchange_service.dart';
+import '../../../services/p2p_settings_service.dart';
+import '../../../services/exchange_service.dart';
+import '../../../services/service_locator.dart';
+import 'package:shimmer/shimmer.dart';
+import '../../../services/wallet_service.dart';
 
 class WalletsTab extends StatefulWidget {
   const WalletsTab({super.key});
@@ -21,35 +24,89 @@ class _WalletsTabState extends State<WalletsTab> {
   bool _showInUSD = true;
   bool _showZeroBalances = true;
 
-  late String _userCurrency;
-  late double _userCurrencyRate;
+  String _userCurrency = 'USD';
+  double _userCurrencyRate = 1.0;
   bool _isLoading = true;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  final _exchangeService = getIt<ExchangeService>();
+  final _p2pSettingsService = getIt<P2PSettingsService>();
+  final WalletService _walletService = getIt<WalletService>();
+  Map<String, dynamic> _balances = {};
+  double _totalBalance = 0;
+
   @override
   void initState() {
     super.initState();
     _loadUserSettings();
+    _loadBalances();
   }
 
   Future<void> _loadUserSettings() async {
     try {
       setState(() => _isLoading = true);
       
-      // TODO: Add API call to get user settings
-      final settings = await UserService().getP2PSettings();
-      final rates = await ExchangeService().getRates(settings.currency);
+      print('Loading user settings...');
+      
+      final settings = await _p2pSettingsService.getSettings();
+      print('Settings loaded: $settings');
+      
+      final rates = await _exchangeService.getRates(settings['currency'] ?? 'USD');
+      print('Rates loaded: $rates');
       
       setState(() {
-        _userCurrency = settings.currency;
-        _userCurrencyRate = rates.rate;
+        _userCurrency = settings['currency'] ?? 'USD';
+        _userCurrencyRate = double.tryParse(rates['rate'].toString()) ?? 1.0;
+        _isLoading = false;
+      });
+
+      print('Settings updated - Currency: $_userCurrency, Rate: $_userCurrencyRate');
+    } catch (e, stackTrace) {
+      print('Error loading settings: $e');
+      print('Stack trace: $stackTrace');
+      
+      setState(() {
+        _userCurrency = 'USD';
+        _userCurrencyRate = 1.0;
+        _isLoading = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading settings: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadBalances() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      final type = _selectedFilter == 'All' ? null : _selectedFilter.toLowerCase();
+      final data = await _walletService.getBalances(
+        type: type,
+        currency: _showInUSD ? 'USD' : _userCurrency,
+      );
+      
+      setState(() {
+        _balances = data['balances'];
+        _totalBalance = data['total'];
         _isLoading = false;
       });
     } catch (e) {
-      // Handle error
-      debugPrint('Error loading settings: $e');
+      print('Error loading balances: $e');
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading balances: $e')),
+        );
+      }
     }
   }
 
@@ -69,10 +126,15 @@ class _WalletsTabState extends State<WalletsTab> {
   }
 
   String _getCurrencySymbol(String currency) {
-    switch (currency) {
+    switch (currency.toUpperCase()) {
       case 'NGN':
         return '₦';
-      // Add other currencies as needed
+      case 'USD':
+        return '\$';
+      case 'EUR':
+        return '€';
+      case 'GBP':
+        return '£';
       default:
         return currency;
     }
@@ -108,10 +170,144 @@ class _WalletsTabState extends State<WalletsTab> {
     super.dispose();
   }
 
+  Widget _buildShimmer() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Portfolio Value Shimmer
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[800] : Colors.white,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(32),
+                  bottomRight: Radius.circular(32),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 16,
+                            color: isDark ? Colors.grey[700] : Colors.white,
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: 150,
+                            height: 32,
+                            color: isDark ? Colors.grey[700] : Colors.white,
+                          ),
+                        ],
+                      ),
+                      // Currency Toggle Shimmer
+                      Container(
+                        width: 120,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[700] : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[700] : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.grey[700] : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Quick Actions Shimmer
+            SizedBox(
+              height: 100,
+              child: Row(
+                children: List.generate(3, (index) => Expanded(
+                  child: Container(
+                    margin: EdgeInsets.only(
+                      left: index == 0 ? 0 : 8,
+                      right: index == 2 ? 0 : 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[800] : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark 
+                            ? Colors.grey[700]! 
+                            : Colors.grey[300]!,
+                      ),
+                    ),
+                  ),
+                )),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Assets List Shimmer
+            ...List.generate(5, (index) => Container(
+              height: 80,
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[800] : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark 
+                      ? Colors.grey[700]! 
+                      : Colors.grey[300]!,
+                ),
+              ),
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    if (_isLoading) {
+      return _buildShimmer();
+    }
+
+    print('Current Currency: $_userCurrency');
+    print('Current Rate: $_userCurrencyRate');
 
     return SafeArea(
       child: CustomScrollView(
@@ -540,6 +736,25 @@ class _WalletsTabState extends State<WalletsTab> {
       return const CircularProgressIndicator();
     }
 
+    // If user's currency is USD, don't show the toggle
+    if (_userCurrency.toUpperCase() == 'USD') {
+      return Container(
+        decoration: BoxDecoration(
+          color: isDark 
+              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+              : SafeJetColors.lightCardBackground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark
+                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                : SafeJetColors.lightCardBorder,
+          ),
+        ),
+        child: _buildCurrencyToggle('USD', true, isDark),
+      );
+    }
+
+    // Show toggle for other currencies
     return Container(
       decoration: BoxDecoration(
         color: isDark 
@@ -704,5 +919,15 @@ class _WalletsTabState extends State<WalletsTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _loadRates() async {
+    try {
+      final rates = await _exchangeService.getRates('ngn'); // or your default currency
+      // Update your UI with the rates
+    } catch (e) {
+      // Handle error
+      print('Error loading rates: $e');
+    }
   }
 } 

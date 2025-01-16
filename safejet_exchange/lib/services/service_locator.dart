@@ -5,6 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import './services.dart';
 import '../providers/auth_provider.dart';
 import 'api_client.dart';
+import 'wallet_service.dart';
+import 'auth_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -23,6 +25,9 @@ Future<void> setupServices() async {
   // Register AuthProvider
   getIt.registerSingleton<AuthProvider>(AuthProvider());
 
+  // Register AuthService
+  getIt.registerSingleton<AuthService>(AuthService());
+
   // Register ApiClient with auth interceptor
   getIt.registerSingleton<ApiClient>(
     ApiClient(dio, getIt<AuthProvider>()),
@@ -32,4 +37,13 @@ Future<void> setupServices() async {
   getIt.registerSingleton<KYCService>(
     KYCService(getIt<ApiClient>().dio),
   );
+
+  // Register P2PSettingsService
+  getIt.registerSingleton<P2PSettingsService>(P2PSettingsService());
+
+  // Register ExchangeService
+  getIt.registerSingleton<ExchangeService>(ExchangeService());
+
+  // Register WalletService
+  getIt.registerLazySingleton<WalletService>(() => WalletService());
 } 

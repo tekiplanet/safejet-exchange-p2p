@@ -11,6 +11,7 @@ import { WalletBalance } from './entities/wallet-balance.entity';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { WalletListener } from './wallet.listener';
+import { ExchangeModule } from '../exchange/exchange.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { WalletListener } from './wallet.listener';
     EventEmitterModule.forRoot(),
     ConfigModule,
     forwardRef(() => AuthModule),
+    ExchangeModule,
   ],
   providers: [
     WalletService, 

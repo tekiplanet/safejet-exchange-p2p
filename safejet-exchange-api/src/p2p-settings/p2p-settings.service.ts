@@ -20,7 +20,7 @@ export class P2PSettingsService {
       const settings = await this.settingsRepository.findOne({
         where: { userId },
       });
-      console.log('Found settings:', settings);
+      // console.log('Found settings:', settings);
 
       if (!settings) {
         console.log('No settings found, creating default settings');

@@ -1,15 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
+import '../services/service_locator.dart';
 
-class ExchangeService {
+class WalletService {
   late final Dio _dio;
   final storage = const FlutterSecureStorage();
-  final AuthService _authService = AuthService();
+  final AuthService _authService = getIt<AuthService>();
 
-  ExchangeService() {
+  WalletService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
-    
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
       headers: {
@@ -42,40 +42,21 @@ class ExchangeService {
     );
   }
 
-  Future<Map<String, dynamic>> getRates(String currency) async {
-    try {
-      print('Fetching rates for $currency');
-      final response = await _dio.get('/exchange-rates/${currency.toLowerCase()}');
-      print('Rate response: ${response.data}');
-      return response.data;
-    } catch (e) {
-      print('Error fetching rates: $e');
-      rethrow;
-    }
-  }
-
-  Future<double> getCryptoPrice(String symbol, String currency) async {
+  Future<Map<String, dynamic>> getBalances({
+    String? type,
+    String currency = 'USD',
+  }) async {
     try {
       final response = await _dio.get(
-        '/exchange-rates/crypto-price',
+        '/wallet/balances',
         queryParameters: {
-          'symbol': symbol,
+          if (type != null) 'type': type,
           'currency': currency,
         },
       );
-      return response.data['price'];
+      return response.data;
     } catch (e) {
-      print('Error getting crypto price: $e');
-      rethrow;
-    }
-  }
-
-  Future<double> convertCryptoToFiat(double amount, String cryptoSymbol, String fiatCurrency) async {
-    try {
-      final price = await getCryptoPrice(cryptoSymbol, fiatCurrency);
-      return amount * price;
-    } catch (e) {
-      print('Error converting crypto to fiat: $e');
+      print('Error fetching wallet balances: $e');
       rethrow;
     }
   }

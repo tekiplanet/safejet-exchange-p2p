@@ -7,17 +7,22 @@ import { CreateWalletDto } from './dto/create-wallet.dto';
 import { Token } from './entities/token.entity';
 import { WalletBalance } from './entities/wallet-balance.entity';
 import { tokenSeeds } from './seeds/tokens.seed';
+import { ExchangeService } from '../exchange/exchange.service';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
+
   constructor(
     @InjectRepository(Wallet)
     private walletRepository: Repository<Wallet>,
     @InjectRepository(Token)
     private tokenRepository: Repository<Token>,
     @InjectRepository(WalletBalance)
-    private balanceRepository: Repository<WalletBalance>,
+    private walletBalanceRepository: Repository<WalletBalance>,
     private keyManagementService: KeyManagementService,
+    private readonly exchangeService: ExchangeService,
   ) {}
 
   async createWallet(userId: string, createWalletDto: CreateWalletDto): Promise<Wallet> {
@@ -81,7 +86,7 @@ export class WalletService {
       const types: ('spot' | 'funding')[] = ['spot', 'funding'];
       
       return types.map(type => 
-        this.balanceRepository.save({
+        this.walletBalanceRepository.save({
           walletId: wallet.id,
           tokenId: token.id,
           balance: '0',
@@ -113,7 +118,7 @@ export class WalletService {
       throw new NotFoundException('Wallet not found');
     }
 
-    const existingBalances = await this.balanceRepository.find({
+    const existingBalances = await this.walletBalanceRepository.find({
       where: { walletId }
     });
 
@@ -148,7 +153,7 @@ export class WalletService {
   ): Promise<WalletBalance[]> {
     const wallet = await this.getWallet(userId, walletId);
 
-    return this.balanceRepository.find({
+    return this.walletBalanceRepository.find({
       where: {
         walletId: wallet.id,
         type,
@@ -166,7 +171,7 @@ export class WalletService {
   ): Promise<WalletBalance> {
     const wallet = await this.getWallet(userId, walletId);
 
-    return this.balanceRepository.findOne({
+    return this.walletBalanceRepository.findOne({
       where: {
         walletId: wallet.id,
         tokenId,
@@ -186,7 +191,7 @@ export class WalletService {
   ): Promise<WalletBalance> {
     const wallet = await this.getWallet(userId, walletId);
     
-    let balance = await this.balanceRepository.findOne({
+    let balance = await this.walletBalanceRepository.findOne({
       where: {
         walletId: wallet.id,
         tokenId,
@@ -195,7 +200,7 @@ export class WalletService {
     });
 
     if (!balance) {
-      balance = this.balanceRepository.create({
+      balance = this.walletBalanceRepository.create({
         walletId: wallet.id,
         tokenId,
         balance: '0',
@@ -204,7 +209,7 @@ export class WalletService {
     }
 
     balance.balance = amount;
-    return this.balanceRepository.save(balance);
+    return this.walletBalanceRepository.save(balance);
   }
 
   async seedTokens() {
@@ -220,6 +225,102 @@ export class WalletService {
       if (!existingToken) {
         await this.tokenRepository.save(tokenData);
       }
+    }
+  }
+
+  async getBalances(userId: string, type?: 'spot' | 'funding'): Promise<WalletBalance[]> {
+    try {
+      // First get all user's wallets
+      const wallets = await this.walletRepository.find({
+        where: { userId, status: 'active' }
+      });
+
+      const walletIds = wallets.map(wallet => wallet.id);
+
+      // Then get balances for all wallets
+      const query = this.walletBalanceRepository
+        .createQueryBuilder('balance')
+        .where('balance.walletId IN (:...walletIds)', { walletIds });
+
+      if (type) {
+        query.andWhere('balance.type = :type', { type });
+      }
+
+      const balances = await query
+        .leftJoinAndSelect('balance.token', 'token')
+        .getMany();
+
+      return balances;
+    } catch (error) {
+      this.logger.error(`Failed to get wallet balances: ${error.message}`);
+      throw new Error('Failed to fetch wallet balances');
+    }
+  }
+
+  async getTotalBalance(userId: string, currency: string): Promise<number> {
+    try {
+      const balances = await this.getBalances(userId);
+      const exchangeRate = await this.exchangeService.getRateForCurrency(currency);
+
+      // Get current prices for all tokens
+      const tokenPrices = await this.getTokenPrices(balances.map(b => b.token));
+
+      return balances.reduce((total, balance) => {
+        const balanceAmount = parseFloat(balance.balance);
+        const tokenPrice = tokenPrices[balance.token.symbol] ?? 0;
+        
+        const tokenValue = balanceAmount * tokenPrice;
+        return total + (tokenValue * exchangeRate.rate);
+      }, 0);
+    } catch (error) {
+      this.logger.error(`Failed to calculate total balance: ${error.message}`);
+      throw new Error('Failed to calculate total balance');
+    }
+  }
+
+  private async getTokenPrices(tokens: Token[]): Promise<Record<string, number>> {
+    try {
+      // Get unique tokens to avoid duplicate requests
+      const uniqueTokens = tokens.filter((token, index, self) =>
+        index === self.findIndex((t) => t.symbol === token.symbol)
+      );
+
+      const prices: Record<string, number> = {};
+
+      // Batch tokens in groups of 10 to avoid rate limits
+      const batchSize = 10;
+      for (let i = 0; i < uniqueTokens.length; i += batchSize) {
+        const batch = uniqueTokens.slice(i, i + batchSize);
+        
+        try {
+          // Get prices for batch
+          const batchPrices = await Promise.all(
+            batch.map(token => 
+              this.exchangeService.getCryptoPrice(token.symbol, 'USD')
+            )
+          );
+
+          // Store prices
+          batch.forEach((token, index) => {
+            prices[token.symbol] = batchPrices[index];
+          });
+
+          // Add delay between batches to respect rate limits
+          if (i + batchSize < uniqueTokens.length) {
+            await new Promise(resolve => setTimeout(resolve, 250));
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to get prices for batch: ${error.message}`);
+          batch.forEach(token => {
+            prices[token.symbol] = 0;
+          });
+        }
+      }
+
+      return prices;
+    } catch (error) {
+      this.logger.error(`Failed to get token prices: ${error.message}`);
+      throw error;
     }
   }
 } 

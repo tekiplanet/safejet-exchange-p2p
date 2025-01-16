@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, Request, Query } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
@@ -9,6 +9,22 @@ import { CreateWalletDto } from './dto/create-wallet.dto';
 @UseGuards(JwtAuthGuard)
 export class WalletController {
   constructor(private readonly walletService: WalletService) {}
+
+  @Get('balances')
+  async getBalances(
+    @GetUser() user: User,
+    @Query('type') type?: 'spot' | 'funding',
+    @Query('currency') currency: string = 'USD',
+  ) {
+    const balances = await this.walletService.getBalances(user.id, type);
+    const total = await this.walletService.getTotalBalance(user.id, currency);
+
+    return {
+      balances,
+      total,
+      currency,
+    };
+  }
 
   @Post()
   async createWallet(
