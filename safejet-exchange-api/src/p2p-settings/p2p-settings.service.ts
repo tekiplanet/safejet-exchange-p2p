@@ -26,7 +26,7 @@ export class P2PSettingsService {
         console.log('No settings found, creating default settings');
         const newSettings = this.settingsRepository.create({ userId });
         const savedSettings = await this.settingsRepository.save(newSettings);
-        console.log('Created default settings:', savedSettings);
+        // console.log('Created default settings:', savedSettings);
         return savedSettings;
       }
 

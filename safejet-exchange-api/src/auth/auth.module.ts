@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -11,6 +11,7 @@ import { LoginTrackerService } from './login-tracker.service';
 import { KYCLevel } from './entities/kyc-level.entity';
 import { TwilioModule } from '../twilio/twilio.module';
 import { P2PSettingsModule } from '../p2p-settings/p2p-settings.module';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { P2PSettingsModule } from '../p2p-settings/p2p-settings.module';
     EmailModule,
     TwilioModule,
     P2PSettingsModule,
+    forwardRef(() => WalletModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, LoginTrackerService],

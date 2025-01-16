@@ -35,6 +35,8 @@ import { UpdateIdentityDetailsDto } from './dto/update-identity-details.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
 import { P2PSettingsService } from '../p2p-settings/p2p-settings.service';
+import { WalletService } from '../wallet/wallet.service';
+import { BLOCKCHAIN_CONFIGS } from '../wallet/blockchain.config';
 
 @Injectable()
 export class AuthService {
@@ -52,6 +54,7 @@ export class AuthService {
     @Inject(ConfigService)
     private readonly configService: ConfigService,
     private readonly p2pSettingsService: P2PSettingsService,
+    private readonly walletService: WalletService,
   ) {}
 
   private generateVerificationCode(): string {
@@ -84,7 +87,7 @@ export class AuthService {
     if (phone.startsWith('+') && formattedCountryCode) {
       try {
         // Remove the exact country code from the phone number
-        phoneWithoutCode = phone.substring(formattedCountryCode.length); // This will remove +234 from +2348166700169
+        phoneWithoutCode = phone.substring(formattedCountryCode.length);
 
         // Remove any leading zeros
         while (phoneWithoutCode.startsWith('0')) {
@@ -109,8 +112,8 @@ export class AuthService {
       email,
       phone,
       phoneWithoutCode,
-      countryCode: formattedCountryCode || '', // Store with + prefix
-      countryName: countryName || '', // Store country name
+      countryCode: formattedCountryCode || '',
+      countryName: countryName || '',
       fullName,
       passwordHash,
     });
@@ -118,8 +121,59 @@ export class AuthService {
     // Generate and save verification code
     const verificationCode = this.generateVerificationCode();
     user.verificationCode = await bcrypt.hash(verificationCode, 10);
-    user.verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    user.verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
     await this.userRepository.save(user);
+
+    // Create wallets for supported blockchains (both mainnet and testnet)
+    try {
+      const supportedBlockchains = Object.keys(BLOCKCHAIN_CONFIGS);
+      const networks = ['mainnet', 'testnet'];
+      
+      console.log(`Starting wallet creation for user ${user.id}`);
+      
+      const walletPromises = supportedBlockchains.flatMap(blockchain => 
+        networks.map(network => 
+          this.walletService.createWallet(user.id, { 
+            blockchain, 
+            network 
+          }).then(wallet => {
+            console.log(`Successfully created ${blockchain} ${network} wallet:`, {
+              userId: user.id,
+              blockchain,
+              network,
+              address: wallet.address
+            });
+            return wallet;
+          }).catch(error => {
+            console.error(`Failed to create ${blockchain} ${network} wallet:`, {
+              userId: user.id,
+              error: error.message,
+              stack: error.stack
+            });
+            // Don't throw error to allow other wallets to be created
+            return null;
+          })
+        )
+      );
+      
+      const results = await Promise.all(walletPromises);
+      const successfulWallets = results.filter(Boolean);
+      
+      console.log(`Wallet creation completed for user ${user.id}:`, {
+        total: results.length,
+        successful: successfulWallets.length,
+        failed: results.length - successfulWallets.length
+      });
+    } catch (error) {
+      // Log error but don't fail registration
+      console.error('Wallet creation error during registration:', {
+        userId: user.id,
+        email: user.email,
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Send verification email
     await this.emailService.sendVerificationEmail(user.email, verificationCode);
@@ -128,7 +182,7 @@ export class AuthService {
     const tokens = await this.generateTokens(user);
 
     // Create P2P trader settings for the new user
-    await this.p2pSettingsService.getSettings(user.id); // This will create default settings
+    await this.p2pSettingsService.getSettings(user.id);
 
     return {
       user,

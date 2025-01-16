@@ -15,6 +15,7 @@ import { AuthInterceptor } from './auth/auth.interceptor';
 import { SeedersModule } from './seeders/seeders.module';
 import { CurrenciesModule } from './currencies/currencies.module';
 import { P2PSettingsModule } from './p2p-settings/p2p-settings.module';
+import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { P2PSettingsModule } from './p2p-settings/p2p-settings.module';
     SeedersModule,
     CurrenciesModule,
     P2PSettingsModule,
+    WalletModule,
   ],
   controllers: [AppController],
   providers: [
