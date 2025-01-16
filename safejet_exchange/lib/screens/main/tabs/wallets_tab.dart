@@ -51,18 +51,30 @@ class _WalletsTabState extends State<WalletsTab> {
       final balanceA = double.tryParse(a['balance'] as String) ?? 0.0;
       final balanceB = double.tryParse(b['balance'] as String) ?? 0.0;
       
-      // If both have zero balance, sort alphabetically by symbol
-      if (balanceA == 0 && balanceB == 0) {
+      // Safely convert price to double regardless of whether it's int or double
+      final priceA = (a['price'] == null) ? 0.0 : (a['price'] is int ? 
+          (a['price'] as int).toDouble() : 
+          (a['price'] as num).toDouble());
+      final priceB = (b['price'] == null) ? 0.0 : (b['price'] is int ? 
+          (b['price'] as int).toDouble() : 
+          (b['price'] as num).toDouble());
+      
+      // Calculate fiat values
+      final fiatValueA = balanceA * priceA;
+      final fiatValueB = balanceB * priceB;
+      
+      // If both have zero value, sort alphabetically by symbol
+      if (fiatValueA == 0 && fiatValueB == 0) {
         return (a['token']['symbol'] as String)
             .compareTo(b['token']['symbol'] as String);
       }
       
-      // If only one has balance, it should come first
-      if (balanceA == 0) return 1;
-      if (balanceB == 0) return -1;
+      // If only one has value, it should come first
+      if (fiatValueA == 0) return 1;
+      if (fiatValueB == 0) return -1;
       
-      // If both have balance, sort by balance (highest first)
-      return balanceB.compareTo(balanceA);
+      // If both have value, sort by fiat value (highest first)
+      return fiatValueB.compareTo(fiatValueA);
     });
   }
 
