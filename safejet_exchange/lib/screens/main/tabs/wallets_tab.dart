@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../config/theme/colors.dart';
 import 'package:animate_do/animate_do.dart';
@@ -42,12 +43,28 @@ class _WalletsTabState extends State<WalletsTab> {
   double _change24h = 0.0;
   double _changePercent24h = 0.0;
   bool _isPriceLoading = false;
+  Timer? _refreshTimer;
+  bool _isInitialLoad = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserSettings();
     _loadBalances();
+    
+    // Set up periodic refresh
+    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) {
+        _loadBalances(showLoading: false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserSettings() async {
@@ -90,35 +107,31 @@ class _WalletsTabState extends State<WalletsTab> {
     }
   }
 
-  Future<void> _loadBalances() async {
+  Future<void> _loadBalances({bool showLoading = true}) async {
     if (!mounted) return;
 
     try {
-      setState(() {
-        _isLoading = true;
-        _isPriceLoading = true;
-        _hasError = false;
-        _errorMessage = '';
-      });
-      
+      if (showLoading && _isInitialLoad) {
+        setState(() {
+          _isLoading = true;
+          _isPriceLoading = true;
+        });
+      }
+
       final type = _selectedFilter == 'All' ? null : _selectedFilter.toLowerCase();
       final data = await _walletService.getBalances(
         type: type,
         currency: _showInUSD ? 'USD' : _userCurrency,
       );
-      
-      print('WalletsTab received data: $data');
 
       if (!mounted) return;
 
       setState(() {
-        // Extract balances array from the response
         _balances = List<Map<String, dynamic>>.from(data['balances'] ?? []);
         _totalBalance = (data['total'] ?? 0.0).toDouble();
         _change24h = (data['change24h'] ?? 0.0).toDouble();
         _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
         
-        // Update token prices
         _tokenPrices = Map.fromEntries(
           _balances.map((b) => MapEntry(
             b['token']['symbol'] as String,
@@ -128,6 +141,7 @@ class _WalletsTabState extends State<WalletsTab> {
         
         _isLoading = false;
         _isPriceLoading = false;
+        _isInitialLoad = false;
       });
     } catch (e) {
       print('Error in _loadBalances: $e');
@@ -194,12 +208,6 @@ class _WalletsTabState extends State<WalletsTab> {
       
       return index;
     }).where((index) => index != -1).toList();
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   Widget _buildShimmer() {

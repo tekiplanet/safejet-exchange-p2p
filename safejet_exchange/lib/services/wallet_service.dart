@@ -7,6 +7,8 @@ class WalletService {
   late final Dio _dio;
   final storage = const FlutterSecureStorage();
   final AuthService _authService = getIt<AuthService>();
+  final _cache = <String, CacheEntry>{};
+  final _cacheDuration = const Duration(minutes: 3);
 
   WalletService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
@@ -47,6 +49,14 @@ class WalletService {
     String currency = 'USD',
   }) async {
     try {
+      // Check cache first
+      final cacheKey = '${type ?? 'all'}-$currency';
+      final cachedData = _cache[cacheKey];
+      
+      if (cachedData != null && !cachedData.isExpired) {
+        return cachedData.data;
+      }
+
       final response = await _dio.get(
         '/wallet/balances',
         queryParameters: {
@@ -55,31 +65,22 @@ class WalletService {
         },
       );
 
-      print('Frontend raw response: ${response.data}');
+      final data = response.data;
       
-      // Ensure we have a valid response
-      if (response.data == null) {
-        return {
-          'balances': [],
-          'total': 0.0,
-          'change24h': 0.0,
-          'changePercent24h': 0.0,
-        };
-      }
+      // Cache the response
+      _cache[cacheKey] = CacheEntry(
+        data: data,
+        timestamp: DateTime.now(),
+      );
 
-      // Handle the nested balances structure
-      if (response.data['balances'] is Map && response.data['balances']['balances'] is List) {
-        return {
-          'balances': response.data['balances']['balances'],
-          'total': response.data['balances']['total'] ?? 0.0,
-          'change24h': response.data['balances']['change24h'] ?? 0.0,
-          'changePercent24h': response.data['balances']['changePercent24h'] ?? 0.0,
-        };
-      }
-
-      return response.data;
+      return data;
     } catch (e) {
       print('Error fetching wallet balances: $e');
+      // Return cached data if available, even if expired
+      final cachedData = _cache[type ?? 'all'];
+      if (cachedData != null) {
+        return cachedData.data;
+      }
       return {
         'balances': [],
         'total': 0.0,
@@ -88,4 +89,18 @@ class WalletService {
       };
     }
   }
+}
+
+class CacheEntry {
+  final Map<String, dynamic> data;
+  final DateTime timestamp;
+  final Duration validity;
+
+  CacheEntry({
+    required this.data,
+    required this.timestamp,
+    this.validity = const Duration(minutes: 1),
+  });
+
+  bool get isExpired => DateTime.now().difference(timestamp) > validity;
 } 

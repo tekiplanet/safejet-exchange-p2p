@@ -235,11 +235,7 @@ export class WalletService {
         where: { userId, status: 'active' }
       });
 
-      console.log('Found wallets:', wallets);
-
-      // If no wallets found, return empty response
       if (!wallets || wallets.length === 0) {
-        console.log('No wallets found for user:', userId);
         return {
           balances: [],
           total: 0,
@@ -249,9 +245,8 @@ export class WalletService {
       }
 
       const walletIds = wallets.map(w => w.id);
-      console.log('Wallet IDs:', walletIds);
 
-      // Then get balances for all wallets
+      // Get balances for all wallets
       const query = this.walletBalanceRepository
         .createQueryBuilder('balance')
         .where('balance.walletId IN (:...walletIds)', { walletIds })
@@ -263,91 +258,32 @@ export class WalletService {
       }
 
       const balances = await query.getMany();
-      console.log('Found balances:', balances);
 
-      // Get price changes for all tokens
-      const priceChanges = await Promise.all(
-        balances.map(async balance => {
-          const change = await this.exchangeService.getCryptoPriceChange(
-            balance.token.symbol
-          );
-          return {
-            symbol: balance.token.symbol,
-            ...change
-          };
-        })
-      );
+      // Get unique tokens
+      const uniqueTokens = [...new Set(balances.map(b => b.token))];
+      const symbols = uniqueTokens.map(token => token.symbol);
 
-      // Add prices to balance objects
-      let processedBalances = balances.map(balance => {
-        const priceData = priceChanges.find(p => p.symbol === balance.token.symbol);
-        return {
-          id: balance.id,
-          balance: balance.balance,
-          type: balance.type,
-          token: {
-            id: balance.token.id,
-            name: balance.token.name,
-            symbol: balance.token.symbol,
-            blockchain: balance.token.blockchain,
-            contractAddress: balance.token.contractAddress,
-            metadata: balance.token.metadata
-          },
-          price: priceData?.price ?? 0
-        };
-      });
+      // Fetch all prices in one batch request
+      const prices = await this.exchangeService.getBatchPrices(symbols);
 
-      // If type is not specified (All filter), aggregate balances by token
-      if (!type) {
-        const aggregatedBalances = new Map<string, any>();
-        
-        processedBalances.forEach(balance => {
-          const key = balance.token.symbol;
-          if (aggregatedBalances.has(key)) {
-            // Add to existing balance
-            const existing = aggregatedBalances.get(key);
-            existing.balance = (
-              parseFloat(existing.balance) + 
-              parseFloat(balance.balance)
-            ).toString();
-          } else {
-            // Create new aggregated balance
-            aggregatedBalances.set(key, {...balance});
-          }
-        });
+      // Process balances with prices
+      const processedBalances = balances.map(balance => ({
+        id: balance.id,
+        balance: balance.balance,
+        type: balance.type,
+        token: balance.token,
+        price: prices[balance.token.symbol] || 0
+      }));
 
-        processedBalances = Array.from(aggregatedBalances.values());
-      }
-
-      // Calculate totals
-      const totalValue = processedBalances.reduce((acc, curr) => {
-        const balance = parseFloat(curr.balance);
-        const price = curr.price ?? 0;
-        return acc + (balance * price);
-      }, 0);
-
-      const totalChange = priceChanges.reduce((acc, curr, index) => {
-        const balance = parseFloat(balances[index].balance);
-        const valueChange = balance * curr.change24h;
-        return acc + valueChange;
-      }, 0);
-
-      const totalChangePercent = totalValue > 0 
-        ? (totalChange / totalValue) * 100 
-        : 0;
-
-      const response = {
+      return {
         balances: processedBalances,
-        total: totalValue,
-        change24h: totalChange,
-        changePercent24h: totalChangePercent
+        total: this.calculateTotal(processedBalances),
+        change24h: 0, // Implement 24h change calculation
+        changePercent24h: 0
       };
-
-      console.log('Backend response:', JSON.stringify(response, null, 2));
-      return response;
     } catch (error) {
-      this.logger.error(`Failed to get wallet balances: ${error.message}`);
-      throw new Error('Failed to fetch wallet balances');
+      this.logger.error(`Failed to get balances: ${error.message}`);
+      throw error;
     }
   }
 
@@ -421,5 +357,13 @@ export class WalletService {
       this.logger.error(`Failed to get token prices: ${error.message}`);
       throw error;
     }
+  }
+
+  private calculateTotal(balances: any[]): number {
+    return balances.reduce((total, balance) => {
+      const amount = parseFloat(balance.balance) || 0;
+      const price = balance.price || 0;
+      return total + (amount * price);
+    }, 0);
   }
 } 

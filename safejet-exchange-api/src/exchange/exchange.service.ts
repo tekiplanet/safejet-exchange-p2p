@@ -16,9 +16,9 @@ export class ExchangeService {
   private readonly updateInterval: number;
   private ratesCache: Map<string, { rates: any, timestamp: number }> = new Map();
   private cryptoPricesCache: Map<string, { price: number, timestamp: number }> = new Map();
-  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour cache
+  private readonly CACHE_DURATION = 3 * 60 * 1000; // 3 minute cache
   private readonly PRICE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-  private readonly priceCache: Map<string, { price: number, timestamp: number }> = new Map();
+  private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
 
   constructor(
     @InjectRepository(ExchangeRate)
@@ -30,37 +30,85 @@ export class ExchangeService {
     this.updateInterval = this.configService.get<number>('exchange.updateInterval');
   }
 
-  async getCryptoPrice(symbol: string, currency: string): Promise<number> {
+  async getCryptoPrice(symbol: string, currency: string = 'USD'): Promise<number> {
     try {
+      // Check cache first
       const cacheKey = `${symbol}-${currency}`;
-      const cached = this.cryptoPricesCache.get(cacheKey);
-
-      if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-        return cached.price;
+      const cachedData = this.priceCache.get(cacheKey);
+      
+      if (cachedData && Date.now() - cachedData.timestamp < this.CACHE_DURATION) {
+        return cachedData.price;
       }
 
-      // Direct call to CryptoCompare API
-      const response = await axios.get(`${this.cryptoApiUrl}/price`, {
-        params: {
-          fsym: symbol.toUpperCase(),
-          tsyms: currency.toUpperCase()
-        }
-      });
-
-      const price = response.data[currency.toUpperCase()] ?? 0;
-
-      this.cryptoPricesCache.set(cacheKey, {
+      // If not in cache or expired, fetch new price
+      const price = await this.fetchPrice(symbol, currency);
+      
+      // Update cache
+      this.priceCache.set(cacheKey, {
         price,
         timestamp: Date.now()
       });
 
       return price;
     } catch (error) {
-      this.logger.error(`Failed to get crypto price for ${symbol}: ${error.message}`);
-      
-      // Return cached price even if expired in case of API failure
-      const cached = this.cryptoPricesCache.get(`${symbol}-${currency}`);
-      return cached?.price ?? 0;
+      this.logger.error(`Failed to get price for ${symbol}: ${error.message}`);
+      // Return cached price if available, even if expired
+      const cachedData = this.priceCache.get(`${symbol}-${currency}`);
+      if (cachedData) {
+        return cachedData.price;
+      }
+      throw error;
+    }
+  }
+
+  // Batch price fetching for multiple tokens
+  async getBatchPrices(symbols: string[], currency: string = 'USD'): Promise<Record<string, number>> {
+    try {
+      const prices: Record<string, number> = {};
+      const symbolsToFetch: string[] = [];
+
+      // Check cache first
+      for (const symbol of symbols) {
+        const cacheKey = `${symbol}-${currency}`;
+        const cachedData = this.priceCache.get(cacheKey);
+        
+        if (cachedData && Date.now() - cachedData.timestamp < this.CACHE_DURATION) {
+          prices[symbol] = cachedData.price;
+        } else {
+          symbolsToFetch.push(symbol);
+        }
+      }
+
+      // Fetch prices in batches of 20 (or whatever the API limit is)
+      if (symbolsToFetch.length > 0) {
+        const batchSize = 20;
+        for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
+          const batch = symbolsToFetch.slice(i, i + batchSize);
+          const batchPrices = await this.fetchBatchPrices(batch, currency);
+          
+          // Update cache and prices object
+          for (const [symbol, price] of Object.entries(batchPrices)) {
+            this.priceCache.set(`${symbol}-${currency}`, {
+              price,
+              timestamp: Date.now()
+            });
+            prices[symbol] = price;
+          }
+        }
+      }
+
+      return prices;
+    } catch (error) {
+      this.logger.error(`Failed to get batch prices: ${error.message}`);
+      // Return cached prices if available
+      const prices: Record<string, number> = {};
+      for (const symbol of symbols) {
+        const cachedData = this.priceCache.get(`${symbol}-${currency}`);
+        if (cachedData) {
+          prices[symbol] = cachedData.price;
+        }
+      }
+      return prices;
     }
   }
 
@@ -178,6 +226,43 @@ export class ExchangeService {
     } catch (error) {
       this.logger.error(`Failed to get crypto price change for ${symbol}: ${error.message}`);
       return { price: 0, change24h: 0, changePercent24h: 0 };
+    }
+  }
+
+  private async fetchPrice(symbol: string, currency: string): Promise<number> {
+    try {
+      const response = await axios.get(`${this.cryptoApiUrl}/price`, {
+        params: {
+          fsym: symbol.toUpperCase(),
+          tsyms: currency.toUpperCase()
+        }
+      });
+      
+      return response.data[currency.toUpperCase()] ?? 0;
+    } catch (error) {
+      this.logger.error(`Failed to fetch price for ${symbol}: ${error.message}`);
+      return 0;
+    }
+  }
+
+  private async fetchBatchPrices(symbols: string[], currency: string): Promise<Record<string, number>> {
+    try {
+      const response = await axios.get(`${this.cryptoApiUrl}/pricemulti`, {
+        params: {
+          fsyms: symbols.join(',').toUpperCase(),
+          tsyms: currency.toUpperCase()
+        }
+      });
+      
+      const prices: Record<string, number> = {};
+      for (const symbol of symbols) {
+        prices[symbol] = response.data[symbol.toUpperCase()]?.[currency.toUpperCase()] ?? 0;
+      }
+      
+      return prices;
+    } catch (error) {
+      this.logger.error(`Failed to fetch batch prices: ${error.message}`);
+      return symbols.reduce((acc, symbol) => ({ ...acc, [symbol]: 0 }), {});
     }
   }
 } 
