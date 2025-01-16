@@ -1,26 +1,29 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { PaymentMethodType } from '../payment-methods/entities/payment-method-type.entity';
-import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
 import { PaymentMethodsSeederService } from './payment-methods.seeder.service';
-import { Currency } from '../currencies/entities/currency.entity';
+import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 import { CurrencySeederService } from './currency.seeder.service';
+import { Currency } from '../currencies/entities/currency.entity';
+import { TokensSeederService } from './tokens.seeder.service';
+import { Token } from '../wallet/entities/token.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      // PaymentMethodType,
-      // PaymentMethodField,
-      Currency,
+      // PaymentMethod, 
+      // Currency, 
+      Token
     ]),
   ],
   providers: [
     // PaymentMethodsSeederService,
-    CurrencySeederService,
+    // CurrencySeederService,
+    TokensSeederService,
   ],
   exports: [
     // PaymentMethodsSeederService,
-    CurrencySeederService,
+    // CurrencySeederService,
+    TokensSeederService,
   ],
 })
 export class SeedersModule {}

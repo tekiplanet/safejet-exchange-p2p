@@ -4,12 +4,19 @@ import { Repository } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { KeyManagementService } from './key-management.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
+import { Token } from './entities/token.entity';
+import { WalletBalance } from './entities/wallet-balance.entity';
+import { tokenSeeds } from './seeds/tokens.seed';
 
 @Injectable()
 export class WalletService {
   constructor(
     @InjectRepository(Wallet)
     private walletRepository: Repository<Wallet>,
+    @InjectRepository(Token)
+    private tokenRepository: Repository<Token>,
+    @InjectRepository(WalletBalance)
+    private balanceRepository: Repository<WalletBalance>,
     private keyManagementService: KeyManagementService,
   ) {}
 
@@ -69,5 +76,88 @@ export class WalletService {
     }
 
     return wallet;
+  }
+
+  // Get all balances for a wallet
+  async getWalletBalances(
+    userId: string, 
+    walletId: string,
+    type: 'spot' | 'funding' = 'spot'
+  ): Promise<WalletBalance[]> {
+    const wallet = await this.getWallet(userId, walletId);
+
+    return this.balanceRepository.find({
+      where: {
+        walletId: wallet.id,
+        type,
+      },
+      relations: ['token'],
+    });
+  }
+
+  // Get specific token balance
+  async getTokenBalance(
+    userId: string,
+    walletId: string,
+    tokenId: string,
+    type: 'spot' | 'funding' = 'spot'
+  ): Promise<WalletBalance> {
+    const wallet = await this.getWallet(userId, walletId);
+
+    return this.balanceRepository.findOne({
+      where: {
+        walletId: wallet.id,
+        tokenId,
+        type,
+      },
+      relations: ['token'],
+    });
+  }
+
+  // Update balance
+  async updateBalance(
+    userId: string,
+    walletId: string,
+    tokenId: string,
+    amount: string,
+    type: 'spot' | 'funding' = 'spot'
+  ): Promise<WalletBalance> {
+    const wallet = await this.getWallet(userId, walletId);
+    
+    let balance = await this.balanceRepository.findOne({
+      where: {
+        walletId: wallet.id,
+        tokenId,
+        type,
+      },
+    });
+
+    if (!balance) {
+      balance = this.balanceRepository.create({
+        walletId: wallet.id,
+        tokenId,
+        balance: '0',
+        type,
+      });
+    }
+
+    balance.balance = amount;
+    return this.balanceRepository.save(balance);
+  }
+
+  async seedTokens() {
+    for (const tokenData of tokenSeeds) {
+      const existingToken = await this.tokenRepository.findOne({
+        where: {
+          blockchain: tokenData.blockchain,
+          symbol: tokenData.symbol,
+          contractAddress: tokenData.contractAddress,
+        },
+      });
+
+      if (!existingToken) {
+        await this.tokenRepository.save(tokenData);
+      }
+    }
   }
 } 

@@ -30,6 +30,7 @@
     "db:fresh": "npm run db:drop-all && npm run migration:run",
     "seed:payment-methods": "ts-node src/scripts/seed-payment-methods.ts",
     "seed:currencies": "ts-node src/scripts/seed-currencies.ts",
+    "seed:tokens": "ts-node src/scripts/seed-tokens.ts",
     "generate:encryption-key": "ts-node src/scripts/generate-encryption-key.ts",
     "clean": "rimraf dist"
   },
