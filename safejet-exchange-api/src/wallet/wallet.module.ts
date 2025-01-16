@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { WalletService } from './wallet.service';
 import { WalletController } from './wallet.controller';
 import { KeyManagementService } from './key-management.service';
@@ -9,6 +10,7 @@ import { Token } from './entities/token.entity';
 import { WalletBalance } from './entities/wallet-balance.entity';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
+import { WalletListener } from './wallet.listener';
 
 @Module({
   imports: [
@@ -18,10 +20,15 @@ import { AuthModule } from '../auth/auth.module';
       Token,
       WalletBalance
     ]),
+    EventEmitterModule.forRoot(),
     ConfigModule,
     forwardRef(() => AuthModule),
   ],
-  providers: [WalletService, KeyManagementService],
+  providers: [
+    WalletService, 
+    KeyManagementService,
+    WalletListener
+  ],
   controllers: [WalletController],
   exports: [WalletService],
 })

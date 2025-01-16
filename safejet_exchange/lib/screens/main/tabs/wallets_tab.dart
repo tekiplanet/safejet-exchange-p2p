@@ -5,6 +5,8 @@ import '../../wallet/deposit_screen.dart';
 import '../../wallet/withdraw_screen.dart';
 import '../../wallet/transaction_history_screen.dart';
 import '../../p2p/p2p_screen.dart';
+import '../../services/user_service.dart';
+import '../../services/exchange_service.dart';
 
 class WalletsTab extends StatefulWidget {
   const WalletsTab({super.key});
@@ -19,10 +21,37 @@ class _WalletsTabState extends State<WalletsTab> {
   bool _showInUSD = true;
   bool _showZeroBalances = true;
 
-  final double _ngnRate = 1200.0;
+  late String _userCurrency;
+  late double _userCurrencyRate;
+  bool _isLoading = true;
 
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSettings();
+  }
+
+  Future<void> _loadUserSettings() async {
+    try {
+      setState(() => _isLoading = true);
+      
+      // TODO: Add API call to get user settings
+      final settings = await UserService().getP2PSettings();
+      final rates = await ExchangeService().getRates(settings.currency);
+      
+      setState(() {
+        _userCurrency = settings.currency;
+        _userCurrencyRate = rates.rate;
+        _isLoading = false;
+      });
+    } catch (e) {
+      // Handle error
+      debugPrint('Error loading settings: $e');
+    }
+  }
 
   String _formatNumber(double number) {
     return number.toStringAsFixed(2).replaceAllMapped(
@@ -31,12 +60,22 @@ class _WalletsTabState extends State<WalletsTab> {
     );
   }
 
-  String _formatBalance(bool inUSD) {
+  String _formatBalance(bool inUSD, double balance) {
     if (inUSD) {
-      return '\$${_formatNumber(12384.21)}';
+      return '\$${_formatNumber(balance)}';
     }
-    final ngnBalance = 12384.21 * _ngnRate;
-    return '₦${_formatNumber(ngnBalance)}';
+    final localBalance = balance * _userCurrencyRate;
+    return '${_getCurrencySymbol(_userCurrency)}${_formatNumber(localBalance)}';
+  }
+
+  String _getCurrencySymbol(String currency) {
+    switch (currency) {
+      case 'NGN':
+        return '₦';
+      // Add other currencies as needed
+      default:
+        return currency;
+    }
   }
 
   List<int> _getFilteredAssets() {
@@ -117,7 +156,7 @@ class _WalletsTabState extends State<WalletsTab> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            _buildBalanceText(_formatBalance(_showInUSD)),
+                            _buildBalanceText(_formatBalance(_showInUSD, 12384.21)),
                           ],
                         ),
                         _buildCurrencyToggleButton(isDark),
@@ -497,6 +536,10 @@ class _WalletsTabState extends State<WalletsTab> {
   }
 
   Widget _buildCurrencyToggleButton(bool isDark) {
+    if (_isLoading) {
+      return const CircularProgressIndicator();
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: isDark 
@@ -513,7 +556,7 @@ class _WalletsTabState extends State<WalletsTab> {
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildCurrencyToggle('USD', true, isDark),
-          _buildCurrencyToggle('NGN', false, isDark),
+          _buildCurrencyToggle(_userCurrency, false, isDark),
         ],
       ),
     );
@@ -571,7 +614,7 @@ class _WalletsTabState extends State<WalletsTab> {
 
   Widget _buildAssetItem(bool isDark, ThemeData theme, int index) {
     final usdBalance = 10123.45;
-    final ngnBalance = usdBalance * _ngnRate;
+    final ngnBalance = usdBalance * _userCurrencyRate;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -640,9 +683,7 @@ class _WalletsTabState extends State<WalletsTab> {
               ),
               const SizedBox(height: 4),
               _buildAssetBalance(
-                _showInUSD 
-                    ? '\$${_formatNumber(usdBalance)}'
-                    : '₦${_formatNumber(ngnBalance)}',
+                _formatBalance(_showInUSD, usdBalance),
                 isDark,
               ),
             ],

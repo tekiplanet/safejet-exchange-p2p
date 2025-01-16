@@ -45,7 +45,7 @@ export class WalletService {
     );
 
     // Create wallet record
-    const wallet = this.walletRepository.create({
+    const wallet = await this.walletRepository.save({
       userId,
       blockchain: createWalletDto.blockchain,
       network: createWalletDto.network,
@@ -57,7 +57,69 @@ export class WalletService {
       },
     });
 
-    return this.walletRepository.save(wallet);
+    // Initialize balances for all tokens of this blockchain
+    await this.initializeWalletBalances(wallet);
+
+    return wallet;
+  }
+
+  private async initializeWalletBalances(wallet: Wallet) {
+    // Get all tokens for this blockchain and network using QueryBuilder
+    const tokens = await this.tokenRepository
+      .createQueryBuilder('token')
+      .where('token.blockchain = :blockchain', { blockchain: wallet.blockchain })
+      .andWhere(`token.metadata::jsonb @> :networks`, { 
+        networks: { networks: [wallet.network === 'mainnet' ? 'mainnet' : 'testnet'] }
+      })
+      .getMany();
+
+      console.log(`Found ${tokens.length} tokens for ${wallet.blockchain} on ${wallet.network}`);
+      console.log('Tokens:', tokens.map(t => t.symbol).join(', '));
+
+    // Create initial balance entries for both spot and funding
+    const balancePromises = tokens.flatMap(token => {
+      const types: ('spot' | 'funding')[] = ['spot', 'funding'];
+      
+      return types.map(type => 
+        this.balanceRepository.save({
+          walletId: wallet.id,
+          tokenId: token.id,
+          balance: '0',
+          type,
+          metadata: {
+            createdAt: new Date().toISOString(),
+            network: wallet.network
+          }
+        })
+      );
+    });
+
+    try {
+      await Promise.all(balancePromises);
+      console.log(`Successfully initialized ${balancePromises.length} balances for wallet ${wallet.id}`);
+    } catch (error) {
+      console.error('Error initializing wallet balances:', error);
+      throw new Error(`Failed to initialize wallet balances: ${error.message}`);
+    }
+  }
+
+  // Add method to check if balances exist and create if missing
+  async ensureWalletBalances(walletId: string) {
+    const wallet = await this.walletRepository.findOne({
+      where: { id: walletId }
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+
+    const existingBalances = await this.balanceRepository.find({
+      where: { walletId }
+    });
+
+    if (existingBalances.length === 0) {
+      await this.initializeWalletBalances(wallet);
+    }
   }
 
   async getWallets(userId: string): Promise<Wallet[]> {

@@ -40,4 +40,4 @@ export class P2PSettingsController {
   ) {
     return this.p2pSettingsService.updateAutoResponses(user.id, updateDto);
   }
-} 
+}

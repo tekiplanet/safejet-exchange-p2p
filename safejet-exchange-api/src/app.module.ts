@@ -16,6 +16,9 @@ import { SeedersModule } from './seeders/seeders.module';
 import { CurrenciesModule } from './currencies/currencies.module';
 import { P2PSettingsModule } from './p2p-settings/p2p-settings.module';
 import { WalletModule } from './wallet/wallet.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ExchangeModule } from './exchange/exchange.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -49,6 +52,9 @@ import { WalletModule } from './wallet/wallet.module';
     CurrenciesModule,
     P2PSettingsModule,
     WalletModule,
+    EventEmitterModule.forRoot(),
+    ExchangeModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [

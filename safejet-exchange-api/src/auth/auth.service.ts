@@ -37,6 +37,8 @@ import { ConfigService } from '@nestjs/config';
 import { P2PSettingsService } from '../p2p-settings/p2p-settings.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BLOCKCHAIN_CONFIGS } from '../wallet/blockchain.config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CreateWalletEvent } from '../wallet/events/create-wallet.event';
 
 @Injectable()
 export class AuthService {
@@ -55,6 +57,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly p2pSettingsService: P2PSettingsService,
     private readonly walletService: WalletService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private generateVerificationCode(): string {
@@ -124,55 +127,20 @@ export class AuthService {
     user.verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
     await this.userRepository.save(user);
 
-    // Create wallets for supported blockchains (both mainnet and testnet)
+    // Emit event for background wallet creation
     try {
       const supportedBlockchains = Object.keys(BLOCKCHAIN_CONFIGS);
       const networks = ['mainnet', 'testnet'];
       
-      console.log(`Starting wallet creation for user ${user.id}`);
-      
-      const walletPromises = supportedBlockchains.flatMap(blockchain => 
-        networks.map(network => 
-          this.walletService.createWallet(user.id, { 
-            blockchain, 
-            network 
-          }).then(wallet => {
-            console.log(`Successfully created ${blockchain} ${network} wallet:`, {
-              userId: user.id,
-              blockchain,
-              network,
-              address: wallet.address
-            });
-            return wallet;
-          }).catch(error => {
-            console.error(`Failed to create ${blockchain} ${network} wallet:`, {
-              userId: user.id,
-              error: error.message,
-              stack: error.stack
-            });
-            // Don't throw error to allow other wallets to be created
-            return null;
-          })
-        )
+      this.eventEmitter.emit(
+        'user.registered',
+        new CreateWalletEvent(user.id, supportedBlockchains, networks)
       );
       
-      const results = await Promise.all(walletPromises);
-      const successfulWallets = results.filter(Boolean);
-      
-      console.log(`Wallet creation completed for user ${user.id}:`, {
-        total: results.length,
-        successful: successfulWallets.length,
-        failed: results.length - successfulWallets.length
-      });
+      console.log('Triggered background wallet creation for user:', user.id);
     } catch (error) {
       // Log error but don't fail registration
-      console.error('Wallet creation error during registration:', {
-        userId: user.id,
-        email: user.email,
-        error: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString()
-      });
+      console.error('Failed to trigger wallet creation:', error);
     }
 
     // Send verification email
