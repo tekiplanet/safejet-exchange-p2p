@@ -54,10 +54,45 @@ class WalletService {
           'currency': currency,
         },
       );
-      return response.data;
+
+      // Ensure we have a valid response
+      if (response.data == null) {
+        return {
+          'balances': [],
+          'total': 0.0,
+          'currency': currency,
+        };
+      }
+
+      // Handle both array and map responses
+      if (response.data is List) {
+        return {
+          'balances': response.data,
+          'total': 0.0,
+          'currency': currency,
+        };
+      }
+
+      if (response.data is! Map<String, dynamic>) {
+        return {
+          'balances': [],
+          'total': 0.0,
+          'currency': currency,
+        };
+      }
+
+      return {
+        'balances': response.data['balances'] ?? [],
+        'total': (response.data['total'] ?? 0.0).toDouble(),
+        'currency': currency,
+      };
     } catch (e) {
       print('Error fetching wallet balances: $e');
-      rethrow;
+      return {
+        'balances': [],
+        'total': 0.0,
+        'currency': currency,
+      };
     }
   }
 } 

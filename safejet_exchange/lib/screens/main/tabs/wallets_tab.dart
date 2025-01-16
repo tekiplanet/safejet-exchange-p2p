@@ -34,8 +34,11 @@ class _WalletsTabState extends State<WalletsTab> {
   final _exchangeService = getIt<ExchangeService>();
   final _p2pSettingsService = getIt<P2PSettingsService>();
   final WalletService _walletService = getIt<WalletService>();
-  Map<String, dynamic> _balances = {};
-  double _totalBalance = 0;
+  List<Map<String, dynamic>> _balances = [];
+  double _totalBalance = 0.0;
+  Map<String, double> _tokenPrices = {};
+  bool _hasError = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -85,8 +88,14 @@ class _WalletsTabState extends State<WalletsTab> {
   }
 
   Future<void> _loadBalances() async {
+    if (!mounted) return;
+
     try {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+        _errorMessage = '';
+      });
       
       final type = _selectedFilter == 'All' ? null : _selectedFilter.toLowerCase();
       final data = await _walletService.getBalances(
@@ -94,19 +103,37 @@ class _WalletsTabState extends State<WalletsTab> {
         currency: _showInUSD ? 'USD' : _userCurrency,
       );
       
+      if (!mounted) return;
+
       setState(() {
-        _balances = data['balances'];
-        _totalBalance = data['total'];
+        _balances = List<Map<String, dynamic>>.from(data['balances'] ?? [])
+            .where((b) => b != null && b['token'] != null)
+            .toList();
+        _totalBalance = (data['total'] ?? 0.0).toDouble();
         _isLoading = false;
       });
     } catch (e) {
       print('Error loading balances: $e');
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading balances: $e')),
-        );
-      }
+      if (!mounted) return;
+      
+      setState(() {
+        _balances = [];
+        _totalBalance = 0.0;
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = 'Failed to load balances';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading balances. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: _loadBalances,
+          ),
+        ),
+      );
     }
   }
 
@@ -306,8 +333,9 @@ class _WalletsTabState extends State<WalletsTab> {
       return _buildShimmer();
     }
 
-    print('Current Currency: $_userCurrency');
-    print('Current Rate: $_userCurrencyRate');
+    if (_hasError) {
+      return _buildErrorState();
+    }
 
     return SafeArea(
       child: CustomScrollView(
@@ -589,39 +617,41 @@ class _WalletsTabState extends State<WalletsTab> {
                         final isSelected = _selectedFilter == filter;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () => setState(() => _selectedFilter = filter),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
+                          child: InkWell(
+                            onTap: () {
+                              setState(() => _selectedFilter = filter);
+                              _loadBalances();
+                            },
+                            borderRadius: BorderRadius.circular(24),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected 
+                                    ? SafeJetColors.secondaryHighlight 
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
                                   color: isSelected
                                       ? SafeJetColors.secondaryHighlight
-                                      : (isDark 
-                                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                                          : SafeJetColors.lightCardBackground),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? SafeJetColors.secondaryHighlight
-                                        : (isDark
-                                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                            : SafeJetColors.lightCardBorder),
-                                  ),
+                                      : Colors.grey.withOpacity(0.3),
+                                  width: 1,
                                 ),
-                                child: Text(
-                                  filter,
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.black
-                                        : (isDark ? Colors.white : SafeJetColors.lightText),
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                  ),
+                              ),
+                              child: Text(
+                                filter,
+                                style: TextStyle(
+                                  color: isSelected 
+                                      ? Colors.black 
+                                      : isDark 
+                                          ? Colors.white 
+                                          : Colors.black,
+                                  fontWeight: isSelected 
+                                      ? FontWeight.bold 
+                                      : FontWeight.normal,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -635,23 +665,28 @@ class _WalletsTabState extends State<WalletsTab> {
             ),
           ),
 
-          // Assets List
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final filteredAssets = _getFilteredAssets();
-                  if (index >= filteredAssets.length) return null;
-                  
-                  return FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: Duration(milliseconds: 300 + (index * 100)),
-                    child: _buildAssetItem(isDark, theme, filteredAssets[index]),
-                  );
-                },
-                childCount: _showZeroBalances ? 10 : 5, // Adjust based on filtered count
-              ),
+          // Asset List
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (_balances.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                final balance = _balances[index];
+                final token = balance['token'] as Map<String, dynamic>;
+                final amount = double.tryParse(balance['balance'] as String) ?? 0.0;
+                
+                return _buildAssetItem(
+                  isDark,
+                  theme,
+                  token['name'] as String,
+                  token['symbol'] as String,
+                  amount,
+                  token['metadata']?['icon'] as String?,
+                );
+              },
+              childCount: _balances.isEmpty ? 1 : _balances.length,
             ),
           ),
 
@@ -827,12 +862,16 @@ class _WalletsTabState extends State<WalletsTab> {
     );
   }
 
-  Widget _buildAssetItem(bool isDark, ThemeData theme, int index) {
-    final usdBalance = 10123.45;
-    final ngnBalance = usdBalance * _userCurrencyRate;
-    
+  Widget _buildAssetItem(
+    bool isDark,
+    ThemeData theme,
+    String name,
+    String symbol,
+    double balance,
+    String? iconUrl,
+  ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark 
@@ -852,15 +891,23 @@ class _WalletsTabState extends State<WalletsTab> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  SafeJetColors.secondaryHighlight,
-                  SafeJetColors.secondaryHighlight.withOpacity(0.8),
-                ],
-              ),
+              color: SafeJetColors.secondaryHighlight,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.currency_bitcoin, color: Colors.black, size: 24),
+            child: iconUrl != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      iconUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.currency_bitcoin,
+                        color: Colors.black,
+                        size: 24,
+                      ),
+                    ),
+                  )
+                : Icon(Icons.currency_bitcoin, color: Colors.black, size: 24),
           ),
           const SizedBox(width: 12),
           
@@ -870,14 +917,14 @@ class _WalletsTabState extends State<WalletsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Bitcoin',
+                  name,
                   style: theme.textTheme.bodyLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'BTC',
+                  symbol,
                   style: TextStyle(
                     color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                   ),
@@ -891,14 +938,14 @@ class _WalletsTabState extends State<WalletsTab> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '0.2384 BTC',
+                '${balance.toStringAsFixed(4)} $symbol',
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 4),
               _buildAssetBalance(
-                _formatBalance(_showInUSD, usdBalance),
+                _formatBalance(_showInUSD, balance * (_tokenPrices[symbol] ?? 0)),
                 isDark,
               ),
             ],
@@ -929,5 +976,121 @@ class _WalletsTabState extends State<WalletsTab> {
       // Handle error
       print('Error loading rates: $e');
     }
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              size: 64,
+              color: SafeJetColors.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: SafeJetColors.error,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please check your connection and try again',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : SafeJetColors.lightTextSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadBalances,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: SafeJetColors.secondaryHighlight,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.account_balance_wallet_outlined,
+              size: 64,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.grey[400]
+                  : SafeJetColors.lightTextSecondary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No Assets Found',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Start by depositing some assets into your wallet',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : SafeJetColors.lightTextSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DepositScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Deposit Assets'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: SafeJetColors.secondaryHighlight,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 } 

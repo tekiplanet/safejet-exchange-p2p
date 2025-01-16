@@ -33,13 +33,13 @@ export class ExchangeService {
   async getCryptoPrice(symbol: string, currency: string): Promise<number> {
     try {
       const cacheKey = `${symbol}-${currency}`;
-      const cached = this.priceCache.get(cacheKey);
+      const cached = this.cryptoPricesCache.get(cacheKey);
 
-      // Return cached price if valid
-      if (cached && Date.now() - cached.timestamp < this.PRICE_CACHE_DURATION) {
+      if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
         return cached.price;
       }
 
+      // Direct call to CryptoCompare API
       const response = await axios.get(`${this.cryptoApiUrl}/price`, {
         params: {
           fsym: symbol.toUpperCase(),
@@ -49,8 +49,7 @@ export class ExchangeService {
 
       const price = response.data[currency.toUpperCase()] ?? 0;
 
-      // Cache the new price
-      this.priceCache.set(cacheKey, {
+      this.cryptoPricesCache.set(cacheKey, {
         price,
         timestamp: Date.now()
       });
@@ -60,7 +59,7 @@ export class ExchangeService {
       this.logger.error(`Failed to get crypto price for ${symbol}: ${error.message}`);
       
       // Return cached price even if expired in case of API failure
-      const cached = this.priceCache.get(`${symbol}-${currency}`);
+      const cached = this.cryptoPricesCache.get(`${symbol}-${currency}`);
       return cached?.price ?? 0;
     }
   }

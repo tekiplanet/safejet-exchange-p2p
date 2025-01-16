@@ -248,6 +248,7 @@ export class WalletService {
 
       const balances = await query
         .leftJoinAndSelect('balance.token', 'token')
+        .orderBy('token.symbol', 'ASC')
         .getMany();
 
       return balances;
@@ -260,7 +261,11 @@ export class WalletService {
   async getTotalBalance(userId: string, currency: string): Promise<number> {
     try {
       const balances = await this.getBalances(userId);
-      const exchangeRate = await this.exchangeService.getRateForCurrency(currency);
+      
+      // Only get exchange rate if currency is not USD
+      const exchangeRate = currency.toUpperCase() === 'USD' 
+        ? { rate: 1 } 
+        : await this.exchangeService.getRateForCurrency(currency);
 
       // Get current prices for all tokens
       const tokenPrices = await this.getTokenPrices(balances.map(b => b.token));
@@ -269,8 +274,11 @@ export class WalletService {
         const balanceAmount = parseFloat(balance.balance);
         const tokenPrice = tokenPrices[balance.token.symbol] ?? 0;
         
-        const tokenValue = balanceAmount * tokenPrice;
-        return total + (tokenValue * exchangeRate.rate);
+        // Calculate USD value first
+        const usdValue = balanceAmount * tokenPrice;
+        
+        // Convert to target currency
+        return total + (usdValue * exchangeRate.rate);
       }, 0);
     } catch (error) {
       this.logger.error(`Failed to calculate total balance: ${error.message}`);
@@ -287,35 +295,19 @@ export class WalletService {
 
       const prices: Record<string, number> = {};
 
-      // Batch tokens in groups of 10 to avoid rate limits
-      const batchSize = 10;
-      for (let i = 0; i < uniqueTokens.length; i += batchSize) {
-        const batch = uniqueTokens.slice(i, i + batchSize);
-        
-        try {
-          // Get prices for batch
-          const batchPrices = await Promise.all(
-            batch.map(token => 
-              this.exchangeService.getCryptoPrice(token.symbol, 'USD')
-            )
-          );
-
-          // Store prices
-          batch.forEach((token, index) => {
-            prices[token.symbol] = batchPrices[index];
-          });
-
-          // Add delay between batches to respect rate limits
-          if (i + batchSize < uniqueTokens.length) {
-            await new Promise(resolve => setTimeout(resolve, 250));
-          }
-        } catch (error) {
-          this.logger.warn(`Failed to get prices for batch: ${error.message}`);
-          batch.forEach(token => {
+      // Get all prices in parallel using direct crypto price API
+      await Promise.all(
+        uniqueTokens.map(async token => {
+          try {
+            // Always get price in USD first
+            const price = await this.exchangeService.getCryptoPrice(token.symbol, 'USD');
+            prices[token.symbol] = price;
+          } catch (error) {
+            this.logger.warn(`Failed to get price for ${token.symbol}: ${error.message}`);
             prices[token.symbol] = 0;
-          });
-        }
-      }
+          }
+        })
+      );
 
       return prices;
     } catch (error) {

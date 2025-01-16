@@ -38,5 +38,5 @@ export class WalletBalance {
   createdAt: Date;
 
   @UpdateDateColumn()
-  lastUpdated: Date;
+  updatedAt: Date;
 } 

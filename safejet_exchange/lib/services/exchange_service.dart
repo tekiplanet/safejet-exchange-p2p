@@ -57,16 +57,23 @@ class ExchangeService {
   Future<double> getCryptoPrice(String symbol, String currency) async {
     try {
       final response = await _dio.get(
-        '/exchange-rates/crypto-price',
+        '/exchange-rates/crypto/price',
         queryParameters: {
-          'symbol': symbol,
-          'currency': currency,
+          'symbol': symbol.toUpperCase(),
+          'currency': currency.toUpperCase(),
         },
       );
-      return response.data['price'];
+      
+      if (response.data == null || !response.data.containsKey('price')) {
+        print('Invalid price response: ${response.data}');
+        return 0.0;
+      }
+      
+      final price = response.data['price'];
+      return price is num ? price.toDouble() : 0.0;
     } catch (e) {
       print('Error getting crypto price: $e');
-      rethrow;
+      return 0.0;
     }
   }
 

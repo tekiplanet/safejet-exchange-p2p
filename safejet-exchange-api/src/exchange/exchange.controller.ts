@@ -16,12 +16,26 @@ export class ExchangeController {
     };
   }
 
-  @Get('crypto-price')
+  @Get('crypto/price')
   async getCryptoPrice(
     @Query('symbol') symbol: string,
-    @Query('currency') currency: string,
+    @Query('currency') currency: string = 'USD',
   ) {
     const price = await this.exchangeService.getCryptoPrice(symbol, currency);
     return { price };
+  }
+
+  @Get('crypto/convert')
+  async convertCryptoToFiat(
+    @Query('amount') amount: number,
+    @Query('symbol') symbol: string,
+    @Query('currency') currency: string = 'USD',
+  ) {
+    const price = await this.exchangeService.getCryptoPrice(symbol, currency);
+    return {
+      price,
+      value: amount * price,
+      currency
+    };
   }
 } 
