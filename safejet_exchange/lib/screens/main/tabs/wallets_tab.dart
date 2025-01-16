@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../config/theme/colors.dart';
 import 'package:animate_do/animate_do.dart';
@@ -11,6 +10,7 @@ import '../../../services/exchange_service.dart';
 import '../../../services/service_locator.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../services/wallet_service.dart';
+import 'dart:async';
 
 class WalletsTab extends StatefulWidget {
   const WalletsTab({super.key});
@@ -45,6 +45,26 @@ class _WalletsTabState extends State<WalletsTab> {
   bool _isPriceLoading = false;
   Timer? _refreshTimer;
   bool _isInitialLoad = true;
+
+  List<Map<String, dynamic>> _sortBalances(List<Map<String, dynamic>> balances) {
+    return [...balances]..sort((a, b) {
+      final balanceA = double.tryParse(a['balance'] as String) ?? 0.0;
+      final balanceB = double.tryParse(b['balance'] as String) ?? 0.0;
+      
+      // If both have zero balance, sort alphabetically by symbol
+      if (balanceA == 0 && balanceB == 0) {
+        return (a['token']['symbol'] as String)
+            .compareTo(b['token']['symbol'] as String);
+      }
+      
+      // If only one has balance, it should come first
+      if (balanceA == 0) return 1;
+      if (balanceB == 0) return -1;
+      
+      // If both have balance, sort by balance (highest first)
+      return balanceB.compareTo(balanceA);
+    });
+  }
 
   @override
   void initState() {
@@ -126,23 +146,66 @@ class _WalletsTabState extends State<WalletsTab> {
 
       if (!mounted) return;
 
-      setState(() {
-        _balances = List<Map<String, dynamic>>.from(data['balances'] ?? []);
-        _totalBalance = (data['total'] ?? 0.0).toDouble();
-        _change24h = (data['change24h'] ?? 0.0).toDouble();
-        _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
+      if (_selectedFilter == 'All') {
+        // Create a map to store combined balances by token symbol
+        final Map<String, Map<String, dynamic>> combinedBalances = {};
         
-        _tokenPrices = Map.fromEntries(
-          _balances.map((b) => MapEntry(
-            b['token']['symbol'] as String,
-            (b['price'] ?? 0.0).toDouble(),
-          )),
-        );
-        
-        _isLoading = false;
-        _isPriceLoading = false;
-        _isInitialLoad = false;
-      });
+        // Process each balance
+        for (final balance in List<Map<String, dynamic>>.from(data['balances'] ?? [])) {
+          final token = balance['token'] as Map<String, dynamic>;
+          final symbol = token['symbol'] as String;
+          final currentBalance = double.tryParse(balance['balance'] as String) ?? 0.0;
+          
+          if (combinedBalances.containsKey(symbol)) {
+            // Add to existing balance
+            final existingBalance = double.tryParse(combinedBalances[symbol]!['balance'] as String) ?? 0.0;
+            combinedBalances[symbol]!['balance'] = (existingBalance + currentBalance).toString();
+          } else {
+            // Create new entry
+            combinedBalances[symbol] = {
+              ...balance,
+              'token': token,
+            };
+          }
+        }
+
+        setState(() {
+          _balances = _sortBalances(combinedBalances.values.toList());
+          _totalBalance = (data['total'] ?? 0.0).toDouble();
+          _change24h = (data['change24h'] ?? 0.0).toDouble();
+          _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
+          
+          _tokenPrices = Map.fromEntries(
+            _balances.map((b) => MapEntry(
+              b['token']['symbol'] as String,
+              (b['price'] ?? 0.0).toDouble(),
+            )),
+          );
+          
+          _isLoading = false;
+          _isPriceLoading = false;
+          _isInitialLoad = false;
+        });
+      } else {
+        // For Spot or Funding, use the data as is
+        setState(() {
+          _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
+          _totalBalance = (data['total'] ?? 0.0).toDouble();
+          _change24h = (data['change24h'] ?? 0.0).toDouble();
+          _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
+          
+          _tokenPrices = Map.fromEntries(
+            _balances.map((b) => MapEntry(
+              b['token']['symbol'] as String,
+              (b['price'] ?? 0.0).toDouble(),
+            )),
+          );
+          
+          _isLoading = false;
+          _isPriceLoading = false;
+          _isInitialLoad = false;
+        });
+      }
     } catch (e) {
       print('Error in _loadBalances: $e');
       if (!mounted) return;
