@@ -886,39 +886,40 @@ class _WalletsTabState extends State<WalletsTab> {
       ),
       child: Row(
         children: [
-          // Coin Icon
+          // Token Icon
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: SafeJetColors.secondaryHighlight,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: iconUrl != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      iconUrl,
+              borderRadius: BorderRadius.circular(20),
+              image: iconUrl != null
+                  ? DecorationImage(
+                      image: NetworkImage(iconUrl),
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.currency_bitcoin,
-                        color: Colors.black,
-                        size: 24,
+                    )
+                  : null,
+            ),
+            child: iconUrl == null
+                ? Center(
+                    child: Text(
+                      symbol[0],
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
                   )
-                : Icon(Icons.currency_bitcoin, color: Colors.black, size: 24),
+                : null,
           ),
           const SizedBox(width: 12),
           
-          // Coin Info
+          // Token Name and Symbol
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   name,
-                  style: theme.textTheme.bodyLarge?.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -933,12 +934,12 @@ class _WalletsTabState extends State<WalletsTab> {
             ),
           ),
           
-          // Balance Info
+          // Balance
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${balance.toStringAsFixed(4)} $symbol',
+                balance.toStringAsFixed(4),
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),

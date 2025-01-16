@@ -228,28 +228,49 @@ export class WalletService {
     }
   }
 
-  async getBalances(userId: string, type?: 'spot' | 'funding'): Promise<WalletBalance[]> {
+  async getBalances(userId: string, type?: string): Promise<WalletBalance[]> {
     try {
-      // First get all user's wallets
+      // Get all user wallets
       const wallets = await this.walletRepository.find({
         where: { userId, status: 'active' }
       });
 
-      const walletIds = wallets.map(wallet => wallet.id);
+      const walletIds = wallets.map(w => w.id);
 
       // Then get balances for all wallets
       const query = this.walletBalanceRepository
         .createQueryBuilder('balance')
-        .where('balance.walletId IN (:...walletIds)', { walletIds });
+        .where('balance.walletId IN (:...walletIds)', { walletIds })
+        .leftJoinAndSelect('balance.token', 'token')
+        .orderBy('token.symbol', 'ASC');
 
       if (type) {
         query.andWhere('balance.type = :type', { type });
       }
 
-      const balances = await query
-        .leftJoinAndSelect('balance.token', 'token')
-        .orderBy('token.symbol', 'ASC')
-        .getMany();
+      const balances = await query.getMany();
+
+      // If type is not specified (All filter), aggregate balances by token
+      if (!type) {
+        const aggregatedBalances = new Map<string, WalletBalance>();
+        
+        balances.forEach(balance => {
+          const key = balance.token.symbol;
+          if (aggregatedBalances.has(key)) {
+            // Add to existing balance
+            const existing = aggregatedBalances.get(key);
+            existing.balance = (
+              parseFloat(existing.balance) + 
+              parseFloat(balance.balance)
+            ).toString();
+          } else {
+            // Create new aggregated balance
+            aggregatedBalances.set(key, {...balance});
+          }
+        });
+
+        return Array.from(aggregatedBalances.values());
+      }
 
       return balances;
     } catch (error) {
