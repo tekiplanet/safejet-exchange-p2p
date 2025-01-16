@@ -39,6 +39,9 @@ class _WalletsTabState extends State<WalletsTab> {
   Map<String, double> _tokenPrices = {};
   bool _hasError = false;
   String _errorMessage = '';
+  double _change24h = 0.0;
+  double _changePercent24h = 0.0;
+  bool _isPriceLoading = false;
 
   @override
   void initState() {
@@ -93,6 +96,7 @@ class _WalletsTabState extends State<WalletsTab> {
     try {
       setState(() {
         _isLoading = true;
+        _isPriceLoading = true;
         _hasError = false;
         _errorMessage = '';
       });
@@ -110,7 +114,10 @@ class _WalletsTabState extends State<WalletsTab> {
             .where((b) => b != null && b['token'] != null)
             .toList();
         _totalBalance = (data['total'] ?? 0.0).toDouble();
+        _change24h = (data['change24h'] ?? 0.0).toDouble();
+        _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
         _isLoading = false;
+        _isPriceLoading = false;
       });
     } catch (e) {
       print('Error loading balances: $e');
@@ -122,6 +129,7 @@ class _WalletsTabState extends State<WalletsTab> {
         _isLoading = false;
         _hasError = true;
         _errorMessage = 'Failed to load balances';
+        _isPriceLoading = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -374,13 +382,13 @@ class _WalletsTabState extends State<WalletsTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Portfolio Value',
+                              _getBalanceTitle(),
                               style: theme.textTheme.titleMedium?.copyWith(
                                 color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            _buildBalanceText(_formatBalance(_showInUSD, 12384.21)),
+                            _buildBalanceText(_formatBalance(_showInUSD, _totalBalance)),
                           ],
                         ),
                         _buildCurrencyToggleButton(isDark),
@@ -389,33 +397,7 @@ class _WalletsTabState extends State<WalletsTab> {
                     const SizedBox(height: 24),
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: SafeJetColors.success.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.trending_up_rounded,
-                                color: SafeJetColors.success,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '+\$${_formatNumber(234.12)} (1.93%)',
-                                style: TextStyle(
-                                  color: SafeJetColors.success,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildPriceChange(),
                         const Spacer(),
                         IconButton(
                           onPressed: () => Navigator.push(
@@ -1092,6 +1074,85 @@ class _WalletsTabState extends State<WalletsTab> {
           ],
         ),
       ),
+    );
+  }
+
+  String _getBalanceTitle() {
+    switch (_selectedFilter) {
+      case 'Spot':
+        return 'Spot Balance';
+      case 'Funding':
+        return 'Fund Balance';
+      default:
+        return 'Portfolio Value';
+    }
+  }
+
+  String _formatPriceChange(double value) {
+    if (value.abs() >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(2)}M';
+    } else if (value.abs() >= 1000) {
+      return '${(value / 1000).toStringAsFixed(2)}K';
+    }
+    return value.toStringAsFixed(2);
+  }
+
+  Widget _buildPriceChange() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _isPriceLoading
+          ? Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                ),
+              ),
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: (_changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _changePercent24h >= 0 
+                        ? Icons.trending_up_rounded 
+                        : Icons.trending_down_rounded,
+                    color: _changePercent24h >= 0 
+                        ? SafeJetColors.success 
+                        : SafeJetColors.error,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_changePercent24h >= 0 ? '+' : ''}\$${_formatPriceChange(_change24h.abs())} '
+                    '(${_changePercent24h.toStringAsFixed(2)}%)',
+                    style: TextStyle(
+                      color: _changePercent24h >= 0 
+                          ? SafeJetColors.success 
+                          : SafeJetColors.error,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 } 

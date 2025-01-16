@@ -150,4 +150,34 @@ export class ExchangeService {
       await this.fetchAndSaveRate(currency.code.toLowerCase());
     }
   }
+
+  async getCryptoPriceChange(symbol: string, currency: string = 'USD'): Promise<{
+    price: number;
+    change24h: number;
+    changePercent24h: number;
+  }> {
+    try {
+      // Get price change data from CryptoCompare
+      const response = await axios.get(`${this.cryptoApiUrl}/pricemultifull`, {
+        params: {
+          fsyms: symbol.toUpperCase(),
+          tsyms: currency.toUpperCase()
+        }
+      });
+
+      const data = response.data.RAW?.[symbol.toUpperCase()]?.[currency.toUpperCase()];
+      if (!data) {
+        return { price: 0, change24h: 0, changePercent24h: 0 };
+      }
+
+      return {
+        price: data.PRICE ?? 0,
+        change24h: data.CHANGE24HOUR ?? 0,
+        changePercent24h: data.CHANGEPCT24HOUR ?? 0
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get crypto price change for ${symbol}: ${error.message}`);
+      return { price: 0, change24h: 0, changePercent24h: 0 };
+    }
+  }
 } 

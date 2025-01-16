@@ -13,16 +13,16 @@ export class WalletController {
   @Get('balances')
   async getBalances(
     @GetUser() user: User,
-    @Query('type') type?: 'spot' | 'funding',
+    @Query('type') type?: string,
     @Query('currency') currency: string = 'USD',
   ) {
     const balances = await this.walletService.getBalances(user.id, type);
-    const total = await this.walletService.getTotalBalance(user.id, currency);
+    const total = await this.walletService.getTotalBalance(user.id, currency, type);
 
     return {
       balances,
       total,
-      currency,
+      currency
     };
   }
 

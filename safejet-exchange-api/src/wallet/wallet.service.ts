@@ -228,7 +228,7 @@ export class WalletService {
     }
   }
 
-  async getBalances(userId: string, type?: string): Promise<WalletBalance[]> {
+  async getBalances(userId: string, type?: string): Promise<any> {
     try {
       // Get all user wallets
       const wallets = await this.walletRepository.find({
@@ -272,16 +272,52 @@ export class WalletService {
         return Array.from(aggregatedBalances.values());
       }
 
-      return balances;
+      // Get price changes for all tokens
+      const priceChanges = await Promise.all(
+        balances.map(async balance => {
+          const change = await this.exchangeService.getCryptoPriceChange(
+            balance.token.symbol
+          );
+          return {
+            symbol: balance.token.symbol,
+            ...change
+          };
+        })
+      );
+
+      // Calculate total portfolio change
+      const totalChange = priceChanges.reduce((acc, curr, index) => {
+        const balance = parseFloat(balances[index].balance);
+        const valueChange = balance * curr.change24h;
+        return acc + valueChange;
+      }, 0);
+
+      const totalValue = balances.reduce((acc, curr, index) => {
+        const balance = parseFloat(curr.balance);
+        const price = priceChanges.find(p => p.symbol === curr.token.symbol)?.price ?? 0;
+        return acc + (balance * price);
+      }, 0);
+
+      const totalChangePercent = totalValue > 0 
+        ? (totalChange / totalValue) * 100 
+        : 0;
+
+      return {
+        balances,
+        total: totalValue,
+        change24h: totalChange,
+        changePercent24h: totalChangePercent
+      };
     } catch (error) {
       this.logger.error(`Failed to get wallet balances: ${error.message}`);
       throw new Error('Failed to fetch wallet balances');
     }
   }
 
-  async getTotalBalance(userId: string, currency: string): Promise<number> {
+  async getTotalBalance(userId: string, currency: string, type?: string): Promise<number> {
     try {
-      const balances = await this.getBalances(userId);
+      // Get balances filtered by type if specified
+      const balances = await this.getBalances(userId, type);
       
       // Only get exchange rate if currency is not USD
       const exchangeRate = currency.toUpperCase() === 'USD' 
