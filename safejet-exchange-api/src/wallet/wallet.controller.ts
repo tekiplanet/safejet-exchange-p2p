@@ -15,9 +15,18 @@ export class WalletController {
     @GetUser() user: User,
     @Query('type') type?: string,
     @Query('currency') currency: string = 'USD',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     try {
-      const balances = await this.walletService.getBalances(user.id, type);
+      const balances = await this.walletService.getBalances(
+        user.id, 
+        type,
+        { 
+          page: page ? parseInt(page, 10) : 1, 
+          limit: limit ? parseInt(limit, 10) : 20 
+        }
+      );
       return balances;
     } catch (error) {
       throw new HttpException(

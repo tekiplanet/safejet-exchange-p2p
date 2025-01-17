@@ -46,6 +46,12 @@ class _WalletsTabState extends State<WalletsTab> {
   Timer? _refreshTimer;
   bool _isInitialLoad = true;
 
+  final int _pageSize = 20;
+  int _currentPage = 1;
+  bool _isLoadingMore = false;
+  bool _hasMoreData = true;
+  final ScrollController _scrollController = ScrollController();
+
   List<Map<String, dynamic>> _sortBalances(List<Map<String, dynamic>> balances) {
     return [...balances]..sort((a, b) {
       final balanceA = double.tryParse(a['balance'] as String) ?? 0.0;
@@ -83,6 +89,7 @@ class _WalletsTabState extends State<WalletsTab> {
     super.initState();
     _loadUserSettings();
     _loadBalances();
+    _setupScrollController();
     
     // Set up periodic refresh
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -96,6 +103,7 @@ class _WalletsTabState extends State<WalletsTab> {
   void dispose() {
     _refreshTimer?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -427,6 +435,7 @@ class _WalletsTabState extends State<WalletsTab> {
 
     return SafeArea(
       child: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           // Modern Header with Balance
           SliverToBoxAdapter(
@@ -735,6 +744,22 @@ class _WalletsTabState extends State<WalletsTab> {
                   return _buildEmptyState();
                 }
 
+                // Add loading indicator at the bottom
+                if (index == _balances.length) {
+                  if (_isLoadingMore) {
+                    return Container(
+                      padding: const EdgeInsets.all(16.0),
+                      alignment: Alignment.center,
+                      child: const CircularProgressIndicator(),
+                    );
+                  } else if (!_hasMoreData) {
+                    return const SizedBox(); // Hide when no more data
+                  }
+                  return const SizedBox();
+                }
+
+                if (index >= _balances.length) return null;
+
                 final balance = _balances[index];
                 final token = balance['token'] as Map<String, dynamic>;
                 final amount = double.tryParse(balance['balance'] as String) ?? 0.0;
@@ -748,7 +773,7 @@ class _WalletsTabState extends State<WalletsTab> {
                   token['metadata']?['icon'] as String?,
                 );
               },
-              childCount: _balances.isEmpty ? 1 : _balances.length,
+              childCount: _balances.isEmpty ? 1 : _balances.length + 1,
             ),
           ),
 
@@ -1237,5 +1262,99 @@ class _WalletsTabState extends State<WalletsTab> {
               ),
             ),
     );
+  }
+
+  void _setupScrollController() {
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= 
+          _scrollController.position.maxScrollExtent * 0.8 &&
+          !_isLoadingMore &&
+          _hasMoreData) {
+        _loadMoreBalances();
+      }
+    });
+  }
+
+  Future<void> _loadMoreBalances() async {
+    if (!mounted || _isLoadingMore || !_hasMoreData) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    try {
+      final type = _selectedFilter == 'All' ? null : _selectedFilter.toLowerCase();
+      final data = await _walletService.getBalances(
+        type: type,
+        currency: _showInUSD ? 'USD' : _userCurrency,
+        page: _currentPage + 1,
+        limit: _pageSize,
+      );
+
+      if (!mounted) return;
+
+      final newBalances = List<Map<String, dynamic>>.from(data['balances'] ?? []);
+      
+      if (newBalances.isEmpty) {
+        setState(() {
+          _hasMoreData = false;
+          _isLoadingMore = false;
+        });
+        return;
+      }
+
+      setState(() {
+        if (_selectedFilter == 'All') {
+          // Handle combining balances for All filter
+          final Map<String, Map<String, dynamic>> combinedBalances = 
+              Map.fromEntries(_balances.map((b) => 
+                  MapEntry(b['token']['symbol'] as String, b)));
+
+          for (final balance in newBalances) {
+            final token = balance['token'] as Map<String, dynamic>;
+            final symbol = token['symbol'] as String;
+            final currentBalance = double.tryParse(balance['balance'] as String) ?? 0.0;
+
+            if (combinedBalances.containsKey(symbol)) {
+              final existingBalance = double.tryParse(
+                  combinedBalances[symbol]!['balance'] as String) ?? 0.0;
+              combinedBalances[symbol]!['balance'] = 
+                  (existingBalance + currentBalance).toString();
+            } else {
+              combinedBalances[symbol] = {
+                ...balance,
+                'token': token,
+              };
+            }
+          }
+
+          _balances = _sortBalances(combinedBalances.values.toList());
+        } else {
+          _balances.addAll(newBalances);
+          _balances = _sortBalances(_balances);
+        }
+
+        _currentPage++;
+        _isLoadingMore = false;
+      });
+
+      // Update token prices
+      final newPrices = Map.fromEntries(
+        newBalances.map((b) => MapEntry(
+          b['token']['symbol'] as String,
+          (b['price'] ?? 0.0).toDouble(),
+        )),
+      );
+      _tokenPrices.addAll(newPrices);
+
+    } catch (e) {
+      print('Error loading more balances: $e');
+      if (!mounted) return;
+      
+      setState(() {
+        _isLoadingMore = false;
+        _hasMoreData = false;
+      });
+    }
   }
 } 

@@ -47,10 +47,12 @@ class WalletService {
   Future<Map<String, dynamic>> getBalances({
     String? type,
     String currency = 'USD',
+    int page = 1,
+    int limit = 20,
   }) async {
     try {
       // Check cache first
-      final cacheKey = '${type ?? 'all'}-$currency';
+      final cacheKey = '${type ?? 'all'}-$currency-$page-$limit';
       final cachedData = _cache[cacheKey];
       
       if (cachedData != null && !cachedData.isExpired) {
@@ -62,6 +64,8 @@ class WalletService {
         queryParameters: {
           if (type != null) 'type': type,
           'currency': currency,
+          'page': page,
+          'limit': limit,
         },
       );
 

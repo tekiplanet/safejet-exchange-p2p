@@ -10,6 +10,11 @@ import { tokenSeeds } from './seeds/tokens.seed';
 import { ExchangeService } from '../exchange/exchange.service';
 import { Logger } from '@nestjs/common';
 
+interface PaginationParams {
+  page: number;
+  limit: number;
+}
+
 @Injectable()
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
@@ -228,9 +233,15 @@ export class WalletService {
     }
   }
 
-  async getBalances(userId: string, type?: string): Promise<any> {
+  async getBalances(
+    userId: string, 
+    type?: string, 
+    pagination: PaginationParams = { page: 1, limit: 20 }
+  ): Promise<any> {
     try {
-      // Get all user wallets
+      const page = Math.max(1, Math.floor(Number(pagination.page)));
+      const limit = Math.max(1, Math.floor(Number(pagination.limit)));
+      
       const wallets = await this.walletRepository.find({
         where: { userId, status: 'active' }
       });
@@ -240,13 +251,18 @@ export class WalletService {
           balances: [],
           total: 0,
           change24h: 0,
-          changePercent24h: 0
+          changePercent24h: 0,
+          pagination: {
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+            hasMore: false,
+          }
         };
       }
 
       const walletIds = wallets.map(w => w.id);
-
-      // Get balances for all wallets
       const query = this.walletBalanceRepository
         .createQueryBuilder('balance')
         .where('balance.walletId IN (:...walletIds)', { walletIds })
@@ -254,33 +270,96 @@ export class WalletService {
         .orderBy('token.symbol', 'ASC');
 
       if (type) {
+        // For spot or funding, apply normal pagination
         query.andWhere('balance.type = :type', { type });
+        
+        const skip = (page - 1) * limit;
+        const [balances, total] = await Promise.all([
+          query.skip(skip).take(limit).getMany(),
+          query.getCount(),
+        ]);
+
+        const uniqueTokens = [...new Set(balances.map(b => b.token))];
+        const symbols = uniqueTokens.map(token => token.symbol);
+        const prices = await this.exchangeService.getBatchPrices(symbols);
+
+        const processedBalances = balances.map(balance => ({
+          id: balance.id,
+          balance: balance.balance,
+          type: balance.type,
+          token: balance.token,
+          price: prices[balance.token.symbol] || 0
+        }));
+
+        return {
+          balances: processedBalances,
+          total: this.calculateTotal(processedBalances),
+          change24h: 0,
+          changePercent24h: 0,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            hasMore: page * limit < total,
+          }
+        };
+      } else {
+        // For "All", get all balances first then combine
+        const allBalances = await query.getMany();
+        
+        // Combine spot and funding balances for each token
+        const combinedBalances = new Map<string, any>();
+        
+        allBalances.forEach(balance => {
+          const tokenSymbol = balance.token.symbol;
+          const currentBalance = parseFloat(balance.balance) || 0;
+          
+          if (combinedBalances.has(tokenSymbol)) {
+            const existing = combinedBalances.get(tokenSymbol);
+            existing.balance = (parseFloat(existing.balance) + currentBalance).toString();
+          } else {
+            combinedBalances.set(tokenSymbol, {
+              id: balance.id,
+              balance: balance.balance,
+              token: balance.token,
+              type: 'all' // Mark as combined balance
+            });
+          }
+        });
+
+        // Convert to array and sort
+        let processedBalances = Array.from(combinedBalances.values());
+        
+        // Get prices for all tokens
+        const symbols = processedBalances.map(b => b.token.symbol);
+        const prices = await this.exchangeService.getBatchPrices(symbols);
+        
+        // Add prices to balances
+        processedBalances = processedBalances.map(balance => ({
+          ...balance,
+          price: prices[balance.token.symbol] || 0
+        }));
+
+        // Apply pagination to combined results
+        const total = processedBalances.length;
+        const start = (page - 1) * limit;
+        const paginatedBalances = processedBalances.slice(start, start + limit);
+
+        return {
+          balances: paginatedBalances,
+          total: this.calculateTotal(processedBalances), // Calculate total from all balances
+          change24h: 0,
+          changePercent24h: 0,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+            hasMore: page * limit < total,
+          }
+        };
       }
-
-      const balances = await query.getMany();
-
-      // Get unique tokens
-      const uniqueTokens = [...new Set(balances.map(b => b.token))];
-      const symbols = uniqueTokens.map(token => token.symbol);
-
-      // Fetch all prices in one batch request
-      const prices = await this.exchangeService.getBatchPrices(symbols);
-
-      // Process balances with prices
-      const processedBalances = balances.map(balance => ({
-        id: balance.id,
-        balance: balance.balance,
-        type: balance.type,
-        token: balance.token,
-        price: prices[balance.token.symbol] || 0
-      }));
-
-      return {
-        balances: processedBalances,
-        total: this.calculateTotal(processedBalances),
-        change24h: 0, // Implement 24h change calculation
-        changePercent24h: 0
-      };
     } catch (error) {
       this.logger.error(`Failed to get balances: ${error.message}`);
       throw error;
