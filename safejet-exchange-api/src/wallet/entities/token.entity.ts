@@ -43,4 +43,34 @@ export class Token {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   lastPriceUpdate: Date;
+
+  @Column({ type: 'decimal', nullable: true })
+  marketCap: number;
+
+  @Column({ type: 'decimal', nullable: true })
+  fullyDilutedMarketCap: number;
+
+  @Column({ type: 'decimal', nullable: true })
+  volume24h: number;
+
+  @Column({ type: 'decimal', nullable: true })
+  circulatingSupply: number;
+
+  @Column({ type: 'decimal', nullable: true })
+  maxSupply: number;
+
+  @Column({ type: 'decimal', nullable: true })
+  marketCapChange24h: number;
+
+  @Column({ type: 'decimal', nullable: true })
+  marketCapChangePercent24h: number;
+
+  @Column({ type: 'decimal', nullable: true })
+  volumeChangePercent24h: number;
+
+  @Column({ type: 'json', nullable: true })
+  priceHistory: any;
+
+  @Column({ nullable: true })
+  coingeckoId: string;
 } 

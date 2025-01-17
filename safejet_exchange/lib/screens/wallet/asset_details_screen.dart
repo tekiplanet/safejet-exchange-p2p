@@ -29,12 +29,35 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
 
   String _formatBalance(bool showInUSD, double value) {
     final currencySymbol = showInUSD ? '\$' : _getCurrencySymbol(widget.userCurrency);
+    
+    // Format large numbers with K, M, B
+    if (value >= 1000000000) {
+      return '$currencySymbol${(value / 1000000000).toStringAsFixed(2)}B';
+    } else if (value >= 1000000) {
+      return '$currencySymbol${(value / 1000000).toStringAsFixed(2)}M';
+    } else if (value >= 1000) {
+      return '$currencySymbol${(value / 1000).toStringAsFixed(2)}K';
+    }
+
+    // For smaller numbers, use regular currency format
     final numberFormat = NumberFormat.currency(
       locale: 'en_US',
       symbol: currencySymbol,
       decimalDigits: 2,
     );
     return numberFormat.format(value);
+  }
+
+  // Helper method to format large numbers (for non-currency values)
+  String _formatLargeNumber(double value) {
+    if (value >= 1000000000) {
+      return '${(value / 1000000000).toStringAsFixed(2)}B';
+    } else if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(2)}M';
+    } else if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(2)}K';
+    }
+    return value.toStringAsFixed(2);
   }
 
   String _getCurrencySymbol(String currency) {
@@ -464,33 +487,42 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _buildStatisticRow(
+                        _buildStatisticItem(
                           'Market Cap',
-                          '\$452.5B',
-                          '\$+23.4B (5.45%)',
-                          SafeJetColors.success,
+                          _formatBalance(widget.showInUSD, double.tryParse(token['marketCap']?.toString() ?? '0') ?? 0.0),
+                          token['marketCapChange24h'] != null 
+                              ? '${_formatBalance(widget.showInUSD, double.tryParse(token['marketCapChange24h']?.toString() ?? '0') ?? 0.0)} (${(double.tryParse(token['marketCapChangePercent24h']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2)}%)'
+                              : null,
+                          token['marketCapChangePercent24h'] != null && 
+                            (double.tryParse(token['marketCapChangePercent24h']?.toString() ?? '0') ?? 0.0) >= 0,
                           isDark,
                         ),
-                        _buildStatisticRow(
+                        _buildStatisticItem(
                           'Fully Diluted Market Cap',
-                          '\$478.9B',
+                          _formatBalance(widget.showInUSD, double.tryParse(token['fullyDilutedMarketCap']?.toString() ?? '0') ?? 0.0),
                           null,
                           null,
                           isDark,
                         ),
-                        _buildStatisticRow(
+                        _buildStatisticItem(
                           'Volume (24h)',
-                          '\$1.2B',
-                          '-12.34%',
-                          SafeJetColors.error,
+                          _formatBalance(widget.showInUSD, double.tryParse(token['volume24h']?.toString() ?? '0') ?? 0.0),
+                          token['volumeChangePercent24h'] != null 
+                              ? '${(double.tryParse(token['volumeChangePercent24h']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2)}%'
+                              : null,
+                          token['volumeChangePercent24h'] != null && 
+                            (double.tryParse(token['volumeChangePercent24h']?.toString() ?? '0') ?? 0.0) >= 0,
                           isDark,
                         ),
-                        _buildStatisticRow(
+                        _buildStatisticItem(
                           'Circulating Supply',
-                          '19.5M BTC',
-                          '92.85%',
-                          SafeJetColors.primary,
+                          '${_formatLargeNumber(double.tryParse(token['circulatingSupply']?.toString() ?? '0') ?? 0)} ${token['symbol']}',
+                          token['maxSupply'] != null 
+                              ? '${((double.tryParse(token['circulatingSupply']?.toString() ?? '0') ?? 0) / (double.tryParse(token['maxSupply']?.toString() ?? '0') ?? 1) * 100).toStringAsFixed(2)}%'
+                              : null,
+                          null,
                           isDark,
+                          isSupply: true,
                         ),
                       ],
                     ),
@@ -725,49 +757,91 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     );
   }
 
-  Widget _buildStatisticRow(
+  Widget _buildStatisticItem(
     String label,
     String value,
     String? change,
-    Color? changeColor,
-    bool isDark,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
+    bool? isPositive,
+    bool isDark, {
+    bool isSupply = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isDark 
+                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                : SafeJetColors.lightCardBorder,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-              ),
+          Text(
+            label,
+            style: TextStyle(
+              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              fontSize: 13,
             ),
           ),
-          Expanded(
-            flex: 3,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
                   value,
                   style: TextStyle(
                     color: isDark ? Colors.white : Colors.black,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
                   ),
                 ),
-                if (change != null)
-                  Text(
+              ),
+              if (change != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (isPositive == true ? SafeJetColors.success : SafeJetColors.error)
+                        .withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
                     change,
                     style: TextStyle(
-                      color: changeColor,
+                      color: isPositive == true ? SafeJetColors.success : SafeJetColors.error,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                ),
               ],
-            ),
+              if (isSupply && change != null)
+                Flexible(
+                  child: Container(
+                    margin: const EdgeInsets.only(left: 8),
+                    width: double.infinity,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: SafeJetColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: double.tryParse(change.replaceAll('%', ''))! / 100,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: SafeJetColors.primary,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),

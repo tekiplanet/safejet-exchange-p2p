@@ -6,11 +6,11 @@ import { User } from '../auth/entities/user.entity';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 
 @Controller('wallets')
-@UseGuards(JwtAuthGuard)
 export class WalletController {
   constructor(private readonly walletService: WalletService) {}
 
   @Get('balances')
+  @UseGuards(JwtAuthGuard)
   async getBalances(
     @GetUser('id') userId: string,
     @Query('type') type?: string,
@@ -24,6 +24,7 @@ export class WalletController {
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   async createWallet(
     @GetUser() user: User,
     @Body() createWalletDto: CreateWalletDto,
@@ -32,11 +33,13 @@ export class WalletController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   async getWallets(@GetUser() user: User) {
     return this.walletService.getWallets(user.id);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   async getWallet(
     @GetUser() user: User,
     @Param('id') walletId: string,
@@ -45,6 +48,7 @@ export class WalletController {
   }
 
   @Post('test-create')
+  @UseGuards(JwtAuthGuard)
   async testCreateWallet(
     @GetUser() user: User,
     @Body() createWalletDto: CreateWalletDto,
@@ -66,5 +70,15 @@ export class WalletController {
         error: error.message,
       };
     }
+  }
+
+  @Post('token/:id/market-data')
+  async updateTokenMarketData(@Param('id') tokenId: string) {
+    return this.walletService.updateSingleTokenMarketData(tokenId);
+  }
+
+  @Post('tokens/market-data')
+  async updateAllTokensMarketData() {
+    return this.walletService.updateTokenMarketData();
   }
 } 

@@ -227,7 +227,7 @@ class _WalletsTabState extends State<WalletsTab> {
             _balances = _sortBalances([..._balances, ...newBalances]);
           } else {
             // Reset to first page
-            _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
+          _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
             _currentPage = 1;
             _hasMoreData = true;
           }
@@ -875,7 +875,7 @@ class _WalletsTabState extends State<WalletsTab> {
                               Row(
                                 children: [
                                   Text(
-                                    symbol,
+                  symbol,
                                     style: TextStyle(
                                       color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                                     ),
@@ -1141,12 +1141,12 @@ class _WalletsTabState extends State<WalletsTab> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            text,
-            key: ValueKey<String>(text),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+        text,
+        key: ValueKey<String>(text),
+        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+          fontWeight: FontWeight.bold,
               fontSize: text.length > 15 ? 20.0 : 24.0,
-            ),
+        ),
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -1257,16 +1257,16 @@ class _WalletsTabState extends State<WalletsTab> {
                     ),
                     const SizedBox(width: 8),
                     // Price change indicator
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
                         color: (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error)
                             .withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1282,17 +1282,17 @@ class _WalletsTabState extends State<WalletsTab> {
                           const SizedBox(width: 2),
                           Text(
                             '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.abs().toStringAsFixed(2)}%',
-                            style: TextStyle(
+                          style: TextStyle(
                               color: changePercent24h >= 0 
                                   ? SafeJetColors.success 
                                   : SafeJetColors.error,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                            ),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
                           ),
                         ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -1313,7 +1313,7 @@ class _WalletsTabState extends State<WalletsTab> {
               _buildAssetBalance(
                 _formatBalance(_showInUSD, double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0),
                 isDark,
-              ),
+                ),
             ],
           ),
         ],
@@ -1585,7 +1585,7 @@ class _WalletsTabState extends State<WalletsTab> {
       
       // Check if we have more data based on pagination info
       final hasMore = pagination['hasMore'] as bool;
-      
+
       setState(() {
         if (_selectedFilter == 'All') {
           // Handle combining balances for All filter

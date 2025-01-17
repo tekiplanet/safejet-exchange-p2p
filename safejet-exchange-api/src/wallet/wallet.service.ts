@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { KeyManagementService } from './key-management.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
@@ -10,6 +10,10 @@ import { tokenSeeds } from './seeds/tokens.seed';
 import { ExchangeService } from '../exchange/exchange.service';
 import { Logger } from '@nestjs/common';
 import { Decimal } from 'decimal.js';
+import axios from 'axios';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { delay } from '../utils/helpers';
+import { chunk } from 'lodash';
 
 interface PaginationParams {
   page: number;
@@ -19,6 +23,11 @@ interface PaginationParams {
 @Injectable()
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
+  private readonly cryptoCompareApi = 'https://min-api.cryptocompare.com/data';
+  private readonly API_KEY = process.env.CRYPTOCOMPARE_API_KEY;
+  private readonly BATCH_SIZE = 10;
+  private readonly RATE_LIMIT_DELAY = 1000;
+  private readonly BATCH_DELAY = 10000;
 
   constructor(
     @InjectRepository(Wallet)
@@ -237,7 +246,7 @@ export class WalletService {
 
   async getBalances(
     userId: any,
-    type?: string,
+    type?: string, 
     pagination: PaginationParams = { page: 1, limit: 20 },
     showZeroBalances: boolean = true
   ): Promise<any> {
@@ -331,14 +340,14 @@ export class WalletService {
       // Calculate overall change percentage
       const changePercent24h = totalValue > 0 ? (totalChange24h / totalValue) * 100 : 0;
 
-      return {
-        balances: paginatedBalances,
+        return {
+          balances: paginatedBalances,
         total: spotTotal + fundingTotal,
         spotTotal,
         fundingTotal,
         change24h: totalChange24h,
-        changePercent24h,
-        pagination: {
+          changePercent24h,
+          pagination: {
           total: displayBalances.length,
           page: pagination.page,
           limit: pagination.limit,
@@ -527,5 +536,150 @@ export class WalletService {
       
       return total + amount.times(price).toNumber();
     }, 0);
+  }
+
+  async getTokenMarketData(symbol: string) {
+    try {
+      // Get market data
+      const marketDataResponse = await axios.get(`${this.cryptoCompareApi}/pricemultifull`, {
+        params: {
+          fsyms: symbol,
+          tsyms: 'USD',
+          api_key: this.API_KEY
+        }
+      });
+
+      const data = marketDataResponse.data.RAW[symbol].USD;
+
+      // Get historical daily data
+      const historyResponse = await axios.get(`${this.cryptoCompareApi}/v2/histoday`, {
+        params: {
+          fsym: symbol,
+          tsym: 'USD',
+          limit: 7,
+          api_key: this.API_KEY
+        }
+      });
+
+      // Helper to convert values to null if they're invalid
+      const sanitizeNumber = (value: any) => {
+        const num = Number(value);
+        return (!isNaN(num) && num > 0) ? num : null;
+      };
+      
+      return {
+        marketCap: sanitizeNumber(data.MKTCAP),
+        fullyDilutedMarketCap: sanitizeNumber(data.CIRCULATINGSUPPLYMKTCAP),
+        volume24h: sanitizeNumber(data.VOLUME24HOUR),
+        circulatingSupply: sanitizeNumber(data.CIRCULATINGSUPPLY),
+        maxSupply: sanitizeNumber(data.SUPPLY),
+        marketCapChange24h: sanitizeNumber(data.MKTCAP * data.CHANGEPCT24HOUR / 100),
+        marketCapChangePercent24h: sanitizeNumber(data.CHANGEPCT24HOUR),
+        volumeChangePercent24h: data.VOLUMEDAYTO > 0 ? 
+          sanitizeNumber(((data.VOLUME24HOUR - data.VOLUMEDAYTO) / data.VOLUMEDAYTO) * 100) : null,
+        priceHistory: historyResponse.data.Data.Data.map(d => [
+          d.time * 1000,
+          d.close
+        ])
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async updateTokenMarketData() {
+    try {
+      const tokens = await this.tokenRepository.find({
+        where: { symbol: Not(IsNull()) }
+      });
+      this.logger.log(`Found ${tokens.length} tokens to update`);
+
+      const batches = chunk(tokens, this.BATCH_SIZE);
+      this.logger.log(`Split into ${batches.length} batches of ${this.BATCH_SIZE}`);
+
+      for (const [batchIndex, batch] of batches.entries()) {
+        this.logger.log(`Processing batch ${batchIndex + 1}/${batches.length}`);
+
+        for (const token of batch) {
+          try {
+            this.logger.debug(`Updating ${token.symbol}...`);
+            const marketData = await this.getTokenMarketData(token.symbol);
+            
+            if (marketData) {
+              await this.tokenRepository.update(token.id, {
+                marketCap: marketData.marketCap,
+                fullyDilutedMarketCap: marketData.fullyDilutedMarketCap,
+                volume24h: marketData.volume24h,
+                circulatingSupply: marketData.circulatingSupply,
+                maxSupply: marketData.maxSupply,
+                marketCapChange24h: marketData.marketCapChange24h,
+                marketCapChangePercent24h: marketData.marketCapChangePercent24h,
+                volumeChangePercent24h: marketData.volumeChangePercent24h,
+                priceHistory: marketData.priceHistory,
+                lastPriceUpdate: new Date()
+              });
+              this.logger.debug(`Updated market data for ${token.symbol}`);
+            }
+
+            await delay(this.RATE_LIMIT_DELAY);
+
+          } catch (error) {
+            if (error.response?.status === 429) {
+              this.logger.warn(`Rate limit hit for ${token.symbol}`);
+              await delay(this.BATCH_DELAY);
+              break;
+            } else {
+              this.logger.error(`Error updating ${token.symbol}:`, error);
+            }
+          }
+        }
+
+        if (batchIndex < batches.length - 1) {
+          this.logger.log(`Waiting ${this.BATCH_DELAY/1000}s before next batch...`);
+          await delay(this.BATCH_DELAY);
+        }
+      }
+
+      this.logger.log('Finished updating all token market data');
+    } catch (error) {
+      this.logger.error('Error in updateTokenMarketData:', error);
+    }
+  }
+
+  // Method to manually update a specific token
+  async updateSingleTokenMarketData(tokenId: string) {
+    try {
+      const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
+      if (!token) {
+        throw new Error('Token not found');
+      }
+
+      const coinId = token.metadata?.coingeckoId;
+      if (!coinId) {
+        throw new Error('No CoinGecko ID found for token');
+      }
+
+      const marketData = await this.getTokenMarketData(coinId);
+      if (marketData) {
+        await this.tokenRepository.update(token.id, {
+          marketCap: marketData.marketCap,
+          fullyDilutedMarketCap: marketData.fullyDilutedMarketCap,
+          volume24h: marketData.volume24h,
+          circulatingSupply: marketData.circulatingSupply,
+          maxSupply: marketData.maxSupply,
+          marketCapChange24h: marketData.marketCapChange24h,
+          marketCapChangePercent24h: marketData.marketCapChangePercent24h,
+          volumeChangePercent24h: marketData.volumeChangePercent24h,
+          priceHistory: marketData.priceHistory,
+          lastPriceUpdate: new Date()
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      this.logger.error(`Error updating token ${tokenId}:`, error);
+      throw error;
+    }
   }
 } 
