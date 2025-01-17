@@ -801,6 +801,9 @@ class _WalletsTabState extends State<WalletsTab> {
                 final price = _tokenPrices[symbol] ?? 0.0;
                 final isLoading = balance['priceLoading'] ?? false;
                 
+                // Get the change percent from the token data
+                final tokenChangePercent24h = double.tryParse(balance['token']['changePercent24h']?.toString() ?? '0') ?? 0.0;
+
                 return GestureDetector(
                   onTap: () {
                     Navigator.push(
@@ -878,44 +881,43 @@ class _WalletsTabState extends State<WalletsTab> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  // Updated price change indicator
-                                  if (price > 0)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: (balance['token']['changePercent24h'] >= 0 ? SafeJetColors.success : SafeJetColors.error)
-                                            .withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            balance['token']['changePercent24h'] >= 0 
-                                                ? Icons.trending_up_rounded 
-                                                : Icons.trending_down_rounded,
-                                            color: balance['token']['changePercent24h'] >= 0 
+                                  // Price change indicator
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: (tokenChangePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error)
+                                          .withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          tokenChangePercent24h >= 0 
+                                              ? Icons.trending_up_rounded 
+                                              : Icons.trending_down_rounded,
+                                          color: tokenChangePercent24h >= 0 
+                                              ? SafeJetColors.success 
+                                              : SafeJetColors.error,
+                                          size: 12,
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          '${tokenChangePercent24h >= 0 ? '+' : ''}${tokenChangePercent24h.abs().toStringAsFixed(2)}%',
+                                          style: TextStyle(
+                                            color: tokenChangePercent24h >= 0 
                                                 ? SafeJetColors.success 
                                                 : SafeJetColors.error,
-                                            size: 12,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
                                           ),
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            '${balance['token']['changePercent24h'] >= 0 ? '+' : ''}${balance['token']['changePercent24h'].abs().toStringAsFixed(2)}%',
-                                            style: TextStyle(
-                                              color: balance['token']['changePercent24h'] >= 0 
-                                                  ? SafeJetColors.success 
-                                                  : SafeJetColors.error,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
+                                  ),
                                   // Use balance metadata to check network
                                   if (balance['metadata']?['network'] == 'testnet')
                                     Container(
@@ -948,7 +950,7 @@ class _WalletsTabState extends State<WalletsTab> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              balance['balance'].toString(),
+                              _formatAssetBalance(amount),
                               style: theme.textTheme.bodyLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1162,22 +1164,10 @@ class _WalletsTabState extends State<WalletsTab> {
     Map<String, dynamic>? tokenMetadata,
     Map<String, dynamic> balance,
   ) {
-    // Add debug logging
-    print('\n=== Asset Item Debug ===');
-    print('Symbol: $symbol');
-    print('Amount: $amount');
-    print('Raw balance data: $balance');
-    print('USD Value: ${balance['usdValue']}');
-    print('Current rate: $_userCurrencyRate');
-    print('Show in USD: $_showInUSD');
-
-    // Get token decimals
-    final decimals = balance['token']['decimals'] as int? ?? 18;
-    
-    // Format balance based on amount size and decimals
+    // Format balance with thousands separator
     String formattedBalance;
     final numberFormat = NumberFormat.decimalPattern('en_US');
-    
+
     if (amount == 0) {
       formattedBalance = '0.00';
     } else if (amount < 0.00001) {
@@ -1200,15 +1190,8 @@ class _WalletsTabState extends State<WalletsTab> {
                           decimal.toStringAsFixed(4).substring(1);
       }
     }
-    
-    // Format fiat value
-    final price = double.tryParse(balance['token']['currentPrice']?.toString() ?? '0') ?? 0.0;
-    final usdValue = double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0;
-    final fiatValue = _showInUSD ? usdValue : usdValue * _userCurrencyRate;
+
     final changePercent24h = double.tryParse(balance['token']['changePercent24h']?.toString() ?? '0') ?? 0.0;
-    
-    // Remove network name from display
-    final displayName = name.split(' (')[0];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1258,7 +1241,7 @@ class _WalletsTabState extends State<WalletsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  displayName,  // Use clean name without network
+                  name.split(' (')[0],
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -1273,65 +1256,43 @@ class _WalletsTabState extends State<WalletsTab> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Updated price change indicator
-                    if (price > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error)
-                              .withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              changePercent24h >= 0 
-                                  ? Icons.trending_up_rounded 
-                                  : Icons.trending_down_rounded,
+                    // Price change indicator
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error)
+                            .withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            changePercent24h >= 0 
+                                ? Icons.trending_up_rounded 
+                                : Icons.trending_down_rounded,
+                            color: changePercent24h >= 0 
+                                ? SafeJetColors.success 
+                                : SafeJetColors.error,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.abs().toStringAsFixed(2)}%',
+                            style: TextStyle(
                               color: changePercent24h >= 0 
                                   ? SafeJetColors.success 
                                   : SafeJetColors.error,
-                              size: 12,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
                             ),
-                            const SizedBox(width: 2),
-                            Text(
-                              '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.abs().toStringAsFixed(2)}%',
-                              style: TextStyle(
-                                color: changePercent24h >= 0 
-                                    ? SafeJetColors.success 
-                                    : SafeJetColors.error,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    // Use balance metadata to check network
-                    if (balance['metadata']?['network'] == 'testnet')
-                      Container(
-                        margin: const EdgeInsets.only(left: 6),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: SafeJetColors.warning.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'Testnet',
-                          style: TextStyle(
-                            color: SafeJetColors.warning,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
               ],
@@ -1350,7 +1311,7 @@ class _WalletsTabState extends State<WalletsTab> {
               ),
               const SizedBox(height: 4),
               _buildAssetBalance(
-                _formatBalance(_showInUSD, fiatValue),
+                _formatBalance(_showInUSD, double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0),
                 isDark,
               ),
             ],
@@ -1705,5 +1666,26 @@ class _WalletsTabState extends State<WalletsTab> {
     }).toList();
   }
 
+  String _formatAssetBalance(double amount) {
+    if (amount == 0) return '0';
+    
+    if (amount >= 1) {
+      // For numbers >= 1, show with comma separators
+      final wholeNumber = amount.floor();
+      final decimal = amount - wholeNumber;
+      final numberFormat = NumberFormat('#,##0', 'en_US');
+      
+      if (decimal == 0) {
+        return numberFormat.format(wholeNumber);
+      } else {
+        // Add up to 4 decimal places if there are decimals
+        final decimalStr = decimal.toStringAsFixed(4).substring(1);
+        return '${numberFormat.format(wholeNumber)}$decimalStr';
+      }
+    } else {
+      // For numbers < 1, show up to 8 decimal places without comma separators
+      return amount.toStringAsFixed(8).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+    }
+  }
 
 } 
