@@ -55,16 +55,12 @@ class _WalletsTabState extends State<WalletsTab> {
 
   List<Map<String, dynamic>> _sortBalances(List<Map<String, dynamic>> balances) {
     return [...balances]..sort((a, b) {
-      final balanceA = double.tryParse(a['balance'] as String) ?? 0.0;
-      final balanceB = double.tryParse(b['balance'] as String) ?? 0.0;
+      final balanceA = double.tryParse(a['balance']?.toString() ?? '0') ?? 0.0;
+      final balanceB = double.tryParse(b['balance']?.toString() ?? '0') ?? 0.0;
       
       // Safely convert price to double regardless of whether it's int or double
-      final priceA = (a['price'] == null) ? 0.0 : (a['price'] is int ? 
-          (a['price'] as int).toDouble() : 
-          (a['price'] as num).toDouble());
-      final priceB = (b['price'] == null) ? 0.0 : (b['price'] is int ? 
-          (b['price'] as int).toDouble() : 
-          (b['price'] as num).toDouble());
+      final priceA = double.tryParse(a['price']?.toString() ?? '0') ?? 0.0;
+      final priceB = double.tryParse(b['price']?.toString() ?? '0') ?? 0.0;
       
       // Calculate fiat values
       final fiatValueA = balanceA * priceA;
@@ -122,7 +118,7 @@ class _WalletsTabState extends State<WalletsTab> {
       
       setState(() {
         _userCurrency = settings['currency'] ?? 'USD';
-        _userCurrencyRate = double.tryParse(rates['rate'].toString()) ?? 1.0;
+        _userCurrencyRate = double.tryParse(rates['rate']?.toString() ?? '1') ?? 1.0;
         _isLoading = false;
       });
 
@@ -168,21 +164,20 @@ class _WalletsTabState extends State<WalletsTab> {
       if (!mounted) return;
 
       if (_selectedFilter == 'All') {
-        // Create a map to store combined balances by token symbol
         final Map<String, Map<String, dynamic>> combinedBalances = {};
         
-        // Process each balance
         for (final balance in List<Map<String, dynamic>>.from(data['balances'] ?? [])) {
           final token = balance['token'] as Map<String, dynamic>;
           final symbol = token['symbol'] as String;
-          final currentBalance = double.tryParse(balance['balance'] as String) ?? 0.0;
+          
+          // Safely parse balance
+          final currentBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;
           
           if (combinedBalances.containsKey(symbol)) {
-            // Add to existing balance
-            final existingBalance = double.tryParse(combinedBalances[symbol]!['balance'] as String) ?? 0.0;
+            // Safely parse existing balance
+            final existingBalance = double.tryParse(combinedBalances[symbol]!['balance'].toString()) ?? 0.0;
             combinedBalances[symbol]!['balance'] = (existingBalance + currentBalance).toString();
           } else {
-            // Create new entry
             combinedBalances[symbol] = {
               ...balance,
               'token': token,
@@ -192,18 +187,16 @@ class _WalletsTabState extends State<WalletsTab> {
 
         setState(() {
           _balances = _sortBalances(combinedBalances.values.toList());
-          _totalBalance = _showInUSD 
-              ? (data['total'] ?? 0.0).toDouble()
-              : (data['total'] ?? 0.0).toDouble() * _userCurrencyRate;
-          _change24h = _showInUSD
-              ? (data['change24h'] ?? 0.0).toDouble()
-              : (data['change24h'] ?? 0.0).toDouble() * _userCurrencyRate;
-          _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
+          // Safely parse numeric values
+          _totalBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
+          _change24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
+          _changePercent24h = double.tryParse(data['changePercent24h']?.toString() ?? '0') ?? 0.0;
           
+          // Update token prices with safe parsing
           _tokenPrices = Map<String, double>.fromEntries(
             _balances.map((b) => MapEntry(
               b['token']['symbol'] as String,
-              (b['price'] ?? 0.0).toDouble(),
+              double.tryParse(b['price']?.toString() ?? '0') ?? 0.0,
             )),
           );
           
@@ -212,21 +205,18 @@ class _WalletsTabState extends State<WalletsTab> {
           _isInitialLoad = false;
         });
       } else {
-        // For Spot or Funding, use the data as is
         setState(() {
           _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
-          _totalBalance = _showInUSD 
-              ? (data['total'] ?? 0.0).toDouble()
-              : (data['total'] ?? 0.0).toDouble() * _userCurrencyRate;
-          _change24h = _showInUSD
-              ? (data['change24h'] ?? 0.0).toDouble()
-              : (data['change24h'] ?? 0.0).toDouble() * _userCurrencyRate;
-          _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
+          // Safely parse numeric values
+          _totalBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
+          _change24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
+          _changePercent24h = double.tryParse(data['changePercent24h']?.toString() ?? '0') ?? 0.0;
           
+          // Update token prices with safe parsing
           _tokenPrices = Map<String, double>.fromEntries(
             _balances.map((b) => MapEntry(
               b['token']['symbol'] as String,
-              (b['price'] ?? 0.0).toDouble(),
+              double.tryParse(b['price']?.toString() ?? '0') ?? 0.0,
             )),
           );
           
@@ -769,17 +759,20 @@ class _WalletsTabState extends State<WalletsTab> {
 
                 final balance = _balances[index];
                 final token = balance['token'] as Map<String, dynamic>;
-                final amount = double.tryParse(balance['balance'] as String) ?? 0.0;
+                final amount = double.tryParse(balance['balance']?.toString() ?? '0') ?? 0.0;
+                final symbol = token['symbol'] as String;
+                final price = _tokenPrices[symbol] ?? 0.0;
+                final isLoading = balance['priceLoading'] ?? false;
                 
                 return _buildAssetItem(
                   isDark,
                   theme,
                   token['name'] as String,
-                  token['symbol'] as String,
+                  symbol,
                   amount,
                   token['metadata']?['icon'] as String?,
                   token['metadata'] as Map<String, dynamic>?,
-                  balance['metadata'] as Map<String, dynamic>?,
+                  balance,
                 );
               },
               childCount: _balances.isEmpty ? 1 : _balances.length + 1,
@@ -967,14 +960,16 @@ class _WalletsTabState extends State<WalletsTab> {
     ThemeData theme,
     String name,
     String symbol,
-    double balance,
+    double amount,
     String? iconUrl,
     Map<String, dynamic>? tokenMetadata,
-    Map<String, dynamic>? balanceMetadata,
+    Map<String, dynamic> balance,
   ) {
-    final price = _tokenPrices[symbol] ?? 0.0;
-    final adjustedPrice = _showInUSD ? price : (price * _userCurrencyRate);
-    final fiatValue = balance * adjustedPrice;
+    // Safely parse all numeric values
+    final price = double.tryParse(balance['price']?.toString() ?? '0') ?? 0.0;
+    final price24h = double.tryParse(balance['price24h']?.toString() ?? '0') ?? 0.0;
+    final changePercent24h = double.tryParse(balance['changePercent24h']?.toString() ?? '0') ?? 0.0;
+    final fiatValue = amount * price;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1039,8 +1034,7 @@ class _WalletsTabState extends State<WalletsTab> {
                       ),
                     ),
                     // Use balance metadata to check network
-                    if (balanceMetadata != null && 
-                        balanceMetadata['network'] == 'testnet')
+                    if (balance['network'] == 'testnet')
                       Container(
                         margin: const EdgeInsets.only(left: 6),
                         padding: const EdgeInsets.symmetric(
@@ -1071,7 +1065,7 @@ class _WalletsTabState extends State<WalletsTab> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                balance.toStringAsFixed(4),
+                amount.toStringAsFixed(4),
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -1081,6 +1075,15 @@ class _WalletsTabState extends State<WalletsTab> {
                 _formatBalance(_showInUSD, fiatValue),
                 isDark,
               ),
+              // Add price change indicator
+              if (changePercent24h != 0)
+                Text(
+                  '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.toStringAsFixed(2)}%',
+                  style: TextStyle(
+                    color: changePercent24h >= 0 ? Colors.green : Colors.red,
+                    fontSize: 12,
+                  ),
+                ),
             ],
           ),
         ],

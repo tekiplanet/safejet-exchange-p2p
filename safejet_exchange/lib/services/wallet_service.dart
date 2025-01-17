@@ -70,51 +70,24 @@ class WalletService {
 
   Future<Map<String, dynamic>> getBalances({
     String? type,
-    String currency = 'USD',
+    String? currency,
     int page = 1,
     int limit = 20,
   }) async {
     try {
-      // Check cache first
-      final cacheKey = '${type ?? 'all'}-$currency-$page-$limit';
-      final cachedData = _cache[cacheKey];
-      
-      if (cachedData != null && !cachedData.isExpired) {
-        return cachedData.data;
-      }
-
       final response = await _dio.get(
-        '/wallet/balances',
+        '/wallets/balances',
         queryParameters: {
           if (type != null) 'type': type,
-          'currency': currency,
           'page': page,
           'limit': limit,
         },
       );
 
-      final data = response.data;
-      
-      // Cache the response
-      _cache[cacheKey] = CacheEntry(
-        data: data,
-        timestamp: DateTime.now(),
-      );
-
-      return data;
+      return response.data;
     } catch (e) {
-      print('Error fetching wallet balances: $e');
-      // Return cached data if available, even if expired
-      final cachedData = _cache[type ?? 'all'];
-      if (cachedData != null) {
-        return cachedData.data;
-      }
-      return {
-        'balances': [],
-        'total': 0.0,
-        'change24h': 0.0,
-        'changePercent24h': 0.0,
-      };
+      print('Error in getBalances: $e');
+      rethrow;
     }
   }
 }

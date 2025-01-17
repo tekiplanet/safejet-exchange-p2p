@@ -8,6 +8,12 @@ import { Token } from '../wallet/entities/token.entity';
 import { Currency } from '../currencies/entities/currency.entity';
 import { CoinCache } from './interfaces/coin-cache.interface';
 
+// Add interface for price options
+interface PriceOptions {
+  timestamp?: '24h' | 'current';
+  onlyCached?: boolean;
+}
+
 @Injectable()
 export class ExchangeService {
   private readonly logger = new Logger(ExchangeService.name);
@@ -17,7 +23,7 @@ export class ExchangeService {
   private ratesCache: Map<string, { rates: any, timestamp: number }> = new Map();
   private cryptoPricesCache: Map<string, { price: number, timestamp: number }> = new Map();
   private readonly CACHE_DURATION = 3 * 60 * 1000; // 3 minute cache
-  private readonly PRICE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private readonly PRICE_CACHE_DURATION =  10 * 1000; // 30 seconds cache
   private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
 
   constructor(
@@ -61,54 +67,89 @@ export class ExchangeService {
     }
   }
 
-  // Batch price fetching for multiple tokens
-  async getBatchPrices(symbols: string[], currency: string = 'USD'): Promise<Record<string, number>> {
+  // Update method signature to accept options
+  async getBatchPrices(
+    symbols: string[], 
+    options: PriceOptions = { timestamp: 'current', onlyCached: false }
+  ): Promise<Record<string, number>> {
     try {
       const prices: Record<string, number> = {};
-      const symbolsToFetch: string[] = [];
+      const uncachedSymbols: string[] = [];
 
       // Check cache first
       for (const symbol of symbols) {
-        const cacheKey = `${symbol}-${currency}`;
-        const cachedData = this.priceCache.get(cacheKey);
-        
-        if (cachedData && Date.now() - cachedData.timestamp < this.CACHE_DURATION) {
-          prices[symbol] = cachedData.price;
-        } else {
-          symbolsToFetch.push(symbol);
+        const cacheKey = `${symbol}-${options.timestamp}`;
+        const cached = this.priceCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.PRICE_CACHE_DURATION) {
+          prices[symbol] = cached.price;
+        } else if (!options.onlyCached) {
+          uncachedSymbols.push(symbol);
         }
       }
 
-      // Fetch prices in batches of 20 (or whatever the API limit is)
-      if (symbolsToFetch.length > 0) {
-        const batchSize = 20;
-        for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
-          const batch = symbolsToFetch.slice(i, i + batchSize);
-          const batchPrices = await this.fetchBatchPrices(batch, currency);
+      // Only fetch uncached prices if not onlyCached
+      if (!options.onlyCached && uncachedSymbols.length > 0) {
+        const batchSize = 5;
+        for (let i = 0; i < uncachedSymbols.length; i += batchSize) {
+          const batch = uncachedSymbols.slice(i, i + batchSize);
           
-          // Update cache and prices object
-          for (const [symbol, price] of Object.entries(batchPrices)) {
-            this.priceCache.set(`${symbol}-${currency}`, {
-              price,
-              timestamp: Date.now()
-            });
-            prices[symbol] = price;
+          // Process batch with delay between each token
+          await Promise.all(
+            batch.map(async (symbol, index) => {
+              try {
+                // Add small delay between requests
+                await new Promise(resolve => setTimeout(resolve, index * 200));
+
+                if (options.timestamp === '24h') {
+                  const priceData = await this.getCryptoPriceChange(symbol, 'USD');
+                  this.logger.log(`${symbol} Price Change Data:`, priceData);
+                  
+                  const price24h = priceData.price / (1 + (priceData.changePercent24h / 100));
+                  prices[symbol] = price24h || 0;
+                  
+                  this.logger.log(`${symbol} Calculated 24h Price: $${price24h}`);
+                } else {
+                  let retries = 3;
+                  let currentPrice = 0;
+                  
+                  while (retries > 0 && currentPrice === 0) {
+                    currentPrice = await this.getCryptoPrice(symbol, 'USD');
+                    if (currentPrice === 0) {
+                      await new Promise(resolve => setTimeout(resolve, 1000));
+                      retries--;
+                    }
+                  }
+                  
+                  prices[symbol] = currentPrice;
+                  this.logger.log(`${symbol} Current Price: $${currentPrice}`);
+                }
+              } catch (error) {
+                this.logger.warn(`Failed to get price for ${symbol}: ${error.message}`);
+                prices[symbol] = 0;
+              }
+            })
+          );
+
+          // Add delay between batches
+          if (i + batchSize < uncachedSymbols.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
+        }
+
+        // Cache the new prices
+        for (const [symbol, price] of Object.entries(prices)) {
+          const cacheKey = `${symbol}-${options.timestamp}`;
+          this.priceCache.set(cacheKey, {
+            price,
+            timestamp: Date.now()
+          });
         }
       }
 
       return prices;
     } catch (error) {
       this.logger.error(`Failed to get batch prices: ${error.message}`);
-      // Return cached prices if available
-      const prices: Record<string, number> = {};
-      for (const symbol of symbols) {
-        const cachedData = this.priceCache.get(`${symbol}-${currency}`);
-        if (cachedData) {
-          prices[symbol] = cachedData.price;
-        }
-      }
-      return prices;
+      throw error;
     }
   }
 
@@ -205,6 +246,7 @@ export class ExchangeService {
     changePercent24h: number;
   }> {
     try {
+      this.logger.log(`Getting price change data for ${symbol}`);
       // Get price change data from CryptoCompare
       const response = await axios.get(`${this.cryptoApiUrl}/pricemultifull`, {
         params: {

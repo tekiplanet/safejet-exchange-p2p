@@ -877,4 +877,18 @@ class AuthService {
   Future<String?> getAccessToken() async {
     return await storage.read(key: 'accessToken');
   }
+
+  Future<String?> getUserId() async {
+    try {
+      final userJson = await storage.read(key: 'user');
+      if (userJson != null) {
+        final userData = json.decode(userJson);
+        return userData['id'];
+      }
+      return null;
+    } catch (e) {
+      print('Get user ID error: $e');
+      return null;
+    }
+  }
 } 

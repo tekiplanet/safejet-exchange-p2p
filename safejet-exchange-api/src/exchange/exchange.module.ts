@@ -5,13 +5,17 @@ import { ExchangeService } from './exchange.service';
 import { ExchangeRate } from './exchange-rate.entity';
 import { Token } from '../wallet/entities/token.entity';
 import { Currency } from '../currencies/entities/currency.entity';
+import { PriceUpdateService } from './price-update.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ExchangeRate, Token, Currency]),
   ],
   controllers: [ExchangeController],
-  providers: [ExchangeService],
+  providers: [
+    ExchangeService,
+    PriceUpdateService,
+  ],
   exports: [ExchangeService],
 })
 export class ExchangeModule {} 

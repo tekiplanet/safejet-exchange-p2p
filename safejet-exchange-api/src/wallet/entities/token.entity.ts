@@ -25,4 +25,16 @@ export class Token {
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>; // For additional token info
+
+  @Column({ type: 'decimal', precision: 24, scale: 8, default: 0 })
+  currentPrice: number;
+
+  @Column({ type: 'decimal', precision: 24, scale: 8, default: 0 })
+  price24h: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  changePercent24h: number;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  lastPriceUpdate: Date;
 } 

@@ -234,16 +234,22 @@ export class WalletService {
   }
 
   async getBalances(
-    userId: string, 
+    userId: any,  // Change the type to handle both string and object
     type?: string, 
     pagination: PaginationParams = { page: 1, limit: 20 }
   ): Promise<any> {
     try {
+      this.logger.log('=== Starting getBalances ===');
+      this.logger.log(`Type: ${type}, Page: ${pagination.page}, Limit: ${pagination.limit}`);
+
+      // Extract ID if a user object was passed
+      const actualUserId = typeof userId === 'object' ? userId.id : userId;
+
       const page = Math.max(1, Math.floor(Number(pagination.page)));
       const limit = Math.max(1, Math.floor(Number(pagination.limit)));
       
       const wallets = await this.walletRepository.find({
-        where: { userId, status: 'active' }
+        where: { userId: actualUserId, status: 'active' }
       });
 
       if (!wallets || wallets.length === 0) {
@@ -270,7 +276,6 @@ export class WalletService {
         .orderBy('token.symbol', 'ASC');
 
       if (type) {
-        // For spot or funding, apply normal pagination
         query.andWhere('balance.type = :type', { type });
         
         const skip = (page - 1) * limit;
@@ -279,24 +284,27 @@ export class WalletService {
           query.getCount(),
         ]);
 
-        const uniqueTokens = [...new Set(balances.map(b => b.token))];
-        const symbols = uniqueTokens.map(token => token.symbol);
-        const prices = await this.exchangeService.getBatchPrices(symbols);
-
         const processedBalances = balances.map(balance => ({
           id: balance.id,
           balance: balance.balance,
           type: balance.type,
           token: balance.token,
-          price: prices[balance.token.symbol] || 0,
+          price: balance.token.currentPrice,
+          price24h: balance.token.price24h,
+          changePercent24h: balance.token.changePercent24h,
           metadata: balance.metadata
         }));
 
+        const currentTotal = this.calculateTotal(processedBalances, 'price');
+        const total24h = this.calculateTotal(processedBalances, 'price24h');
+        const change24h = currentTotal - total24h;
+        const changePercent24h = total24h !== 0 ? ((currentTotal - total24h) / total24h) * 100 : 0;
+
         return {
           balances: processedBalances,
-          total: this.calculateTotal(processedBalances),
-          change24h: 0,
-          changePercent24h: 0,
+          total: currentTotal,
+          change24h,
+          changePercent24h,
           pagination: {
             total,
             page,
@@ -324,7 +332,10 @@ export class WalletService {
               id: balance.id,
               balance: balance.balance,
               token: balance.token,
-              type: 'all' // Mark as combined balance
+              type: 'all', // Mark as combined balance
+              price: balance.token.currentPrice,
+              price24h: balance.token.price24h,
+              changePercent24h: balance.token.changePercent24h
             });
           }
         });
@@ -332,15 +343,11 @@ export class WalletService {
         // Convert to array and sort
         let processedBalances = Array.from(combinedBalances.values());
         
-        // Get prices for all tokens
-        const symbols = processedBalances.map(b => b.token.symbol);
-        const prices = await this.exchangeService.getBatchPrices(symbols);
-        
-        // Add prices to balances
-        processedBalances = processedBalances.map(balance => ({
-          ...balance,
-          price: prices[balance.token.symbol] || 0
-        }));
+        // Calculate totals using database prices
+        const currentTotal = this.calculateTotal(processedBalances, 'price');
+        const total24h = this.calculateTotal(processedBalances, 'price24h');
+        const change24h = currentTotal - total24h;
+        const changePercent24h = total24h !== 0 ? ((currentTotal - total24h) / total24h) * 100 : 0;
 
         // Apply pagination to combined results
         const total = processedBalances.length;
@@ -349,9 +356,9 @@ export class WalletService {
 
         return {
           balances: paginatedBalances,
-          total: this.calculateTotal(processedBalances), // Calculate total from all balances
-          change24h: 0,
-          changePercent24h: 0,
+          total: currentTotal,
+          change24h,
+          changePercent24h,
           pagination: {
             total,
             page,
@@ -364,6 +371,20 @@ export class WalletService {
     } catch (error) {
       this.logger.error(`Failed to get balances: ${error.message}`);
       throw error;
+    }
+  }
+
+  private async fetchRemainingPrices(symbols: string[], balances: any[]) {
+    try {
+      const [newCurrentPrices, newPrices24h] = await Promise.all([
+        this.exchangeService.getBatchPrices(symbols, { timestamp: 'current' }),
+        this.exchangeService.getBatchPrices(symbols, { timestamp: '24h' })
+      ]);
+
+      // Update prices in cache
+      // ... update cache with new prices ...
+    } catch (error) {
+      this.logger.error(`Failed to fetch remaining prices: ${error.message}`);
     }
   }
 
@@ -439,10 +460,10 @@ export class WalletService {
     }
   }
 
-  private calculateTotal(balances: any[]): number {
+  private calculateTotal(balances: any[], priceField: string = 'price'): number {
     return balances.reduce((total, balance) => {
       const amount = parseFloat(balance.balance) || 0;
-      const price = balance.price || 0;
+      const price = balance[priceField] || 0;
       return total + (amount * price);
     }, 0);
   }
