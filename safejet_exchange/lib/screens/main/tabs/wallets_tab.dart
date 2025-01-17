@@ -1046,7 +1046,7 @@ class _WalletsTabState extends State<WalletsTab> {
                       ),
                     ),
                     // Use balance metadata to check network
-                    if (balance['network'] == 'testnet')
+                    if (balance['metadata']?['network'] == 'testnet')
                       Container(
                         margin: const EdgeInsets.only(left: 6),
                         padding: const EdgeInsets.symmetric(
