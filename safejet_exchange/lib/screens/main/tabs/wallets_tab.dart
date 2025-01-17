@@ -11,6 +11,7 @@ import '../../../services/service_locator.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../services/wallet_service.dart';
 import 'dart:async';
+import 'package:intl/intl.dart';
 
 class WalletsTab extends StatefulWidget {
   const WalletsTab({super.key});
@@ -191,11 +192,15 @@ class _WalletsTabState extends State<WalletsTab> {
 
         setState(() {
           _balances = _sortBalances(combinedBalances.values.toList());
-          _totalBalance = (data['total'] ?? 0.0).toDouble();
-          _change24h = (data['change24h'] ?? 0.0).toDouble();
+          _totalBalance = _showInUSD 
+              ? (data['total'] ?? 0.0).toDouble()
+              : (data['total'] ?? 0.0).toDouble() * _userCurrencyRate;
+          _change24h = _showInUSD
+              ? (data['change24h'] ?? 0.0).toDouble()
+              : (data['change24h'] ?? 0.0).toDouble() * _userCurrencyRate;
           _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
           
-          _tokenPrices = Map.fromEntries(
+          _tokenPrices = Map<String, double>.fromEntries(
             _balances.map((b) => MapEntry(
               b['token']['symbol'] as String,
               (b['price'] ?? 0.0).toDouble(),
@@ -210,11 +215,15 @@ class _WalletsTabState extends State<WalletsTab> {
         // For Spot or Funding, use the data as is
         setState(() {
           _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
-          _totalBalance = (data['total'] ?? 0.0).toDouble();
-          _change24h = (data['change24h'] ?? 0.0).toDouble();
+          _totalBalance = _showInUSD 
+              ? (data['total'] ?? 0.0).toDouble()
+              : (data['total'] ?? 0.0).toDouble() * _userCurrencyRate;
+          _change24h = _showInUSD
+              ? (data['change24h'] ?? 0.0).toDouble()
+              : (data['change24h'] ?? 0.0).toDouble() * _userCurrencyRate;
           _changePercent24h = (data['changePercent24h'] ?? 0.0).toDouble();
           
-          _tokenPrices = Map.fromEntries(
+          _tokenPrices = Map<String, double>.fromEntries(
             _balances.map((b) => MapEntry(
               b['token']['symbol'] as String,
               (b['price'] ?? 0.0).toDouble(),
@@ -239,19 +248,17 @@ class _WalletsTabState extends State<WalletsTab> {
     }
   }
 
-  String _formatNumber(double number) {
-    return number.toStringAsFixed(2).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},'
-    );
+  String _formatBalance(bool inUSD, double value) {
+    final symbol = inUSD ? '\$' : _getCurrencySymbol(_userCurrency);
+    return '$symbol${_formatNumber(value)}';
   }
 
-  String _formatBalance(bool inUSD, double balance) {
-    if (inUSD) {
-      return '\$${_formatNumber(balance)}';
-    }
-    final localBalance = balance * _userCurrencyRate;
-    return '${_getCurrencySymbol(_userCurrency)}${_formatNumber(localBalance)}';
+  String _formatNumber(double value) {
+    if (value == 0) return '0.00';
+    
+    // Use NumberFormat for proper thousand separators and decimal places
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    return formatter.format(value);
   }
 
   String _getCurrencySymbol(String currency) {
@@ -905,7 +912,11 @@ class _WalletsTabState extends State<WalletsTab> {
     final isSelected = _showInUSD == isUSD;
     
     return GestureDetector(
-      onTap: () => setState(() => _showInUSD = isUSD),
+      onTap: () {
+        if (_showInUSD != isUSD) {
+          _updateCurrencyDisplay(isUSD);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: 16,
@@ -962,7 +973,8 @@ class _WalletsTabState extends State<WalletsTab> {
     Map<String, dynamic>? balanceMetadata,
   ) {
     final price = _tokenPrices[symbol] ?? 0.0;
-    final fiatValue = balance * price * (_showInUSD ? 1.0 : _userCurrencyRate);
+    final adjustedPrice = _showInUSD ? price : (price * _userCurrencyRate);
+    final fiatValue = balance * adjustedPrice;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1386,5 +1398,19 @@ class _WalletsTabState extends State<WalletsTab> {
         _hasMoreData = false;
       });
     }
+  }
+
+  // Add this method to handle immediate currency conversion
+  void _updateCurrencyDisplay(bool showInUSD) {
+    setState(() {
+      _showInUSD = showInUSD;
+      // Immediately convert the values when currency display changes
+      _totalBalance = showInUSD 
+          ? _totalBalance / _userCurrencyRate  // Convert back to USD
+          : _totalBalance * _userCurrencyRate; // Convert to local currency
+      _change24h = showInUSD
+          ? _change24h / _userCurrencyRate
+          : _change24h * _userCurrencyRate;
+    });
   }
 } 
