@@ -167,26 +167,22 @@ class _WalletsTabState extends State<WalletsTab> {
       if (_selectedFilter == 'All') {
         final Map<String, Map<String, dynamic>> combinedBalances = {};
         
-        // If preserving state, start with existing balances
-        if (preserveState) {
-          combinedBalances.addAll(
-            Map.fromEntries(_balances.map((b) => 
-                MapEntry(b['token']['symbol'] as String, b)))
-          );
-        }
-        
         for (final balance in List<Map<String, dynamic>>.from(data['balances'] ?? [])) {
           final token = balance['token'] as Map<String, dynamic>;
           final symbol = token['symbol'] as String;
           print('Processing token: $symbol');
           
-          // Safely parse balance
+          // Safely parse balance and USD value
           final currentBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;
+          final currentUsdValue = double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0;
           
           if (combinedBalances.containsKey(symbol)) {
-            // Safely parse existing balance
+            // Add to existing balance
             final existingBalance = double.tryParse(combinedBalances[symbol]!['balance'].toString()) ?? 0.0;
+            final existingUsdValue = double.tryParse(combinedBalances[symbol]!['usdValue']?.toString() ?? '0') ?? 0.0;
+            
             combinedBalances[symbol]!['balance'] = (existingBalance + currentBalance).toString();
+            combinedBalances[symbol]!['usdValue'] = (existingUsdValue + currentUsdValue).toString();
           } else {
             combinedBalances[symbol] = {
               ...balance,
