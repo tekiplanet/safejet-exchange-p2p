@@ -309,11 +309,35 @@ export class WalletService {
       const paginatedBalances = displayBalances
         .slice(startIndex, startIndex + pagination.limit);
 
+      // Calculate total USD value and 24h changes
+      let totalChange24h = 0;
+      let totalValue = 0;
+
+      for (const balance of displayBalances) {
+        const token = await this.tokenRepository.findOne({
+          where: { symbol: balance.symbol }
+        });
+
+        if (token && balance.balance > 0) {
+          const currentValue = balance.balance * token.currentPrice;
+          totalValue += currentValue;
+          
+          // Calculate this token's contribution to the 24h change
+          const tokenChange = currentValue * (token.changePercent24h / 100);
+          totalChange24h += tokenChange;
+        }
+      }
+
+      // Calculate overall change percentage
+      const changePercent24h = totalValue > 0 ? (totalChange24h / totalValue) * 100 : 0;
+
       return {
         balances: paginatedBalances,
         total: spotTotal + fundingTotal,
         spotTotal,
         fundingTotal,
+        change24h: totalChange24h,
+        changePercent24h,
         pagination: {
           total: displayBalances.length,
           page: pagination.page,

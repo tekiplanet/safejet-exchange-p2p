@@ -58,7 +58,17 @@ class _WalletsTabState extends State<WalletsTab> {
   double _usdChange24h = 0.0;
 
   List<Map<String, dynamic>> _sortBalances(List<Map<String, dynamic>> balances) {
-    return balances; // Let backend handle sorting
+    // Create a copy of the list to sort
+    final sortedBalances = List<Map<String, dynamic>>.from(balances);
+    
+    // Sort by USD value in descending order
+    sortedBalances.sort((a, b) {
+      final aUsdValue = double.tryParse(a['usdValue']?.toString() ?? '0') ?? 0.0;
+      final bUsdValue = double.tryParse(b['usdValue']?.toString() ?? '0') ?? 0.0;
+      return bUsdValue.compareTo(aUsdValue); // Descending order (highest first)
+    });
+    
+    return sortedBalances;
   }
 
   @override
@@ -143,6 +153,14 @@ class _WalletsTabState extends State<WalletsTab> {
         page: preserveState ? _currentPage : 1,
         limit: _pageSize,
       );
+
+      // Add debug logging for price change data
+      print('\n=== Price Change Debug ===');
+      print('Raw total: ${data['total']}');
+      print('Raw change24h: ${data['change24h']}');
+      print('Raw changePercent24h: ${data['changePercent24h']}');
+      print('Current currency rate: $_userCurrencyRate');
+      print('Show in USD: $_showInUSD');
 
       if (!mounted) return;
 
@@ -252,17 +270,14 @@ class _WalletsTabState extends State<WalletsTab> {
 
   String _formatBalance(bool showInUSD, double value) {
     final currencySymbol = showInUSD ? '\$' : _getCurrencySymbol(_userCurrency);
-    final rate = showInUSD ? 1.0 : _userCurrencyRate;
-    final convertedValue = value * rate;
     
-    // Use number format for currency values
     final numberFormat = NumberFormat.currency(
       locale: 'en_US',
       symbol: currencySymbol,
       decimalDigits: 2,
     );
     
-    return numberFormat.format(convertedValue);
+    return numberFormat.format(value);
   }
 
   String _formatNumber(double value) {
@@ -997,6 +1012,15 @@ class _WalletsTabState extends State<WalletsTab> {
     Map<String, dynamic>? tokenMetadata,
     Map<String, dynamic> balance,
   ) {
+    // Add debug logging
+    print('\n=== Asset Item Debug ===');
+    print('Symbol: $symbol');
+    print('Amount: $amount');
+    print('Raw balance data: $balance');
+    print('USD Value: ${balance['usdValue']}');
+    print('Current rate: $_userCurrencyRate');
+    print('Show in USD: $_showInUSD');
+
     // Get token decimals
     final decimals = balance['token']['decimals'] as int? ?? 18;
     
@@ -1029,7 +1053,8 @@ class _WalletsTabState extends State<WalletsTab> {
     
     // Format fiat value
     final price = double.tryParse(balance['token']['currentPrice']?.toString() ?? '0') ?? 0.0;
-    final fiatValue = amount * price;
+    final usdValue = double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0;
+    final fiatValue = _showInUSD ? usdValue : usdValue * _userCurrencyRate;
     final changePercent24h = double.tryParse(balance['token']['changePercent24h']?.toString() ?? '0') ?? 0.0;
     
     // Remove network name from display
@@ -1529,4 +1554,6 @@ class _WalletsTabState extends State<WalletsTab> {
       return true;
     }).toList();
   }
+
+
 } 
