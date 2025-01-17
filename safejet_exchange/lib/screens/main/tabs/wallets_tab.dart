@@ -147,7 +147,7 @@ class _WalletsTabState extends State<WalletsTab> {
     }
   }
 
-  Future<void> _loadBalances({bool showLoading = true}) async {
+  Future<void> _loadBalances({bool showLoading = true, bool preserveState = false}) async {
     if (!mounted) return;
 
     try {
@@ -162,6 +162,9 @@ class _WalletsTabState extends State<WalletsTab> {
       final data = await _walletService.getBalances(
         type: type,
         currency: _showInUSD ? 'USD' : _userCurrency,
+        // Only get first page for refresh, keep existing page for preserveState
+        page: preserveState ? _currentPage : 1,
+        limit: _pageSize,
       );
 
       if (!mounted) return;
@@ -169,9 +172,18 @@ class _WalletsTabState extends State<WalletsTab> {
       if (_selectedFilter == 'All') {
         final Map<String, Map<String, dynamic>> combinedBalances = {};
         
+        // If preserving state, start with existing balances
+        if (preserveState) {
+          combinedBalances.addAll(
+            Map.fromEntries(_balances.map((b) => 
+                MapEntry(b['token']['symbol'] as String, b)))
+          );
+        }
+        
         for (final balance in List<Map<String, dynamic>>.from(data['balances'] ?? [])) {
           final token = balance['token'] as Map<String, dynamic>;
           final symbol = token['symbol'] as String;
+          print('Processing token: $symbol');
           
           // Safely parse balance
           final currentBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;
@@ -190,6 +202,11 @@ class _WalletsTabState extends State<WalletsTab> {
 
         setState(() {
           _balances = _sortBalances(combinedBalances.values.toList());
+          // Only reset pagination if not preserving state
+          if (!preserveState) {
+            _currentPage = 1;
+            _hasMoreData = true;
+          }
           // Store USD values
           _usdBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
           _usdChange24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
@@ -212,7 +229,16 @@ class _WalletsTabState extends State<WalletsTab> {
         });
       } else {
         setState(() {
-          _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
+          if (preserveState) {
+            // Update existing balances while maintaining pagination
+            final newBalances = List<Map<String, dynamic>>.from(data['balances'] ?? []);
+            _balances = _sortBalances([..._balances, ...newBalances]);
+          } else {
+            // Reset to first page
+            _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
+            _currentPage = 1;
+            _hasMoreData = true;
+          }
           // Store USD values
           _usdBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
           _usdChange24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
@@ -982,6 +1008,11 @@ class _WalletsTabState extends State<WalletsTab> {
     final price24h = double.tryParse(balance['price24h']?.toString() ?? '0') ?? 0.0;
     final changePercent24h = double.tryParse(balance['changePercent24h']?.toString() ?? '0') ?? 0.0;
     final fiatValue = amount * price;
+    
+    // Calculate price change
+    final priceChange = price - price24h;
+    final priceChangeFormatted = priceChange.abs().toStringAsFixed(2);
+    final isPositive = priceChange >= 0;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -1045,6 +1076,45 @@ class _WalletsTabState extends State<WalletsTab> {
                         color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    // Add price change indicator here
+                    if (price24h > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (isPositive ? SafeJetColors.success : SafeJetColors.error)
+                              .withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isPositive 
+                                  ? Icons.trending_up_rounded 
+                                  : Icons.trending_down_rounded,
+                              color: isPositive 
+                                  ? SafeJetColors.success 
+                                  : SafeJetColors.error,
+                              size: 12,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${isPositive ? '+' : '-'}$priceChangeFormatted%',
+                              style: TextStyle(
+                                color: isPositive 
+                                    ? SafeJetColors.success 
+                                    : SafeJetColors.error,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Use balance metadata to check network
                     if (balance['metadata']?['network'] == 'testnet')
                       Container(
@@ -1087,15 +1157,6 @@ class _WalletsTabState extends State<WalletsTab> {
                 _formatBalance(_showInUSD, fiatValue),
                 isDark,
               ),
-              // Add price change indicator
-              if (changePercent24h != 0)
-                Text(
-                  '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.toStringAsFixed(2)}%',
-                  style: TextStyle(
-                    color: changePercent24h >= 0 ? Colors.green : Colors.red,
-                    fontSize: 12,
-                  ),
-                ),
             ],
           ),
         ],
@@ -1351,15 +1412,11 @@ class _WalletsTabState extends State<WalletsTab> {
       if (!mounted) return;
 
       final newBalances = List<Map<String, dynamic>>.from(data['balances'] ?? []);
+      final pagination = data['pagination'] as Map<String, dynamic>;
       
-      if (newBalances.isEmpty) {
-        setState(() {
-          _hasMoreData = false;
-          _isLoadingMore = false;
-        });
-        return;
-      }
-
+      // Check if we have more data based on pagination info
+      final hasMore = pagination['hasMore'] as bool;
+      
       setState(() {
         if (_selectedFilter == 'All') {
           // Handle combining balances for All filter
@@ -1370,13 +1427,15 @@ class _WalletsTabState extends State<WalletsTab> {
           for (final balance in newBalances) {
             final token = balance['token'] as Map<String, dynamic>;
             final symbol = token['symbol'] as String;
-            final currentBalance = double.tryParse(balance['balance'] as String) ?? 0.0;
+            final currentBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;
 
             if (combinedBalances.containsKey(symbol)) {
               final existingBalance = double.tryParse(
-                  combinedBalances[symbol]!['balance'] as String) ?? 0.0;
+                  combinedBalances[symbol]!['balance'].toString()) ?? 0.0;
               combinedBalances[symbol]!['balance'] = 
                   (existingBalance + currentBalance).toString();
+              // Update token data
+              combinedBalances[symbol]!['token'] = token;
             } else {
               combinedBalances[symbol] = {
                 ...balance,
@@ -1393,13 +1452,14 @@ class _WalletsTabState extends State<WalletsTab> {
 
         _currentPage++;
         _isLoadingMore = false;
+        _hasMoreData = hasMore;  // Update based on pagination info
       });
 
-      // Update token prices
+      // Update token prices for new balances
       final newPrices = Map<String, double>.fromEntries(
         newBalances.map((b) => MapEntry(
           b['token']['symbol'] as String,
-          (b['price'] ?? 0.0).toDouble(),
+          double.tryParse(b['price']?.toString() ?? '0') ?? 0.0,
         )),
       );
       _tokenPrices.addAll(newPrices);

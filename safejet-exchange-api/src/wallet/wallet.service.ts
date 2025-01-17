@@ -252,6 +252,12 @@ export class WalletService {
         where: { userId: actualUserId, status: 'active' }
       });
 
+      // Add logging here
+      this.logger.log(`Found ${wallets.length} active wallets:`);
+      wallets.forEach(wallet => {
+        this.logger.log(`Wallet: ${wallet.blockchain} - ${wallet.network} - ${wallet.id}`);
+      });
+
       if (!wallets || wallets.length === 0) {
         return {
           balances: [],
@@ -274,6 +280,10 @@ export class WalletService {
         .where('balance.walletId IN (:...walletIds)', { walletIds })
         .leftJoinAndSelect('balance.token', 'token')
         .orderBy('token.symbol', 'ASC');
+
+      // Add logging here
+      this.logger.log('Query:', query.getSql());
+      this.logger.log('Parameters:', query.getParameters());
 
       if (type) {
         query.andWhere('balance.type = :type', { type });
@@ -314,19 +324,25 @@ export class WalletService {
           }
         };
       } else {
-        // For "All", get all balances first then combine
         const allBalances = await query.getMany();
         
         // Combine spot and funding balances for each token
         const combinedBalances = new Map<string, any>();
-        
+
         allBalances.forEach(balance => {
           const tokenSymbol = balance.token.symbol;
           const currentBalance = parseFloat(balance.balance) || 0;
           
           if (combinedBalances.has(tokenSymbol)) {
             const existing = combinedBalances.get(tokenSymbol);
-            existing.balance = (parseFloat(existing.balance) + currentBalance).toString();
+            const newBalance = (parseFloat(existing.balance) + currentBalance).toString();
+            existing.balance = newBalance;
+            
+            // Ensure we keep the token data even if balance is 0
+            existing.token = balance.token;
+            existing.price = balance.token.currentPrice;
+            existing.price24h = balance.token.price24h;
+            existing.changePercent24h = balance.token.changePercent24h;
           } else {
             combinedBalances.set(tokenSymbol, {
               id: balance.id,
@@ -335,14 +351,23 @@ export class WalletService {
               type: 'all', // Mark as combined balance
               price: balance.token.currentPrice,
               price24h: balance.token.price24h,
-              changePercent24h: balance.token.changePercent24h
+              changePercent24h: balance.token.changePercent24h,
+              metadata: balance.metadata
             });
           }
         });
 
-        // Convert to array and sort
+        // Convert to array and ensure all tokens are included
         let processedBalances = Array.from(combinedBalances.values());
-        
+
+        // Add debug logging
+        this.logger.log('Processed balances:', processedBalances.map(b => ({
+          symbol: b.token.symbol,
+          balance: b.balance,
+          price: b.price,
+          price24h: b.price24h
+        })));
+
         // Calculate totals using database prices
         const currentTotal = this.calculateTotal(processedBalances, 'price');
         const total24h = this.calculateTotal(processedBalances, 'price24h');

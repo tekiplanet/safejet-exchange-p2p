@@ -84,6 +84,14 @@ class WalletService {
         },
       );
 
+      print('Raw balances response: ${response.data}');
+      
+      final balances = response.data['balances'] as List<dynamic>;
+      balances.forEach((balance) {
+        final token = balance['token'] as Map<String, dynamic>;
+        print('Token: ${token['symbol']} - Balance: ${balance['balance']}');
+      });
+
       return response.data;
     } catch (e) {
       print('Error in getBalances: $e');

@@ -35,6 +35,7 @@ import { ScheduleModule } from '@nestjs/schedule';
         migrations: ['dist/src/migrations/*.js'],
         migrationsRun: false,
         migrationsTableName: 'migrations',
+        logger: 'advanced-console',
       }),
     }),
     AuthModule,
