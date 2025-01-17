@@ -53,6 +53,9 @@ class _WalletsTabState extends State<WalletsTab> {
   bool _hasMoreData = true;
   final ScrollController _scrollController = ScrollController();
 
+  double _usdBalance = 0.0;
+  double _usdChange24h = 0.0;
+
   List<Map<String, dynamic>> _sortBalances(List<Map<String, dynamic>> balances) {
     return [...balances]..sort((a, b) {
       final balanceA = double.tryParse(a['balance']?.toString() ?? '0') ?? 0.0;
@@ -187,9 +190,12 @@ class _WalletsTabState extends State<WalletsTab> {
 
         setState(() {
           _balances = _sortBalances(combinedBalances.values.toList());
-          // Safely parse numeric values
-          _totalBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
-          _change24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
+          // Store USD values
+          _usdBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
+          _usdChange24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
+          // Set displayed values based on current currency
+          _totalBalance = _showInUSD ? _usdBalance : _usdBalance * _userCurrencyRate;
+          _change24h = _showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
           _changePercent24h = double.tryParse(data['changePercent24h']?.toString() ?? '0') ?? 0.0;
           
           // Update token prices with safe parsing
@@ -207,9 +213,12 @@ class _WalletsTabState extends State<WalletsTab> {
       } else {
         setState(() {
           _balances = _sortBalances(List<Map<String, dynamic>>.from(data['balances'] ?? []));
-          // Safely parse numeric values
-          _totalBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
-          _change24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
+          // Store USD values
+          _usdBalance = double.tryParse(data['total']?.toString() ?? '0') ?? 0.0;
+          _usdChange24h = double.tryParse(data['change24h']?.toString() ?? '0') ?? 0.0;
+          // Set displayed values based on current currency
+          _totalBalance = _showInUSD ? _usdBalance : _usdBalance * _userCurrencyRate;
+          _change24h = _showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
           _changePercent24h = double.tryParse(data['changePercent24h']?.toString() ?? '0') ?? 0.0;
           
           // Update token prices with safe parsing
@@ -1294,7 +1303,7 @@ class _WalletsTabState extends State<WalletsTab> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '${_changePercent24h >= 0 ? '+' : ''}\$${_formatPriceChange(_change24h.abs())} '
+                    '${_changePercent24h >= 0 ? '+' : ''}${_getCurrencySymbol(_showInUSD ? 'USD' : _userCurrency)}${_formatPriceChange(_change24h.abs())} '
                     '(${_changePercent24h.toStringAsFixed(2)}%)',
                     style: TextStyle(
                       color: _changePercent24h >= 0 
@@ -1407,13 +1416,9 @@ class _WalletsTabState extends State<WalletsTab> {
   void _updateCurrencyDisplay(bool showInUSD) {
     setState(() {
       _showInUSD = showInUSD;
-      // Immediately convert the values when currency display changes
-      _totalBalance = showInUSD 
-          ? _totalBalance / _userCurrencyRate  // Convert back to USD
-          : _totalBalance * _userCurrencyRate; // Convert to local currency
-      _change24h = showInUSD
-          ? _change24h / _userCurrencyRate
-          : _change24h * _userCurrencyRate;
+      // Use stored USD values for conversion
+      _totalBalance = showInUSD ? _usdBalance : _usdBalance * _userCurrencyRate;
+      _change24h = showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
     });
   }
 } 

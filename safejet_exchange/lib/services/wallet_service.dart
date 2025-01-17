@@ -8,7 +8,7 @@ class WalletService {
   final storage = const FlutterSecureStorage();
   final AuthService _authService = getIt<AuthService>();
   final _cache = <String, CacheEntry>{};
-  final _cacheDuration = const Duration(minutes: 3);
+  final _cacheDuration = const Duration(minutes: 5);
 
   WalletService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
