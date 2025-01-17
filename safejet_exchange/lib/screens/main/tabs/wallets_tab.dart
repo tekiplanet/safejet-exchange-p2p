@@ -746,12 +746,15 @@ class _WalletsTabState extends State<WalletsTab> {
           SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
-                if (_balances.isEmpty) {
+                // Get filtered balances
+                final filteredBalances = _getFilteredBalances();
+
+                if (filteredBalances.isEmpty) {
                   return _buildEmptyState();
                 }
 
                 // Add loading indicator at the bottom
-                if (index == _balances.length) {
+                if (index == filteredBalances.length) {
                   if (_isLoadingMore) {
                     return Container(
                       padding: const EdgeInsets.all(16.0),
@@ -764,9 +767,9 @@ class _WalletsTabState extends State<WalletsTab> {
                   return const SizedBox();
                 }
 
-                if (index >= _balances.length) return null;
+                if (index >= filteredBalances.length) return null;
 
-                final balance = _balances[index];
+                final balance = filteredBalances[index];
                 final token = balance['token'] as Map<String, dynamic>;
                 final amount = double.tryParse(balance['balance']?.toString() ?? '0') ?? 0.0;
                 final symbol = token['symbol'] as String;
@@ -784,7 +787,7 @@ class _WalletsTabState extends State<WalletsTab> {
                   balance,
                 );
               },
-              childCount: _balances.isEmpty ? 1 : _balances.length + 1,
+              childCount: _getFilteredBalances().isEmpty ? 1 : _getFilteredBalances().length + 1,
             ),
           ),
 
@@ -1420,5 +1423,17 @@ class _WalletsTabState extends State<WalletsTab> {
       _totalBalance = showInUSD ? _usdBalance : _usdBalance * _userCurrencyRate;
       _change24h = showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
     });
+  }
+
+  // Add this method to filter balances
+  List<Map<String, dynamic>> _getFilteredBalances() {
+    if (_showZeroBalances) {
+      return _balances;
+    }
+
+    return _balances.where((balance) {
+      final amount = double.tryParse(balance['balance']?.toString() ?? '0') ?? 0.0;
+      return amount > 0;
+    }).toList();
   }
 } 
