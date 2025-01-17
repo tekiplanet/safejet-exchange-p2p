@@ -1427,13 +1427,25 @@ class _WalletsTabState extends State<WalletsTab> {
 
   // Add this method to filter balances
   List<Map<String, dynamic>> _getFilteredBalances() {
-    if (_showZeroBalances) {
-      return _balances;
-    }
-
     return _balances.where((balance) {
-      final amount = double.tryParse(balance['balance']?.toString() ?? '0') ?? 0.0;
-      return amount > 0;
+      // First check balance if zero balances are hidden
+      if (!_showZeroBalances) {
+        final amount = double.tryParse(balance['balance']?.toString() ?? '0') ?? 0.0;
+        if (amount <= 0) return false;
+      }
+
+      // Then apply search filter if there's a search query
+      if (_searchQuery.isNotEmpty) {
+        final token = balance['token'] as Map<String, dynamic>;
+        final name = (token['name'] as String).toLowerCase();
+        final symbol = (token['symbol'] as String).toLowerCase();
+        final query = _searchQuery.toLowerCase();
+
+        // Check if either name or symbol contains the search query
+        return name.contains(query) || symbol.contains(query);
+      }
+
+      return true;
     }).toList();
   }
 } 
