@@ -19,6 +19,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ExchangeModule } from './exchange/exchange.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { TokenManagementModule } from './tokens/token-management.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     EventEmitterModule.forRoot(),
     ExchangeModule,
     ScheduleModule.forRoot(),
+    TokenManagementModule,
   ],
   controllers: [AppController],
   providers: [

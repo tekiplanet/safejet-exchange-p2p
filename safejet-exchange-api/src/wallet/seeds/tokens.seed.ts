@@ -30,13 +30,15 @@ export const PRICE_FEED_CONFIGS = {
 };
 
 export const tokenSeeds: Partial<Token>[] = [
-  // Bitcoin (updating metadata)
+  // Bitcoin remains the same as it's native only
   {
     symbol: 'BTC',
     name: 'Bitcoin',
     blockchain: 'bitcoin',
     contractAddress: null,
     decimals: 8,
+    baseSymbol: 'BTC',
+    networkVersion: 'NATIVE',
     metadata: {
       isNative: true,
       networks: ['mainnet', 'testnet'],
@@ -50,6 +52,110 @@ export const tokenSeeds: Partial<Token>[] = [
         testnet: {
           provider: 'chainlink',
           address: '0xA39434A63A52E749F02807ae27335515BA4b07F7',
+          interval: 60
+        }
+      }
+    },
+  },
+
+  // USDT Versions
+  {
+    symbol: 'USDT',
+    name: 'Tether USD (ERC20)',
+    blockchain: 'ethereum',
+    contractAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+    decimals: 6,
+    baseSymbol: 'USDT',
+    networkVersion: 'ERC20',
+    metadata: {
+      networks: ['mainnet'],
+      icon: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
+      priceFeeds: {
+        mainnet: {
+          provider: 'chainlink',
+          address: '0x3E7d1eAB13ad0104d2750B8863b489D65364e32D',
+          interval: 60
+        }
+      }
+    },
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD (TRC20)',
+    blockchain: 'trx',
+    contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+    decimals: 6,
+    baseSymbol: 'USDT',
+    networkVersion: 'TRC20',
+    metadata: {
+      networks: ['mainnet'],
+      icon: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
+      priceFeeds: {
+        mainnet: {
+          provider: 'binance',
+          symbol: 'USDTUSDC',
+          interval: 60
+        }
+      }
+    },
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD (BEP20)',
+    blockchain: 'bsc',
+    contractAddress: '0x55d398326f99059ff775485246999027b3197955',
+    decimals: 6,
+    baseSymbol: 'USDT',
+    networkVersion: 'BEP20',
+    metadata: {
+      networks: ['mainnet'],
+      icon: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
+      priceFeeds: {
+        mainnet: {
+          provider: 'chainlink',
+          address: '0x3E7d1eAB13ad0104d2750B8863b489D65364e32D',
+          interval: 60
+        }
+      }
+    },
+  },
+
+  // USDC Versions
+  {
+    symbol: 'USDC',
+    name: 'USD Coin (ERC20)',
+    blockchain: 'ethereum',
+    contractAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    decimals: 6,
+    baseSymbol: 'USDC',
+    networkVersion: 'ERC20',
+    metadata: {
+      networks: ['mainnet'],
+      icon: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
+      priceFeeds: {
+        mainnet: {
+          provider: 'chainlink',
+          address: '0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6',
+          interval: 60
+        }
+      }
+    },
+  },
+  {
+    symbol: 'USDC',
+    name: 'USD Coin (TRC20)',
+    blockchain: 'trx',
+    contractAddress: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
+    decimals: 6,
+    baseSymbol: 'USDC',
+    networkVersion: 'TRC20',
+    metadata: {
+      networks: ['mainnet'],
+      icon: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
+      priceFeeds: {
+        mainnet: {
+          provider: 'binance',
+          symbol: 'USDCUSDT',
           interval: 60
         }
       }
@@ -172,47 +278,13 @@ export const tokenSeeds: Partial<Token>[] = [
     },
   },
   {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    blockchain: 'ethereum',
-    contractAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-    decimals: 6,
-    metadata: {
-      networks: ['mainnet'],
-      icon: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
-      priceFeeds: {
-        mainnet: {
-          provider: 'chainlink',
-          address: '0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6',
-          interval: 60
-        }
-      }
-    },
-  },
-  {
-    symbol: 'USDT',
-    name: 'Tether USD',
-    blockchain: 'ethereum',
-    contractAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
-    decimals: 6,
-    metadata: {
-      networks: ['mainnet'],
-      icon: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
-      priceFeeds: {
-        mainnet: {
-          provider: 'chainlink',
-          address: '0x3E7d1eAB13ad0104d2750B8863b489D65364e32D',
-          interval: 60
-        }
-      }
-    },
-  },
-  {
     symbol: 'WBTC',
-    name: 'Wrapped Bitcoin',
+    name: 'Wrapped Bitcoin (ERC20)',
     blockchain: 'ethereum',
     contractAddress: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599',
     decimals: 8,
+    baseSymbol: 'WBTC',
+    networkVersion: 'ERC20',
     metadata: {
       networks: ['mainnet'],
       icon: 'https://assets.coingecko.com/coins/images/7598/large/wrapped_bitcoin_wbtc.png',
@@ -226,11 +298,33 @@ export const tokenSeeds: Partial<Token>[] = [
     },
   },
   {
+    symbol: 'WBTC',
+    name: 'Wrapped Bitcoin (BEP20)',
+    blockchain: 'bsc',
+    contractAddress: '0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE',
+    decimals: 8,
+    baseSymbol: 'WBTC',
+    networkVersion: 'BEP20',
+    metadata: {
+      networks: ['mainnet'],
+      icon: 'https://assets.coingecko.com/coins/images/7598/large/wrapped_bitcoin_wbtc.png',
+      priceFeeds: {
+        mainnet: {
+          provider: 'chainlink',
+          address: '0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf',
+          interval: 60
+        }
+      }
+    },
+  },
+  {
     symbol: 'DAI',
-    name: 'Dai Stablecoin',
+    name: 'Dai Stablecoin (ERC20)',
     blockchain: 'ethereum',
     contractAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
     decimals: 18,
+    baseSymbol: 'DAI',
+    networkVersion: 'ERC20',
     metadata: {
       networks: ['mainnet'],
       icon: 'https://assets.coingecko.com/coins/images/9956/large/4943.png',
@@ -238,6 +332,26 @@ export const tokenSeeds: Partial<Token>[] = [
         mainnet: {
           provider: 'chainlink',
           address: '0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9',
+          interval: 60
+        }
+      }
+    },
+  },
+  {
+    symbol: 'DAI',
+    name: 'Dai Stablecoin (BEP20)',
+    blockchain: 'bsc',
+    contractAddress: '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3',
+    decimals: 18,
+    baseSymbol: 'DAI',
+    networkVersion: 'BEP20',
+    metadata: {
+      networks: ['mainnet'],
+      icon: 'https://assets.coingecko.com/coins/images/9956/large/4943.png',
+      priceFeeds: {
+        mainnet: {
+          provider: 'chainlink',
+          address: '0x132d3C0B1D2cEa0BC552588063bdBb210FDeecfA',
           interval: 60
         }
       }
@@ -576,42 +690,6 @@ export const tokenSeeds: Partial<Token>[] = [
         mainnet: {
           provider: 'binance',
           symbol: 'WINUSDT',
-          interval: 60
-        }
-      }
-    },
-  },
-  {
-    symbol: 'USDT',
-    name: 'Tether USD (TRC20)',
-    blockchain: 'trx',
-    contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
-    decimals: 6,
-    metadata: {
-      networks: ['mainnet'],
-      icon: 'https://assets.coingecko.com/coins/images/325/large/Tether.png',
-      priceFeeds: {
-        mainnet: {
-          provider: 'binance',
-          symbol: 'USDTUSDC',
-          interval: 60
-        }
-      }
-    },
-  },
-  {
-    symbol: 'USDC',
-    name: 'USD Coin (TRC20)',
-    blockchain: 'trx',
-    contractAddress: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8',
-    decimals: 6,
-    metadata: {
-      networks: ['mainnet'],
-      icon: 'https://assets.coingecko.com/coins/images/6319/large/USD_Coin_icon.png',
-      priceFeeds: {
-        mainnet: {
-          provider: 'binance',
-          symbol: 'USDCUSDT',
           interval: 60
         }
       }

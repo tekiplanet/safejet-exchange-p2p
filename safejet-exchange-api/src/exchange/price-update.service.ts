@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { Token } from '../wallet/entities/token.entity';
 import { ExchangeService } from './exchange.service';
 import { Controller, Post } from '@nestjs/common';
+import Decimal from 'decimal.js';
 
 @Controller('prices')
 @Injectable()
@@ -38,28 +39,36 @@ export class PriceUpdateService {
               const priceData = await this.getPriceWithRetry(token);
               
               if (priceData.price > 0) {
-                const currentPrice = Number(priceData.price);
-                const oldPrice = Number(token.currentPrice);
-                const price24h = Number(token.price24h || oldPrice);
-
+                const currentPrice = new Decimal(priceData.price);
+                const oldPrice = new Decimal(token.currentPrice || priceData.price);
+                
+                // Initialize price24h with current price if not set
+                let price24h = new Decimal(token.price24h || 0);
+                
                 // Only update price24h if it's not set or if 24 hours have passed
                 const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
                 const shouldUpdatePrice24h = !token.lastPriceUpdate || 
                   token.lastPriceUpdate < twentyFourHoursAgo;
 
-                // Calculate change percentage
-                const changePercent = ((currentPrice - price24h) / price24h) * 100;
+                if (shouldUpdatePrice24h || price24h.isZero()) {
+                  price24h = oldPrice;
+                }
+
+                // Calculate change percentage using Decimal
+                const changePercent = price24h.isZero() ? 
+                  new Decimal(0) : 
+                  currentPrice.minus(price24h).dividedBy(price24h).times(100);
 
                 await this.tokenRepository.update(token.id, {
-                  currentPrice,
-                  price24h: shouldUpdatePrice24h ? oldPrice : price24h,
-                  changePercent24h: changePercent,
+                  currentPrice: Number(currentPrice.toFixed(18)),
+                  price24h: Number(price24h.toFixed(18)),
+                  changePercent24h: Number(changePercent.toFixed(18)),
                   lastPriceUpdate: new Date(),
                 });
 
                 this.logger.log(
-                  `Updated price for ${token.symbol}: $${currentPrice} (${changePercent.toFixed(2)}%) ` +
-                  `[24h: $${price24h}]`
+                  `Updated price for ${token.symbol}: $${currentPrice.toFixed(8)} ` +
+                  `(${changePercent.toFixed(2)}%) [24h: $${price24h.toFixed(8)}]`
                 );
               }
             } catch (error) {

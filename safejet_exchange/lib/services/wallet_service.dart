@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import '../services/service_locator.dart';
+import 'dart:math' as math;
 
 class WalletService {
   late final Dio _dio;
@@ -84,18 +85,66 @@ class WalletService {
         },
       );
 
-      print('Raw balances response: ${response.data}');
+      print('\n=== Raw Response Data ===');
+      print(response.data);
       
       final balances = response.data['balances'] as List<dynamic>;
       balances.forEach((balance) {
         final token = balance['token'] as Map<String, dynamic>;
-        print('Token: ${token['symbol']} - Balance: ${balance['balance']}');
+        final rawBalance = balance['balance'].toString();
+        final networks = balance['networks'] as List<dynamic>?;
+        
+        print('\n=== Token Balance ===');
+        print('Symbol: ${token['symbol']}');
+        print('Type: ${balance['type']}');
+        print('Total Balance: ${_formatBalance(rawBalance, token['decimals'])}');
+        print('Current Price: ${token['currentPrice']}');
+        
+        if (networks != null) {
+          print('\nNetwork Breakdown:');
+          networks.forEach((network) {
+            print('  ${network['blockchain']} (${network['networkVersion']}): '
+                '${_formatBalance(network['balance'].toString(), token['decimals'])}');
+          });
+        }
       });
 
       return response.data;
     } catch (e) {
       print('Error in getBalances: $e');
       rethrow;
+    }
+  }
+
+  String _formatBalance(String balance, int decimals) {
+    try {
+      print('\nFormatting balance:');
+      print('Input balance: $balance');
+      print('Decimals: $decimals');
+      
+      double rawValue = double.parse(balance);
+      print('Parsed raw value: $rawValue');
+      
+      BigInt baseUnits = BigInt.from(rawValue * math.pow(10, decimals));
+      print('Base units: $baseUnits');
+      
+      BigInt wholePart = baseUnits ~/ BigInt.from(math.pow(10, decimals));
+      BigInt fractionalPart = baseUnits % BigInt.from(math.pow(10, decimals));
+      
+      String fractionalStr = fractionalPart.toString().padLeft(decimals, '0');
+      
+      // Trim trailing zeros while keeping at least one decimal place
+      while (fractionalStr.endsWith('0') && fractionalStr.length > 1) {
+        fractionalStr = fractionalStr.substring(0, fractionalStr.length - 1);
+      }
+      
+      String result = '$wholePart.$fractionalStr';
+      print('Formatted result: $result');
+      return result;
+    } catch (e) {
+      print('Error formatting balance: $balance with decimals: $decimals');
+      print('Error details: $e');
+      return '0.0';
     }
   }
 }

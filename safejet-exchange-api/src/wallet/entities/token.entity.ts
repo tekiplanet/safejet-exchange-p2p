@@ -14,25 +14,31 @@ export class Token {
   @Column()
   blockchain: string; // e.g., 'ethereum', 'bsc'
 
-  @Column()
+  @Column({ nullable: true })
   contractAddress: string; // null for native tokens
 
   @Column()
   decimals: number;
 
+  @Column({ type: 'jsonb', nullable: true })
+  metadata: any; // For additional token info
+
+  @Column({ nullable: true })
+  baseSymbol: string;  // e.g., "USDT" for all USDT versions
+
+  @Column({ nullable: true })
+  networkVersion: string;  // e.g., "ERC20", "TRC20", "BEP20"
+
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ type: 'jsonb', nullable: true })
-  metadata: Record<string, any>; // For additional token info
-
-  @Column({ type: 'decimal', precision: 24, scale: 8, default: 0 })
+  @Column('numeric', { precision: 40, scale: 18, default: 0 })
   currentPrice: number;
 
-  @Column({ type: 'decimal', precision: 24, scale: 8, default: 0 })
+  @Column('numeric', { precision: 40, scale: 18, default: 0 })
   price24h: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column('numeric', { precision: 40, scale: 18, default: 0 })
   changePercent24h: number;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })

@@ -9,6 +9,7 @@ import { WalletBalance } from './entities/wallet-balance.entity';
 import { tokenSeeds } from './seeds/tokens.seed';
 import { ExchangeService } from '../exchange/exchange.service';
 import { Logger } from '@nestjs/common';
+import { Decimal } from 'decimal.js';
 
 interface PaginationParams {
   page: number;
@@ -98,7 +99,8 @@ export class WalletService {
           type,
           metadata: {
             createdAt: new Date().toISOString(),
-            network: wallet.network
+            network: wallet.network,
+            networkVersion: token.networkVersion
           }
         })
       );
@@ -234,9 +236,10 @@ export class WalletService {
   }
 
   async getBalances(
-    userId: any,  // Change the type to handle both string and object
-    type?: string, 
-    pagination: PaginationParams = { page: 1, limit: 20 }
+    userId: any,
+    type?: string,
+    pagination: PaginationParams = { page: 1, limit: 20 },
+    showZeroBalances: boolean = true
   ): Promise<any> {
     try {
       this.logger.log('=== Starting getBalances ===');
@@ -277,125 +280,128 @@ export class WalletService {
       const walletIds = wallets.map(w => w.id);
       const query = this.walletBalanceRepository
         .createQueryBuilder('balance')
-        .where('balance.walletId IN (:...walletIds)', { walletIds })
         .leftJoinAndSelect('balance.token', 'token')
-        .orderBy('token.symbol', 'ASC');
-
-      // Add logging here
-      this.logger.log('Query:', query.getSql());
-      this.logger.log('Parameters:', query.getParameters());
+        .where('balance.walletId IN (:...walletIds)', { walletIds });
 
       if (type) {
         query.andWhere('balance.type = :type', { type });
-        
-        const skip = (page - 1) * limit;
-        const [balances, total] = await Promise.all([
-          query.skip(skip).take(limit).getMany(),
-          query.getCount(),
-        ]);
-
-        const processedBalances = balances.map(balance => ({
-          id: balance.id,
-          balance: balance.balance,
-          type: balance.type,
-          token: balance.token,
-          price: balance.token.currentPrice,
-          price24h: balance.token.price24h,
-          changePercent24h: balance.token.changePercent24h,
-          metadata: balance.metadata
-        }));
-
-        const currentTotal = this.calculateTotal(processedBalances, 'price');
-        const total24h = this.calculateTotal(processedBalances, 'price24h');
-        const change24h = currentTotal - total24h;
-        const changePercent24h = total24h !== 0 ? ((currentTotal - total24h) / total24h) * 100 : 0;
-
-        return {
-          balances: processedBalances,
-          total: currentTotal,
-          change24h,
-          changePercent24h,
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: page * limit < total,
-          }
-        };
-      } else {
-        const allBalances = await query.getMany();
-        
-        // Combine spot and funding balances for each token
-        const combinedBalances = new Map<string, any>();
-
-        allBalances.forEach(balance => {
-          const tokenSymbol = balance.token.symbol;
-          const currentBalance = parseFloat(balance.balance) || 0;
-          
-          if (combinedBalances.has(tokenSymbol)) {
-            const existing = combinedBalances.get(tokenSymbol);
-            const newBalance = (parseFloat(existing.balance) + currentBalance).toString();
-            existing.balance = newBalance;
-            
-            // Ensure we keep the token data even if balance is 0
-            existing.token = balance.token;
-            existing.price = balance.token.currentPrice;
-            existing.price24h = balance.token.price24h;
-            existing.changePercent24h = balance.token.changePercent24h;
-          } else {
-            combinedBalances.set(tokenSymbol, {
-              id: balance.id,
-              balance: balance.balance,
-              token: balance.token,
-              type: 'all', // Mark as combined balance
-              price: balance.token.currentPrice,
-              price24h: balance.token.price24h,
-              changePercent24h: balance.token.changePercent24h,
-              metadata: balance.metadata
-            });
-          }
-        });
-
-        // Convert to array and ensure all tokens are included
-        let processedBalances = Array.from(combinedBalances.values());
-
-        // Add debug logging
-        this.logger.log('Processed balances:', processedBalances.map(b => ({
-          symbol: b.token.symbol,
-          balance: b.balance,
-          price: b.price,
-          price24h: b.price24h
-        })));
-
-        // Calculate totals using database prices
-        const currentTotal = this.calculateTotal(processedBalances, 'price');
-        const total24h = this.calculateTotal(processedBalances, 'price24h');
-        const change24h = currentTotal - total24h;
-        const changePercent24h = total24h !== 0 ? ((currentTotal - total24h) / total24h) * 100 : 0;
-
-        // Apply pagination to combined results
-        const total = processedBalances.length;
-        const start = (page - 1) * limit;
-        const paginatedBalances = processedBalances.slice(start, start + limit);
-
-        return {
-          balances: paginatedBalances,
-          total: currentTotal,
-          change24h,
-          changePercent24h,
-          pagination: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit),
-            hasMore: page * limit < total,
-          }
-        };
       }
+
+      const balances = await query.getMany();
+
+      // Process all balances (combines networks and sorts by value)
+      const processedBalances = this.processBalancesWithNetworks(balances);
+
+      // Filter zero balances if needed
+      const displayBalances = showZeroBalances 
+        ? processedBalances 
+        : processedBalances.filter(b => !new Decimal(b.usdValue).isZero());
+
+      // Calculate totals
+      const spotBalances = displayBalances.filter(b => b.type === 'spot');
+      const fundingBalances = displayBalances.filter(b => b.type === 'funding');
+      
+      const spotTotal = this.calculateTotal(spotBalances);
+      const fundingTotal = this.calculateTotal(fundingBalances);
+
+      // Paginate after all processing
+      const startIndex = (pagination.page - 1) * pagination.limit;
+      const paginatedBalances = displayBalances
+        .slice(startIndex, startIndex + pagination.limit);
+
+      return {
+        balances: paginatedBalances,
+        total: spotTotal + fundingTotal,
+        spotTotal,
+        fundingTotal,
+        pagination: {
+          total: displayBalances.length,
+          page: pagination.page,
+          limit: pagination.limit,
+          totalPages: Math.ceil(displayBalances.length / pagination.limit),
+          hasMore: pagination.page * pagination.limit < displayBalances.length
+        }
+      };
     } catch (error) {
       this.logger.error(`Failed to get balances: ${error.message}`);
       throw error;
+    }
+  }
+
+  private processBalancesWithNetworks(balances: any[]): any[] {
+    const combinedBalances = new Map<string, any>();
+    
+    // First combine balances
+    balances.forEach(balance => {
+      const key = `${balance.token.baseSymbol}_${balance.type}`;
+      const rawBalance = balance.balance || '0';
+      const currentBalance = new Decimal(rawBalance);
+
+      // Get price in proper decimal format
+      const price = new Decimal(balance.token.currentPrice || '0');
+      
+      // Calculate USD value
+      const usdValue = currentBalance.times(price);
+
+      const networkBalance = {
+        blockchain: balance.token.blockchain,
+        networkVersion: balance.token.networkVersion,
+        balance: rawBalance,
+        type: balance.type,
+        usdValue: usdValue.toString()  // Store USD value for sorting
+      };
+
+      if (combinedBalances.has(key)) {
+        const existing = combinedBalances.get(key);
+        const newBalance = new Decimal(existing.balance).plus(currentBalance);
+        const newUsdValue = new Decimal(existing.usdValue).plus(usdValue);
+        
+        existing.balance = newBalance.toString();
+        existing.usdValue = newUsdValue.toString();
+        if (!existing.networks) existing.networks = [];
+        existing.networks.push(networkBalance);
+      } else {
+        combinedBalances.set(key, {
+          symbol: balance.token.symbol,
+          baseSymbol: balance.token.baseSymbol,
+          name: balance.token.name,
+          decimals: balance.token.decimals,
+          balance: currentBalance.toString(),
+          usdValue: usdValue.toString(),
+          type: balance.type,
+          token: balance.token,
+          networks: [networkBalance]
+        });
+      }
+    });
+
+    // Sort by USD value first, then alphabetically
+    return Array.from(combinedBalances.values())
+      .sort((a, b) => {
+        const valueA = new Decimal(a.usdValue);
+        const valueB = new Decimal(b.usdValue);
+        
+        // If both have value, sort by value (highest first)
+        if (!valueA.isZero() && !valueB.isZero()) {
+          return valueB.minus(valueA).toNumber();
+        }
+        
+        // If only one has value, it comes first
+        if (!valueA.isZero()) return -1;
+        if (!valueB.isZero()) return 1;
+        
+        // If both are zero, sort alphabetically
+        return a.symbol.localeCompare(b.symbol);
+      });
+  }
+
+  private formatBalance(balance: string, decimals: number): string {
+    try {
+      // Just return the balance as is - it's already in the correct format
+      return new Decimal(balance).toString();
+    } catch (error) {
+      this.logger.error(`Error formatting balance: ${error.message}`);
+      return '0';
     }
   }
 
@@ -485,11 +491,17 @@ export class WalletService {
     }
   }
 
-  private calculateTotal(balances: any[], priceField: string = 'price'): number {
+  private calculateTotal(balances: any[], priceField: string = 'currentPrice'): number {
     return balances.reduce((total, balance) => {
-      const amount = parseFloat(balance.balance) || 0;
-      const price = balance[priceField] || 0;
-      return total + (amount * price);
+      const amount = new Decimal(balance.balance || '0');
+      const price = new Decimal(balance.token[priceField] || '0');
+      
+      console.log('\nCalculating total for:', balance.symbol);
+      console.log('Amount:', amount.toString());
+      console.log('Price:', price.toString());
+      console.log('Product:', amount.times(price).toString());
+      
+      return total + amount.times(price).toNumber();
     }, 0);
   }
 } 

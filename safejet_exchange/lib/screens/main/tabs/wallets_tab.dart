@@ -12,6 +12,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../../services/wallet_service.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
+import 'package:auto_size_text/auto_size_text.dart';
 
 class WalletsTab extends StatefulWidget {
   const WalletsTab({super.key});
@@ -57,31 +58,7 @@ class _WalletsTabState extends State<WalletsTab> {
   double _usdChange24h = 0.0;
 
   List<Map<String, dynamic>> _sortBalances(List<Map<String, dynamic>> balances) {
-    return [...balances]..sort((a, b) {
-      final balanceA = double.tryParse(a['balance']?.toString() ?? '0') ?? 0.0;
-      final balanceB = double.tryParse(b['balance']?.toString() ?? '0') ?? 0.0;
-      
-      // Safely convert price to double regardless of whether it's int or double
-      final priceA = double.tryParse(a['price']?.toString() ?? '0') ?? 0.0;
-      final priceB = double.tryParse(b['price']?.toString() ?? '0') ?? 0.0;
-      
-      // Calculate fiat values
-      final fiatValueA = balanceA * priceA;
-      final fiatValueB = balanceB * priceB;
-      
-      // If both have zero value, sort alphabetically by symbol
-      if (fiatValueA == 0 && fiatValueB == 0) {
-        return (a['token']['symbol'] as String)
-            .compareTo(b['token']['symbol'] as String);
-      }
-      
-      // If only one has value, it should come first
-      if (fiatValueA == 0) return 1;
-      if (fiatValueB == 0) return -1;
-      
-      // If both have value, sort by fiat value (highest first)
-      return fiatValueB.compareTo(fiatValueA);
-    });
+    return balances; // Let backend handle sorting
   }
 
   @override
@@ -273,9 +250,19 @@ class _WalletsTabState extends State<WalletsTab> {
     }
   }
 
-  String _formatBalance(bool inUSD, double value) {
-    final symbol = inUSD ? '\$' : _getCurrencySymbol(_userCurrency);
-    return '$symbol${_formatNumber(value)}';
+  String _formatBalance(bool showInUSD, double value) {
+    final currencySymbol = showInUSD ? '\$' : _getCurrencySymbol(_userCurrency);
+    final rate = showInUSD ? 1.0 : _userCurrencyRate;
+    final convertedValue = value * rate;
+    
+    // Use number format for currency values
+    final numberFormat = NumberFormat.currency(
+      locale: 'en_US',
+      symbol: currencySymbol,
+      decimalDigits: 2,
+    );
+    
+    return numberFormat.format(convertedValue);
   }
 
   String _formatNumber(double value) {
@@ -983,12 +970,19 @@ class _WalletsTabState extends State<WalletsTab> {
           ),
         );
       },
-      child: Text(
-        text,
-        key: ValueKey<String>(text),
-        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            text,
+            key: ValueKey<String>(text),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: text.length > 15 ? 20.0 : 24.0,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
@@ -1003,11 +997,44 @@ class _WalletsTabState extends State<WalletsTab> {
     Map<String, dynamic>? tokenMetadata,
     Map<String, dynamic> balance,
   ) {
-    // Safely parse all numeric values
-    final price = double.tryParse(balance['price']?.toString() ?? '0') ?? 0.0;
-    final changePercent24h = double.tryParse(balance['changePercent24h']?.toString() ?? '0') ?? 0.0;
-    final fiatValue = amount * price;
+    // Get token decimals
+    final decimals = balance['token']['decimals'] as int? ?? 18;
     
+    // Format balance based on amount size and decimals
+    String formattedBalance;
+    final numberFormat = NumberFormat.decimalPattern('en_US');
+    
+    if (amount == 0) {
+      formattedBalance = '0.00';
+    } else if (amount < 0.00001) {
+      // For very small numbers, use scientific notation
+      formattedBalance = amount.toStringAsExponential(4);
+    } else if (amount < 1) {
+      // For small numbers, show more decimals without commas
+      formattedBalance = amount.toStringAsFixed(8);
+    } else {
+      // For larger numbers, format with commas and 4 decimals
+      final wholeNumber = amount.floor();
+      final decimal = amount - wholeNumber;
+      
+      if (decimal == 0) {
+        // If no decimals, just format the whole number
+        formattedBalance = numberFormat.format(wholeNumber);
+      } else {
+        // Combine formatted whole number with decimals
+        formattedBalance = numberFormat.format(wholeNumber) + 
+                          decimal.toStringAsFixed(4).substring(1);
+      }
+    }
+    
+    // Format fiat value
+    final price = double.tryParse(balance['token']['currentPrice']?.toString() ?? '0') ?? 0.0;
+    final fiatValue = amount * price;
+    final changePercent24h = double.tryParse(balance['token']['changePercent24h']?.toString() ?? '0') ?? 0.0;
+    
+    // Remove network name from display
+    final displayName = name.split(' (')[0];
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(16),
@@ -1056,7 +1083,7 @@ class _WalletsTabState extends State<WalletsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
+                  displayName,  // Use clean name without network
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -1141,7 +1168,7 @@ class _WalletsTabState extends State<WalletsTab> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                amount.toStringAsFixed(4),
+                formattedBalance,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
