@@ -771,6 +771,8 @@ class _WalletsTabState extends State<WalletsTab> {
                   token['symbol'] as String,
                   amount,
                   token['metadata']?['icon'] as String?,
+                  token['metadata'] as Map<String, dynamic>?,
+                  balance['metadata'] as Map<String, dynamic>?,
                 );
               },
               childCount: _balances.isEmpty ? 1 : _balances.length + 1,
@@ -956,6 +958,8 @@ class _WalletsTabState extends State<WalletsTab> {
     String symbol,
     double balance,
     String? iconUrl,
+    Map<String, dynamic>? tokenMetadata,
+    Map<String, dynamic>? balanceMetadata,
   ) {
     final price = _tokenPrices[symbol] ?? 0.0;
     final fiatValue = balance * price * (_showInUSD ? 1.0 : _userCurrencyRate);
@@ -1014,11 +1018,37 @@ class _WalletsTabState extends State<WalletsTab> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  symbol,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      symbol,
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                      ),
+                    ),
+                    // Use balance metadata to check network
+                    if (balanceMetadata != null && 
+                        balanceMetadata['network'] == 'testnet')
+                      Container(
+                        margin: const EdgeInsets.only(left: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: SafeJetColors.warning.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Testnet',
+                          style: TextStyle(
+                            color: SafeJetColors.warning,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -1339,7 +1369,7 @@ class _WalletsTabState extends State<WalletsTab> {
       });
 
       // Update token prices
-      final newPrices = Map.fromEntries(
+      final newPrices = Map<String, double>.fromEntries(
         newBalances.map((b) => MapEntry(
           b['token']['symbol'] as String,
           (b['price'] ?? 0.0).toDouble(),

@@ -18,6 +18,9 @@ class WalletService {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
     ));
     _setupInterceptors();
   }
@@ -34,10 +37,31 @@ class WalletService {
           }
           return handler.next(options);
         },
-        onError: (DioException error, handler) {
+        onError: (DioException error, handler) async {
           print('Error Response: ${error.response?.data}');
           print('Error Status Code: ${error.response?.statusCode}');
           print('Error Headers: ${error.response?.headers}');
+          
+          if (error.type == DioExceptionType.connectionError ||
+              error.type == DioExceptionType.unknown) {
+            RequestOptions requestOptions = error.requestOptions;
+            
+            try {
+              print('Retrying request to: ${requestOptions.path}');
+              final response = await _dio.request(
+                requestOptions.path,
+                data: requestOptions.data,
+                queryParameters: requestOptions.queryParameters,
+                options: Options(
+                  method: requestOptions.method,
+                  headers: requestOptions.headers,
+                ),
+              );
+              return handler.resolve(response);
+            } catch (e) {
+              return handler.next(error);
+            }
+          }
           return handler.next(error);
         },
       ),

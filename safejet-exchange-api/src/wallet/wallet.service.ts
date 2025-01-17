@@ -288,7 +288,8 @@ export class WalletService {
           balance: balance.balance,
           type: balance.type,
           token: balance.token,
-          price: prices[balance.token.symbol] || 0
+          price: prices[balance.token.symbol] || 0,
+          metadata: balance.metadata
         }));
 
         return {
