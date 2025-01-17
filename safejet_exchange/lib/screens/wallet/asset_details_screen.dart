@@ -30,8 +30,10 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
   String _formatBalance(bool showInUSD, double value) {
     final currencySymbol = showInUSD ? '\$' : _getCurrencySymbol(widget.userCurrency);
     
-    // Format large numbers with K, M, B
-    if (value >= 1000000000) {
+    // Format large numbers with T, B, M, K
+    if (value >= 1000000000000) {
+      return '$currencySymbol${(value / 1000000000000).toStringAsFixed(2)}T';
+    } else if (value >= 1000000000) {
       return '$currencySymbol${(value / 1000000000).toStringAsFixed(2)}B';
     } else if (value >= 1000000) {
       return '$currencySymbol${(value / 1000000).toStringAsFixed(2)}M';
@@ -48,9 +50,10 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     return numberFormat.format(value);
   }
 
-  // Helper method to format large numbers (for non-currency values)
   String _formatLargeNumber(double value) {
-    if (value >= 1000000000) {
+    if (value >= 1000000000000) {
+      return '${(value / 1000000000000).toStringAsFixed(2)}T';
+    } else if (value >= 1000000000) {
       return '${(value / 1000000000).toStringAsFixed(2)}B';
     } else if (value >= 1000000) {
       return '${(value / 1000000).toStringAsFixed(2)}M';
@@ -70,6 +73,16 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     }
   }
 
+  String _formatExactBalance(double value) {
+    final formatter = NumberFormat('#,##0.########'); // 8 decimal places for crypto
+    return formatter.format(value);
+  }
+
+  String _formatFiatBalance(double value) {
+    final formatter = NumberFormat('#,##0.000'); // 3 decimal places for fiat
+    return formatter.format(value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -79,6 +92,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     final usdValue = double.tryParse(widget.asset['usdValue'].toString()) ?? 0.0;
     final fiatValue = widget.showInUSD ? usdValue : usdValue * widget.userCurrencyRate;
     final changePercent24h = double.tryParse(token['changePercent24h']?.toString() ?? '0') ?? 0.0;
+    final currencySymbol = widget.showInUSD ? '\$' : _getCurrencySymbol(widget.userCurrency);
 
     return Scaffold(
       backgroundColor: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
@@ -203,14 +217,14 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
                         
                         // Token Balance
                         Text(
-                          balance.toString(),
+                          _formatExactBalance(balance),
                           style: theme.textTheme.headlineLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                             fontSize: 32,
                           ),
                         ),
                         Text(
-                          '≈ ${_formatBalance(widget.showInUSD, fiatValue)}',
+                          '≈ ${currencySymbol}${_formatFiatBalance(fiatValue)}',
                           style: TextStyle(
                             color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                             fontSize: 18,
@@ -235,7 +249,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    balance.toString(),
+                                    _formatExactBalance(balance),
                                     style: theme.textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -261,7 +275,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '0.0000',
+                                    '0.00000000',
                                     style: theme.textTheme.titleLarge?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
