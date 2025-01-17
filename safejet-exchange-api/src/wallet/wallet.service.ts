@@ -538,7 +538,7 @@ export class WalletService {
     }, 0);
   }
 
-  async getTokenMarketData(symbol: string) {
+  async getTokenMarketData(symbol: string, timeframe: string = '24H') {
     try {
       // Get market data
       const marketDataResponse = await axios.get(`${this.cryptoCompareApi}/pricemultifull`, {
@@ -551,12 +551,24 @@ export class WalletService {
 
       const data = marketDataResponse.data.RAW[symbol].USD;
 
-      // Get historical daily data
-      const historyResponse = await axios.get(`${this.cryptoCompareApi}/v2/histoday`, {
+      // Add timeframe parameters
+      const timeframeParams = {
+        '1H': { limit: 60, endpoint: 'histominute' },
+        '24H': { limit: 24, endpoint: 'histohour' },
+        '1W': { limit: 7, endpoint: 'histoday' },
+        '1M': { limit: 30, endpoint: 'histoday' },
+        '1Y': { limit: 365, endpoint: 'histoday' },
+        'ALL': { limit: 2000, endpoint: 'histoday' }
+      };
+
+      const params = timeframeParams[timeframe] || timeframeParams['24H'];
+      
+      // Get historical data with selected timeframe
+      const historyResponse = await axios.get(`${this.cryptoCompareApi}/v2/${params.endpoint}`, {
         params: {
           fsym: symbol,
           tsym: 'USD',
-          limit: 7,
+          limit: params.limit,
           api_key: this.API_KEY
         }
       });
@@ -648,19 +660,18 @@ export class WalletService {
   }
 
   // Method to manually update a specific token
-  async updateSingleTokenMarketData(tokenId: string) {
+  async updateSingleTokenMarketData(tokenId: string, timeframe?: string) {
     try {
       const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
       if (!token) {
         throw new Error('Token not found');
       }
 
-      const coinId = token.metadata?.coingeckoId;
-      if (!coinId) {
-        throw new Error('No CoinGecko ID found for token');
+      if (!token.symbol) {
+        throw new Error('No symbol found for token');
       }
 
-      const marketData = await this.getTokenMarketData(coinId);
+      const marketData = await this.getTokenMarketData(token.symbol, timeframe);
       if (marketData) {
         await this.tokenRepository.update(token.id, {
           marketCap: marketData.marketCap,

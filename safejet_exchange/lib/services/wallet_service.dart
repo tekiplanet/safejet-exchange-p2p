@@ -147,6 +147,32 @@ class WalletService {
       return '0.0';
     }
   }
+
+  Future<Map<String, dynamic>> updateTokenMarketData(String tokenId, {String? timeframe}) async {
+    try {
+      final response = await _dio.post(
+        '/wallets/token/$tokenId/market-data',
+        queryParameters: timeframe != null ? {'timeframe': timeframe} : null,
+      );
+      
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'data': response.data,
+        };
+      }
+      
+      return {
+        'success': false,
+        'message': 'Failed to update token market data',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
 }
 
 class CacheEntry {

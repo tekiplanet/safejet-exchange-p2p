@@ -73,8 +73,11 @@ export class WalletController {
   }
 
   @Post('token/:id/market-data')
-  async updateTokenMarketData(@Param('id') tokenId: string) {
-    return this.walletService.updateSingleTokenMarketData(tokenId);
+  async updateTokenMarketData(
+    @Param('id') tokenId: string,
+    @Query('timeframe') timeframe?: string
+  ) {
+    return this.walletService.updateSingleTokenMarketData(tokenId, timeframe);
   }
 
   @Post('tokens/market-data')

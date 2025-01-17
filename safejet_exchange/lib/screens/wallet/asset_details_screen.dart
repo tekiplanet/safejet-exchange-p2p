@@ -4,6 +4,12 @@ import 'package:intl/intl.dart';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'dart:math' show min, max;
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:get_it/get_it.dart';
+import '../../services/wallet_service.dart';
 
 class AssetDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -26,6 +32,8 @@ class AssetDetailsScreen extends StatefulWidget {
 class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
   String _selectedTimeframe = '24H';
   final List<String> _timeframes = ['1H', '24H', '1W', '1M', '1Y', 'ALL'];
+  bool _isLoadingChart = false;
+  final _walletService = GetIt.I<WalletService>();
 
   String _formatBalance(bool showInUSD, double value) {
     final currencySymbol = showInUSD ? '\$' : _getCurrencySymbol(widget.userCurrency);
@@ -81,6 +89,48 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
   String _formatFiatBalance(double value) {
     final formatter = NumberFormat('#,##0.000'); // 3 decimal places for fiat
     return formatter.format(value);
+  }
+
+  List<FlSpot> _getChartData() {
+    final priceHistory = (widget.asset['token']['priceHistory'] as List?)?.cast<List>();
+    if (priceHistory == null || priceHistory.isEmpty) {
+      return [];
+    }
+
+    // Convert timestamp and price data to FlSpots
+    return priceHistory.asMap().entries.map((entry) {
+      final timestamp = entry.value[0] as int;  // milliseconds timestamp
+      final price = (entry.value[1] as num).toDouble();
+      return FlSpot(entry.key.toDouble(), price);
+    }).toList();
+  }
+
+  void _onTimeframeSelected(String timeframe) async {
+    if (_selectedTimeframe == timeframe) return;
+    
+    setState(() {
+      _isLoadingChart = true;
+      _selectedTimeframe = timeframe;
+    });
+
+    try {
+      final response = await _walletService.updateTokenMarketData(
+        widget.asset['token']['id'],
+        timeframe: timeframe,
+      );
+
+      if (response['success'] == true) {
+        setState(() {
+          widget.asset['token'] = response['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating chart data: $e');
+    } finally {
+      setState(() {
+        _isLoadingChart = false;
+      });
+    }
   }
 
   @override
@@ -152,407 +202,428 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
           ),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                // Main Balance Section with Gradient
-                FadeInDown(
-                  duration: const Duration(milliseconds: 400),
-                  child: Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isDark 
-                            ? [
-                                SafeJetColors.primaryAccent.withOpacity(0.2),
-                                SafeJetColors.secondaryHighlight.withOpacity(0.05),
-                              ]
-                            : [
-                                SafeJetColors.secondaryHighlight.withOpacity(0.1),
-                                SafeJetColors.primaryAccent.withOpacity(0.05),
-                              ],
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Main Balance Section with Gradient
+            FadeInDown(
+              duration: const Duration(milliseconds: 400),
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark 
+                        ? [
+                            SafeJetColors.primaryAccent.withOpacity(0.2),
+                            SafeJetColors.secondaryHighlight.withOpacity(0.05),
+                          ]
+                        : [
+                            SafeJetColors.secondaryHighlight.withOpacity(0.1),
+                            SafeJetColors.primaryAccent.withOpacity(0.05),
+                          ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    // Price Change Indicator
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            changePercent24h >= 0 ? Icons.trending_up : Icons.trending_down,
+                            color: changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.toStringAsFixed(2)}%',
+                            style: TextStyle(
+                              color: changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Column(
+                    const SizedBox(height: 16),
+                    
+                    // Token Balance
+                    Text(
+                      _formatExactBalance(balance),
+                      style: theme.textTheme.headlineLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 32,
+                      ),
+                    ),
+                    Text(
+                      '≈ ${currencySymbol}${_formatFiatBalance(fiatValue)}',
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                        fontSize: 18,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // Available and Frozen Balance
+                    Row(
                       children: [
-                        // Price Change Indicator
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                changePercent24h >= 0 ? Icons.trending_up : Icons.trending_down,
-                                color: changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 4),
                               Text(
-                                '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.toStringAsFixed(2)}%',
+                                'Available',
                                 style: TextStyle(
-                                  color: changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error,
+                                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatExactBalance(balance),
+                                style: theme.textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        
-                        // Token Balance
-                        Text(
-                          _formatExactBalance(balance),
-                          style: theme.textTheme.headlineLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 32,
-                          ),
+                        Container(
+                          width: 1,
+                          height: 40,
+                          color: isDark ? Colors.grey[800] : Colors.grey[300],
                         ),
-                        Text(
-                          '≈ ${currencySymbol}${_formatFiatBalance(fiatValue)}',
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            fontSize: 18,
-                          ),
-                        ),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Available and Frozen Balance
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Available',
-                                    style: TextStyle(
-                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _formatExactBalance(balance),
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              width: 1,
-                              height: 40,
-                              color: isDark ? Colors.grey[800] : Colors.grey[300],
-                            ),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    'Frozen',
-                                    style: TextStyle(
-                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '0.00000000',
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Market Info Card
-                FadeInUp(
-                  duration: const Duration(milliseconds: 500),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                          : SafeJetColors.lightCardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Market Info',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildMarketInfoCard(
-                                context,
-                                'Current Price',
-                                _formatBalance(widget.showInUSD, double.parse(token['currentPrice'].toString())),
-                                Icons.attach_money,
-                                isDark,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildMarketInfoCard(
-                                context,
-                                '24h Volume',
-                                '\$1.2B',
-                                Icons.bar_chart,
-                                isDark,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildMarketInfoCard(
-                                context,
-                                '24h High',
-                                _formatBalance(widget.showInUSD, double.parse(token['currentPrice'].toString()) * 1.1),
-                                Icons.arrow_upward,
-                                isDark,
-                                color: SafeJetColors.success,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildMarketInfoCard(
-                                context,
-                                '24h Low',
-                                _formatBalance(widget.showInUSD, double.parse(token['currentPrice'].toString()) * 0.9),
-                                Icons.arrow_downward,
-                                isDark,
-                                color: SafeJetColors.error,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Chart Time Selection
-                FadeInUp(
-                  duration: const Duration(milliseconds: 450),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: _timeframes.map((timeframe) {
-                        final isSelected = timeframe == _selectedTimeframe;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _selectedTimeframe = timeframe),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: isSelected
-                                        ? (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error)
-                                        : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                timeframe,
-                                textAlign: TextAlign.center,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'Frozen',
                                 style: TextStyle(
-                                  color: isSelected
-                                      ? (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error)
-                                      : (isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary),
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                  fontSize: 14,
                                 ),
                               ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-
-                // Price Chart Section
-                FadeInUp(
-                  duration: const Duration(milliseconds: 500),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    padding: const EdgeInsets.all(16),
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                          : SafeJetColors.lightCardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      ),
-                    ),
-                    child: LineChart(
-                      LineChartData(
-                        gridData: FlGridData(show: false),
-                        titlesData: FlTitlesData(show: false),
-                        borderData: FlBorderData(show: false),
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: [
-                              const FlSpot(0, 3),
-                              const FlSpot(2.6, 2),
-                              const FlSpot(4.9, 5),
-                              const FlSpot(6.8, 3.1),
-                              const FlSpot(8, 4),
-                              const FlSpot(9.5, 3),
-                              const FlSpot(11, 4),
-                            ],
-                            isCurved: true,
-                            gradient: LinearGradient(
-                              colors: [
-                                changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error,
-                                (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.3),
-                              ],
-                            ),
-                            barWidth: 2,
-                            isStrokeCapRound: true,
-                            dotData: FlDotData(show: false),
-                            belowBarData: BarAreaData(
-                              show: true,
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
-                                  (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.0),
-                                ],
+                              const SizedBox(height: 4),
+                              Text(
+                                '0.00000000',
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Add Price Statistics section
-                FadeInUp(
-                  duration: const Duration(milliseconds: 550),
-                  child: Container(
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                          : SafeJetColors.lightCardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Price Statistics',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildStatisticItem(
-                          'Market Cap',
-                          _formatBalance(widget.showInUSD, double.tryParse(token['marketCap']?.toString() ?? '0') ?? 0.0),
-                          token['marketCapChange24h'] != null 
-                              ? '${_formatBalance(widget.showInUSD, double.tryParse(token['marketCapChange24h']?.toString() ?? '0') ?? 0.0)} (${(double.tryParse(token['marketCapChangePercent24h']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2)}%)'
-                              : null,
-                          token['marketCapChangePercent24h'] != null && 
-                            (double.tryParse(token['marketCapChangePercent24h']?.toString() ?? '0') ?? 0.0) >= 0,
-                          isDark,
-                        ),
-                        _buildStatisticItem(
-                          'Fully Diluted Market Cap',
-                          _formatBalance(widget.showInUSD, double.tryParse(token['fullyDilutedMarketCap']?.toString() ?? '0') ?? 0.0),
-                          null,
-                          null,
-                          isDark,
-                        ),
-                        _buildStatisticItem(
-                          'Volume (24h)',
-                          _formatBalance(widget.showInUSD, double.tryParse(token['volume24h']?.toString() ?? '0') ?? 0.0),
-                          token['volumeChangePercent24h'] != null 
-                              ? '${(double.tryParse(token['volumeChangePercent24h']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2)}%'
-                              : null,
-                          token['volumeChangePercent24h'] != null && 
-                            (double.tryParse(token['volumeChangePercent24h']?.toString() ?? '0') ?? 0.0) >= 0,
-                          isDark,
-                        ),
-                        _buildStatisticItem(
-                          'Circulating Supply',
-                          '${_formatLargeNumber(double.tryParse(token['circulatingSupply']?.toString() ?? '0') ?? 0)} ${token['symbol']}',
-                          token['maxSupply'] != null 
-                              ? '${((double.tryParse(token['circulatingSupply']?.toString() ?? '0') ?? 0) / (double.tryParse(token['maxSupply']?.toString() ?? '0') ?? 1) * 100).toStringAsFixed(2)}%'
-                              : null,
-                          null,
-                          isDark,
-                          isSupply: true,
                         ),
                       ],
                     ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Market Info Card
+            FadeInUp(
+              duration: const Duration(milliseconds: 500),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark 
+                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                      : SafeJetColors.lightCardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
                   ),
                 ),
-
-                const SizedBox(height: 24),
-
-                // Trading Buttons (keep existing buttons)
-                // ... existing trading buttons ...
-
-                const SizedBox(height: 100), // Space for bottom nav
-              ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Market Info',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildMarketInfoCard(
+                            context,
+                            'Current Price',
+                            _formatBalance(widget.showInUSD, double.parse(token['currentPrice'].toString())),
+                            Icons.attach_money,
+                            isDark,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildMarketInfoCard(
+                            context,
+                            '24h Volume',
+                            '\$1.2B',
+                            Icons.bar_chart,
+                            isDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildMarketInfoCard(
+                            context,
+                            '24h High',
+                            _formatBalance(widget.showInUSD, double.parse(token['currentPrice'].toString()) * 1.1),
+                            Icons.arrow_upward,
+                            isDark,
+                            color: SafeJetColors.success,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildMarketInfoCard(
+                            context,
+                            '24h Low',
+                            _formatBalance(widget.showInUSD, double.parse(token['currentPrice'].toString()) * 0.9),
+                            Icons.arrow_downward,
+                            isDark,
+                            color: SafeJetColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
+
+            // Chart Time Selection
+            FadeInUp(
+              duration: const Duration(milliseconds: 450),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: _timeframes.map((timeframe) {
+                    final isSelected = _selectedTimeframe == timeframe;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: _isLoadingChart ? null : () => _onTimeframeSelected(timeframe),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: isSelected
+                                    ? SafeJetColors.primary
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            timeframe,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? SafeJetColors.primary
+                                  : isDark
+                                      ? Colors.grey[400]
+                                      : SafeJetColors.lightTextSecondary,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+
+            // Price Chart Section
+            FadeInUp(
+              duration: const Duration(milliseconds: 500),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(16),
+                height: 200,
+                decoration: BoxDecoration(
+                  color: isDark 
+                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                      : SafeJetColors.lightCardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                child: _isLoadingChart
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            isDark ? Colors.white : SafeJetColors.primary,
+                          ),
+                        ),
+                      )
+                    : LineChart(
+                        LineChartData(
+                          gridData: FlGridData(show: false),
+                          titlesData: FlTitlesData(show: false),
+                          borderData: FlBorderData(show: false),
+                          minX: 0,
+                          maxX: (_getChartData().length - 1).toDouble(),
+                          minY: _getChartData().isEmpty ? 0 : _getChartData().map((spot) => spot.y).reduce(min),
+                          maxY: _getChartData().isEmpty ? 0 : _getChartData().map((spot) => spot.y).reduce(max),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: _getChartData(),
+                              isCurved: true,
+                              gradient: LinearGradient(
+                                colors: [
+                                  changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error,
+                                  (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.3),
+                                ],
+                              ),
+                              barWidth: 2,
+                              isStrokeCapRound: true,
+                              dotData: FlDotData(show: false),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
+                                    (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                          lineTouchData: LineTouchData(
+                            touchTooltipData: LineTouchTooltipData(
+                              tooltipBgColor: isDark 
+                                  ? SafeJetColors.primaryAccent.withOpacity(0.8)
+                                  : Colors.white,
+                              getTooltipItems: (touchedSpots) {
+                                return touchedSpots.map((spot) {
+                                  final price = spot.y;
+                                  return LineTooltipItem(
+                                    _formatBalance(widget.showInUSD, price),
+                                    TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  );
+                                }).toList();
+                              },
+                            ),
+                            handleBuiltInTouches: true,
+                            touchCallback: (event, response) {
+                              // Handle touch events if needed
+                            },
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+
+            // Price Statistics section
+            FadeInUp(
+              duration: const Duration(milliseconds: 550),
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark 
+                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                      : SafeJetColors.lightCardBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Price Statistics',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildStatisticItem(
+                      'Market Cap',
+                      _formatBalance(widget.showInUSD, double.tryParse(token['marketCap']?.toString() ?? '0') ?? 0.0),
+                      token['marketCapChange24h'] != null 
+                          ? '${_formatBalance(widget.showInUSD, double.tryParse(token['marketCapChange24h']?.toString() ?? '0') ?? 0.0)} (${(double.tryParse(token['marketCapChangePercent24h']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2)}%)'
+                          : null,
+                      token['marketCapChangePercent24h'] != null && 
+                        (double.tryParse(token['marketCapChangePercent24h']?.toString() ?? '0') ?? 0.0) >= 0,
+                      isDark,
+                    ),
+                    _buildStatisticItem(
+                      'Fully Diluted Market Cap',
+                      _formatBalance(widget.showInUSD, double.tryParse(token['fullyDilutedMarketCap']?.toString() ?? '0') ?? 0.0),
+                      null,
+                      null,
+                      isDark,
+                    ),
+                    _buildStatisticItem(
+                      'Volume (24h)',
+                      _formatBalance(widget.showInUSD, double.tryParse(token['volume24h']?.toString() ?? '0') ?? 0.0),
+                      token['volumeChangePercent24h'] != null 
+                          ? '${(double.tryParse(token['volumeChangePercent24h']?.toString() ?? '0') ?? 0.0).toStringAsFixed(2)}%'
+                          : null,
+                      token['volumeChangePercent24h'] != null && 
+                        (double.tryParse(token['volumeChangePercent24h']?.toString() ?? '0') ?? 0.0) >= 0,
+                      isDark,
+                    ),
+                    _buildStatisticItem(
+                      'Circulating Supply',
+                      '${_formatLargeNumber(double.tryParse(token['circulatingSupply']?.toString() ?? '0') ?? 0)} ${token['symbol']}',
+                      token['maxSupply'] != null 
+                          ? '${((double.tryParse(token['circulatingSupply']?.toString() ?? '0') ?? 0) / (double.tryParse(token['maxSupply']?.toString() ?? '0') ?? 1) * 100).toStringAsFixed(2)}%'
+                          : null,
+                      null,
+                      isDark,
+                      isSupply: true,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            const SizedBox(height: 100), // Space for bottom nav
+          ],
+        ),
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
