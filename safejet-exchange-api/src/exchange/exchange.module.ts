@@ -11,7 +11,7 @@ import { PriceUpdateService } from './price-update.service';
   imports: [
     TypeOrmModule.forFeature([ExchangeRate, Token, Currency]),
   ],
-  controllers: [ExchangeController],
+  controllers: [ExchangeController, PriceUpdateService],
   providers: [
     ExchangeService,
     PriceUpdateService,

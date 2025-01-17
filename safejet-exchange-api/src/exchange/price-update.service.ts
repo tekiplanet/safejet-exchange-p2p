@@ -4,7 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Token } from '../wallet/entities/token.entity';
 import { ExchangeService } from './exchange.service';
+import { Controller, Post } from '@nestjs/common';
 
+@Controller('prices')
 @Injectable()
 export class PriceUpdateService {
   private readonly logger = new Logger(PriceUpdateService.name);
@@ -17,15 +19,15 @@ export class PriceUpdateService {
     private exchangeService: ExchangeService,
   ) {}
 
-  @Cron(CronExpression.EVERY_30_SECONDS)
+  @Cron(CronExpression.EVERY_HOUR)
   async updatePrices() {
     try {
       const tokens = await this.tokenRepository.find({ 
         where: { isActive: true },
-        order: { lastPriceUpdate: 'ASC' } // Update oldest prices first
+        order: { lastPriceUpdate: 'ASC' }
       });
 
-      const batchSize = 3; // Reduced batch size
+      const batchSize = 3;
       
       for (let i = 0; i < tokens.length; i += batchSize) {
         const batch = tokens.slice(i, i + batchSize);
@@ -33,19 +35,32 @@ export class PriceUpdateService {
         await Promise.all(
           batch.map(async (token) => {
             try {
-              // Try to get price with retries
               const priceData = await this.getPriceWithRetry(token);
               
               if (priceData.price > 0) {
+                const currentPrice = Number(priceData.price);
+                const oldPrice = Number(token.currentPrice);
+                const price24h = Number(token.price24h || oldPrice);
+
+                // Only update price24h if it's not set or if 24 hours have passed
+                const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                const shouldUpdatePrice24h = !token.lastPriceUpdate || 
+                  token.lastPriceUpdate < twentyFourHoursAgo;
+
+                // Calculate change percentage
+                const changePercent = ((currentPrice - price24h) / price24h) * 100;
+
                 await this.tokenRepository.update(token.id, {
-                  currentPrice: priceData.price,
-                  price24h: priceData.price / (1 + (priceData.changePercent24h / 100)),
-                  changePercent24h: priceData.changePercent24h,
+                  currentPrice,
+                  price24h: shouldUpdatePrice24h ? oldPrice : price24h,
+                  changePercent24h: changePercent,
                   lastPriceUpdate: new Date(),
                 });
-                this.logger.log(`Updated price for ${token.symbol}: $${priceData.price}`);
-              } else {
-                this.logger.warn(`Skipping update for ${token.symbol} due to zero price`);
+
+                this.logger.log(
+                  `Updated price for ${token.symbol}: $${currentPrice} (${changePercent.toFixed(2)}%) ` +
+                  `[24h: $${price24h}]`
+                );
               }
             } catch (error) {
               this.logger.error(`Failed to update price for ${token.symbol}: ${error.message}`);
@@ -53,7 +68,6 @@ export class PriceUpdateService {
           })
         );
 
-        // Add longer delay between batches (2 seconds)
         if (i + batchSize < tokens.length) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
@@ -69,7 +83,6 @@ export class PriceUpdateService {
     changePercent24h: number;
   }> {
     try {
-      // Add delay based on attempt number (exponential backoff)
       const delay = this.INITIAL_DELAY * Math.pow(2, attempt - 1);
       await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -81,13 +94,13 @@ export class PriceUpdateService {
         return this.getPriceWithRetry(token, attempt + 1);
       }
 
-      // If still 0 after retries, use previous price if available
+      // If still 0 after retries, use previous price and maintain change data
       if (priceData.price === 0 && token.currentPrice > 0) {
         this.logger.warn(`Using previous price for ${token.symbol}`);
         return {
           price: token.currentPrice,
-          change24h: 0,
-          changePercent24h: 0,
+          change24h: token.currentPrice - token.price24h,
+          changePercent24h: token.changePercent24h,
         };
       }
 
@@ -98,17 +111,24 @@ export class PriceUpdateService {
         return this.getPriceWithRetry(token, attempt + 1);
       }
 
-      // If all retries failed, use previous price if available
+      // If all retries failed, maintain previous data
       if (token.currentPrice > 0) {
         this.logger.warn(`Using previous price for ${token.symbol} after all retries failed`);
         return {
           price: token.currentPrice,
-          change24h: 0,
-          changePercent24h: 0,
+          change24h: token.currentPrice - token.price24h,
+          changePercent24h: token.changePercent24h,
         };
       }
 
       throw error;
     }
+  }
+
+  @Post('update')
+  async triggerPriceUpdate() {
+    this.logger.log('Manually triggering price update...');
+    await this.updatePrices();
+    return { message: 'Price update completed' };
   }
 } 

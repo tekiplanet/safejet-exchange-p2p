@@ -22,9 +22,10 @@ export class ExchangeService {
   private readonly updateInterval: number;
   private ratesCache: Map<string, { rates: any, timestamp: number }> = new Map();
   private cryptoPricesCache: Map<string, { price: number, timestamp: number }> = new Map();
-  private readonly CACHE_DURATION = 3 * 60 * 1000; // 3 minute cache
-  private readonly PRICE_CACHE_DURATION =  10 * 1000; // 30 seconds cache
+  private readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours cache
+  private readonly PRICE_CACHE_DURATION = 60 * 60 * 1000; // 1 hour cache
   private priceCache: Map<string, { price: number; timestamp: number }> = new Map();
+  private readonly cryptoApiKey: string;
 
   constructor(
     @InjectRepository(ExchangeRate)
@@ -34,6 +35,7 @@ export class ExchangeService {
     private configService: ConfigService,
   ) {
     this.updateInterval = this.configService.get<number>('exchange.updateInterval');
+    this.cryptoApiKey = this.configService.get<string>('CRYPTOCOMPARE_API_KEY');
   }
 
   async getCryptoPrice(symbol: string, currency: string = 'USD'): Promise<number> {
@@ -246,27 +248,54 @@ export class ExchangeService {
     changePercent24h: number;
   }> {
     try {
+      // Check cache first
+      const cacheKey = `${symbol}-${currency}-change`;
+      const cached = this.priceCache.get(cacheKey);
+      
+      if (cached && Date.now() - cached.timestamp < this.PRICE_CACHE_DURATION) {
+        return cached.price as any;
+      }
+
       this.logger.log(`Getting price change data for ${symbol}`);
-      // Get price change data from CryptoCompare
+      
       const response = await axios.get(`${this.cryptoApiUrl}/pricemultifull`, {
         params: {
           fsyms: symbol.toUpperCase(),
           tsyms: currency.toUpperCase()
+        },
+        headers: {
+          'Authorization': `Apikey ${this.cryptoApiKey}`
         }
       });
 
       const data = response.data.RAW?.[symbol.toUpperCase()]?.[currency.toUpperCase()];
+      
       if (!data) {
+        this.logger.warn(`No price data found for ${symbol}`);
         return { price: 0, change24h: 0, changePercent24h: 0 };
       }
 
-      return {
+      const result = {
         price: data.PRICE ?? 0,
         change24h: data.CHANGE24HOUR ?? 0,
         changePercent24h: data.CHANGEPCT24HOUR ?? 0
       };
+
+      this.logger.log(`Price data for ${symbol}: ${JSON.stringify(result)}`);
+
+      // Cache the result
+      this.priceCache.set(cacheKey, {
+        price: result as any,
+        timestamp: Date.now()
+      });
+
+      return result;
     } catch (error) {
-      this.logger.error(`Failed to get crypto price change for ${symbol}: ${error.message}`);
+      if (axios.isAxiosError(error)) {
+        this.logger.error(`API Error for ${symbol}: ${error.response?.data?.Message || error.message}`);
+      } else {
+        this.logger.error(`Failed to get crypto price change for ${symbol}: ${error.message}`);
+      }
       return { price: 0, change24h: 0, changePercent24h: 0 };
     }
   }
@@ -277,6 +306,9 @@ export class ExchangeService {
         params: {
           fsym: symbol.toUpperCase(),
           tsyms: currency.toUpperCase()
+        },
+        headers: {
+          'Authorization': `Apikey ${this.cryptoApiKey}`
         }
       });
       

@@ -1005,15 +1005,9 @@ class _WalletsTabState extends State<WalletsTab> {
   ) {
     // Safely parse all numeric values
     final price = double.tryParse(balance['price']?.toString() ?? '0') ?? 0.0;
-    final price24h = double.tryParse(balance['price24h']?.toString() ?? '0') ?? 0.0;
     final changePercent24h = double.tryParse(balance['changePercent24h']?.toString() ?? '0') ?? 0.0;
     final fiatValue = amount * price;
     
-    // Calculate price change
-    final priceChange = price - price24h;
-    final priceChangeFormatted = priceChange.abs().toStringAsFixed(2);
-    final isPositive = priceChange >= 0;
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(16),
@@ -1077,15 +1071,15 @@ class _WalletsTabState extends State<WalletsTab> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // Add price change indicator here
-                    if (price24h > 0)
+                    // Updated price change indicator
+                    if (price > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: (isPositive ? SafeJetColors.success : SafeJetColors.error)
+                          color: (changePercent24h >= 0 ? SafeJetColors.success : SafeJetColors.error)
                               .withOpacity(0.2),
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -1093,19 +1087,19 @@ class _WalletsTabState extends State<WalletsTab> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              isPositive 
+                              changePercent24h >= 0 
                                   ? Icons.trending_up_rounded 
                                   : Icons.trending_down_rounded,
-                              color: isPositive 
+                              color: changePercent24h >= 0 
                                   ? SafeJetColors.success 
                                   : SafeJetColors.error,
                               size: 12,
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              '${isPositive ? '+' : '-'}$priceChangeFormatted%',
+                              '${changePercent24h >= 0 ? '+' : ''}${changePercent24h.abs().toStringAsFixed(2)}%',
                               style: TextStyle(
-                                color: isPositive 
+                                color: changePercent24h >= 0 
                                     ? SafeJetColors.success 
                                     : SafeJetColors.error,
                                 fontSize: 10,
