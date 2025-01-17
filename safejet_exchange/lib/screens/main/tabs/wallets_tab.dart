@@ -1336,11 +1336,23 @@ class _WalletsTabState extends State<WalletsTab> {
 
   Future<void> _loadRates() async {
     try {
-      final rates = await _exchangeService.getRates('ngn'); // or your default currency
-      // Update your UI with the rates
+      final rates = await _exchangeService.getRates(_userCurrency);
+      if (mounted) {
+        setState(() {
+          _userCurrencyRate = double.tryParse(rates['rate']?.toString() ?? '1') ?? 1.0;
+        });
+      }
     } catch (e) {
-      // Handle error
       print('Error loading rates: $e');
+      // Optionally show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading exchange rates: ${e.toString()}'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
