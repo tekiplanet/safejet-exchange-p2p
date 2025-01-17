@@ -13,6 +13,7 @@ import '../../../services/wallet_service.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import '../../wallet/asset_details_screen.dart';
 
 class WalletsTab extends StatefulWidget {
   const WalletsTab({super.key});
@@ -800,15 +801,168 @@ class _WalletsTabState extends State<WalletsTab> {
                 final price = _tokenPrices[symbol] ?? 0.0;
                 final isLoading = balance['priceLoading'] ?? false;
                 
-                return _buildAssetItem(
-                  isDark,
-                  theme,
-                  token['name'] as String,
-                  symbol,
-                  amount,
-                  token['metadata']?['icon'] as String?,
-                  token['metadata'] as Map<String, dynamic>?,
-                  balance,
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AssetDetailsScreen(
+                          asset: balance,
+                          showInUSD: _showInUSD,
+                          userCurrencyRate: _userCurrencyRate,
+                          userCurrency: _userCurrency,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                          : SafeJetColors.lightCardBackground,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        // Token Icon
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            image: token['metadata']?['icon'] != null
+                                ? DecorationImage(
+                                    image: NetworkImage(token['metadata']['icon']),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: token['metadata']?['icon'] != null
+                              ? null
+                              : Center(
+                                  child: Text(
+                                    symbol[0],
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      color: isDark ? Colors.white : Colors.black,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        
+                        // Token Name and Symbol
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                token['name'].split(' (')[0],  // Use clean name without network
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Text(
+                                    symbol,
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Updated price change indicator
+                                  if (price > 0)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: (balance['token']['changePercent24h'] >= 0 ? SafeJetColors.success : SafeJetColors.error)
+                                            .withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            balance['token']['changePercent24h'] >= 0 
+                                                ? Icons.trending_up_rounded 
+                                                : Icons.trending_down_rounded,
+                                            color: balance['token']['changePercent24h'] >= 0 
+                                                ? SafeJetColors.success 
+                                                : SafeJetColors.error,
+                                            size: 12,
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            '${balance['token']['changePercent24h'] >= 0 ? '+' : ''}${balance['token']['changePercent24h'].abs().toStringAsFixed(2)}%',
+                                            style: TextStyle(
+                                              color: balance['token']['changePercent24h'] >= 0 
+                                                  ? SafeJetColors.success 
+                                                  : SafeJetColors.error,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  // Use balance metadata to check network
+                                  if (balance['metadata']?['network'] == 'testnet')
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: SafeJetColors.warning.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'Testnet',
+                                        style: TextStyle(
+                                          color: SafeJetColors.warning,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        // Balance
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              balance['balance'].toString(),
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            _buildAssetBalance(
+                              _formatBalance(_showInUSD, double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0),
+                              isDark,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
               childCount: _getFilteredBalances().isEmpty ? 1 : _getFilteredBalances().length + 1,
