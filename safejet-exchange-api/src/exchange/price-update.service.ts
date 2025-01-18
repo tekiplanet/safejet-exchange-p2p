@@ -20,7 +20,7 @@ export class PriceUpdateService {
     private exchangeService: ExchangeService,
   ) {}
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_2_HOURS)
   async updatePrices() {
     try {
       const tokens = await this.tokenRepository.find({ 

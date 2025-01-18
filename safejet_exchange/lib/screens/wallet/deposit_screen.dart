@@ -44,6 +44,10 @@ class _DepositScreenState extends State<DepositScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeCoin();
+  }
+
+  void _initializeCoin() {
     final token = widget.asset['token'] as Map<String, dynamic>;
     final metadata = token['metadata'] as Map<String, dynamic>;
 

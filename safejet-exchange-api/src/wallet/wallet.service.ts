@@ -98,7 +98,7 @@ export class WalletService {
     private keyManagementService: KeyManagementService,
     private readonly exchangeService: ExchangeService,
   ) {}
-  
+
 
 
   private async initializeWalletBalances(wallet: Wallet) {
@@ -162,7 +162,7 @@ export class WalletService {
               ['userId', 'baseSymbol', 'type']
             );
           }
-        } catch (error) {
+    } catch (error) {
           this.logger.error(
             `Failed to initialize balance for ${baseSymbol}:`,
             error
@@ -225,7 +225,7 @@ export class WalletService {
 
   // Get all balances for a wallet
   async getWalletBalances(
-    userId: string,
+    userId: string, 
     walletId: string,
     type: 'spot' | 'funding' = 'spot'
   ): Promise<WalletBalance[]> {
@@ -455,12 +455,12 @@ export class WalletService {
         ? 0
         : totalChange24h.div(totalValue).times(100).toNumber();
 
-      return {
+        return {
         balances: processedBalances,
         total: totalValue.toString(),
         change24h: totalChange24h.toString(),
-        changePercent24h,
-        pagination: {
+          changePercent24h,
+          pagination: {
           total: totalCount,
           page,
           limit,
@@ -480,7 +480,7 @@ export class WalletService {
     
     balances.forEach(balance => {
       if (!balance.token) return;
-      
+
       const key = `${balance.token.baseSymbol}_${balance.type}`;
       const currentBalance = new Decimal(balance.balance || '0');
       const price = new Decimal(balance.token.currentPrice || '0');
@@ -672,7 +672,7 @@ export class WalletService {
     }
   }
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_HOUR)
   async updateTokenMarketData() {
     try {
       const tokens = await this.tokenRepository.find({
@@ -682,25 +682,25 @@ export class WalletService {
 
       for (const token of tokens) {
         try {
-          const marketData = await this.getTokenMarketData(token.symbol);
-          
+            const marketData = await this.getTokenMarketData(token.symbol);
+            
           if (marketData && marketData.priceHistory?.length > 0) {
             // Get current price from latest price history entry
             const currentPrice = marketData.priceHistory[marketData.priceHistory.length - 1][1];
             
-            await this.tokenRepository.update(token.id, {
+              await this.tokenRepository.update(token.id, {
               currentPrice: currentPrice.toString(),
               price24h: marketData.priceHistory[0][1].toString(), // First entry is 24h ago
               changePercent24h: marketData.marketCapChangePercent24h,
-              lastPriceUpdate: new Date()
-            });
-            
+                lastPriceUpdate: new Date()
+              });
+
             this.logger.debug(`Updated price for ${token.symbol}: ${currentPrice}`);
           }
-        } catch (error) {
-          this.logger.error(`Error updating ${token.symbol}:`, error);
-        }
-      }
+          } catch (error) {
+              this.logger.error(`Error updating ${token.symbol}:`, error);
+            }
+          }
     } catch (error) {
       this.logger.error('Error in updateTokenMarketData:', error);
     }

@@ -308,14 +308,13 @@ class _WalletsTabState extends State<WalletsTab> {
       return '${_getCurrencySymbol(currency)}0.00';
     }
     
-    // Convert USD to user currency
-    final convertedAmount = amount * _userCurrencyRate;
-    
+    // The amount is already converted in _updateCurrencyDisplay, 
+    // so we don't need to convert it again
     final formatter = NumberFormat.currency(
       symbol: _getCurrencySymbol(currency),
       decimalDigits: 2,
     );
-    return formatter.format(convertedAmount);
+    return formatter.format(amount);
   }
 
   String _getCurrencySymbol(String currency) {
@@ -1012,7 +1011,7 @@ class _WalletsTabState extends State<WalletsTab> {
                               _showInUSD 
                                 ? _formatUsdValue(balance['usdValue']?.toString() ?? '0')
                                 : _formatCurrencyValue(
-                                    (double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0 * _userCurrencyRate).toString(),
+                                    ((double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0) * _userCurrencyRate).toString(),
                                     _userCurrency
                                   ),
                               isDark,
@@ -1353,7 +1352,7 @@ class _WalletsTabState extends State<WalletsTab> {
                 _showInUSD 
                   ? _formatUsdValue(balance['usdValue']?.toString() ?? '0')
                   : _formatCurrencyValue(
-                      (double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0 * _userCurrencyRate).toString(),
+                      ((double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0) * _userCurrencyRate).toString(),
                       _userCurrency
                     ),
                 isDark,
@@ -1695,11 +1694,14 @@ class _WalletsTabState extends State<WalletsTab> {
 
   // Add this method to handle immediate currency conversion
   void _updateCurrencyDisplay(bool showInUSD) {
+    print('Current USD value: $_usdBalance');
+    print('Current exchange rate: $_userCurrencyRate');
+    
     setState(() {
       _showInUSD = showInUSD;
-      // Use stored USD values for conversion
-      _totalBalance = showInUSD ? _usdBalance : _usdBalance * _userCurrencyRate;
-      _change24h = showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
+      // This is where we do the single conversion
+      _totalBalance = _showInUSD ? _usdBalance : _usdBalance * _userCurrencyRate;
+      _change24h = _showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
     });
   }
 
@@ -1725,6 +1727,20 @@ class _WalletsTabState extends State<WalletsTab> {
 
       return true;
     }).toList();
+  }
+
+  Future<void> _loadExchangeRate() async {
+    try {
+      final response = await _exchangeService.getRates(_userCurrency);
+      setState(() {
+        _userCurrencyRate = double.tryParse(response['rate']) ?? 1.0;
+        print('Loaded exchange rate: $_userCurrencyRate for $_userCurrency');
+      });
+    } catch (e) {
+      print('Error loading exchange rate: $e');
+      // Set a fallback rate
+      _userCurrencyRate = 1.0;
+    }
   }
 
 } 

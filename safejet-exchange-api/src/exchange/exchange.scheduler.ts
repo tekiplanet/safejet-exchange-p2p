@@ -6,7 +6,7 @@ import { ExchangeService } from './exchange.service';
 export class ExchangeScheduler {
   constructor(private readonly exchangeService: ExchangeService) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_DAY_AT_1AM)
   async updateRates() {
     await this.exchangeService.updateAllRates();
   }
