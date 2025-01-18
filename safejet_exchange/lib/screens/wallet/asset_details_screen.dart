@@ -134,6 +134,36 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     }
   }
 
+  void _handleDepositTap() {
+    final token = widget.asset['token'] as Map<String, dynamic>;
+    final metadata = token['metadata'] as Map<String, dynamic>;
+    
+    // Ensure networks are properly passed
+    if (!metadata.containsKey('networks')) {
+      metadata['networks'] = token['networkVersion'] == 'NATIVE' 
+          ? ['mainnet', 'testnet']  // Include testnet for native tokens
+          : ['mainnet'];            // Only mainnet for other tokens
+    }
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DepositScreen(
+          asset: {
+            ...widget.asset,
+            'token': {
+              ...token,
+              'metadata': metadata,
+            },
+          },
+          showInUSD: widget.showInUSD,
+          userCurrencyRate: widget.userCurrencyRate,
+          userCurrency: widget.userCurrency,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -667,19 +697,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
               'Deposit',
               Icons.download_rounded,
               SafeJetColors.success,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => DepositScreen(
-                      asset: widget.asset,
-                      showInUSD: widget.showInUSD,
-                      userCurrencyRate: widget.userCurrencyRate,
-                      userCurrency: widget.userCurrency,
-                    ),
-                  ),
-                );
-              },
+              _handleDepositTap,
               isDark,
             ),
             _buildAdvancedNavButton(

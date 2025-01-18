@@ -48,16 +48,27 @@ class _DepositScreenState extends State<DepositScreen> {
     final metadata = token['metadata'] as Map<String, dynamic>;
     final networks = List<String>.from(metadata['networks'] ?? ['mainnet']);
 
-    // For tokens like USDT that exist on multiple blockchains
+    // Create network list including both mainnet and testnet for NATIVE tokens
     final availableNetworks = [
       Network(
         name: networks.first,
         blockchain: token['blockchain'],
         version: token['networkVersion'],
-        arrivalTime: '10-30 minutes',
+        arrivalTime: _getArrivalTime(token['blockchain']),
         isActive: true,
+        network: networks.first,
       ),
-      // Add other networks if they exist for this token
+      // Add testnet variant for NATIVE tokens if supported
+      if (token['networkVersion'] == 'NATIVE' && networks.contains('testnet'))
+        Network(
+          name: 'testnet',
+          blockchain: token['blockchain'],
+          version: token['networkVersion'],
+          arrivalTime: _getArrivalTime(token['blockchain']),
+          isActive: true,
+          network: 'testnet',
+        ),
+      // Keep existing multi-chain token logic
       if (token['baseSymbol'] == 'USDT') ...[
         if (token['blockchain'] != 'ethereum')
           Network(
@@ -66,6 +77,7 @@ class _DepositScreenState extends State<DepositScreen> {
             version: 'ERC20',
             arrivalTime: '10-30 minutes',
             isActive: true,
+            network: 'mainnet',
           ),
         if (token['blockchain'] != 'trx')
           Network(
@@ -74,6 +86,7 @@ class _DepositScreenState extends State<DepositScreen> {
             version: 'TRC20',
             arrivalTime: '5-10 minutes',
             isActive: true,
+            network: 'mainnet',
           ),
         if (token['blockchain'] != 'bsc')
           Network(
@@ -82,29 +95,43 @@ class _DepositScreenState extends State<DepositScreen> {
             version: 'BEP20',
             arrivalTime: '5-10 minutes',
             isActive: true,
+            network: 'mainnet',
           ),
       ]
     ];
 
     _selectedCoin = Coin(
+      id: token['id'],
       symbol: token['symbol'],
       name: token['name'],
       networks: availableNetworks,
+      iconUrl: metadata['icon'],
     );
     _selectedNetwork = _selectedCoin.networks[0];
     _fetchDepositAddress();
   }
 
+  // Helper method to get arrival time based on blockchain
+  String _getArrivalTime(String blockchain) {
+    switch (blockchain.toLowerCase()) {
+      case 'ethereum':
+        return '10-30 minutes';
+      case 'bitcoin':
+        return '30-60 minutes';
+      default:
+        return '5-10 minutes';
+    }
+  }
+
   Future<void> _fetchDepositAddress() async {
     setState(() => _isLoading = true);
     try {
-      final token = widget.asset['token'] as Map<String, dynamic>;
-      debugPrint('Token data: $token');
+      debugPrint('Selected coin: ${_selectedCoin.symbol} (${_selectedCoin.id})');
       debugPrint('Selected network: ${_selectedNetwork.blockchain} (${_selectedNetwork.version})');
 
       final response = await _walletService.getDepositAddress(
-        token['id'],
-        network: _selectedNetwork.name.toLowerCase(),
+        _selectedCoin.id,
+        network: _selectedNetwork.network.toLowerCase(),
         blockchain: _selectedNetwork.blockchain.toLowerCase(),
         version: _selectedNetwork.version.toUpperCase(),
       );
@@ -112,7 +139,7 @@ class _DepositScreenState extends State<DepositScreen> {
       setState(() {
         _depositAddress = response['address'];
         _networkVersion = _selectedNetwork.version;
-        _warningMessage = 'Send only ${token['symbol']} (${_selectedNetwork.version}) to this deposit address. ' +
+        _warningMessage = 'Send only ${_selectedCoin.symbol} (${_selectedNetwork.version}) to this deposit address. ' +
             'Sending any other coin or token may result in permanent loss.';
       });
     } catch (e) {
@@ -122,6 +149,26 @@ class _DepositScreenState extends State<DepositScreen> {
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleCoinSelection() async {
+    final result = await Navigator.push<Coin>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CoinSelectionModal(),
+        fullscreenDialog: true,
+      ),
+    );
+    
+    if (result != null) {
+      setState(() {
+        _selectedCoin = result;
+        // Reset to first available network
+        _selectedNetwork = result.networks[0];
+        _depositAddress = null; // Clear existing address
+      });
+      await _fetchDepositAddress(); // Fetch new address
     }
   }
 
@@ -165,22 +212,7 @@ class _DepositScreenState extends State<DepositScreen> {
                   FadeInDown(
                     duration: const Duration(milliseconds: 600),
                     child: GestureDetector(
-                      onTap: () async {
-                        final result = await Navigator.push<Coin>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const CoinSelectionModal(),
-                            fullscreenDialog: true,
-                          ),
-                        );
-                        if (result != null) {
-                          setState(() {
-                            _selectedCoin = result;
-                            _selectedNetwork = result.networks[0]; // Reset to first network
-                            _fetchDepositAddress();
-                          });
-                        }
-                      },
+                      onTap: _handleCoinSelection,
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -202,17 +234,17 @@ class _DepositScreenState extends State<DepositScreen> {
                               height: 32,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
-                                image: widget.asset['token']['metadata']['icon'] != null
+                                image: _selectedCoin.iconUrl != null
                                     ? DecorationImage(
-                                        image: NetworkImage(widget.asset['token']['metadata']['icon']),
+                                        image: NetworkImage(_selectedCoin.iconUrl!),
                                         fit: BoxFit.cover,
                                       )
                                     : null,
                               ),
-                              child: widget.asset['token']['metadata']['icon'] == null
+                              child: _selectedCoin.iconUrl == null
                                   ? Center(
                                       child: Text(
-                                        widget.asset['token']['symbol'][0],
+                                        _selectedCoin.symbol[0],
                                         style: theme.textTheme.titleLarge?.copyWith(
                                           color: isDark ? Colors.white : Colors.black,
                                         ),
@@ -227,13 +259,13 @@ class _DepositScreenState extends State<DepositScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    widget.asset['token']['name'],
+                                    _selectedCoin.name,
                                     style: theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   Text(
-                                    widget.asset['token']['symbol'],
+                                    _selectedCoin.symbol,
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                                     ),

@@ -113,22 +113,22 @@ class WalletService {
 
       return response.data;
     } catch (e) {
-      print('Error in getBalances: $e');
+      // print('Error in getBalances: $e');
       rethrow;
     }
   }
 
   String _formatBalance(String balance, int decimals) {
     try {
-      print('\nFormatting balance:');
-      print('Input balance: $balance');
-      print('Decimals: $decimals');
+      // print('\nFormatting balance:');
+      // print('Input balance: $balance');
+      // print('Decimals: $decimals');
       
       double rawValue = double.parse(balance);
-      print('Parsed raw value: $rawValue');
+      // print('Parsed raw value: $rawValue');
       
       BigInt baseUnits = BigInt.from(rawValue * math.pow(10, decimals));
-      print('Base units: $baseUnits');
+      // print('Base units: $baseUnits');
       
       BigInt wholePart = baseUnits ~/ BigInt.from(math.pow(10, decimals));
       BigInt fractionalPart = baseUnits % BigInt.from(math.pow(10, decimals));
@@ -208,6 +208,7 @@ class WalletService {
         final networks = List<Map<String, dynamic>>.from(token['networks']);
         
         return Coin(
+          id: token['id'],
           symbol: token['symbol'],
           name: token['name'],
           iconUrl: metadata['icon'],
@@ -216,6 +217,7 @@ class WalletService {
             blockchain: network['blockchain'],
             version: network['version'],
             arrivalTime: network['arrivalTime'],
+            network: network['network'],
             requiresMemo: network['requiredFields']?['memo'] ?? false,
             requiresTag: network['requiredFields']?['tag'] ?? false,
           )).toList(),

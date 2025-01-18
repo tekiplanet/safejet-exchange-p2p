@@ -171,7 +171,7 @@ class _WalletsTabState extends State<WalletsTab> {
         for (final balance in List<Map<String, dynamic>>.from(data['balances'] ?? [])) {
           final token = balance['token'] as Map<String, dynamic>;
           final symbol = token['symbol'] as String;
-          print('Processing token: $symbol');
+          // print('Processing token: $symbol');
           
           // Safely parse balance and USD value
           final currentBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;

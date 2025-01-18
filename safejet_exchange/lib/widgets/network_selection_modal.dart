@@ -73,7 +73,8 @@ class NetworkSelectionModal extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${network.blockchain.toUpperCase()} (${network.version})',
+                              '${network.blockchain.toUpperCase()} (${network.version})' +
+                              (network.network == 'testnet' ? ' - TESTNET' : ''),
                               style: theme.textTheme.titleSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),

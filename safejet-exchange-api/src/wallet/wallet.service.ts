@@ -771,22 +771,46 @@ export class WalletService {
         };
       }
 
-      // Get supported networks from metadata
-      const supportedNetworks = token.metadata?.networks || ['mainnet'];
-
-      // Add each supported network
-      supportedNetworks.forEach(networkType => {
+      // For NATIVE tokens, add both mainnet and testnet variants
+      if (token.networkVersion === 'NATIVE') {
+        // Always add mainnet
         acc[key].networks.push({
           blockchain: token.blockchain,
           version: token.networkVersion,
-          network: networkType,
+          network: 'mainnet',
           arrivalTime: token.blockchain === 'ethereum' ? '10-30 minutes' : '5-10 minutes',
           requiredFields: {
             memo: false,
             tag: false
           }
         });
-      });
+
+        // Add testnet if supported in metadata
+        if (token.metadata?.networks?.includes('testnet')) {
+          acc[key].networks.push({
+            blockchain: token.blockchain,
+            version: token.networkVersion,
+            network: 'testnet',
+            arrivalTime: token.blockchain === 'ethereum' ? '10-30 minutes' : '5-10 minutes',
+            requiredFields: {
+              memo: false,
+              tag: false
+            }
+          });
+        }
+      } else {
+        // For non-NATIVE tokens (TRC20, BEP20, etc.), just add mainnet
+        acc[key].networks.push({
+          blockchain: token.blockchain,
+          version: token.networkVersion,
+          network: 'mainnet',
+          arrivalTime: token.blockchain === 'ethereum' ? '10-30 minutes' : '5-10 minutes',
+          requiredFields: {
+            memo: false,
+            tag: false
+          }
+        });
+      }
 
       return acc;
     }, {});
