@@ -149,9 +149,9 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
       final response = await _walletService.getAvailableCoins();
       final availableCoins = response;
       
-      // Find the matching coin by symbol instead of ID
+      // Find the matching coin by baseSymbol
       final matchingCoin = availableCoins.firstWhere(
-        (coin) => coin.symbol.toUpperCase() == token['symbol'].toString().toUpperCase(),
+        (coin) => coin.symbol.toUpperCase() == token['baseSymbol'].toString().toUpperCase(),
         orElse: () => Coin(
           id: token['id'],
           symbol: token['symbol'],
