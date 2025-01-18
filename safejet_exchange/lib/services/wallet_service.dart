@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/service_locator.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import '../models/coin.dart';
 
 class WalletService {
   late final Dio _dio;
@@ -175,20 +176,27 @@ class WalletService {
     }
   }
 
-  Future<Map<String, dynamic>> getDepositAddress(String tokenId, {String? network}) async {
+  Future<Map<String, dynamic>> getDepositAddress(
+    String tokenId, {
+    String? network,
+    String? blockchain,
+    String? version,
+  }) async {
     try {
-      // Get the auth token
       final token = await storage.read(key: 'accessToken');
       if (token == null) {
         throw 'Authentication token not found';
       }
 
-      // Add auth token to headers
       _dio.options.headers['Authorization'] = 'Bearer $token';
 
       final response = await _dio.get(
         '/wallets/deposit-address/$tokenId',
-        queryParameters: network != null ? {'network': network} : null,
+        queryParameters: {
+          if (network != null) 'network': network,
+          if (blockchain != null) 'blockchain': blockchain,
+          if (version != null) 'version': version,
+        },
       );
 
       if (response.data == null) {
@@ -204,6 +212,45 @@ class WalletService {
       };
     } catch (e) {
       debugPrint('Error getting deposit address: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<Coin>> getAvailableCoins() async {
+    try {
+      final response = await _dio.get('/wallets/tokens/available');
+      final List<dynamic> tokens = response.data['tokens'];
+      
+      return tokens.map((token) {
+        final metadata = token['metadata'] as Map<String, dynamic>;
+        final networks = List<String>.from(metadata['networks'] ?? ['mainnet']);
+        final variants = List<Map<String, dynamic>>.from(token['variants'] ?? []);
+        
+        return Coin(
+          symbol: token['symbol'],
+          name: token['name'],
+          iconUrl: metadata['icon'],
+          networks: [
+            Network(
+              name: networks.first,
+              blockchain: token['blockchain'],
+              version: token['networkVersion'],
+              arrivalTime: '10-30 minutes',
+              isActive: true,
+            ),
+            // Add network variants
+            ...variants.map((variant) => Network(
+              name: networks.first,
+              blockchain: variant['blockchain'],
+              version: variant['networkVersion'],
+              arrivalTime: '5-10 minutes',
+              isActive: true,
+            )),
+          ],
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('Error getting available coins: $e');
       rethrow;
     }
   }

@@ -740,4 +740,41 @@ export class WalletService {
       tag: wallet.tag
     };
   }
+
+  async getAvailableTokens() {
+    // Get all active tokens
+    const tokens = await this.tokenRepository.find({
+      where: { isActive: true },
+      order: { symbol: 'ASC' }
+    });
+
+    // Group tokens by baseSymbol
+    const tokensByBase = tokens.reduce((acc, token) => {
+      if (!acc[token.baseSymbol]) {
+        acc[token.baseSymbol] = [];
+      }
+      acc[token.baseSymbol].push(token);
+      return acc;
+    }, {} as Record<string, typeof tokens>);
+
+    // Return tokens with their variants
+    return {
+      tokens: tokens.map(token => ({
+        id: token.id,
+        symbol: token.symbol,
+        name: token.name,
+        blockchain: token.blockchain,
+        networkVersion: token.networkVersion,
+        baseSymbol: token.baseSymbol,
+        metadata: token.metadata,
+        currentPrice: token.currentPrice,
+        variants: tokensByBase[token.baseSymbol]
+          .filter(t => t.id !== token.id)
+          .map(t => ({
+            blockchain: t.blockchain,
+            networkVersion: t.networkVersion,
+          }))
+      }))
+    };
+  }
 } 

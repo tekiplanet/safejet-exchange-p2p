@@ -12,6 +12,7 @@ import '../../widgets/network_selection_modal.dart';
 import '../../models/coin.dart';
 import 'package:get_it/get_it.dart';
 import '../../services/wallet_service.dart';
+import 'package:shimmer/shimmer.dart';
 
 class DepositScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -42,19 +43,52 @@ class _DepositScreenState extends State<DepositScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize with the asset's coin and network
     final token = widget.asset['token'] as Map<String, dynamic>;
     final metadata = token['metadata'] as Map<String, dynamic>;
     final networks = List<String>.from(metadata['networks'] ?? ['mainnet']);
-    
+
+    // For tokens like USDT that exist on multiple blockchains
+    final availableNetworks = [
+      Network(
+        name: networks.first,
+        blockchain: token['blockchain'],
+        version: token['networkVersion'],
+        arrivalTime: '10-30 minutes',
+        isActive: true,
+      ),
+      // Add other networks if they exist for this token
+      if (token['baseSymbol'] == 'USDT') ...[
+        if (token['blockchain'] != 'ethereum')
+          Network(
+            name: networks.first,
+            blockchain: 'ethereum',
+            version: 'ERC20',
+            arrivalTime: '10-30 minutes',
+            isActive: true,
+          ),
+        if (token['blockchain'] != 'trx')
+          Network(
+            name: networks.first,
+            blockchain: 'trx',
+            version: 'TRC20',
+            arrivalTime: '5-10 minutes',
+            isActive: true,
+          ),
+        if (token['blockchain'] != 'bsc')
+          Network(
+            name: networks.first,
+            blockchain: 'bsc',
+            version: 'BEP20',
+            arrivalTime: '5-10 minutes',
+            isActive: true,
+          ),
+      ]
+    ];
+
     _selectedCoin = Coin(
       symbol: token['symbol'],
       name: token['name'],
-      networks: networks.map((network) => Network(
-        name: network, // Use actual network from metadata
-        arrivalTime: '10-30 minutes',
-        isActive: true,
-      )).toList(),
+      networks: availableNetworks,
     );
     _selectedNetwork = _selectedCoin.networks[0];
     _fetchDepositAddress();
@@ -65,15 +99,17 @@ class _DepositScreenState extends State<DepositScreen> {
     try {
       final token = widget.asset['token'] as Map<String, dynamic>;
       debugPrint('Token data: $token');
-      debugPrint('Selected network: ${_selectedNetwork.name}');
+      debugPrint('Selected network: ${_selectedNetwork.blockchain} (${_selectedNetwork.version})');
 
       final response = await _walletService.getDepositAddress(
         token['id'],
-        network: _selectedNetwork.name.toLowerCase(), // This will now be 'testnet' or 'mainnet'
+        network: _selectedNetwork.name.toLowerCase(),
+        blockchain: _selectedNetwork.blockchain,
+        version: _selectedNetwork.version,
       );
       setState(() {
         _depositAddress = response['address'];
-        _networkVersion = response['networkVersion'];
+        _networkVersion = _selectedNetwork.version;
       });
     } catch (e) {
       debugPrint('Error getting deposit address: $e');
@@ -126,16 +162,18 @@ class _DepositScreenState extends State<DepositScreen> {
                     duration: const Duration(milliseconds: 600),
                     child: GestureDetector(
                       onTap: () async {
-                        final result = await showModalBottomSheet<Coin>(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => const CoinSelectionModal(),
+                        final result = await Navigator.push<Coin>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CoinSelectionModal(),
+                            fullscreenDialog: true,
+                          ),
                         );
                         if (result != null) {
                           setState(() {
                             _selectedCoin = result;
                             _selectedNetwork = result.networks[0]; // Reset to first network
+                            _fetchDepositAddress();
                           });
                         }
                       },
@@ -156,33 +194,43 @@ class _DepositScreenState extends State<DepositScreen> {
                           children: [
                             // Coin Icon
                             Container(
-                              width: 40,
-                              height: 40,
+                              width: 32,
+                              height: 32,
                               decoration: BoxDecoration(
-                                color: SafeJetColors.secondaryHighlight,
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(16),
+                                image: widget.asset['token']['metadata']['icon'] != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(widget.asset['token']['metadata']['icon']),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
                               ),
-                              child: const Icon(
-                                Icons.currency_bitcoin,
-                                color: Colors.black,
-                                size: 24,
-                              ),
+                              child: widget.asset['token']['metadata']['icon'] == null
+                                  ? Center(
+                                      child: Text(
+                                        widget.asset['token']['symbol'][0],
+                                        style: theme.textTheme.titleLarge?.copyWith(
+                                          color: isDark ? Colors.white : Colors.black,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
                             ),
                             const SizedBox(width: 12),
-                            // Coin Info
+                            // Coin Name and Symbol
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _selectedCoin.name,
-                                    style: theme.textTheme.titleMedium?.copyWith(
+                                    widget.asset['token']['name'],
+                                    style: theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   Text(
-                                    'BTC',
-                                    style: TextStyle(
+                                    widget.asset['token']['symbol'],
+                                    style: theme.textTheme.bodySmall?.copyWith(
                                       color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                                     ),
                                   ),
@@ -257,7 +305,7 @@ class _DepositScreenState extends State<DepositScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${_selectedNetwork.name}${_networkVersion != null ? ' ($_networkVersion)' : ''}',
+                                    '${_selectedNetwork.blockchain.toUpperCase()} (${_selectedNetwork.version})',
                                     style: theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -378,7 +426,7 @@ class _DepositScreenState extends State<DepositScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return _isLoading 
-      ? const Center(child: CircularProgressIndicator())
+      ? _buildShimmerLoading(isDark)
       : Column(
           children: [
             // QR Code
@@ -440,5 +488,71 @@ class _DepositScreenState extends State<DepositScreen> {
             ),
           ],
         );
+  }
+
+  Widget _buildShimmerLoading(bool isDark) {
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[900]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+      child: Column(
+        children: [
+          // QR Code placeholder
+          Container(
+            width: 200,
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Address container placeholder
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                // Address text placeholder
+                Expanded(
+                  child: Container(
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Copy button placeholder
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Share button placeholder
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 } 

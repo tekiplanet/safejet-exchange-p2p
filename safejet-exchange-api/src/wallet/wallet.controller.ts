@@ -95,4 +95,10 @@ export class WalletController {
     console.log('Getting deposit address for:', {userId: user.id, tokenId, network});
     return this.walletService.getDepositAddress(user.id, tokenId, network);
   }
+
+  @Get('tokens/available')
+  @UseGuards(JwtAuthGuard)
+  async getAvailableTokens() {
+    return this.walletService.getAvailableTokens();
+  }
 } 
