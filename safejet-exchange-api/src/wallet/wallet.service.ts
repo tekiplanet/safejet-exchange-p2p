@@ -693,4 +693,51 @@ export class WalletService {
       throw error;
     }
   }
+
+  async getDepositAddress(userId: string, tokenId: string, network?: string): Promise<{
+    address: string;
+    network: string;
+    networkVersion: string;
+    memo?: string;
+    tag?: string;
+  }> {
+    // Get token to determine blockchain and network version
+    const token = await this.tokenRepository.findOne({
+      where: { id: tokenId }
+    });
+
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
+
+    console.log('Token found:', token);
+    console.log('Looking for wallet with:', {
+      userId,
+      blockchain: token.blockchain.toLowerCase(),
+      network: (network || 'mainnet').toLowerCase()
+    });
+
+    // Find existing wallet for this blockchain and network
+    const wallet = await this.walletRepository.findOne({
+      where: {
+        userId,
+        blockchain: token.blockchain.toLowerCase(),
+        network: (network || 'mainnet').toLowerCase()
+      }
+    });
+
+    if (!wallet) {
+      throw new NotFoundException(
+        `No wallet found for ${token.blockchain} ${network || 'mainnet'}`
+      );
+    }
+
+    return {
+      address: wallet.address,
+      network: wallet.network,
+      networkVersion: token.networkVersion,
+      memo: wallet.memo,
+      tag: wallet.tag
+    };
+  }
 } 

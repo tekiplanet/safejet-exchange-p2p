@@ -36,8 +36,8 @@ class _CoinSelectionModalState extends State<CoinSelectionModal> {
     });
   }
 
-  IconData _getCoinIcon(String icon) {
-    switch (icon) {
+  IconData _getCoinIcon(String? iconUrl) {
+    switch (iconUrl) {
       case 'bitcoin':
         return Icons.currency_bitcoin;
       case 'ethereum':
@@ -148,7 +148,7 @@ class _CoinSelectionModalState extends State<CoinSelectionModal> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
-                              _getCoinIcon(coin.icon),
+                              _getCoinIcon(coin.iconUrl),
                               color: Colors.black,
                               size: 24,
                             ),

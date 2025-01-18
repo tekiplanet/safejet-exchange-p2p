@@ -578,7 +578,14 @@ class _WalletsTabState extends State<WalletsTab> {
                                   color: SafeJetColors.success,
                                   onTap: () => Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (context) => const DepositScreen()),
+                                    MaterialPageRoute(
+                                      builder: (context) => DepositScreen(
+                                        asset: _balances.isEmpty ? {'token': {'symbol': 'BTC', 'name': 'Bitcoin'}} : _balances.first,
+                                        showInUSD: _showInUSD,
+                                        userCurrencyRate: _userCurrencyRate,
+                                        userCurrency: _userCurrency,
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -1448,7 +1455,12 @@ class _WalletsTabState extends State<WalletsTab> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const DepositScreen(),
+                    builder: (context) => DepositScreen(
+                      asset: _balances.isEmpty ? {'token': {'symbol': 'BTC', 'name': 'Bitcoin'}} : _balances.first,
+                      showInUSD: _showInUSD,
+                      userCurrencyRate: _userCurrencyRate,
+                      userCurrency: _userCurrency,
+                    ),
                   ),
                 );
               },

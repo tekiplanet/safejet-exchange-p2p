@@ -10,23 +10,79 @@ import '../../widgets/coin_selection_modal.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../widgets/network_selection_modal.dart';
 import '../../models/coin.dart';
+import 'package:get_it/get_it.dart';
+import '../../services/wallet_service.dart';
 
 class DepositScreen extends StatefulWidget {
-  const DepositScreen({super.key});
+  final Map<String, dynamic> asset;
+  final bool showInUSD;
+  final double userCurrencyRate;
+  final String userCurrency;
+
+  const DepositScreen({
+    super.key,
+    required this.asset,
+    required this.showInUSD,
+    required this.userCurrencyRate,
+    required this.userCurrency,
+  });
 
   @override
   State<DepositScreen> createState() => _DepositScreenState();
 }
 
 class _DepositScreenState extends State<DepositScreen> {
+  final _walletService = GetIt.I<WalletService>();
+  String? _depositAddress;
+  String? _networkVersion;
+  bool _isLoading = false;
   late Coin _selectedCoin;
   late Network _selectedNetwork;
 
   @override
   void initState() {
     super.initState();
-    _selectedCoin = coins[0]; // Default to Bitcoin
-    _selectedNetwork = _selectedCoin.networks[0]; // Default to first network
+    // Initialize with the asset's coin and network
+    final token = widget.asset['token'] as Map<String, dynamic>;
+    final metadata = token['metadata'] as Map<String, dynamic>;
+    final networks = List<String>.from(metadata['networks'] ?? ['mainnet']);
+    
+    _selectedCoin = Coin(
+      symbol: token['symbol'],
+      name: token['name'],
+      networks: networks.map((network) => Network(
+        name: network, // Use actual network from metadata
+        arrivalTime: '10-30 minutes',
+        isActive: true,
+      )).toList(),
+    );
+    _selectedNetwork = _selectedCoin.networks[0];
+    _fetchDepositAddress();
+  }
+
+  Future<void> _fetchDepositAddress() async {
+    setState(() => _isLoading = true);
+    try {
+      final token = widget.asset['token'] as Map<String, dynamic>;
+      debugPrint('Token data: $token');
+      debugPrint('Selected network: ${_selectedNetwork.name}');
+
+      final response = await _walletService.getDepositAddress(
+        token['id'],
+        network: _selectedNetwork.name.toLowerCase(), // This will now be 'testnet' or 'mainnet'
+      );
+      setState(() {
+        _depositAddress = response['address'];
+        _networkVersion = response['networkVersion'];
+      });
+    } catch (e) {
+      debugPrint('Error getting deposit address: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to get deposit address: ${e.toString()}')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -175,7 +231,10 @@ class _DepositScreenState extends State<DepositScreen> {
                           ),
                         );
                         if (result != null) {
-                          setState(() => _selectedNetwork = result);
+                          setState(() {
+                            _selectedNetwork = result;
+                          });
+                          _fetchDepositAddress(); // Fetch new address for selected network
                         }
                       },
                       child: Container(
@@ -198,7 +257,7 @@ class _DepositScreenState extends State<DepositScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _selectedNetwork.name,
+                                    '${_selectedNetwork.name}${_networkVersion != null ? ' ($_networkVersion)' : ''}',
                                     style: theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -258,62 +317,7 @@ class _DepositScreenState extends State<DepositScreen> {
                       child: Column(
                         children: [
                           // QR Code
-                          QrImageView(
-                            data: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-                            version: QrVersions.auto,
-                            size: 200,
-                            backgroundColor: Colors.white,
-                            padding: const EdgeInsets.all(16),
-                          ),
-                          const SizedBox(height: 20),
-                          // Address with Copy/Share
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isDark 
-                                  ? Colors.black.withOpacity(0.2)
-                                  : Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-                                    style: theme.textTheme.bodyMedium,
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: () {
-                                    Clipboard.setData(const ClipboardData(
-                                      text: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
-                                    ));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Address copied to clipboard'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.copy_rounded),
-                                  color: SafeJetColors.secondaryHighlight,
-                                ),
-                                IconButton(
-                                  onPressed: () {
-                                    Share.share(
-                                      'My Bitcoin deposit address:\n\nbc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh\n\nNetwork: Bitcoin (BTC)',
-                                      subject: 'My Bitcoin Deposit Address',
-                                    );
-                                  },
-                                  icon: const Icon(Icons.share_rounded),
-                                  color: SafeJetColors.secondaryHighlight,
-                                ),
-                              ],
-                            ),
-                          ),
+                          _buildAddressSection(),
                         ],
                       ),
                     ),
@@ -322,37 +326,7 @@ class _DepositScreenState extends State<DepositScreen> {
                   const SizedBox(height: 24),
 
                   // Warning Notice
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 400),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: SafeJetColors.error.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: SafeJetColors.error.withOpacity(0.2),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.warning_rounded,
-                            color: SafeJetColors.error,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Send only BTC to this deposit address. Sending any other coin may result in permanent loss.',
-                              style: TextStyle(
-                                color: SafeJetColors.error,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  _buildWarningNotice(),
                 ],
               ),
             ),
@@ -360,5 +334,111 @@ class _DepositScreenState extends State<DepositScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildWarningNotice() {
+    return FadeInDown(
+      duration: const Duration(milliseconds: 600),
+      delay: const Duration(milliseconds: 400),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: SafeJetColors.error.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: SafeJetColors.error.withOpacity(0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.warning_rounded,
+              color: SafeJetColors.error,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Send only ${widget.asset['token']['symbol']} ' +
+                (_networkVersion != null ? '($_networkVersion) ' : '') +
+                'to this deposit address. ' +
+                'Sending any other coin or token may result in permanent loss.',
+                style: TextStyle(
+                  color: SafeJetColors.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddressSection() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return _isLoading 
+      ? const Center(child: CircularProgressIndicator())
+      : Column(
+          children: [
+            // QR Code
+            if (_depositAddress != null)
+              QrImageView(
+                data: _depositAddress!,
+                version: QrVersions.auto,
+                size: 200.0,
+                backgroundColor: Colors.white,
+              ),
+            const SizedBox(height: 20),
+            // Address with Copy/Share
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                color: isDark 
+                    ? Colors.black.withOpacity(0.2)
+                    : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _depositAddress ?? 'Loading address...',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _depositAddress == null ? null : () {
+                      Clipboard.setData(ClipboardData(
+                        text: _depositAddress!,
+                      ));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Address copied to clipboard'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_rounded),
+                    color: SafeJetColors.secondaryHighlight,
+                  ),
+                  IconButton(
+                    onPressed: _depositAddress == null ? null : () {
+                      Share.share(
+                        'My ${widget.asset['token']['symbol']} deposit address:\n\n$_depositAddress\n\nNetwork: ${_selectedNetwork.name}${_networkVersion != null ? ' ($_networkVersion)' : ''}',
+                        subject: 'My ${widget.asset['token']['symbol']} Deposit Address',
+                      );
+                    },
+                    icon: const Icon(Icons.share_rounded),
+                    color: SafeJetColors.secondaryHighlight,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
   }
 } 

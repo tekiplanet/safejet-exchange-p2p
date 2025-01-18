@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import '../services/service_locator.dart';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 
 class WalletService {
   late final Dio _dio;
@@ -171,6 +172,39 @@ class WalletService {
         'success': false,
         'message': e.toString(),
       };
+    }
+  }
+
+  Future<Map<String, dynamic>> getDepositAddress(String tokenId, {String? network}) async {
+    try {
+      // Get the auth token
+      final token = await storage.read(key: 'accessToken');
+      if (token == null) {
+        throw 'Authentication token not found';
+      }
+
+      // Add auth token to headers
+      _dio.options.headers['Authorization'] = 'Bearer $token';
+
+      final response = await _dio.get(
+        '/wallets/deposit-address/$tokenId',
+        queryParameters: network != null ? {'network': network} : null,
+      );
+
+      if (response.data == null) {
+        throw 'Failed to get deposit address';
+      }
+
+      return {
+        'address': response.data['address'],
+        'network': response.data['network'],
+        'networkVersion': response.data['networkVersion'],
+        'memo': response.data['memo'],
+        'tag': response.data['tag'],
+      };
+    } catch (e) {
+      debugPrint('Error getting deposit address: $e');
+      rethrow;
     }
   }
 }

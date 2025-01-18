@@ -1,14 +1,14 @@
 class Coin {
-  final String name;
   final String symbol;
-  final String icon;
+  final String name;
   final List<Network> networks;
+  final String? iconUrl;
 
   const Coin({
-    required this.name,
     required this.symbol,
-    required this.icon,
+    required this.name,
     required this.networks,
+    this.iconUrl,
   });
 }
 
@@ -29,7 +29,7 @@ final List<Coin> coins = [
   Coin(
     name: 'Bitcoin',
     symbol: 'BTC',
-    icon: 'bitcoin',
+    iconUrl: 'bitcoin',
     networks: [
       Network(name: 'Bitcoin Network (BTC)', arrivalTime: '~30 minutes'),
       Network(name: 'Lightning Network', arrivalTime: '~1 minute', isActive: false),
@@ -38,7 +38,7 @@ final List<Coin> coins = [
   Coin(
     name: 'Ethereum',
     symbol: 'ETH',
-    icon: 'ethereum',
+    iconUrl: 'ethereum',
     networks: [
       Network(name: 'ERC-20', arrivalTime: '~5 minutes'),
     ],
@@ -46,7 +46,7 @@ final List<Coin> coins = [
   Coin(
     name: 'Tether',
     symbol: 'USDT',
-    icon: 'tether',
+    iconUrl: 'tether',
     networks: [
       Network(name: 'ERC-20', arrivalTime: '~5 minutes'),
       Network(name: 'TRC-20', arrivalTime: '~3 minutes'),
@@ -56,7 +56,7 @@ final List<Coin> coins = [
   Coin(
     name: 'BNB',
     symbol: 'BNB',
-    icon: 'bnb',
+    iconUrl: 'bnb',
     networks: [
       Network(name: 'BEP-20', arrivalTime: '~3 minutes'),
     ],
@@ -64,7 +64,7 @@ final List<Coin> coins = [
   Coin(
     name: 'Solana',
     symbol: 'SOL',
-    icon: 'solana',
+    iconUrl: 'solana',
     networks: [
       Network(name: 'Solana Network', arrivalTime: '~1 minute'),
     ],

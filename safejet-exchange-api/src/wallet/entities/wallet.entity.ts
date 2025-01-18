@@ -35,4 +35,10 @@ export class Wallet {
 
   @Column({ default: 'mainnet' })
   network: string;
+
+  @Column({ nullable: true })
+  memo: string;
+
+  @Column({ nullable: true })
+  tag: string;
 } 

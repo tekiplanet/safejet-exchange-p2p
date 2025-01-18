@@ -84,4 +84,15 @@ export class WalletController {
   async updateAllTokensMarketData() {
     return this.walletService.updateTokenMarketData();
   }
+
+  @Get('deposit-address/:tokenId')
+  @UseGuards(JwtAuthGuard)
+  async getDepositAddress(
+    @GetUser() user: User,
+    @Param('tokenId') tokenId: string,
+    @Query('network') network?: string,
+  ) {
+    console.log('Getting deposit address for:', {userId: user.id, tokenId, network});
+    return this.walletService.getDepositAddress(user.id, tokenId, network);
+  }
 } 
