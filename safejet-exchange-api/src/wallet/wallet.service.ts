@@ -65,45 +65,50 @@ export class WalletService {
       
       for (const type of types) {
         try {
-          // Find matching token for this blockchain/network
-          const matchingToken = groupTokens.find(t => 
-            t.blockchain === wallet.blockchain && 
-            t.metadata?.networks?.includes(wallet.network)
-          );
+          // Build complete networks metadata for all supported networks
+          const networks = {};
+          
+          // Add metadata for all tokens with this baseSymbol
+          for (const token of groupTokens) {
+            // Get ALL wallets for this blockchain (both mainnet and testnet)
+            const tokenWallets = await this.walletRepository.find({
+              where: {
+                userId: wallet.userId,
+                blockchain: token.blockchain
+              }
+            });
 
-          if (matchingToken) {
-            // Use upsert to handle concurrent operations
-            await this.walletBalanceRepository.createQueryBuilder()
-              .insert()
-              .into(WalletBalance)
-              .values({
+            // Add entry for each network where we have a wallet
+            for (const tokenWallet of tokenWallets) {
+              const networkKey = `${token.blockchain}_${tokenWallet.network}`; // e.g. "ethereum_mainnet"
+              networks[networkKey] = {
+                walletId: tokenWallet.id,
+                tokenId: token.id,
+                networkVersion: token.networkVersion,
+                contractAddress: token.contractAddress,
+                network: tokenWallet.network
+              };
+            }
+          }
+
+          // Only create/update if we have network metadata
+          if (Object.keys(networks).length > 0) {
+            await this.walletBalanceRepository.upsert(
+              {
                 userId: wallet.userId,
                 baseSymbol,
-                balance: '0',
                 type,
-                metadata: {
-                  networks: {
-                    [wallet.blockchain]: {
-                      walletId: wallet.id,
-                      tokenId: matchingToken.id,
-                      networkVersion: matchingToken.networkVersion,
-                      contractAddress: matchingToken.contractAddress,
-                      network: wallet.network
-                    }
-                  }
-                }
-              })
-              .orUpdate(
-                ['metadata'],
-                ['userId', 'baseSymbol', 'type'],
-                {
-                  skipUpdateIfNoValuesChanged: true
-                }
-              )
-              .execute();
+                balance: '0',
+                metadata: { networks }
+              },
+              ['userId', 'baseSymbol', 'type']
+            );
           }
         } catch (error) {
-          this.logger.warn(`Failed to initialize balance for ${baseSymbol} ${type}: ${error.message}`);
+          this.logger.error(
+            `Failed to initialize balance for ${baseSymbol}:`,
+            error
+          );
         }
       }
     }
