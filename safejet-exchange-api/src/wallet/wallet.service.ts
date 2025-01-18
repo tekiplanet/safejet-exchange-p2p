@@ -694,41 +694,50 @@ export class WalletService {
     }
   }
 
-  async getDepositAddress(userId: string, tokenId: string, network?: string): Promise<{
-    address: string;
-    network: string;
-    networkVersion: string;
-    memo?: string;
-    tag?: string;
-  }> {
-    // Get token to determine blockchain and network version
-    const token = await this.tokenRepository.findOne({
+  async getDepositAddress(
+    userId: string,
+    tokenId: string,
+    network: string,
+    blockchain: string,
+    version: string,
+  ) {
+    // First get the original token to get its baseSymbol
+    const originalToken = await this.tokenRepository.findOne({
       where: { id: tokenId }
     });
 
-    if (!token) {
+    if (!originalToken) {
       throw new NotFoundException('Token not found');
     }
 
-    console.log('Token found:', token);
-    console.log('Looking for wallet with:', {
-      userId,
-      blockchain: token.blockchain.toLowerCase(),
-      network: (network || 'mainnet').toLowerCase()
+    // Find the token variant for the requested network
+    const token = await this.tokenRepository.findOne({
+      where: {
+        baseSymbol: originalToken.baseSymbol,
+        blockchain: blockchain.toLowerCase(),
+        networkVersion: version.toUpperCase(),
+        isActive: true
+      }
     });
 
-    // Find existing wallet for this blockchain and network
+    if (!token) {
+      throw new NotFoundException(
+        `Network ${blockchain}/${version} not available for this token`
+      );
+    }
+
+    // Find the user's wallet for this blockchain
     const wallet = await this.walletRepository.findOne({
       where: {
         userId,
-        blockchain: token.blockchain.toLowerCase(),
-        network: (network || 'mainnet').toLowerCase()
-      }
+        blockchain: blockchain.toLowerCase(),
+        network: network.toLowerCase(),
+      },
     });
 
     if (!wallet) {
       throw new NotFoundException(
-        `No wallet found for ${token.blockchain} ${network || 'mainnet'}`
+        `No wallet found for ${blockchain} ${network}`
       );
     }
 
@@ -737,44 +746,42 @@ export class WalletService {
       network: wallet.network,
       networkVersion: token.networkVersion,
       memo: wallet.memo,
-      tag: wallet.tag
+      tag: wallet.tag,
     };
   }
 
   async getAvailableTokens() {
-    // Get all active tokens
     const tokens = await this.tokenRepository.find({
       where: { isActive: true },
       order: { symbol: 'ASC' }
     });
 
     // Group tokens by baseSymbol
-    const tokensByBase = tokens.reduce((acc, token) => {
-      if (!acc[token.baseSymbol]) {
-        acc[token.baseSymbol] = [];
+    const groupedTokens = tokens.reduce((acc, token) => {
+      const key = token.baseSymbol || token.symbol;
+      if (!acc[key]) {
+        acc[key] = {
+          id: token.id,
+          symbol: token.symbol,
+          name: token.name.split(' (')[0], // Remove network suffix
+          baseSymbol: token.baseSymbol,
+          metadata: token.metadata,
+          currentPrice: token.currentPrice,
+          networks: token.networkConfigs
+            .filter(config => config.isActive)
+            .map(config => ({
+              blockchain: config.blockchain,
+              version: config.version,
+              arrivalTime: config.arrivalTime,
+              requiredFields: config.requiredFields,
+            }))
+        };
       }
-      acc[token.baseSymbol].push(token);
       return acc;
-    }, {} as Record<string, typeof tokens>);
+    }, {});
 
-    // Return tokens with their variants
     return {
-      tokens: tokens.map(token => ({
-        id: token.id,
-        symbol: token.symbol,
-        name: token.name,
-        blockchain: token.blockchain,
-        networkVersion: token.networkVersion,
-        baseSymbol: token.baseSymbol,
-        metadata: token.metadata,
-        currentPrice: token.currentPrice,
-        variants: tokensByBase[token.baseSymbol]
-          .filter(t => t.id !== token.id)
-          .map(t => ({
-            blockchain: t.blockchain,
-            networkVersion: t.networkVersion,
-          }))
-      }))
+      tokens: Object.values(groupedTokens)
     };
   }
 } 

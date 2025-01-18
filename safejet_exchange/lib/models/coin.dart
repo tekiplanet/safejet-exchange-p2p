@@ -13,18 +13,22 @@ class Coin {
 }
 
 class Network {
-  final String name;        // mainnet/testnet
-  final String blockchain;  // ethereum/trx/bsc
-  final String version;     // ERC20/TRC20/BEP20/NATIVE
+  final String name;
+  final String blockchain;
+  final String version;
   final String arrivalTime;
   final bool isActive;
+  final bool requiresMemo;
+  final bool requiresTag;
 
-  const Network({
+  Network({
     required this.name,
     required this.blockchain,
     required this.version,
     required this.arrivalTime,
     this.isActive = true,
+    this.requiresMemo = false,
+    this.requiresTag = false,
   });
 }
 

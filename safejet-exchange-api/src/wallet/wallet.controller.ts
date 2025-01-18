@@ -91,9 +91,24 @@ export class WalletController {
     @GetUser() user: User,
     @Param('tokenId') tokenId: string,
     @Query('network') network?: string,
+    @Query('blockchain') blockchain?: string,
+    @Query('version') version?: string,
   ) {
-    console.log('Getting deposit address for:', {userId: user.id, tokenId, network});
-    return this.walletService.getDepositAddress(user.id, tokenId, network);
+    console.log('Getting deposit address for:', {
+      userId: user.id,
+      tokenId,
+      network,
+      blockchain,
+      version
+    });
+    
+    return this.walletService.getDepositAddress(
+      user.id,
+      tokenId,
+      network || 'mainnet',
+      blockchain || 'ethereum',
+      version || 'NATIVE'
+    );
   }
 
   @Get('tokens/available')

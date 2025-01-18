@@ -178,38 +178,20 @@ class WalletService {
 
   Future<Map<String, dynamic>> getDepositAddress(
     String tokenId, {
-    String? network,
-    String? blockchain,
-    String? version,
+    required String network,
+    required String blockchain,
+    required String version,
   }) async {
     try {
-      final token = await storage.read(key: 'accessToken');
-      if (token == null) {
-        throw 'Authentication token not found';
-      }
-
-      _dio.options.headers['Authorization'] = 'Bearer $token';
-
       final response = await _dio.get(
         '/wallets/deposit-address/$tokenId',
         queryParameters: {
-          if (network != null) 'network': network,
-          if (blockchain != null) 'blockchain': blockchain,
-          if (version != null) 'version': version,
+          'network': network,
+          'blockchain': blockchain,
+          'version': version,
         },
       );
-
-      if (response.data == null) {
-        throw 'Failed to get deposit address';
-      }
-
-      return {
-        'address': response.data['address'],
-        'network': response.data['network'],
-        'networkVersion': response.data['networkVersion'],
-        'memo': response.data['memo'],
-        'tag': response.data['tag'],
-      };
+      return response.data;
     } catch (e) {
       debugPrint('Error getting deposit address: $e');
       rethrow;
@@ -223,30 +205,20 @@ class WalletService {
       
       return tokens.map((token) {
         final metadata = token['metadata'] as Map<String, dynamic>;
-        final networks = List<String>.from(metadata['networks'] ?? ['mainnet']);
-        final variants = List<Map<String, dynamic>>.from(token['variants'] ?? []);
+        final networks = List<Map<String, dynamic>>.from(token['networks']);
         
         return Coin(
           symbol: token['symbol'],
           name: token['name'],
           iconUrl: metadata['icon'],
-          networks: [
-            Network(
-              name: networks.first,
-              blockchain: token['blockchain'],
-              version: token['networkVersion'],
-              arrivalTime: '10-30 minutes',
-              isActive: true,
-            ),
-            // Add network variants
-            ...variants.map((variant) => Network(
-              name: networks.first,
-              blockchain: variant['blockchain'],
-              version: variant['networkVersion'],
-              arrivalTime: '5-10 minutes',
-              isActive: true,
-            )),
-          ],
+          networks: networks.map((network) => Network(
+            name: network['blockchain'],
+            blockchain: network['blockchain'],
+            version: network['version'],
+            arrivalTime: network['arrivalTime'],
+            requiresMemo: network['requiredFields']?['memo'] ?? false,
+            requiresTag: network['requiredFields']?['tag'] ?? false,
+          )).toList(),
         );
       }).toList();
     } catch (e) {

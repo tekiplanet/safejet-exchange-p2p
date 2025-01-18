@@ -39,6 +39,7 @@ class _DepositScreenState extends State<DepositScreen> {
   bool _isLoading = false;
   late Coin _selectedCoin;
   late Network _selectedNetwork;
+  String? _warningMessage;
 
   @override
   void initState() {
@@ -104,12 +105,15 @@ class _DepositScreenState extends State<DepositScreen> {
       final response = await _walletService.getDepositAddress(
         token['id'],
         network: _selectedNetwork.name.toLowerCase(),
-        blockchain: _selectedNetwork.blockchain,
-        version: _selectedNetwork.version,
+        blockchain: _selectedNetwork.blockchain.toLowerCase(),
+        version: _selectedNetwork.version.toUpperCase(),
       );
+
       setState(() {
         _depositAddress = response['address'];
         _networkVersion = _selectedNetwork.version;
+        _warningMessage = 'Send only ${token['symbol']} (${_selectedNetwork.version}) to this deposit address. ' +
+            'Sending any other coin or token may result in permanent loss.';
       });
     } catch (e) {
       debugPrint('Error getting deposit address: $e');
@@ -269,21 +273,21 @@ class _DepositScreenState extends State<DepositScreen> {
                     delay: const Duration(milliseconds: 200),
                     child: GestureDetector(
                       onTap: () async {
-                        final result = await showModalBottomSheet<Network>(
+                        final result = await showModalBottomSheet<void>(
                           context: context,
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
                           builder: (context) => NetworkSelectionModal(
                             networks: _selectedCoin.networks,
                             selectedNetwork: _selectedNetwork,
+                            onNetworkSelected: (network) {
+                              setState(() {
+                                _selectedNetwork = network;
+                                _fetchDepositAddress();
+                              });
+                            },
                           ),
                         );
-                        if (result != null) {
-                          setState(() {
-                            _selectedNetwork = result;
-                          });
-                          _fetchDepositAddress(); // Fetch new address for selected network
-                        }
                       },
                       child: Container(
                         padding: const EdgeInsets.all(16),
@@ -310,32 +314,19 @@ class _DepositScreenState extends State<DepositScreen> {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
                                   Text(
                                     'Average arrival time: ${_selectedNetwork.arrivalTime}',
                                     style: TextStyle(
                                       color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: SafeJetColors.success.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'Active',
-                                style: TextStyle(
-                                  color: SafeJetColors.success,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                             ),
                           ],
                         ),
@@ -406,10 +397,7 @@ class _DepositScreenState extends State<DepositScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Send only ${widget.asset['token']['symbol']} ' +
-                (_networkVersion != null ? '($_networkVersion) ' : '') +
-                'to this deposit address. ' +
-                'Sending any other coin or token may result in permanent loss.',
+                _warningMessage ?? 'Loading warning...',
                 style: TextStyle(
                   color: SafeJetColors.error,
                 ),

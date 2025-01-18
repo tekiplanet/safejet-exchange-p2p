@@ -688,18 +688,21 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: () async {
-                            final result = await showModalBottomSheet<Network>(
+                            await showModalBottomSheet<void>(
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (context) => NetworkSelectionModal(
                                 networks: _selectedCoin.networks,
                                 selectedNetwork: _selectedNetwork,
+                                onNetworkSelected: (network) {
+                                  setState(() {
+                                    _selectedNetwork = network;
+                                  });
+                                  Navigator.pop(context);
+                                },
                               ),
                             );
-                            if (result != null) {
-                              setState(() => _selectedNetwork = result);
-                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.all(16),

@@ -73,4 +73,16 @@ export class Token {
 
   @Column({ nullable: true })
   coingeckoId: string;
+
+  @Column('jsonb', { nullable: true })
+  networkConfigs: {
+    blockchain: string;
+    version: string;
+    arrivalTime: string;
+    isActive: boolean;
+    requiredFields?: {
+      memo?: boolean;
+      tag?: boolean;
+    };
+  }[];
 } 
