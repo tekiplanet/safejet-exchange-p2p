@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull } from 'typeorm';
+import { Repository, Not, IsNull, Raw } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { KeyManagementService } from './key-management.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
@@ -726,7 +726,7 @@ export class WalletService {
       );
     }
 
-    // Find the user's wallet for this blockchain
+    // Find the user's wallet for this blockchain and network
     const wallet = await this.walletRepository.findOne({
       where: {
         userId,
@@ -763,20 +763,31 @@ export class WalletService {
         acc[key] = {
           id: token.id,
           symbol: token.symbol,
-          name: token.name.split(' (')[0], // Remove network suffix
+          name: token.name.split(' (')[0],
           baseSymbol: token.baseSymbol,
           metadata: token.metadata,
           currentPrice: token.currentPrice,
-          networks: token.networkConfigs
-            .filter(config => config.isActive)
-            .map(config => ({
-              blockchain: config.blockchain,
-              version: config.version,
-              arrivalTime: config.arrivalTime,
-              requiredFields: config.requiredFields,
-            }))
+          networks: []
         };
       }
+
+      // Get supported networks from metadata
+      const supportedNetworks = token.metadata?.networks || ['mainnet'];
+
+      // Add each supported network
+      supportedNetworks.forEach(networkType => {
+        acc[key].networks.push({
+          blockchain: token.blockchain,
+          version: token.networkVersion,
+          network: networkType,
+          arrivalTime: token.blockchain === 'ethereum' ? '10-30 minutes' : '5-10 minutes',
+          requiredFields: {
+            memo: false,
+            tag: false
+          }
+        });
+      });
+
       return acc;
     }, {});
 
