@@ -16,11 +16,17 @@ export class WalletController {
     @Query('type') type?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-  ) {
-    return this.walletService.getBalances(userId, type, {
-      page: page || 1,
-      limit: limit || 20,
-    });
+  ): Promise<any> {
+    const validType = type === 'spot' || type === 'funding' ? type as 'spot' | 'funding' : undefined;
+    
+    return this.walletService.getBalances(
+      userId,
+      validType,
+      {
+        page: page || 1,
+        limit: limit || 20,
+      }
+    );
   }
 
   @Post()

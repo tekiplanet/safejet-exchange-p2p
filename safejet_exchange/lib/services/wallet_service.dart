@@ -93,15 +93,13 @@ class WalletService {
       final balances = response.data['balances'] as List<dynamic>;
       balances.forEach((balance) {
         final token = balance['token'] as Map<String, dynamic>;
-        final rawBalance = balance['balance'].toString();
-        final networks = balance['networks'] as List<dynamic>?;
+        final networks = balance['networks'] as List<dynamic>;
         
         print('\n=== Token Balance ===');
         print('Symbol: ${token['symbol']}');
         print('Type: ${balance['type']}');
-        print('Total Balance: ${_formatBalance(rawBalance, token['decimals'])}');
-        print('Current Price: ${token['currentPrice']}');
         
+        // Process networks with new structure
         if (networks != null) {
           print('\nNetwork Breakdown:');
           networks.forEach((network) {
@@ -113,7 +111,7 @@ class WalletService {
 
       return response.data;
     } catch (e) {
-      // print('Error in getBalances: $e');
+      print('Error in getBalances: $e');
       rethrow;
     }
   }

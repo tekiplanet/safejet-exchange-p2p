@@ -20,6 +20,64 @@ interface PaginationParams {
   limit: number;
 }
 
+interface NetworkBalance {
+  blockchain: string;
+  network: string;
+  walletId: string;
+  tokenId: string;
+  networkVersion: string;
+  contractAddress?: string;
+  balance: string;
+}
+
+interface TokenData {
+  id: string;
+  symbol: string;
+  name: string;
+  currentPrice: string;
+  price24h: string;
+  changePercent24h: number;
+  blockchain: string;
+  contractAddress?: string;
+  networkVersion: string;
+  [key: string]: any;
+}
+
+interface ProcessedBalance {
+  id: string;
+  userId: string;
+  baseSymbol: string;
+  type: 'spot' | 'funding';
+  balance: string;
+  usdValue: string;
+  networks: NetworkBalance[];
+  token: TokenData | null;
+  metadata: {
+    networks: {
+      [key: string]: {
+        walletId: string;
+        tokenId: string;
+        networkVersion: string;
+        contractAddress?: string;
+        network: string;
+      };
+    };
+  };
+}
+
+interface BalanceResponse {
+  balances: ProcessedBalance[];
+  total: string;
+  change24h: string;
+  changePercent24h: number;
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    hasMore: boolean;
+  };
+}
+
 @Injectable()
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
@@ -272,187 +330,165 @@ export class WalletService {
   }
 
   async getBalances(
-    userId: any,
-    type?: string, 
-    pagination: PaginationParams = { page: 1, limit: 20 },
-    showZeroBalances: boolean = true
-  ): Promise<any> {
+    userId: string,
+    type?: 'spot' | 'funding',
+    pagination: PaginationParams = { page: 1, limit: 20 }
+  ): Promise<BalanceResponse> {
     try {
-      this.logger.log('=== Starting getBalances ===');
-      this.logger.log(`Type: ${type}, Page: ${pagination.page}, Limit: ${pagination.limit}`);
-
-      // Extract ID if a user object was passed
-      const actualUserId = typeof userId === 'object' ? userId.id : userId;
-
       const page = Math.max(1, Math.floor(Number(pagination.page)));
       const limit = Math.max(1, Math.floor(Number(pagination.limit)));
-      
-      const wallets = await this.walletRepository.find({
-        where: { userId: actualUserId, status: 'active' }
-      });
+      const offset = (page - 1) * limit;
 
-      // Add logging here
-      this.logger.log(`Found ${wallets.length} active wallets:`);
-      wallets.forEach(wallet => {
-        this.logger.log(`Wallet: ${wallet.blockchain} - ${wallet.network} - ${wallet.id}`);
-      });
-
-      if (!wallets || wallets.length === 0) {
-        return {
-          balances: [],
-          total: 0,
-          change24h: 0,
-          changePercent24h: 0,
-          pagination: {
-            total: 0,
-            page,
-            limit,
-            totalPages: 0,
-            hasMore: false,
-          }
-        };
-      }
-
-      const walletIds = wallets.map(w => w.id);
-      const query = this.walletBalanceRepository
+      // Get balances
+      const balances = await this.walletBalanceRepository
         .createQueryBuilder('balance')
-        .leftJoinAndSelect('balance.token', 'token')
-        .where('balance.walletId IN (:...walletIds)', { walletIds });
+        .where('balance.userId = :userId', { userId })
+        .andWhere(type ? 'balance.type = :type' : '1=1', { type })
+        .skip(offset)
+        .take(limit)
+        .getMany();
 
-      if (type) {
-        query.andWhere('balance.type = :type', { type });
-      }
+      // Process balances
+      const processedBalances = await Promise.all(
+        balances.map(async (balance) => {
+          const networks = [];
+          let totalBalance = new Decimal(0);
 
-      const balances = await query.getMany();
+          // Process network metadata using our new structure
+          if (balance.metadata?.networks) {
+            for (const [networkKey, networkData] of Object.entries(balance.metadata.networks)) {
+              const [blockchain, network] = networkKey.split('_');
+              
+              // Get token using tokenId from network metadata
+              const token = await this.tokenRepository.findOne({
+                where: { id: networkData.tokenId }
+              });
 
-      // Process all balances (combines networks and sorts by value)
-      const processedBalances = this.processBalancesWithNetworks(balances);
+              if (token) {
+                networks.push({
+                  blockchain,
+                  network,
+                  walletId: networkData.walletId,
+                  tokenId: networkData.tokenId,
+                  networkVersion: networkData.networkVersion,
+                  contractAddress: networkData.contractAddress,
+                  balance: '0' // Initialize with 0, will be updated from blockchain
+                });
+              }
+            }
+          }
 
-      // Filter zero balances if needed
-      const displayBalances = showZeroBalances 
-        ? processedBalances 
-        : processedBalances.filter(b => !new Decimal(b.usdValue).isZero());
+          // Get first token from networks for price data
+          const firstNetwork = Object.values(balance.metadata?.networks || {})[0];
+          const token = firstNetwork ? await this.tokenRepository.findOne({
+            where: { id: firstNetwork.tokenId }
+          }) : null;
 
-      // Calculate totals
-      const spotBalances = displayBalances.filter(b => b.type === 'spot');
-      const fundingBalances = displayBalances.filter(b => b.type === 'funding');
-      
-      const spotTotal = this.calculateTotal(spotBalances);
-      const fundingTotal = this.calculateTotal(fundingBalances);
+          const usdValue = token?.currentPrice 
+            ? totalBalance.times(token.currentPrice).toString()
+            : '0';
 
-      // Paginate after all processing
-      const startIndex = (pagination.page - 1) * pagination.limit;
-      const paginatedBalances = displayBalances
-        .slice(startIndex, startIndex + pagination.limit);
+          // Convert numeric values to strings
+          const processedToken = token ? {
+            ...token,
+            currentPrice: token.currentPrice?.toString() || '0',
+            price24h: token.price24h?.toString() || '0',
+            changePercent24h: token.changePercent24h || 0
+          } : null;
 
-      // Calculate total USD value and 24h changes
-      let totalChange24h = 0;
-      let totalValue = 0;
+          return {
+            ...balance,
+            networks,
+            balance: totalBalance.toString(),
+            usdValue,
+            token: processedToken
+          };
+        })
+      );
 
-      for (const balance of displayBalances) {
-        const token = await this.tokenRepository.findOne({
-          where: { symbol: balance.symbol }
-        });
+      // Calculate totals using Decimal.js
+      const totalValue = processedBalances.reduce((acc: Decimal, balance) => {
+        return acc.plus(new Decimal(balance.usdValue || '0'));
+      }, new Decimal(0));
 
-        if (token && balance.balance > 0) {
-          const currentValue = balance.balance * token.currentPrice;
-          totalValue += currentValue;
-          
-          // Calculate this token's contribution to the 24h change
-          const tokenChange = currentValue * (token.changePercent24h / 100);
-          totalChange24h += tokenChange;
-        }
-      }
+      const totalChange24h = processedBalances.reduce((acc: Decimal, balance) => {
+        if (!balance.token) return acc;
+        
+        const price24h = new Decimal(balance.token.price24h || '0');
+        const currentPrice = new Decimal(balance.token.currentPrice || '0');
+        const balanceAmount = new Decimal(balance.balance || '0');
+        
+        return acc.plus(
+          currentPrice.minus(price24h).times(balanceAmount)
+        );
+      }, new Decimal(0));
 
-      // Calculate overall change percentage
-      const changePercent24h = totalValue > 0 ? (totalChange24h / totalValue) * 100 : 0;
+      const changePercent24h = totalValue.isZero()
+        ? 0
+        : totalChange24h.div(totalValue).times(100).toNumber();
 
-        return {
-          balances: paginatedBalances,
-        total: spotTotal + fundingTotal,
-        spotTotal,
-        fundingTotal,
-        change24h: totalChange24h,
-          changePercent24h,
-          pagination: {
-          total: displayBalances.length,
-          page: pagination.page,
-          limit: pagination.limit,
-          totalPages: Math.ceil(displayBalances.length / pagination.limit),
-          hasMore: pagination.page * pagination.limit < displayBalances.length
+      const total = await this.walletBalanceRepository.count({
+        where: { userId, ...(type && { type }) }
+      });
+
+      return {
+        balances: processedBalances,
+        total: totalValue.toString(),
+        change24h: totalChange24h.toString(),
+        changePercent24h,
+        pagination: {
+          total,
+          page,
+          limit,
+          hasMore: offset + limit < total
         }
       };
     } catch (error) {
-      this.logger.error(`Failed to get balances: ${error.message}`);
+      this.logger.error('Error in getBalances:', error);
       throw error;
     }
   }
 
-  private processBalancesWithNetworks(balances: any[]): any[] {
-    const combinedBalances = new Map<string, any>();
+  private processBalancesWithNetworks(
+    balances: ProcessedBalance[]
+  ): ProcessedBalance[] {
+    const combinedBalances = new Map<string, ProcessedBalance>();
     
-    // First combine balances
     balances.forEach(balance => {
-      const key = `${balance.token.baseSymbol}_${balance.type}`;
-      const rawBalance = balance.balance || '0';
-      const currentBalance = new Decimal(rawBalance);
-
-      // Get price in proper decimal format
-      const price = new Decimal(balance.token.currentPrice || '0');
+      if (!balance.token) return;
       
-      // Calculate USD value
+      const key = `${balance.token.baseSymbol}_${balance.type}`;
+      const currentBalance = new Decimal(balance.balance || '0');
+      const price = new Decimal(balance.token.currentPrice || '0');
       const usdValue = currentBalance.times(price);
 
-      const networkBalance = {
+      const networkBalance: NetworkBalance = {
         blockchain: balance.token.blockchain,
+        network: balance.metadata.networks[Object.keys(balance.metadata.networks)[0]].network,
+        walletId: balance.metadata.networks[Object.keys(balance.metadata.networks)[0]].walletId,
+        tokenId: balance.token.id,
         networkVersion: balance.token.networkVersion,
-        balance: rawBalance,
-        type: balance.type,
-        usdValue: usdValue.toString()  // Store USD value for sorting
+        contractAddress: balance.token.contractAddress,
+        balance: balance.balance
       };
 
       if (combinedBalances.has(key)) {
-        const existing = combinedBalances.get(key);
-        const newBalance = new Decimal(existing.balance).plus(currentBalance);
-        const newUsdValue = new Decimal(existing.usdValue).plus(usdValue);
-        
-        existing.balance = newBalance.toString();
-        existing.usdValue = newUsdValue.toString();
-        if (!existing.networks) existing.networks = [];
+        const existing = combinedBalances.get(key)!;
+        existing.balance = new Decimal(existing.balance)
+          .plus(currentBalance).toString();
+        existing.usdValue = new Decimal(existing.usdValue)
+          .plus(usdValue).toString();
         existing.networks.push(networkBalance);
       } else {
         combinedBalances.set(key, {
-          symbol: balance.token.symbol,
-          baseSymbol: balance.token.baseSymbol,
-          name: balance.token.name,
-          decimals: balance.token.decimals,
-          balance: currentBalance.toString(),
+          ...balance,
           usdValue: usdValue.toString(),
-          type: balance.type,
-          token: balance.token,
           networks: [networkBalance]
         });
       }
     });
 
-    // Sort by USD value first, then alphabetically
-    return Array.from(combinedBalances.values())
-      .sort((a, b) => {
-        const valueA = new Decimal(a.usdValue);
-        const valueB = new Decimal(b.usdValue);
-        
-        // If both have value, sort by value (highest first)
-        if (!valueA.isZero() && !valueB.isZero()) {
-          return valueB.minus(valueA).toNumber();
-        }
-        
-        // If only one has value, it comes first
-        if (!valueA.isZero()) return -1;
-        if (!valueB.isZero()) return 1;
-        
-        // If both are zero, sort alphabetically
-        return a.symbol.localeCompare(b.symbol);
-      });
+    return Array.from(combinedBalances.values());
   }
 
   private formatBalance(balance: string, decimals: number): string {
@@ -479,42 +515,42 @@ export class WalletService {
     }
   }
 
-  async getTotalBalance(userId: string, currency: string, type?: string): Promise<number> {
+  async getTotalBalance(
+    userId: string, 
+    currency: string, 
+    type?: 'spot' | 'funding'
+  ): Promise<number> {
     try {
-      // Get balances filtered by type if specified
       const data = await this.getBalances(userId, type);
       
-      // If data already has total, use it
       if (data.total !== undefined) {
-        // Only convert if currency is not USD
         if (currency.toUpperCase() === 'USD') {
-          return data.total;
+          return Number(data.total);
         }
         const exchangeRate = await this.exchangeService.getRateForCurrency(currency);
-        return data.total * exchangeRate.rate;
+        return Number(data.total) * exchangeRate.rate;
       }
 
-      // Otherwise calculate total from balances (for backward compatibility)
       const balances = Array.isArray(data) ? data : data.balances;
-      
-      // Only get exchange rate if currency is not USD
       const exchangeRate = currency.toUpperCase() === 'USD' 
         ? { rate: 1 } 
         : await this.exchangeService.getRateForCurrency(currency);
 
-      // Get current prices for all tokens
       const tokenPrices = await this.getTokenPrices(balances.map(b => b.token));
 
-      return balances.reduce((total, balance) => {
-        const balanceAmount = parseFloat(balance.balance);
-        const tokenPrice = tokenPrices[balance.token.symbol] ?? 0;
+      // Properly type the reduce function
+      const total = (balances as any[]).reduce<Decimal>((acc: Decimal, balance: ProcessedBalance) => {
+        if (!balance.token) return acc;
         
-        // Calculate USD value first
-        const usdValue = balanceAmount * tokenPrice;
+        const balanceAmount = new Decimal(balance.balance || '0');
+        const tokenPrice = new Decimal(tokenPrices[balance.token.symbol] || '0');
+        const usdValue = balanceAmount.times(tokenPrice);
+        const exchangeValue = usdValue.times(new Decimal(exchangeRate.rate));
         
-        // Convert to target currency
-        return total + (usdValue * exchangeRate.rate);
-      }, 0);
+        return acc.plus(exchangeValue);
+      }, new Decimal(0));
+
+      return total.toNumber();
     } catch (error) {
       this.logger.error(`Failed to calculate total balance: ${error.message}`);
       throw new Error('Failed to calculate total balance');
@@ -549,20 +585,6 @@ export class WalletService {
       this.logger.error(`Failed to get token prices: ${error.message}`);
       throw error;
     }
-  }
-
-  private calculateTotal(balances: any[], priceField: string = 'currentPrice'): number {
-    return balances.reduce((total, balance) => {
-      const amount = new Decimal(balance.balance || '0');
-      const price = new Decimal(balance.token[priceField] || '0');
-      
-      console.log('\nCalculating total for:', balance.symbol);
-      console.log('Amount:', amount.toString());
-      console.log('Price:', price.toString());
-      console.log('Product:', amount.times(price).toString());
-      
-      return total + amount.times(price).toNumber();
-    }, 0);
   }
 
   async getTokenMarketData(symbol: string, timeframe: string = '24H') {
@@ -1026,5 +1048,26 @@ export class WalletService {
     ];
 
     return this.createWalletsSequentially(userId, walletConfigs);
+  }
+
+  async calculateTotal(
+    userId: string,
+    type?: 'spot' | 'funding'
+  ): Promise<string> {
+    const data = await this.getBalances(userId, type);
+    return data.total;
+  }
+
+  async calculateTotalInCurrency(
+    userId: string,
+    type: 'spot' | 'funding' | undefined,
+    currency: string
+  ): Promise<string> {
+    const data = await this.getBalances(userId, type);
+    const exchangeRate = await this.exchangeService.getRates(currency);
+    
+    return new Decimal(data.total)
+      .times(new Decimal(exchangeRate.rate))
+      .toString();
   }
 } 

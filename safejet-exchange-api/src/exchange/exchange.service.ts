@@ -339,4 +339,16 @@ export class ExchangeService {
       return symbols.reduce((acc, symbol) => ({ ...acc, [symbol]: 0 }), {});
     }
   }
+
+  async getRates(currency: string): Promise<{ rate: string }> {
+    try {
+      const exchangeRate = await this.getRateForCurrency(currency);
+      return {
+        rate: exchangeRate.rate.toString()
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get rates for ${currency}: ${error.message}`);
+      throw error;
+    }
+  }
 } 
