@@ -129,15 +129,12 @@ export class AuthService {
 
     // Emit event for background wallet creation
     try {
-      const supportedBlockchains = Object.keys(BLOCKCHAIN_CONFIGS);
-      const networks = ['mainnet', 'testnet'];
-      
       this.eventEmitter.emit(
-        'user.registered',
-        new CreateWalletEvent(user.id, supportedBlockchains, networks)
+        'create.wallet',
+        new CreateWalletEvent(user.id)
       );
       
-      console.log('Triggered background wallet creation for user:', user.id);
+      console.log(`Triggered background wallet creation for user: ${user.id}`);
     } catch (error) {
       // Log error but don't fail registration
       console.error('Failed to trigger wallet creation:', error);

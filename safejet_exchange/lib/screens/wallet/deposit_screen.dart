@@ -46,53 +46,56 @@ class _DepositScreenState extends State<DepositScreen> {
     super.initState();
     final token = widget.asset['token'] as Map<String, dynamic>;
     final metadata = token['metadata'] as Map<String, dynamic>;
-    final networks = List<String>.from(metadata['networks'] ?? ['mainnet']);
 
-    debugPrint('\n=== Token Data ===');
-    debugPrint('Token: ${token['symbol']}');
-    debugPrint('Networks from metadata: $networks');
-    debugPrint('Token networks: ${token['networks']}');
-
-    // Create network list based on token data
-    final availableNetworks = <Network>[];
-
-    // Get all network variants from token data
-    if (token['networks'] != null) {
-      final tokenNetworks = List<Map<String, dynamic>>.from(token['networks']);
-      debugPrint('\nProcessing token networks:');
-      for (final networkData in tokenNetworks) {
-        debugPrint('Network: ${networkData['blockchain']} (${networkData['version']})');
-        availableNetworks.add(Network(
-          name: networkData['network'] ?? 'mainnet',
-          blockchain: networkData['blockchain'],
-          version: networkData['version'],
-          arrivalTime: networkData['arrivalTime'] ?? _getArrivalTime(networkData['blockchain']),
-          isActive: networkData['isActive'] ?? true,
-          network: networkData['network'] ?? 'mainnet',
-        ));
-      }
-    }
-
+    // Initialize with current token data
     _selectedCoin = Coin(
       id: token['id'],
       symbol: token['symbol'],
       name: token['name'],
-      networks: availableNetworks,
+      networks: [
+        Network(
+          name: metadata['networks']?.first ?? 'mainnet',
+          blockchain: token['blockchain'],
+          version: token['networkVersion'],
+          arrivalTime: '10-30 minutes',
+          network: metadata['networks']?.first ?? 'mainnet',
+        )
+      ],
       iconUrl: metadata['icon'],
     );
     _selectedNetwork = _selectedCoin.networks[0];
+
+    // Fetch complete network data
+    _fetchNetworkVariants();
     _fetchDepositAddress();
   }
 
-  // Helper method to get arrival time based on blockchain
-  String _getArrivalTime(String blockchain) {
-    switch (blockchain.toLowerCase()) {
-      case 'ethereum':
-        return '10-30 minutes';
-      case 'bitcoin':
-        return '30-60 minutes';
-      default:
-        return '5-10 minutes';
+  Future<void> _fetchNetworkVariants() async {
+    try {
+      final token = widget.asset['token'] as Map<String, dynamic>;
+      final response = await _walletService.getAvailableCoins();
+      final availableCoins = response;
+      
+      final matchingCoin = availableCoins.firstWhere(
+        (coin) => coin.symbol.toUpperCase() == token['baseSymbol'].toString().toUpperCase(),
+        orElse: () => _selectedCoin,
+      );
+
+      if (mounted) {
+        setState(() {
+          _selectedCoin = matchingCoin;
+          // Keep the same network if it exists in new variants, otherwise use first
+          _selectedNetwork = matchingCoin.networks.firstWhere(
+            (n) => n.blockchain == _selectedNetwork.blockchain && 
+                   n.version == _selectedNetwork.version &&
+                   n.network == _selectedNetwork.network,
+            orElse: () => matchingCoin.networks[0],
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching network variants: $e');
+      // Continue with current network data if fetch fails
     }
   }
 
@@ -164,138 +167,191 @@ class _DepositScreenState extends State<DepositScreen> {
             themeProvider.toggleTheme();
           },
         ),
-        body: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
-                isDark ? SafeJetColors.primaryBackground.withOpacity(0.8) : SafeJetColors.lightBackground.withOpacity(0.8),
-              ],
+        body: Container(
+          height: MediaQuery.of(context).size.height,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+                  isDark ? SafeJetColors.primaryBackground.withOpacity(0.8) : SafeJetColors.lightBackground.withOpacity(0.8),
+                ],
+              ),
             ),
-          ),
-          child: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Coin Selection Card
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    child: GestureDetector(
-                      onTap: _handleCoinSelection,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDark 
-                              ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                              : SafeJetColors.lightCardBackground,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark
-                                ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                : SafeJetColors.lightCardBorder,
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Coin Selection Card
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      child: GestureDetector(
+                        onTap: _handleCoinSelection,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark 
+                                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                : SafeJetColors.lightCardBackground,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark
+                                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                  : SafeJetColors.lightCardBorder,
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            // Coin Icon
-                            Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                image: _selectedCoin.iconUrl != null
-                                    ? DecorationImage(
-                                        image: NetworkImage(_selectedCoin.iconUrl!),
-                                        fit: BoxFit.cover,
+                          child: Row(
+                            children: [
+                              // Coin Icon
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  image: _selectedCoin.iconUrl != null
+                                      ? DecorationImage(
+                                          image: NetworkImage(_selectedCoin.iconUrl!),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child: _selectedCoin.iconUrl == null
+                                    ? Center(
+                                        child: Text(
+                                          _selectedCoin.symbol[0],
+                                          style: theme.textTheme.titleLarge?.copyWith(
+                                            color: isDark ? Colors.white : Colors.black,
+                                          ),
+                                        ),
                                       )
                                     : null,
                               ),
-                              child: _selectedCoin.iconUrl == null
-                                  ? Center(
-                                      child: Text(
-                                        _selectedCoin.symbol[0],
-                                        style: theme.textTheme.titleLarge?.copyWith(
-                                          color: isDark ? Colors.white : Colors.black,
-                                        ),
+                              const SizedBox(width: 12),
+                              // Coin Name and Symbol
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedCoin.name,
+                                      style: theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(width: 12),
-                            // Coin Name and Symbol
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _selectedCoin.name,
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.bold,
                                     ),
-                                  ),
-                                  Text(
-                                    _selectedCoin.symbol,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                    Text(
+                                      _selectedCoin.symbol,
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            ),
-                          ],
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // Network Selection
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 100),
-                    child: Text(
-                      'Select Network',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    // Network Selection
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 100),
+                      child: Text(
+                        'Select Network',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                  // Network Card
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 200),
-                    child: GestureDetector(
-                      onTap: () async {
-                        final result = await showModalBottomSheet<void>(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => NetworkSelectionModal(
-                            networks: _selectedCoin.networks,
-                            selectedNetwork: _selectedNetwork,
-                            onNetworkSelected: (network) {
-                              setState(() {
-                                _selectedNetwork = network;
-                                _fetchDepositAddress();
-                              });
-                            },
+                    // Network Card
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 200),
+                      child: GestureDetector(
+                        onTap: () async {
+                          final result = await showModalBottomSheet<void>(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => NetworkSelectionModal(
+                              networks: _selectedCoin.networks,
+                              selectedNetwork: _selectedNetwork,
+                              onNetworkSelected: (network) {
+                                setState(() {
+                                  _selectedNetwork = network;
+                                  _fetchDepositAddress();
+                                });
+                              },
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark 
+                                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                : SafeJetColors.lightCardBackground,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isDark
+                                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                  : SafeJetColors.lightCardBorder,
+                            ),
                           ),
-                        );
-                      },
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${_selectedNetwork.blockchain.toUpperCase()} (${_selectedNetwork.version})',
+                                      style: theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Average arrival time: ${_selectedNetwork.arrivalTime}',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // QR Code Section
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 300),
                       child: Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: isDark 
                               ? SafeJetColors.primaryAccent.withOpacity(0.1)
@@ -307,71 +363,21 @@ class _DepositScreenState extends State<DepositScreen> {
                                 : SafeJetColors.lightCardBorder,
                           ),
                         ),
-                        child: Row(
+                        child: Column(
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${_selectedNetwork.blockchain.toUpperCase()} (${_selectedNetwork.version})',
-                                    style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Average arrival time: ${_selectedNetwork.arrivalTime}',
-                                    style: TextStyle(
-                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            ),
+                            // QR Code
+                            _buildAddressSection(),
                           ],
                         ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // QR Code Section
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 300),
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: isDark 
-                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                            : SafeJetColors.lightCardBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isDark
-                              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                              : SafeJetColors.lightCardBorder,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          // QR Code
-                          _buildAddressSection(),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Warning Notice
-                  _buildWarningNotice(),
-                ],
+                    // Warning Notice
+                    _buildWarningNotice(),
+                  ],
+                ),
               ),
             ),
           ),

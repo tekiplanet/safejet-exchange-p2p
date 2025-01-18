@@ -28,6 +28,7 @@ export class WalletService {
   private readonly BATCH_SIZE = 10;
   private readonly RATE_LIMIT_DELAY = 1000;
   private readonly BATCH_DELAY = 10000;
+  private readonly evmChains = ['ethereum', 'bsc'];
 
   constructor(
     @InjectRepository(Wallet)
@@ -39,90 +40,79 @@ export class WalletService {
     private keyManagementService: KeyManagementService,
     private readonly exchangeService: ExchangeService,
   ) {}
+  
 
-  async createWallet(userId: string, createWalletDto: CreateWalletDto): Promise<Wallet> {
-    // Check if active wallet exists for this blockchain and network
-    const existingWallet = await this.walletRepository.findOne({
-      where: {
-        userId,
-        blockchain: createWalletDto.blockchain,
-        network: createWalletDto.network,
-        status: 'active',
-      },
-    });
-
-    if (existingWallet) {
-      throw new BadRequestException(
-        `Active wallet already exists for ${createWalletDto.blockchain} on ${createWalletDto.network}`
-      );
-    }
-
-    // Generate wallet
-    const { address, keyId } = await this.keyManagementService.generateWallet(
-      userId,
-      createWalletDto.blockchain,
-      createWalletDto.network,
-    );
-
-    // Create wallet record
-    const wallet = await this.walletRepository.save({
-      userId,
-      blockchain: createWalletDto.blockchain,
-      network: createWalletDto.network,
-      address,
-      keyId,
-      metadata: {
-        createdAt: new Date().toISOString(),
-        network: createWalletDto.network,
-      },
-    });
-
-    // Initialize balances for all tokens of this blockchain
-    await this.initializeWalletBalances(wallet);
-
-    return wallet;
-  }
 
   private async initializeWalletBalances(wallet: Wallet) {
-    // Get all tokens for this blockchain and network using QueryBuilder
+    // Get ALL tokens for ALL networks
     const tokens = await this.tokenRepository
       .createQueryBuilder('token')
-      .where('token.blockchain = :blockchain', { blockchain: wallet.blockchain })
-      .andWhere(`token.metadata::jsonb @> :networks`, { 
-        networks: { networks: [wallet.network === 'mainnet' ? 'mainnet' : 'testnet'] }
-      })
       .getMany();
 
-      console.log(`Found ${tokens.length} tokens for ${wallet.blockchain} on ${wallet.network}`);
-      console.log('Tokens:', tokens.map(t => t.symbol).join(', '));
+    // Group tokens by baseSymbol
+    const tokenGroups = tokens.reduce<Record<string, Token[]>>((groups, token) => {
+      const baseSymbol = token.baseSymbol || token.symbol;
+      if (!groups[baseSymbol]) {
+        groups[baseSymbol] = [];
+      }
+      groups[baseSymbol].push(token);
+      return groups;
+    }, {});
 
-    // Create initial balance entries for both spot and funding
-    const balancePromises = tokens.flatMap(token => {
+    // Get or create unified balances
+    for (const [baseSymbol, groupTokens] of Object.entries(tokenGroups)) {
       const types: ('spot' | 'funding')[] = ['spot', 'funding'];
       
-      return types.map(type => 
-        this.walletBalanceRepository.save({
-          walletId: wallet.id,
-          tokenId: token.id,
-          balance: '0',
-          type,
-          metadata: {
-            createdAt: new Date().toISOString(),
-            network: wallet.network,
-            networkVersion: token.networkVersion
-          }
-        })
-      );
-    });
+      for (const type of types) {
+        try {
+          // Find matching token for this blockchain/network
+          const matchingToken = groupTokens.find(t => 
+            t.blockchain === wallet.blockchain && 
+            t.metadata?.networks?.includes(wallet.network)
+          );
 
-    try {
-      await Promise.all(balancePromises);
-      console.log(`Successfully initialized ${balancePromises.length} balances for wallet ${wallet.id}`);
-    } catch (error) {
-      console.error('Error initializing wallet balances:', error);
-      throw new Error(`Failed to initialize wallet balances: ${error.message}`);
+          if (matchingToken) {
+            // Use upsert to handle concurrent operations
+            await this.walletBalanceRepository.createQueryBuilder()
+              .insert()
+              .into(WalletBalance)
+              .values({
+                userId: wallet.userId,
+                baseSymbol,
+                balance: '0',
+                type,
+                metadata: {
+                  networks: {
+                    [wallet.blockchain]: {
+                      walletId: wallet.id,
+                      tokenId: matchingToken.id,
+                      networkVersion: matchingToken.networkVersion,
+                      contractAddress: matchingToken.contractAddress,
+                      network: wallet.network
+                    }
+                  }
+                }
+              })
+              .orUpdate(
+                ['metadata'],
+                ['userId', 'baseSymbol', 'type'],
+                {
+                  skipUpdateIfNoValuesChanged: true
+                }
+              )
+              .execute();
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to initialize balance for ${baseSymbol} ${type}: ${error.message}`);
+        }
+      }
     }
   }
+
+
+
+
+
 
   // Add method to check if balances exist and create if missing
   async ensureWalletBalances(walletId: string) {
@@ -135,13 +125,18 @@ export class WalletService {
     }
 
     const existingBalances = await this.walletBalanceRepository.find({
-      where: { walletId }
+      where: { userId: wallet.userId }
     });
 
     if (existingBalances.length === 0) {
       await this.initializeWalletBalances(wallet);
     }
   }
+
+
+
+
+
 
   async getWallets(userId: string): Promise<Wallet[]> {
     return this.walletRepository.find({
@@ -161,9 +156,13 @@ export class WalletService {
     return wallet;
   }
 
+
+
+
+
   // Get all balances for a wallet
   async getWalletBalances(
-    userId: string, 
+    userId: string,
     walletId: string,
     type: 'spot' | 'funding' = 'spot'
   ): Promise<WalletBalance[]> {
@@ -171,12 +170,13 @@ export class WalletService {
 
     return this.walletBalanceRepository.find({
       where: {
-        walletId: wallet.id,
+        userId: wallet.userId,
         type,
-      },
-      relations: ['token'],
+      }
     });
   }
+
+
 
   // Get specific token balance
   async getTokenBalance(
@@ -186,16 +186,22 @@ export class WalletService {
     type: 'spot' | 'funding' = 'spot'
   ): Promise<WalletBalance> {
     const wallet = await this.getWallet(userId, walletId);
+    const token = await this.tokenRepository.findOneBy({ id: tokenId });
+    
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
 
     return this.walletBalanceRepository.findOne({
       where: {
-        walletId: wallet.id,
-        tokenId,
+        userId: wallet.userId,
+        baseSymbol: token.baseSymbol || token.symbol,
         type,
-      },
-      relations: ['token'],
+      }
     });
   }
+
+
 
   // Update balance
   async updateBalance(
@@ -206,21 +212,37 @@ export class WalletService {
     type: 'spot' | 'funding' = 'spot'
   ): Promise<WalletBalance> {
     const wallet = await this.getWallet(userId, walletId);
+    const token = await this.tokenRepository.findOneBy({ id: tokenId });
+
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
     
     let balance = await this.walletBalanceRepository.findOne({
       where: {
-        walletId: wallet.id,
-        tokenId,
+        userId: wallet.userId,
+        baseSymbol: token.baseSymbol || token.symbol,
         type,
-      },
+      }
     });
 
     if (!balance) {
       balance = this.walletBalanceRepository.create({
-        walletId: wallet.id,
-        tokenId,
+        userId: wallet.userId,
+        baseSymbol: token.baseSymbol || token.symbol,
         balance: '0',
         type,
+        metadata: {
+          networks: {
+            [wallet.blockchain]: {
+              walletId: wallet.id,
+              tokenId: token.id,
+              networkVersion: token.networkVersion,
+              contractAddress: token.contractAddress,
+              network: wallet.network
+            }
+          }
+        }
       });
     }
 
@@ -818,5 +840,186 @@ export class WalletService {
     return {
       tokens: Object.values(groupedTokens)
     };
+  }
+
+  async findEvmWallet(userId: string, network: string): Promise<Wallet | null> {
+    return this.walletRepository.findOne({
+      where: [
+        { userId, blockchain: 'ethereum', network },
+        { userId, blockchain: 'bsc', network }
+      ],
+      order: {
+        createdAt: 'ASC'
+      }
+    });
+  }
+
+  async createWithExistingAddress(
+    userId: string,
+    createWalletDto: CreateWalletDto,
+    existingAddress: string,
+    existingKeyId: string
+  ): Promise<Wallet> {
+    const wallet = new Wallet();
+    wallet.userId = userId;
+    wallet.blockchain = createWalletDto.blockchain;
+    wallet.network = createWalletDto.network;
+    wallet.address = existingAddress;
+    wallet.keyId = existingKeyId;
+    
+    return this.walletRepository.save(wallet);
+  }
+
+  private async createEvmWallet(userId: string, createWalletDto: CreateWalletDto): Promise<Wallet> {
+    this.logger.debug('Creating EVM wallet');
+
+    // Use a transaction for the entire process to ensure atomicity
+    return this.walletRepository.manager.transaction(async manager => {
+      // First check if this exact wallet exists
+      const existingWallet = await manager.findOne(Wallet, {
+        where: {
+          userId,
+          blockchain: createWalletDto.blockchain,
+          network: createWalletDto.network
+        }
+      });
+
+      if (existingWallet) {
+        return existingWallet;
+      }
+
+      // Then look for ANY existing EVM wallet for this network
+      const existingEvmWallet = await manager
+        .createQueryBuilder(Wallet, 'wallet')
+        .where('wallet.userId = :userId', { userId })
+        .andWhere('wallet.blockchain IN (:...blockchains)', { 
+          blockchains: this.evmChains 
+        })
+        .andWhere('wallet.network = :network', { 
+          network: createWalletDto.network 
+        })
+        .orderBy('wallet.createdAt', 'ASC')
+        .getOne();
+
+      if (existingEvmWallet) {
+        // Create new wallet entry with same address
+        const wallet = manager.create(Wallet, {
+          userId,
+          blockchain: createWalletDto.blockchain,
+          network: createWalletDto.network,
+          address: existingEvmWallet.address,
+          keyId: existingEvmWallet.keyId
+        });
+
+        const savedWallet = await manager.save(Wallet, wallet);
+        await this.initializeWalletBalances(savedWallet);
+        return savedWallet;
+      }
+
+      // No existing EVM wallet, create new one
+      const { address, keyId } = await this.keyManagementService.generateWallet(
+        userId,
+        'ethereum', // Always use ethereum for first EVM wallet
+        createWalletDto.network
+      );
+
+      const wallet = manager.create(Wallet, {
+        userId,
+        blockchain: createWalletDto.blockchain,
+        network: createWalletDto.network,
+        address,
+        keyId
+      });
+
+      const savedWallet = await manager.save(Wallet, wallet);
+      await this.initializeWalletBalances(savedWallet);
+      return savedWallet;
+    });
+  }
+
+  async create(userId: string, createWalletDto: CreateWalletDto): Promise<Wallet> {
+    this.logger.debug(`Creating wallet for user ${userId}: ${createWalletDto.blockchain} ${createWalletDto.network}`);
+
+    // For EVM chains
+    if (this.evmChains.includes(createWalletDto.blockchain)) {
+      return this.createEvmWallet(userId, createWalletDto);
+    }
+
+    // Non-EVM wallet creation
+    return this.createNonEvmWallet(userId, createWalletDto);
+  }
+
+  private async createNonEvmWallet(userId: string, createWalletDto: CreateWalletDto): Promise<Wallet> {
+    try {
+      const { address, keyId } = await this.keyManagementService.generateWallet(
+        userId,
+        createWalletDto.blockchain,
+        createWalletDto.network
+      );
+      
+      const wallet = new Wallet();
+      wallet.userId = userId;
+      wallet.blockchain = createWalletDto.blockchain;
+      wallet.network = createWalletDto.network;
+      wallet.address = address;
+      wallet.keyId = keyId;
+      
+      const savedWallet = await this.walletRepository.save(wallet);
+      await this.initializeWalletBalances(savedWallet);
+      return savedWallet;
+    } catch (error) {
+      this.logger.error(`Failed to create wallet: ${error.message}`, error.stack);
+      throw new Error('Failed to create wallet');
+    }
+  }
+
+  private async createWalletsSequentially(userId: string, walletConfigs: CreateWalletDto[]): Promise<{
+    successful: number;
+    failed: number;
+    total: number;
+  }> {
+    let successful = 0;
+    let failed = 0;
+    const total = walletConfigs.length;
+
+    // Process EVM wallets first to ensure consistent address
+    const evmConfigs = walletConfigs.filter(config => this.evmChains.includes(config.blockchain));
+    const nonEvmConfigs = walletConfigs.filter(config => !this.evmChains.includes(config.blockchain));
+    
+    // Sort by network to ensure consistent order and prevent deadlocks
+    const sortedConfigs = [...evmConfigs.sort((a, b) => a.network.localeCompare(b.network)), ...nonEvmConfigs];
+
+    for (const config of sortedConfigs) {
+      try {
+        await this.create(userId, config);
+        successful++;
+      } catch (error) {
+        this.logger.error(`Failed to create wallet: ${error.message}`, error.stack);
+        failed++;
+      }
+    }
+
+    return { successful, failed, total };
+  }
+
+  async createWalletsForUser(userId: string): Promise<{
+    successful: number;
+    failed: number;
+    total: number;
+  }> {
+    const walletConfigs = [
+      { blockchain: 'bitcoin', network: 'mainnet' },
+      { blockchain: 'bitcoin', network: 'testnet' },
+      { blockchain: 'ethereum', network: 'mainnet' },
+      { blockchain: 'ethereum', network: 'testnet' },
+      { blockchain: 'bsc', network: 'mainnet' },
+      { blockchain: 'bsc', network: 'testnet' },
+      { blockchain: 'xrp', network: 'mainnet' },
+      { blockchain: 'xrp', network: 'testnet' },
+      { blockchain: 'trx', network: 'mainnet' },
+      { blockchain: 'trx', network: 'testnet' },
+    ];
+
+    return this.createWalletsSequentially(userId, walletConfigs);
   }
 } 

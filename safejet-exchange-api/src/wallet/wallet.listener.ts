@@ -1,39 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { WalletService } from './wallet.service';
 import { CreateWalletEvent } from './events/create-wallet.event';
 
 @Injectable()
 export class WalletListener {
+  private readonly logger = new Logger(WalletListener.name);
+
   constructor(private readonly walletService: WalletService) {}
 
-  @OnEvent('user.registered')
+  @OnEvent('create.wallet')
   async handleWalletCreation(event: CreateWalletEvent) {
+    this.logger.log(`Triggered background wallet creation for user: ${event.userId}`);
+    
     try {
-      console.log(`Starting background wallet creation for user ${event.userId}`);
-      
-      const walletPromises = event.blockchains.flatMap(blockchain =>
-        event.networks.map(network =>
-          this.walletService.createWallet(event.userId, { blockchain, network })
-            .then(wallet => {
-              console.log(`Created ${blockchain} ${network} wallet for user ${event.userId}`);
-              return wallet;
-            })
-            .catch(error => {
-              console.error(`Failed to create ${blockchain} ${network} wallet:`, error);
-              return null;
-            })
-        )
-      );
-
-      const results = await Promise.all(walletPromises);
-      console.log(`Completed wallet creation for user ${event.userId}:`, {
-        total: results.length,
-        successful: results.filter(Boolean).length,
-        failed: results.filter(r => !r).length
-      });
+      this.logger.log(`Starting background wallet creation for user ${event.userId}`);
+      const result = await this.walletService.createWalletsForUser(event.userId);
+      this.logger.log(`Completed wallet creation for user ${event.userId}: ${JSON.stringify(result)}`);
     } catch (error) {
-      console.error('Background wallet creation error:', error);
+      this.logger.error(`Failed wallet creation for user ${event.userId}: ${error.message}`);
     }
   }
 } 

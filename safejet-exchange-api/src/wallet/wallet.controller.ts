@@ -25,11 +25,11 @@ export class WalletController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  async createWallet(
-    @GetUser() user: User,
-    @Body() createWalletDto: CreateWalletDto,
+  async create(
+    @Request() req,
+    @Body() createWalletDto: CreateWalletDto
   ) {
-    return this.walletService.createWallet(user.id, createWalletDto);
+    return this.walletService.create(req.user.id, createWalletDto);
   }
 
   @Get()
@@ -54,7 +54,7 @@ export class WalletController {
     @Body() createWalletDto: CreateWalletDto,
   ) {
     try {
-      const wallet = await this.walletService.createWallet(user.id, createWalletDto);
+      const wallet = await this.walletService.create(user.id, createWalletDto);
       return {
         success: true,
         wallet: {

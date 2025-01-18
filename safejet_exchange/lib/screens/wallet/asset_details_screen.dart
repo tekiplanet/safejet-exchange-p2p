@@ -135,78 +135,20 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     }
   }
 
-  void _handleDepositTap() async {
+  void _handleDepositTap() {
     final token = widget.asset['token'] as Map<String, dynamic>;
-    final metadata = token['metadata'] as Map<String, dynamic>;
     
-    debugPrint('\n=== Asset Screen Token Data ===');
-    debugPrint('Token: ${token['symbol']}');
-    debugPrint('Token ID: ${token['id']}');
-    debugPrint('Metadata: $metadata');
-    
-    try {
-      // Get all available coins to ensure we have complete network data
-      final response = await _walletService.getAvailableCoins();
-      final availableCoins = response;
-      
-      // Find the matching coin by baseSymbol
-      final matchingCoin = availableCoins.firstWhere(
-        (coin) => coin.symbol.toUpperCase() == token['baseSymbol'].toString().toUpperCase(),
-        orElse: () => Coin(
-          id: token['id'],
-          symbol: token['symbol'],
-          name: token['name'],
-          networks: [
-            Network(
-              name: metadata['networks']?.first ?? 'mainnet',
-              blockchain: token['blockchain'],
-              version: token['networkVersion'],
-              arrivalTime: '10-30 minutes',
-              network: metadata['networks']?.first ?? 'mainnet',
-            )
-          ],
-          iconUrl: metadata['icon'],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DepositScreen(
+          asset: widget.asset,
+          showInUSD: widget.showInUSD,
+          userCurrencyRate: widget.userCurrencyRate,
+          userCurrency: widget.userCurrency,
         ),
-      );
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DepositScreen(
-            asset: {
-              ...widget.asset,
-              'token': {
-                ...token,
-                'networks': matchingCoin.networks.map((network) => {
-                  'blockchain': network.blockchain,
-                  'version': network.version,
-                  'network': network.network,
-                  'isActive': network.isActive,
-                  'arrivalTime': network.arrivalTime,
-                }).toList(),
-              },
-            },
-            showInUSD: widget.showInUSD,
-            userCurrencyRate: widget.userCurrencyRate,
-            userCurrency: widget.userCurrency,
-          ),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error fetching complete token data: $e');
-      // Fallback to original behavior if fetch fails
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DepositScreen(
-            asset: widget.asset,
-            showInUSD: widget.showInUSD,
-            userCurrencyRate: widget.userCurrencyRate,
-            userCurrency: widget.userCurrency,
-          ),
-        ),
-      );
-    }
+      ),
+    );
   }
 
   @override

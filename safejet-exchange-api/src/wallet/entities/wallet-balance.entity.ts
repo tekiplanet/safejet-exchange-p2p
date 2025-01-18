@@ -16,10 +16,10 @@ export class WalletBalance {
   id: string;
 
   @Column()
-  walletId: string;
+  userId: string;
 
   @Column()
-  tokenId: string;
+  baseSymbol: string;
 
   @Column('decimal', { precision: 36, scale: 18, default: '0' })
   balance: string;
@@ -28,11 +28,17 @@ export class WalletBalance {
   type: 'spot' | 'funding';
 
   @Column('jsonb', { nullable: true })
-  metadata: Record<string, any>;
-
-  @ManyToOne(() => Token)
-  @JoinColumn({ name: 'tokenId' })
-  token: Token;
+  metadata: {
+    networks: {
+      [blockchain: string]: {
+        walletId: string;
+        tokenId: string;
+        networkVersion: string;
+        contractAddress?: string;
+        network: string;
+      }
+    }
+  };
 
   @CreateDateColumn()
   createdAt: Date;
