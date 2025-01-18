@@ -201,11 +201,16 @@ class WalletService {
   Future<List<Coin>> getAvailableCoins() async {
     try {
       final response = await _dio.get('/wallets/tokens/available');
-      final List<dynamic> tokens = response.data['tokens'];
+      debugPrint('\n=== Raw Token Response ===');
+      debugPrint(response.data.toString());
       
+      final List<dynamic> tokens = response.data['tokens'];
       return tokens.map((token) {
         final metadata = token['metadata'] as Map<String, dynamic>;
         final networks = List<Map<String, dynamic>>.from(token['networks']);
+        
+        debugPrint('\nProcessing token: ${token['symbol']}');
+        debugPrint('Networks: $networks');
         
         return Coin(
           id: token['id'],

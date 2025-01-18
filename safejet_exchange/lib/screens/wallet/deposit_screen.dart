@@ -48,57 +48,30 @@ class _DepositScreenState extends State<DepositScreen> {
     final metadata = token['metadata'] as Map<String, dynamic>;
     final networks = List<String>.from(metadata['networks'] ?? ['mainnet']);
 
-    // Create network list including both mainnet and testnet for NATIVE tokens
-    final availableNetworks = [
-      Network(
-        name: networks.first,
-        blockchain: token['blockchain'],
-        version: token['networkVersion'],
-        arrivalTime: _getArrivalTime(token['blockchain']),
-        isActive: true,
-        network: networks.first,
-      ),
-      // Add testnet variant for NATIVE tokens if supported
-      if (token['networkVersion'] == 'NATIVE' && networks.contains('testnet'))
-        Network(
-          name: 'testnet',
-          blockchain: token['blockchain'],
-          version: token['networkVersion'],
-          arrivalTime: _getArrivalTime(token['blockchain']),
-          isActive: true,
-          network: 'testnet',
-        ),
-      // Keep existing multi-chain token logic
-      if (token['baseSymbol'] == 'USDT') ...[
-        if (token['blockchain'] != 'ethereum')
-          Network(
-            name: networks.first,
-            blockchain: 'ethereum',
-            version: 'ERC20',
-            arrivalTime: '10-30 minutes',
-            isActive: true,
-            network: 'mainnet',
-          ),
-        if (token['blockchain'] != 'trx')
-          Network(
-            name: networks.first,
-            blockchain: 'trx',
-            version: 'TRC20',
-            arrivalTime: '5-10 minutes',
-            isActive: true,
-            network: 'mainnet',
-          ),
-        if (token['blockchain'] != 'bsc')
-          Network(
-            name: networks.first,
-            blockchain: 'bsc',
-            version: 'BEP20',
-            arrivalTime: '5-10 minutes',
-            isActive: true,
-            network: 'mainnet',
-          ),
-      ]
-    ];
+    debugPrint('\n=== Token Data ===');
+    debugPrint('Token: ${token['symbol']}');
+    debugPrint('Networks from metadata: $networks');
+    debugPrint('Token networks: ${token['networks']}');
+
+    // Create network list based on token data
+    final availableNetworks = <Network>[];
+
+    // Get all network variants from token data
+    if (token['networks'] != null) {
+      final tokenNetworks = List<Map<String, dynamic>>.from(token['networks']);
+      debugPrint('\nProcessing token networks:');
+      for (final networkData in tokenNetworks) {
+        debugPrint('Network: ${networkData['blockchain']} (${networkData['version']})');
+        availableNetworks.add(Network(
+          name: networkData['network'] ?? 'mainnet',
+          blockchain: networkData['blockchain'],
+          version: networkData['version'],
+          arrivalTime: networkData['arrivalTime'] ?? _getArrivalTime(networkData['blockchain']),
+          isActive: networkData['isActive'] ?? true,
+          network: networkData['network'] ?? 'mainnet',
+        ));
+      }
+    }
 
     _selectedCoin = Coin(
       id: token['id'],

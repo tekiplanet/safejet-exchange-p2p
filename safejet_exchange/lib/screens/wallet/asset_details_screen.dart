@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:get_it/get_it.dart';
 import '../../services/wallet_service.dart';
 import 'deposit_screen.dart';
+import '../../models/coin.dart';
 
 class AssetDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -134,34 +135,78 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     }
   }
 
-  void _handleDepositTap() {
+  void _handleDepositTap() async {
     final token = widget.asset['token'] as Map<String, dynamic>;
     final metadata = token['metadata'] as Map<String, dynamic>;
     
-    // Ensure networks are properly passed
-    if (!metadata.containsKey('networks')) {
-      metadata['networks'] = token['networkVersion'] == 'NATIVE' 
-          ? ['mainnet', 'testnet']  // Include testnet for native tokens
-          : ['mainnet'];            // Only mainnet for other tokens
-    }
+    debugPrint('\n=== Asset Screen Token Data ===');
+    debugPrint('Token: ${token['symbol']}');
+    debugPrint('Token ID: ${token['id']}');
+    debugPrint('Metadata: $metadata');
     
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => DepositScreen(
-          asset: {
-            ...widget.asset,
-            'token': {
-              ...token,
-              'metadata': metadata,
-            },
-          },
-          showInUSD: widget.showInUSD,
-          userCurrencyRate: widget.userCurrencyRate,
-          userCurrency: widget.userCurrency,
+    try {
+      // Get all available coins to ensure we have complete network data
+      final response = await _walletService.getAvailableCoins();
+      final availableCoins = response;
+      
+      // Find the matching coin by symbol instead of ID
+      final matchingCoin = availableCoins.firstWhere(
+        (coin) => coin.symbol.toUpperCase() == token['symbol'].toString().toUpperCase(),
+        orElse: () => Coin(
+          id: token['id'],
+          symbol: token['symbol'],
+          name: token['name'],
+          networks: [
+            Network(
+              name: metadata['networks']?.first ?? 'mainnet',
+              blockchain: token['blockchain'],
+              version: token['networkVersion'],
+              arrivalTime: '10-30 minutes',
+              network: metadata['networks']?.first ?? 'mainnet',
+            )
+          ],
+          iconUrl: metadata['icon'],
         ),
-      ),
-    );
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DepositScreen(
+            asset: {
+              ...widget.asset,
+              'token': {
+                ...token,
+                'networks': matchingCoin.networks.map((network) => {
+                  'blockchain': network.blockchain,
+                  'version': network.version,
+                  'network': network.network,
+                  'isActive': network.isActive,
+                  'arrivalTime': network.arrivalTime,
+                }).toList(),
+              },
+            },
+            showInUSD: widget.showInUSD,
+            userCurrencyRate: widget.userCurrencyRate,
+            userCurrency: widget.userCurrency,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error fetching complete token data: $e');
+      // Fallback to original behavior if fetch fails
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DepositScreen(
+            asset: widget.asset,
+            showInUSD: widget.showInUSD,
+            userCurrencyRate: widget.userCurrencyRate,
+            userCurrency: widget.userCurrency,
+          ),
+        ),
+      );
+    }
   }
 
   @override
