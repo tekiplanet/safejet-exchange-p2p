@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull, Raw } from 'typeorm';
+import { Repository, Not, IsNull, Raw, In } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { KeyManagementService } from './key-management.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
@@ -339,30 +339,55 @@ export class WalletService {
       const limit = Math.max(1, Math.floor(Number(pagination.limit)));
       const offset = (page - 1) * limit;
 
-      // Get balances
-      const balances = await this.walletBalanceRepository
+      // First get all non-zero balances
+      const nonZeroBalances = await this.walletBalanceRepository
         .createQueryBuilder('balance')
         .where('balance.userId = :userId', { userId })
         .andWhere(type ? 'balance.type = :type' : '1=1', { type })
-        .skip(offset)
-        .take(limit)
+        .andWhere('CAST(balance.balance AS DECIMAL) > 0')
         .getMany();
 
-      // Process balances
+      // Then get remaining balances with pagination
+      const remainingBalances = await this.walletBalanceRepository
+        .createQueryBuilder('balance')
+        .where('balance.userId = :userId', { userId })
+        .andWhere(type ? 'balance.type = :type' : '1=1', { type })
+        .andWhere('CAST(balance.balance AS DECIMAL) = 0')
+        .skip(offset)
+        .take(limit - nonZeroBalances.length)
+        .getMany();
+
+      // Combine non-zero and remaining balances
+      const balances = [...nonZeroBalances, ...remainingBalances];
+
+      // First fetch all token prices in batch to avoid multiple DB queries
+      const tokenIds = new Set<string>();
+      balances.forEach(balance => {
+        if (balance.metadata?.networks) {
+          Object.values(balance.metadata.networks).forEach(networkData => {
+            tokenIds.add(networkData.tokenId);
+          });
+        }
+      });
+
+      // Fetch all tokens in one query
+      const tokens = await this.tokenRepository.find({
+        where: { id: In([...tokenIds]) }
+      });
+
+      // Create a map for quick token lookup
+      const tokenMap = new Map(tokens.map(token => [token.id, token]));
+
       const processedBalances = await Promise.all(
         balances.map(async (balance) => {
           const networks = [];
-          let totalBalance = new Decimal(0);
+          let totalBalance = new Decimal(balance.balance || '0');
 
-          // Process network metadata using our new structure
           if (balance.metadata?.networks) {
             for (const [networkKey, networkData] of Object.entries(balance.metadata.networks)) {
               const [blockchain, network] = networkKey.split('_');
               
-              // Get token using tokenId from network metadata
-              const token = await this.tokenRepository.findOne({
-                where: { id: networkData.tokenId }
-              });
+              const token = tokenMap.get(networkData.tokenId);
 
               if (token) {
                 networks.push({
@@ -372,39 +397,42 @@ export class WalletService {
                   tokenId: networkData.tokenId,
                   networkVersion: networkData.networkVersion,
                   contractAddress: networkData.contractAddress,
-                  balance: '0' // Initialize with 0, will be updated from blockchain
+                  balance: balance.balance
                 });
               }
             }
           }
 
-          // Get first token from networks for price data
+          // Get token data from our pre-fetched map
           const firstNetwork = Object.values(balance.metadata?.networks || {})[0];
-          const token = firstNetwork ? await this.tokenRepository.findOne({
-            where: { id: firstNetwork.tokenId }
-          }) : null;
+          const token = firstNetwork ? tokenMap.get(firstNetwork.tokenId) : null;
 
-          const usdValue = token?.currentPrice 
-            ? totalBalance.times(token.currentPrice).toString()
-            : '0';
+          // Ensure we have valid price data
+          const currentPrice = token?.currentPrice ? new Decimal(token.currentPrice) : new Decimal(0);
+          const usdValue = totalBalance.times(currentPrice).toString();
 
-          // Convert numeric values to strings
-          const processedToken = token ? {
-            ...token,
-            currentPrice: token.currentPrice?.toString() || '0',
-            price24h: token.price24h?.toString() || '0',
-            changePercent24h: token.changePercent24h || 0
-          } : null;
+          // Log price data for debugging
+          this.logger.debug(`Token ${token?.symbol}: Price = ${currentPrice}, Balance = ${totalBalance}, USD Value = ${usdValue}`);
 
           return {
             ...balance,
             networks,
             balance: totalBalance.toString(),
             usdValue,
-            token: processedToken
+            token: token ? {
+              ...token,
+              currentPrice: token.currentPrice?.toString() || '0',
+              price24h: token.price24h?.toString() || '0',
+              changePercent24h: token.changePercent24h || 0
+            } : null
           };
         })
       );
+
+      // Calculate total count for pagination
+      const totalCount = await this.walletBalanceRepository.count({
+        where: { userId, ...(type && { type }) }
+      });
 
       // Calculate totals using Decimal.js
       const totalValue = processedBalances.reduce((acc: Decimal, balance) => {
@@ -427,20 +455,16 @@ export class WalletService {
         ? 0
         : totalChange24h.div(totalValue).times(100).toNumber();
 
-      const total = await this.walletBalanceRepository.count({
-        where: { userId, ...(type && { type }) }
-      });
-
       return {
         balances: processedBalances,
         total: totalValue.toString(),
         change24h: totalChange24h.toString(),
         changePercent24h,
         pagination: {
-          total,
+          total: totalCount,
           page,
           limit,
-          hasMore: offset + limit < total
+          hasMore: offset + limit < totalCount
         }
       };
     } catch (error) {
@@ -656,53 +680,27 @@ export class WalletService {
       });
       this.logger.log(`Found ${tokens.length} tokens to update`);
 
-      const batches = chunk(tokens, this.BATCH_SIZE);
-      this.logger.log(`Split into ${batches.length} batches of ${this.BATCH_SIZE}`);
-
-      for (const [batchIndex, batch] of batches.entries()) {
-        this.logger.log(`Processing batch ${batchIndex + 1}/${batches.length}`);
-
-        for (const token of batch) {
-          try {
-            this.logger.debug(`Updating ${token.symbol}...`);
-            const marketData = await this.getTokenMarketData(token.symbol);
+      for (const token of tokens) {
+        try {
+          const marketData = await this.getTokenMarketData(token.symbol);
+          
+          if (marketData && marketData.priceHistory?.length > 0) {
+            // Get current price from latest price history entry
+            const currentPrice = marketData.priceHistory[marketData.priceHistory.length - 1][1];
             
-            if (marketData) {
-              await this.tokenRepository.update(token.id, {
-                marketCap: marketData.marketCap,
-                fullyDilutedMarketCap: marketData.fullyDilutedMarketCap,
-                volume24h: marketData.volume24h,
-                circulatingSupply: marketData.circulatingSupply,
-                maxSupply: marketData.maxSupply,
-                marketCapChange24h: marketData.marketCapChange24h,
-                marketCapChangePercent24h: marketData.marketCapChangePercent24h,
-                volumeChangePercent24h: marketData.volumeChangePercent24h,
-                priceHistory: marketData.priceHistory,
-                lastPriceUpdate: new Date()
-              });
-              this.logger.debug(`Updated market data for ${token.symbol}`);
-            }
-
-            await delay(this.RATE_LIMIT_DELAY);
-
-          } catch (error) {
-            if (error.response?.status === 429) {
-              this.logger.warn(`Rate limit hit for ${token.symbol}`);
-              await delay(this.BATCH_DELAY);
-              break;
-            } else {
-              this.logger.error(`Error updating ${token.symbol}:`, error);
-            }
+            await this.tokenRepository.update(token.id, {
+              currentPrice: currentPrice.toString(),
+              price24h: marketData.priceHistory[0][1].toString(), // First entry is 24h ago
+              changePercent24h: marketData.marketCapChangePercent24h,
+              lastPriceUpdate: new Date()
+            });
+            
+            this.logger.debug(`Updated price for ${token.symbol}: ${currentPrice}`);
           }
-        }
-
-        if (batchIndex < batches.length - 1) {
-          this.logger.log(`Waiting ${this.BATCH_DELAY/1000}s before next batch...`);
-          await delay(this.BATCH_DELAY);
+        } catch (error) {
+          this.logger.error(`Error updating ${token.symbol}:`, error);
         }
       }
-
-      this.logger.log('Finished updating all token market data');
     } catch (error) {
       this.logger.error('Error in updateTokenMarketData:', error);
     }

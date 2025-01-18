@@ -265,24 +265,57 @@ class _WalletsTabState extends State<WalletsTab> {
     }
   }
 
-  String _formatBalance(bool showInUSD, double value) {
-    final currencySymbol = showInUSD ? '\$' : _getCurrencySymbol(_userCurrency);
+  String _formatBalance(String balance, {bool showZero = true}) {
+    final amount = double.tryParse(balance) ?? 0.0;
     
-    final numberFormat = NumberFormat.currency(
-      locale: 'en_US',
-      symbol: currencySymbol,
-      decimalDigits: 2,
-    );
-    
-    return numberFormat.format(value);
+    if (amount == 0 && !showZero) {
+      return '0';
+    }
+
+    if (amount == 0) {
+      return '0.00';
+    }
+
+    // Special handling for BTC and similar low-quantity high-value tokens
+    if (amount > 0 && amount < 1) {
+      // Show more decimals for small numbers
+      String formatted = amount.toStringAsFixed(6);
+      // Trim trailing zeros but keep at least 2 decimal places
+      while (formatted.endsWith('0') && formatted.split('.')[1].length > 2) {
+        formatted = formatted.substring(0, formatted.length - 1);
+      }
+      return formatted;
+    } else {
+      // For numbers >= 1, show 2 decimal places with thousand separators
+      final formatter = NumberFormat('#,##0.00');
+      return formatter.format(amount);
+    }
   }
 
-  String _formatNumber(double value) {
-    if (value == 0) return '0.00';
+  String _formatUsdValue(String value) {
+    final amount = double.tryParse(value) ?? 0.0;
+    if (amount == 0) {
+      return '\$0.00';
+    }
     
-    // Use NumberFormat for proper thousand separators and decimal places
-    final formatter = NumberFormat('#,##0.00', 'en_US');
-    return formatter.format(value);
+    final formatter = NumberFormat('\$#,##0.00');
+    return formatter.format(amount);
+  }
+
+  String _formatCurrencyValue(String value, String currency) {
+    final amount = double.tryParse(value) ?? 0.0;
+    if (amount == 0) {
+      return '${_getCurrencySymbol(currency)}0.00';
+    }
+    
+    // Convert USD to user currency
+    final convertedAmount = amount * _userCurrencyRate;
+    
+    final formatter = NumberFormat.currency(
+      symbol: _getCurrencySymbol(currency),
+      decimalDigits: 2,
+    );
+    return formatter.format(convertedAmount);
   }
 
   String _getCurrencySymbol(String currency) {
@@ -497,20 +530,32 @@ class _WalletsTabState extends State<WalletsTab> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _getBalanceTitle(),
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _getBalanceTitle(),
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            _buildBalanceText(_formatBalance(_showInUSD, _totalBalance)),
-                          ],
+                              const SizedBox(height: 8),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: _buildBalanceText(
+                                  _showInUSD 
+                                    ? _formatUsdValue(_totalBalance.toString())
+                                    : _formatCurrencyValue(_totalBalance.toString(), _userCurrency)
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 16),
                         _buildCurrencyToggleButton(isDark),
                       ],
                     ),
@@ -882,7 +927,7 @@ class _WalletsTabState extends State<WalletsTab> {
                               Row(
                                 children: [
                                   Text(
-                  symbol,
+                                    symbol,
                                     style: TextStyle(
                                       color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                                     ),
@@ -957,14 +1002,19 @@ class _WalletsTabState extends State<WalletsTab> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              _formatAssetBalance(amount),
+                              _formatBalance(balance['balance']?.toString() ?? '0'),
                               style: theme.textTheme.bodyLarge?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 4),
                             _buildAssetBalance(
-                              _formatBalance(_showInUSD, double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0),
+                              _showInUSD 
+                                ? _formatUsdValue(balance['usdValue']?.toString() ?? '0')
+                                : _formatCurrencyValue(
+                                    (double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0 * _userCurrencyRate).toString(),
+                                    _userCurrency
+                                  ),
                               isDark,
                             ),
                           ],
@@ -1130,34 +1180,16 @@ class _WalletsTabState extends State<WalletsTab> {
   }
 
   Widget _buildBalanceText(String text) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.0, 0.2),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
-          ),
-        );
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-        text,
-        key: ValueKey<String>(text),
-        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-              fontSize: text.length > 15 ? 20.0 : 24.0,
-        ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: Theme.of(context).brightness == Brightness.dark 
+          ? Colors.white 
+          : Colors.black,
       ),
+      maxLines: 1, // Ensure single line
+      overflow: TextOverflow.ellipsis, // Show ellipsis if needed
     );
   }
 
@@ -1318,9 +1350,14 @@ class _WalletsTabState extends State<WalletsTab> {
               ),
               const SizedBox(height: 4),
               _buildAssetBalance(
-                _formatBalance(_showInUSD, double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0),
+                _showInUSD 
+                  ? _formatUsdValue(balance['usdValue']?.toString() ?? '0')
+                  : _formatCurrencyValue(
+                      (double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0 * _userCurrencyRate).toString(),
+                      _userCurrency
+                    ),
                 isDark,
-                ),
+              ),
             ],
           ),
         ],
@@ -1688,28 +1725,6 @@ class _WalletsTabState extends State<WalletsTab> {
 
       return true;
     }).toList();
-  }
-
-  String _formatAssetBalance(double amount) {
-    if (amount == 0) return '0';
-    
-    if (amount >= 1) {
-      // For numbers >= 1, show with comma separators
-      final wholeNumber = amount.floor();
-      final decimal = amount - wholeNumber;
-      final numberFormat = NumberFormat('#,##0', 'en_US');
-      
-      if (decimal == 0) {
-        return numberFormat.format(wholeNumber);
-      } else {
-        // Add up to 4 decimal places if there are decimals
-        final decimalStr = decimal.toStringAsFixed(4).substring(1);
-        return '${numberFormat.format(wholeNumber)}$decimalStr';
-      }
-    } else {
-      // For numbers < 1, show up to 8 decimal places without comma separators
-      return amount.toStringAsFixed(8).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
-    }
   }
 
 } 
