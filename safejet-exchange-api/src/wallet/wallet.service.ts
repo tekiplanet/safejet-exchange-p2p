@@ -842,7 +842,7 @@ export class WalletService {
         return allNetworks;
       }, new Map<string, NetworkResponse>());
 
-      return {
+    return {
         id: primaryToken.id,
         symbol: primaryToken.symbol,
         name: primaryToken.name.split(' (')[0],
