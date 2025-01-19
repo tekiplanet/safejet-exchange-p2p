@@ -106,14 +106,11 @@ class _DepositScreenState extends State<DepositScreen> {
   Future<void> _fetchDepositAddress() async {
     setState(() => _isLoading = true);
     try {
-      debugPrint('Selected coin: ${_selectedCoin.symbol} (${_selectedCoin.id})');
-      debugPrint('Selected network: ${_selectedNetwork.blockchain} (${_selectedNetwork.version})');
-
       final response = await _walletService.getDepositAddress(
         _selectedCoin.id,
-        network: _selectedNetwork.network.toLowerCase(),
-        blockchain: _selectedNetwork.blockchain.toLowerCase(),
-        version: _selectedNetwork.version.toUpperCase(),
+        network: _selectedNetwork.network,
+        blockchain: _selectedNetwork.blockchain,
+        version: _selectedNetwork.version,
       );
 
       setState(() {

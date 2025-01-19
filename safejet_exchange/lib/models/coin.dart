@@ -18,22 +18,34 @@ class Network {
   final String name;
   final String blockchain;
   final String version;
+  final String network;
   final String arrivalTime;
   final bool isActive;
   final bool requiresMemo;
   final bool requiresTag;
-  final String network;
 
   Network({
     required this.name,
     required this.blockchain,
     required this.version,
+    required this.network,
     required this.arrivalTime,
-    this.network = 'mainnet',
     this.isActive = true,
     this.requiresMemo = false,
     this.requiresTag = false,
   });
+
+  factory Network.fromJson(Map<String, dynamic> json) {
+    return Network(
+      name: json['blockchain'] ?? '',
+      blockchain: json['blockchain'] ?? '',
+      version: json['version'] ?? '',
+      network: json['network'] ?? 'mainnet',
+      arrivalTime: json['arrivalTime'] ?? '10-30 minutes',
+      requiresMemo: json['requiredFields']?['memo'] ?? false,
+      requiresTag: json['requiredFields']?['tag'] ?? false,
+    );
+  }
 }
 
 // Demo coins list
@@ -45,16 +57,17 @@ final List<Coin> coins = [
     iconUrl: 'bitcoin',
     networks: [
       Network(
-        name: 'mainnet',
+        name: 'Bitcoin',
         blockchain: 'bitcoin',
         version: 'NATIVE',
+        network: 'mainnet',
         arrivalTime: '~30 minutes',
-        network: 'mainnet'
       ),
       Network(
-        name: 'mainnet',
+        name: 'Bitcoin Lightning',
         blockchain: 'bitcoin',
         version: 'LIGHTNING',
+        network: 'mainnet',
         arrivalTime: '~1 minute',
         isActive: false
       ),
@@ -67,11 +80,11 @@ final List<Coin> coins = [
     iconUrl: 'ethereum',
     networks: [
       Network(
-        name: 'mainnet',
+        name: 'Ethereum',
         blockchain: 'ethereum',
         version: 'NATIVE',
+        network: 'mainnet',
         arrivalTime: '~5 minutes',
-        network: 'mainnet'
       ),
     ],
   ),
@@ -82,25 +95,25 @@ final List<Coin> coins = [
     iconUrl: 'tether',
     networks: [
       Network(
-        name: 'mainnet',
+        name: 'Ethereum',
         blockchain: 'ethereum',
         version: 'ERC20',
+        network: 'mainnet',
         arrivalTime: '~5 minutes',
-        network: 'mainnet'
       ),
       Network(
-        name: 'mainnet',
+        name: 'TRON',
         blockchain: 'trx',
         version: 'TRC20',
+        network: 'mainnet',
         arrivalTime: '~3 minutes',
-        network: 'mainnet'
       ),
       Network(
-        name: 'mainnet',
+        name: 'BSC',
         blockchain: 'bsc',
         version: 'BEP20',
+        network: 'mainnet',
         arrivalTime: '~3 minutes',
-        network: 'mainnet'
       ),
     ],
   ),
@@ -111,11 +124,11 @@ final List<Coin> coins = [
     iconUrl: 'bnb',
     networks: [
       Network(
-        name: 'mainnet',
+        name: 'BSC',
         blockchain: 'bsc',
         version: 'NATIVE',
+        network: 'mainnet',
         arrivalTime: '~3 minutes',
-        network: 'mainnet'
       ),
     ],
   ),
@@ -126,11 +139,11 @@ final List<Coin> coins = [
     iconUrl: 'solana',
     networks: [
       Network(
-        name: 'mainnet',
+        name: 'Solana',
         blockchain: 'solana',
         version: 'NATIVE',
+        network: 'mainnet',
         arrivalTime: '~1 minute',
-        network: 'mainnet'
       ),
     ],
   ),

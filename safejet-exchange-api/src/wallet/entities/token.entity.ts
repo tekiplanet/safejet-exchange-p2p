@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { NetworkConfig } from '../types/network.types';
 
 @Entity('tokens')
 export class Token {
@@ -76,13 +77,8 @@ export class Token {
 
   @Column('jsonb', { nullable: true })
   networkConfigs: {
-    blockchain: string;
-    version: string;
-    arrivalTime: string;
-    isActive: boolean;
-    requiredFields?: {
-      memo?: boolean;
-      tag?: boolean;
+    [version: string]: {
+      [network: string]: NetworkConfig;
     };
-  }[];
+  };
 } 

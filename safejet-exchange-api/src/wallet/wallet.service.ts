@@ -14,6 +14,7 @@ import axios from 'axios';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { delay } from '../utils/helpers';
 import { chunk } from 'lodash';
+import { NetworkConfig, NetworkResponse } from './types/network.types';
 
 interface PaginationParams {
   page: number;
@@ -803,68 +804,56 @@ export class WalletService {
       order: { symbol: 'ASC' }
     });
 
-    // Group tokens by baseSymbol
-    const groupedTokens = tokens.reduce((acc, token) => {
+    // First group tokens by baseSymbol
+    const tokenGroups = tokens.reduce<Record<string, Token[]>>((groups, token) => {
       const key = token.baseSymbol || token.symbol;
-      if (!acc[key]) {
-        acc[key] = {
-          id: token.id,
-          symbol: token.symbol,
-          name: token.name.split(' (')[0],
-          baseSymbol: token.baseSymbol,
-          metadata: token.metadata,
-          currentPrice: token.currentPrice,
-          networks: []
-        };
+      if (!groups[key]) {
+        groups[key] = [];
       }
-
-      // For NATIVE tokens, add both mainnet and testnet variants
-      if (token.networkVersion === 'NATIVE') {
-        // Always add mainnet
-        acc[key].networks.push({
-          blockchain: token.blockchain,
-          version: token.networkVersion,
-          network: 'mainnet',
-          arrivalTime: token.blockchain === 'ethereum' ? '10-30 minutes' : '5-10 minutes',
-          requiredFields: {
-            memo: false,
-            tag: false
-          }
-        });
-
-        // Add testnet if supported in metadata
-        if (token.metadata?.networks?.includes('testnet')) {
-          acc[key].networks.push({
-            blockchain: token.blockchain,
-            version: token.networkVersion,
-            network: 'testnet',
-            arrivalTime: token.blockchain === 'ethereum' ? '10-30 minutes' : '5-10 minutes',
-            requiredFields: {
-              memo: false,
-              tag: false
-            }
-          });
-        }
-      } else {
-        // For non-NATIVE tokens (TRC20, BEP20, etc.), just add mainnet
-        acc[key].networks.push({
-          blockchain: token.blockchain,
-          version: token.networkVersion,
-          network: 'mainnet',
-          arrivalTime: token.blockchain === 'ethereum' ? '10-30 minutes' : '5-10 minutes',
-          requiredFields: {
-            memo: false,
-            tag: false
-          }
-        });
-      }
-
-      return acc;
+      groups[key].push(token);
+      return groups;
     }, {});
 
-    return {
-      tokens: Object.values(groupedTokens)
-    };
+    // Then create unified token representations
+    const unifiedTokens = Object.entries(tokenGroups).map(([baseSymbol, tokens]) => {
+      // Use the first token for basic info
+      const primaryToken = tokens[0];
+      
+      // Collect all networks across all token variants
+      const networks = tokens.reduce((allNetworks, token) => {
+        if (token.networkConfigs) {
+          Object.entries(token.networkConfigs).forEach(([version, networksByType]) => {
+            Object.entries(networksByType).forEach(([networkType, config]) => {
+              if (config.isActive) {
+                const networkKey = `${config.blockchain}_${config.network}_${config.version}`;
+                if (!allNetworks.has(networkKey)) {
+                  allNetworks.set(networkKey, {
+                    blockchain: config.blockchain,
+                    version: config.version,
+                    network: config.network,
+                    arrivalTime: config.arrivalTime,
+                    requiredFields: config.requiredFields
+                  } as NetworkResponse);
+                }
+              }
+            });
+          });
+        }
+        return allNetworks;
+      }, new Map<string, NetworkResponse>());
+
+      return {
+        id: primaryToken.id,
+        symbol: primaryToken.symbol,
+        name: primaryToken.name.split(' (')[0],
+        baseSymbol: primaryToken.baseSymbol,
+        metadata: primaryToken.metadata,
+        currentPrice: primaryToken.currentPrice,
+        networks: Array.from(networks.values())
+      };
+    });
+
+    return { tokens: unifiedTokens };
   }
 
   async findEvmWallet(userId: string, network: string): Promise<Wallet | null> {

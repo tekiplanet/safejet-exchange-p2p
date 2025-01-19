@@ -199,23 +199,32 @@ class WalletService {
   Future<List<Coin>> getAvailableCoins() async {
     try {
       final response = await _dio.get('/wallets/tokens/available');
-      debugPrint('\n=== Raw Token Response ===');
-      debugPrint(response.data.toString());
       
       final List<dynamic> tokens = response.data['tokens'];
       return tokens.map((token) {
         final metadata = token['metadata'] as Map<String, dynamic>;
         final networks = List<Map<String, dynamic>>.from(token['networks']);
         
-        debugPrint('\nProcessing token: ${token['symbol']}');
-        debugPrint('Networks: $networks');
-        
+        // Deduplicate networks based on blockchain, version and network
+        final uniqueNetworks = networks.fold<List<Map<String, dynamic>>>(
+          [], 
+          (unique, network) {
+            if (!unique.any((n) => 
+                n['blockchain'] == network['blockchain'] && 
+                n['version'] == network['version'] &&
+                n['network'] == network['network'])) {
+              unique.add(network);
+            }
+            return unique;
+          }
+        );
+
         return Coin(
           id: token['id'],
           symbol: token['symbol'],
           name: token['name'],
           iconUrl: metadata['icon'],
-          networks: networks.map((network) => Network(
+          networks: uniqueNetworks.map((network) => Network(
             name: network['blockchain'],
             blockchain: network['blockchain'],
             version: network['version'],
