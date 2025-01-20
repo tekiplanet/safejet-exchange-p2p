@@ -119,7 +119,33 @@ export class DepositTrackingService implements OnModuleInit {
 
   private isMonitoring = false;
   private monitoringIntervals: NodeJS.Timeout[] = [];
-  private stopMonitoring = false;
+  private shouldStop = false;
+
+  // Add interval properties
+  private ethMainnetInterval: NodeJS.Timeout | null = null;
+  private ethTestnetInterval: NodeJS.Timeout | null = null;
+  private bscMainnetInterval: NodeJS.Timeout | null = null;
+  private bscTestnetInterval: NodeJS.Timeout | null = null;
+  private btcMainnetInterval: NodeJS.Timeout | null = null;
+  private btcTestnetInterval: NodeJS.Timeout | null = null;
+  private tronMainnetInterval: NodeJS.Timeout | null = null;
+  private tronTestnetInterval: NodeJS.Timeout | null = null;
+  private xrpMainnetInterval: NodeJS.Timeout | null = null;
+  private xrpTestnetInterval: NodeJS.Timeout | null = null;
+
+  // Add processing flag properties
+  private isProcessingEthMainnet = false;
+  private isProcessingEthTestnet = false;
+  private isProcessingBscMainnet = false;
+  private isProcessingBscTestnet = false;
+  private isProcessingBtcMainnet = false;
+  private isProcessingBtcTestnet = false;
+  private isProcessingTronMainnet = false;
+  private isProcessingTronTestnet = false;
+  private isProcessingXrpMainnet = false;
+  private isProcessingXrpTestnet = false;
+
+  private evmBlockListeners = new Map<string, any>();
 
   constructor(
     @InjectRepository(Deposit)
@@ -278,8 +304,8 @@ export class DepositTrackingService implements OnModuleInit {
       throw new Error('Monitoring is already running');
     }
 
+    this.shouldStop = false;
     this.isMonitoring = true;
-    this.stopMonitoring = false;
     this.logger.log('Starting deposit monitoring...');
 
     // Start monitoring for each chain
@@ -292,17 +318,65 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   async stopMonitoringDeposits() {
-    if (!this.isMonitoring) {
-      throw new Error('Monitoring is not running');
-    }
-
-    this.stopMonitoring = true;
     this.logger.log('Stopping deposit monitoring...');
     
-    // Wait for current processes to finish
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
+    // Set stop flag first
+    this.shouldStop = true;
     this.isMonitoring = false;
+
+    // Remove EVM event listeners
+    for (const [providerKey, listener] of this.evmBlockListeners.entries()) {
+      const provider = this.providers.get(providerKey);
+      if (provider) {
+        provider.removeListener('block', listener);
+      }
+    }
+    this.evmBlockListeners.clear();
+
+    // Clear all intervals
+    if (this.ethMainnetInterval) clearInterval(this.ethMainnetInterval);
+    if (this.ethTestnetInterval) clearInterval(this.ethTestnetInterval);
+    if (this.bscMainnetInterval) clearInterval(this.bscMainnetInterval);
+    if (this.bscTestnetInterval) clearInterval(this.bscTestnetInterval);
+    if (this.btcMainnetInterval) clearInterval(this.btcMainnetInterval);
+    if (this.btcTestnetInterval) clearInterval(this.btcTestnetInterval);
+    if (this.tronMainnetInterval) clearInterval(this.tronMainnetInterval);
+    if (this.tronTestnetInterval) clearInterval(this.tronTestnetInterval);
+    if (this.xrpMainnetInterval) clearInterval(this.xrpMainnetInterval);
+    if (this.xrpTestnetInterval) clearInterval(this.xrpTestnetInterval);
+
+    // Reset interval variables
+    this.ethMainnetInterval = null;
+    this.ethTestnetInterval = null;
+    this.bscMainnetInterval = null;
+    this.bscTestnetInterval = null;
+    this.btcMainnetInterval = null;
+    this.btcTestnetInterval = null;
+    this.tronMainnetInterval = null;
+    this.tronTestnetInterval = null;
+    this.xrpMainnetInterval = null;
+    this.xrpTestnetInterval = null;
+
+    // Clear all queues
+    for (const key in this.blockQueues) {
+      this.blockQueues[key].queue = [];
+    }
+
+    // Reset processing flags
+    this.isProcessingEthMainnet = false;
+    this.isProcessingEthTestnet = false;
+    this.isProcessingBscMainnet = false;
+    this.isProcessingBscTestnet = false;
+    this.isProcessingBtcMainnet = false;
+    this.isProcessingBtcTestnet = false;
+    this.isProcessingTronMainnet = false;
+    this.isProcessingTronTestnet = false;
+    this.isProcessingXrpMainnet = false;
+    this.isProcessingXrpTestnet = false;
+
+    // Wait a bit for any in-progress operations to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
     this.logger.log('Deposit monitoring stopped successfully');
     return { message: 'Deposit monitoring stopped successfully' };
   }
@@ -310,29 +384,36 @@ export class DepositTrackingService implements OnModuleInit {
   private monitorXrpChains() {
     if (!this.isMonitoring) return;
 
-    const interval = setInterval(() => {
+    const mainnetInterval = setInterval(() => {
       this.checkXrpBlocks('mainnet');
+    }, this.PROCESSING_DELAYS.xrp.checkInterval);
+
+    const testnetInterval = setInterval(() => {
       this.checkXrpBlocks('testnet');
     }, this.PROCESSING_DELAYS.xrp.checkInterval);
 
-    this.monitoringIntervals.push(interval);
+    this.xrpMainnetInterval = mainnetInterval;
+    this.xrpTestnetInterval = testnetInterval;
   }
 
-  // Add similar checks to other monitoring methods
   private monitorEvmChains() {
     if (!this.isMonitoring) return;
+    
     try {
-    for (const [providerKey, provider] of this.providers.entries()) {
-      const [chain, network] = providerKey.split('_');
-      if (['eth', 'bsc'].includes(chain)) {
-        this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
+      for (const [providerKey, provider] of this.providers.entries()) {
+        const [chain, network] = providerKey.split('_');
+        if (['eth', 'bsc'].includes(chain)) {
+          this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
           
-          // Add block to queue when received
-        provider.on('block', async (blockNumber: number) => {
+          // Store the listener function so we can remove it later
+          const listener = async (blockNumber: number) => {
             const queueKey = `${chain}_${network}`;
             this.blockQueues[queueKey].queue.push(blockNumber);
             this.processQueueForChain(chain, network, provider);
-          });
+          };
+          
+          provider.on('block', listener);
+          this.evmBlockListeners.set(providerKey, listener);
         }
       }
     } catch (error) {
@@ -342,57 +423,74 @@ export class DepositTrackingService implements OnModuleInit {
 
   private monitorBitcoinChains() {
     if (!this.isMonitoring) return;
+    
     for (const network of ['mainnet', 'testnet']) {
       const provider = this.providers.get(`btc_${network}`);
       this.logger.log(`Started monitoring Bitcoin ${network} blocks`);
       
-      setInterval(async () => {
+      const interval = setInterval(async () => {
         await this.checkBitcoinBlocks(network);
       }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
+
+      if (network === 'mainnet') {
+        this.btcMainnetInterval = interval;
+      } else {
+        this.btcTestnetInterval = interval;
+      }
     }
   }
 
   private monitorTronChains() {
     if (!this.isMonitoring) return;
+    
     for (const network of ['mainnet', 'testnet']) {
       const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
       if (!tronWeb) continue;
       
       this.logger.log(`Started monitoring TRON ${network} blocks`);
       
-      setInterval(async () => {
+      const interval = setInterval(async () => {
         await this.checkTronBlocks(network, tronWeb);
       }, this.PROCESSING_DELAYS.trx.checkInterval);
+
+      if (network === 'mainnet') {
+        this.tronMainnetInterval = interval;
+      } else {
+        this.tronTestnetInterval = interval;
+      }
     }
   }
 
   private async processQueueForChain(chain: string, network: string, provider: any) {
+    if (this.shouldStop) return;
+
     // Check if already processing
     if (!await this.getLock(chain, network)) {
-        this.logger.debug(`${chain} ${network} blocks already processing, skipping`);
-        return;
+      this.logger.debug(`${chain} ${network} blocks already processing, skipping`);
+      return;
     }
 
     const queueKey = `${chain}_${network}`;
     const queue = this.blockQueues[queueKey];
 
     try {
-        while (queue.queue.length > 0) {
-            const blockNumber = queue.queue.shift()!;
-            try {
-                await this.processEvmBlock(chain, network, blockNumber, provider);
-                await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS[chain].blockDelay));
-            } catch (error) {
-                this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
-            }
+      while (queue.queue.length > 0 && !this.shouldStop) {
+        const blockNumber = queue.queue.shift()!;
+        try {
+          await this.processEvmBlock(chain, network, blockNumber, provider);
+          if (this.shouldStop) break;
+          await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS[chain].blockDelay));
+        } catch (error) {
+          this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
         }
+      }
     } finally {
-        this.releaseLock(chain, network);
-        
-        // If new blocks were added while processing, start a new processing cycle
-        if (queue.queue.length > 0) {
-            setImmediate(() => this.processQueueForChain(chain, network, provider));
-        }
+      this.releaseLock(chain, network);
+      
+      // Only continue if not stopping
+      if (queue.queue.length > 0 && !this.shouldStop) {
+        setImmediate(() => this.processQueueForChain(chain, network, provider));
+      }
     }
   }
 
@@ -636,35 +734,37 @@ export class DepositTrackingService implements OnModuleInit {
   private async checkBitcoinBlocks(network: string) {
     // Check if already processing
     if (!await this.getLock('btc', network)) {
-        this.logger.debug(`Bitcoin ${network} blocks already processing, skipping`);
-        return;
+      this.logger.debug(`Bitcoin ${network} blocks already processing, skipping`);
+      return;
     }
 
+    if (this.shouldStop) return;
+
     try {
-        const provider = this.providers.get(`btc_${network}`);
-        if (!provider) {
-            this.logger.warn(`No Bitcoin provider found for network ${network}`);
-            return;
-        }
+      const provider = this.providers.get(`btc_${network}`);
+      if (!provider) {
+        this.logger.warn(`No Bitcoin provider found for network ${network}`);
+        return;
+      }
 
-        const currentHeight = await this.getBitcoinBlockHeight(provider);
-        const lastProcessedBlock = await this.getLastProcessedBlock('btc', network);
+      const currentHeight = await this.getBitcoinBlockHeight(provider);
+      const lastProcessedBlock = await this.getLastProcessedBlock('btc', network);
 
-        // Process one block at a time
-        if (lastProcessedBlock < currentHeight) {
-            const nextBlock = lastProcessedBlock + 1;
-            this.logger.log(`Bitcoin ${network}: Processing block ${nextBlock}`);
-            
-            const block = await this.getBitcoinBlock(provider, nextBlock);
-            if (block) {
-                await this.processBitcoinBlock('btc', network, block);
-                await this.saveLastProcessedBlock('btc', network, nextBlock);
-            }
+      // Process one block at a time
+      if (lastProcessedBlock < currentHeight && !this.shouldStop) {
+        const nextBlock = lastProcessedBlock + 1;
+        this.logger.log(`Bitcoin ${network}: Processing block ${nextBlock}`);
+        
+        const block = await this.getBitcoinBlock(provider, nextBlock);
+        if (block && !this.shouldStop) {
+          await this.processBitcoinBlock('btc', network, block);
+          await this.saveLastProcessedBlock('btc', network, nextBlock);
         }
+      }
     } catch (error) {
-        this.logger.error(`Error in Bitcoin block check: ${error.message}`);
+      this.logger.error(`Error in Bitcoin block check: ${error.message}`);
     } finally {
-        this.releaseLock('btc', network);
+      this.releaseLock('btc', network);
     }
   }
 
@@ -891,6 +991,8 @@ export class DepositTrackingService implements OnModuleInit {
         this.logger.debug(`TRON ${network} blocks already processing, skipping`);
         return;
     }
+
+    if (this.shouldStop) return;
 
     try {
         const currentBlock = await tronWeb.trx.getCurrentBlock();
@@ -1183,6 +1285,8 @@ export class DepositTrackingService implements OnModuleInit {
         return;
     }
 
+    if (this.shouldStop) return;
+
     try {
         const provider = this.providers.get(`xrp_${network}`) as Client;
         if (!provider) {
@@ -1212,7 +1316,7 @@ export class DepositTrackingService implements OnModuleInit {
         }
 
         // Only process if there are new blocks
-        if (lastProcessedBlock < currentLedger) {
+        if (lastProcessedBlock < currentLedger && !this.shouldStop) {
             this.logger.log(`XRP ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
 
             for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
