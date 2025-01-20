@@ -8,10 +8,11 @@ import { AdminAuthController } from './admin-auth.controller';
 import { AdminDepositController } from './admin-deposit.controller';
 import { AdminGuard } from '../auth/admin.guard';
 import { WalletModule } from '../wallet/wallet.module';
+import { SystemSettings } from '../wallet/entities/system-settings.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin]),
+    TypeOrmModule.forFeature([Admin, SystemSettings]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({

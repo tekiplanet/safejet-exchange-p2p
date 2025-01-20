@@ -118,7 +118,7 @@ export class DepositTrackingService implements OnModuleInit {
   private processingLocks = new Map<string, boolean>();
 
   private isMonitoring = false;
-  private monitoringIntervals: NodeJS.Timeout[] = [];
+  private monitoringInterval: NodeJS.Timeout | null = null;
   private shouldStop = false;
 
   // Add interval properties
@@ -315,12 +315,19 @@ export class DepositTrackingService implements OnModuleInit {
     this.monitorXrpChains();
 
     this.logger.log('Deposit monitoring started successfully');
+
+    this.monitoringInterval = setInterval(() => {
+      this.checkForNewDeposits();
+    }, 30000); // Check every 30 seconds
+
+    return true;
   }
 
-  async stopMonitoringDeposits() {
-    this.logger.log('Stopping deposit monitoring...');
-    
-    // Set stop flag first
+  async stopMonitoring() {
+    if (!this.isMonitoring) {
+      throw new Error('Monitoring is not running');
+    }
+
     this.shouldStop = true;
     this.isMonitoring = false;
 
@@ -377,8 +384,55 @@ export class DepositTrackingService implements OnModuleInit {
     // Wait a bit for any in-progress operations to complete
     await new Promise(resolve => setTimeout(resolve, 1000));
 
+    if (this.monitoringInterval) {
+      clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+    }
+
     this.logger.log('Deposit monitoring stopped successfully');
-    return { message: 'Deposit monitoring stopped successfully' };
+    return true;
+  }
+
+  private async checkForNewDeposits() {
+    try {
+      // Your deposit checking logic here
+      // This will run every interval to check for new deposits
+      const chains = ['eth', 'bsc', 'btc', 'trx', 'xrp'];
+      const networks = ['mainnet', 'testnet'];
+
+      for (const chain of chains) {
+        for (const network of networks) {
+          await this.processChainDeposits(chain, network);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for deposits:', error);
+    }
+  }
+
+  private async processChainDeposits(chain: string, network: string) {
+    try {
+      const currentBlock = await this.getCurrentBlockHeight(chain, network);
+      const startBlock = await this.getStartBlock(chain, network);
+
+      if (!startBlock) {
+        console.log(`No start block configured for ${chain} ${network}`);
+        return;
+      }
+
+      // Process blocks from startBlock to currentBlock
+      // Implement your deposit processing logic here
+    } catch (error) {
+      console.error(`Error processing deposits for ${chain} ${network}:`, error);
+    }
+  }
+
+  private async getStartBlock(chain: string, network: string): Promise<number | null> {
+    const key = `start_block_${chain}_${network}`;
+    const setting = await this.systemSettingsRepository.findOne({
+      where: { key }
+    });
+    return setting ? parseInt(setting.value) : null;
   }
 
   private monitorXrpChains() {
@@ -911,12 +965,47 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
+  private async getStartingBlock(chain: string, network: string): Promise<number> {
+    try {
+      // Try to get configured start block
+      const key = `start_block_${chain}_${network}`;
+      const setting = await this.systemSettingsRepository.findOne({
+        where: { key }
+      });
+
+      if (setting) {
+        return parseInt(setting.value);
+      }
+
+      // If no configured start block, get current block and use safe defaults
+      const currentBlock = await this.getCurrentBlockHeight(chain, network);
+      const defaultOffset = this.CONFIRMATION_BLOCKS[chain][network];
+      return Math.max(1, currentBlock - defaultOffset);
+
+    } catch (error) {
+      this.logger.error(`Error getting start block for ${chain} ${network}: ${error.message}`);
+      return 1; // Fallback to block 1 if everything fails
+    }
+  }
+
   private async getLastProcessedBlock(chain: string, network: string): Promise<number> {
-    const chainKey = chain.toLowerCase() === 'bitcoin' ? 'btc' : chain.toLowerCase();
-    const key = `last_processed_block_${chainKey}_${network}`;
-    
-    const setting = await this.systemSettingsRepository.findOne({ where: { key } });
-    return setting ? parseInt(setting.value) : 0;
+    try {
+      const key = `last_processed_block_${chain}_${network}`;
+      const setting = await this.systemSettingsRepository.findOne({
+        where: { key }
+      });
+
+      if (setting) {
+        return parseInt(setting.value);
+      }
+
+      // If no last processed block, get the configured start block
+      return await this.getStartingBlock(chain, network);
+
+    } catch (error) {
+      this.logger.error(`Error getting last processed block for ${chain} ${network}: ${error.message}`);
+      return 0;
+    }
   }
 
   private getChainKey(blockchain: string): string {
@@ -1446,5 +1535,39 @@ export class DepositTrackingService implements OnModuleInit {
   private releaseLock(chain: string, network: string) {
     const key = `${chain}_${network}`;
     this.processingLocks.set(key, false);
+  }
+
+  async getCurrentBlockHeight(chain: string, network: string): Promise<number> {
+    try {
+      const provider = this.providers.get(`${chain}_${network}`);
+      if (!provider) {
+        throw new Error(`No provider found for ${chain} ${network}`);
+      }
+
+      switch (chain) {
+        case 'eth':
+        case 'bsc':
+          return await provider.getBlockNumber();
+        
+        case 'btc':
+          return await this.getBitcoinBlockHeight(provider);
+        
+        case 'trx':
+          const block = await provider.trx.getCurrentBlock();
+          return block.block_header.raw_data.number;
+        
+        case 'xrp':
+          const serverInfo = await provider.request({
+            command: 'server_info'
+          });
+          return serverInfo.result.info.validated_ledger.seq;
+        
+        default:
+          throw new Error(`Unsupported chain: ${chain}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error getting current block height for ${chain} ${network}: ${error.message}`);
+      throw error;
+    }
   }
 }

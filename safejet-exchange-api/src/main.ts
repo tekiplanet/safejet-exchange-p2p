@@ -40,9 +40,10 @@ async function bootstrap() {
       'http://localhost:3000',          // Flutter web if needed
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'ngrok-skip-browser-warning'],
     exposedHeaders: ['Authorization'],
-    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   // Serve static files from public directory

@@ -1,9 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+interface BlockInfo {
+  currentBlocks: {
+    [key: string]: number;
+  };
+  savedBlocks: {
+    [key: string]: string;
+  };
+}
 
 export default function DepositMonitoring() {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(false);
+  const [blockInfo, setBlockInfo] = useState<BlockInfo | null>(null);
+  const [editingBlock, setEditingBlock] = useState<{
+    chain: string;
+    network: string;
+    value: string;
+  } | null>(null);
+  const [updateStatus, setUpdateStatus] = useState('');
+  const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
 
   const handleToggleMonitoring = async () => {
     setLoading(true);
@@ -11,10 +28,11 @@ export default function DepositMonitoring() {
       const token = localStorage.getItem('adminToken');
       const endpoint = isMonitoring ? 'stop-monitoring' : 'start-monitoring';
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposit/${endpoint}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true'
         },
       });
 
@@ -33,6 +51,83 @@ export default function DepositMonitoring() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBlockInfo();
+  }, []);
+
+  const fetchBlockInfo = async () => {
+    setIsLoadingBlocks(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/chain-blocks`;
+      console.log('Fetching from:', url);
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+      });
+
+      // Log the raw response for debugging
+      const text = await response.text();
+      console.log('Raw response:', text);
+
+      try {
+        // Try to parse the text as JSON
+        const data = JSON.parse(text);
+        setBlockInfo(data);
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', {
+          text,
+          error: parseError
+        });
+        throw new TypeError('Response was not valid JSON');
+      }
+    } catch (error: unknown) {
+      console.error('Error fetching block info:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      setUpdateStatus('Failed to fetch block information');
+    } finally {
+      setIsLoadingBlocks(false);
+    }
+  };
+
+  const handleUpdateStartBlock = async () => {
+    if (!editingBlock) return;
+
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/set-start-block`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chain: editingBlock.chain,
+          network: editingBlock.network,
+          startBlock: parseInt(editingBlock.value),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update start block');
+      }
+
+      const data = await response.json();
+      setUpdateStatus(data.message);
+      fetchBlockInfo(); // Refresh block info
+      setEditingBlock(null);
+    } catch (error: unknown) {
+      setUpdateStatus(error instanceof Error ? error.message : 'Failed to update start block');
     }
   };
 
@@ -105,6 +200,104 @@ export default function DepositMonitoring() {
                 <p className="text-sm font-medium">{status}</p>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Block Configuration Section */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Block Configuration</h3>
+        <div className="overflow-x-auto">
+          {isLoadingBlocks ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <span className="ml-2 text-gray-600">Loading block information...</span>
+            </div>
+          ) : blockInfo ? (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Chain</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Network</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Block</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Block</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {Object.entries(blockInfo.currentBlocks).map(([key, currentBlock]) => {
+                  const [chain, network] = key.split('_');
+                  const isEditing = editingBlock?.chain === chain && editingBlock?.network === network;
+                  const savedBlock = blockInfo.savedBlocks[key];
+
+                  return (
+                    <tr key={key}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{chain.toUpperCase()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{network}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{currentBlock}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            className="border rounded px-2 py-1 w-32"
+                            value={editingBlock.value}
+                            onChange={(e) => setEditingBlock({
+                              ...editingBlock,
+                              value: e.target.value
+                            })}
+                          />
+                        ) : (
+                          savedBlock || 'Not set'
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {isEditing ? (
+                          <div className="space-x-2">
+                            <button
+                              onClick={handleUpdateStartBlock}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingBlock(null)}
+                              className="text-gray-600 hover:text-gray-900"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setEditingBlock({
+                              chain,
+                              network,
+                              value: savedBlock || currentBlock.toString()
+                            })}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div className="text-center py-4 text-gray-500">
+              No block information available
+            </div>
+          )}
+        </div>
+
+        {updateStatus && (
+          <div className={`mt-4 p-4 rounded-md ${
+            updateStatus.toLowerCase().includes('error')
+              ? 'bg-red-50 text-red-700'
+              : 'bg-green-50 text-green-700'
+          }`}>
+            <p className="text-sm">{updateStatus}</p>
           </div>
         )}
       </div>
