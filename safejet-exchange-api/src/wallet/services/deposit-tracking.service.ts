@@ -1120,13 +1120,31 @@ export class DepositTrackingService implements OnModuleInit {
             command: 'server_info'
         });
         const currentLedger = serverInfo.result.info.validated_ledger.seq;
-        const lastProcessedBlock = await this.getLastProcessedBlock('xrp', network);
+        let lastProcessedBlock = await this.getLastProcessedBlock('xrp', network);
 
-        this.logger.log(`XRP ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
+        // If this is the first time (lastProcessedBlock is 0), start from current ledger
+        if (lastProcessedBlock === 0) {
+            lastProcessedBlock = currentLedger - 1;  // Start from one block before current
+            await this.saveLastProcessedBlock('xrp', network, lastProcessedBlock);
+        }
 
-        for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
-            await this.processXrpLedger('xrp', network, ledgerIndex);
-            await this.saveLastProcessedBlock('xrp', network, ledgerIndex);
+        // Only process if there are new blocks
+        if (lastProcessedBlock < currentLedger) {
+            this.logger.log(`XRP ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
+
+            for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
+                try {
+                    await this.processXrpLedger('xrp', network, ledgerIndex);
+                    await this.saveLastProcessedBlock('xrp', network, ledgerIndex);
+                } catch (error) {
+                    if (error.message.includes('ledgerNotFound')) {
+                        // If ledger not found, skip to next one
+                        this.logger.warn(`XRP ${network}: Ledger ${ledgerIndex} not found, skipping`);
+                        continue;
+                    }
+                    throw error;
+                }
+            }
         }
     } catch (error) {
         this.logger.error(`Error in XRP block check: ${error.message}`);
