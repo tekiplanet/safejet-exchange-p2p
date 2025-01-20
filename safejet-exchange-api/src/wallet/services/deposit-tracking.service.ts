@@ -111,10 +111,11 @@ export class DepositTrackingService implements OnModuleInit {
 
   private blockQueues: {
     [key: string]: {
-        isProcessing: boolean;
         queue: number[];
     };
   } = {};
+
+  private processingLocks = new Map<string, boolean>();
 
   constructor(
     @InjectRepository(Deposit)
@@ -131,10 +132,8 @@ export class DepositTrackingService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Initialize queues for each chain
     ['eth_mainnet', 'eth_testnet', 'bsc_mainnet', 'bsc_testnet'].forEach(chain => {
         this.blockQueues[chain] = {
-            isProcessing: false,
             queue: []
         };
     });
@@ -299,32 +298,31 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async processQueueForChain(chain: string, network: string, provider: any) {
+    // Check if already processing
+    if (!await this.getLock(chain, network)) {
+        this.logger.debug(`${chain} ${network} blocks already processing, skipping`);
+        return;
+    }
+
     const queueKey = `${chain}_${network}`;
     const queue = this.blockQueues[queueKey];
 
-    // If already processing, return
-    if (queue.isProcessing) return;
-
     try {
-        queue.isProcessing = true;
-
         while (queue.queue.length > 0) {
             const blockNumber = queue.queue.shift()!;
             try {
                 await this.processEvmBlock(chain, network, blockNumber, provider);
-                // Add delay between blocks
                 await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS[chain].blockDelay));
             } catch (error) {
                 this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
-                // Continue with next block even if current fails
             }
         }
     } finally {
-        queue.isProcessing = false;
+        this.releaseLock(chain, network);
         
-        // Check if new blocks were added while processing
+        // If new blocks were added while processing, start a new processing cycle
         if (queue.queue.length > 0) {
-            this.processQueueForChain(chain, network, provider);
+            setImmediate(() => this.processQueueForChain(chain, network, provider));
         }
     }
   }
@@ -567,42 +565,37 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async checkBitcoinBlocks(network: string) {
-    try {
-      const chain = 'bitcoin';
-      const provider = this.providers.get(`btc_${network}`) as BitcoinProvider;
-      if (!provider) {
-        this.logger.warn(`No Bitcoin provider found for network ${network}`);
+    // Check if already processing
+    if (!await this.getLock('btc', network)) {
+        this.logger.debug(`Bitcoin ${network} blocks already processing, skipping`);
         return;
-      }
+    }
 
-      const currentHeight = await this.getBitcoinBlockHeight(provider);
-      const lastProcessedBlock = await this.getLastProcessedBlock(chain, network);
-
-      this.logger.log(`Bitcoin ${network}: Processing from block ${lastProcessedBlock + 1} to ${currentHeight}`);
-
-      // Process blocks in batches
-      const batchSize = 50;
-      for (let height = lastProcessedBlock + 1; height <= currentHeight; height += batchSize) {
-        const endBlock = Math.min(height + batchSize - 1, currentHeight);
-        
-        this.logger.log(`Bitcoin ${network}: Processing batch from block ${height} to ${endBlock}`);
-
-        for (let blockNum = height; blockNum <= endBlock; blockNum++) {
-          const block = await this.getBitcoinBlock(provider, blockNum);
-          if (!block) {
-            this.logger.warn(`Bitcoin ${network}: Block ${blockNum} not found`);
-            continue;
-          }
-
-          await this.processBitcoinBlock(chain, network, block);
-          this.logger.log(`Bitcoin ${network}: Completed block ${blockNum}`);
+    try {
+        const provider = this.providers.get(`btc_${network}`);
+        if (!provider) {
+            this.logger.warn(`No Bitcoin provider found for network ${network}`);
+            return;
         }
 
-        this.logger.log(`Bitcoin ${network}: Completed batch processing up to block ${endBlock}`);
-      }
+        const currentHeight = await this.getBitcoinBlockHeight(provider);
+        const lastProcessedBlock = await this.getLastProcessedBlock('btc', network);
+
+        // Process one block at a time
+        if (lastProcessedBlock < currentHeight) {
+            const nextBlock = lastProcessedBlock + 1;
+            this.logger.log(`Bitcoin ${network}: Processing block ${nextBlock}`);
+            
+            const block = await this.getBitcoinBlock(provider, nextBlock);
+            if (block) {
+                await this.processBitcoinBlock('btc', network, block);
+                await this.saveLastProcessedBlock('btc', network, nextBlock);
+            }
+        }
     } catch (error) {
-      this.logger.error(`Error in Bitcoin block check: ${error.message}`);
-      throw error;
+        this.logger.error(`Error in Bitcoin block check: ${error.message}`);
+    } finally {
+        this.releaseLock('btc', network);
     }
   }
 
@@ -824,57 +817,65 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async checkTronBlocks(network: string, tronWeb: TronWebInstance) {
+    // Check if already processing
+    if (!await this.getLock('trx', network)) {
+        this.logger.debug(`TRON ${network} blocks already processing, skipping`);
+        return;
+    }
+
     try {
-      const currentBlock = await tronWeb.trx.getCurrentBlock();
-      const lastProcessedBlock = await this.getLastProcessedBlock('trx', network);
-      const currentBlockNumber = currentBlock.block_header.raw_data.number;
+        const currentBlock = await tronWeb.trx.getCurrentBlock();
+        const lastProcessedBlock = await this.getLastProcessedBlock('trx', network);
+        const currentBlockNumber = currentBlock.block_header.raw_data.number;
 
-      this.logger.log(`TRON ${network}: Processing blocks from ${lastProcessedBlock + 1} to ${currentBlockNumber}`);
+        this.logger.log(`TRON ${network}: Processing blocks from ${lastProcessedBlock + 1} to ${currentBlockNumber}`);
 
-      // Process blocks in smaller batches to avoid rate limits
-      const batchSize = 5;
-      const startBlock = lastProcessedBlock + 1;
-      const endBlock = Math.min(startBlock + batchSize, currentBlockNumber);
+        // Process blocks in smaller batches to avoid rate limits
+        const batchSize = 5;
+        const startBlock = lastProcessedBlock + 1;
+        const endBlock = Math.min(startBlock + batchSize, currentBlockNumber);
 
-      this.logger.log(`TRON ${network}: Processing batch from block ${startBlock} to ${endBlock}`);
+        this.logger.log(`TRON ${network}: Processing batch from block ${startBlock} to ${endBlock}`);
 
-      for (let height = startBlock; height <= endBlock; height++) {
-        try {
-          this.logger.log(`TRON ${network}: Processing block ${height}`);
+        for (let height = startBlock; height <= endBlock; height++) {
+          try {
+            this.logger.log(`TRON ${network}: Processing block ${height}`);
           
-          // Add configurable delay between blocks
-          await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS.trx.blockDelay));
+            // Add configurable delay between blocks
+            await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS.trx.blockDelay));
 
-          // Get block with retry logic
-          const block = await this.getTronBlockWithRetry(tronWeb, height, 3);
-          if (!block) {
-            this.logger.warn(`Skipping TRON ${network} block ${height}: Could not fetch block data`);
-            continue;
+            // Get block with retry logic
+            const block = await this.getTronBlockWithRetry(tronWeb, height, 3);
+            if (!block) {
+              this.logger.warn(`Skipping TRON ${network} block ${height}: Could not fetch block data`);
+              continue;
+            }
+
+            // Log transactions found
+            const txCount = block.transactions?.length || 0;
+            this.logger.log(`TRON ${network}: Block ${height} has ${txCount} transactions`);
+
+            await this.processTronBlock(network, block);
+            await this.updateTronConfirmations(network, height);
+            await this.saveLastProcessedBlock('trx', network, height);
+
+            this.logger.log(`TRON ${network}: Successfully processed block ${height}`);
+
+          } catch (error) {
+            if (error.response?.status === 403) {
+              this.logger.error(`TRON API rate limit reached at block ${height}, waiting longer...`);
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              continue;
+            }
+            this.logger.error(`Error processing TRON block ${height}: ${error.message}`);
           }
-
-          // Log transactions found
-          const txCount = block.transactions?.length || 0;
-          this.logger.log(`TRON ${network}: Block ${height} has ${txCount} transactions`);
-
-          await this.processTronBlock(network, block);
-          await this.updateTronConfirmations(network, height);
-          await this.saveLastProcessedBlock('trx', network, height);
-
-          this.logger.log(`TRON ${network}: Successfully processed block ${height}`);
-
-        } catch (error) {
-          if (error.response?.status === 403) {
-            this.logger.error(`TRON API rate limit reached at block ${height}, waiting longer...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            continue;
-          }
-          this.logger.error(`Error processing TRON block ${height}: ${error.message}`);
         }
-      }
 
-      this.logger.log(`TRON ${network}: Completed processing batch of blocks`);
+        this.logger.log(`TRON ${network}: Completed processing batch of blocks`);
     } catch (error) {
-      this.logger.error(`Error in TRON block check: ${error.message}`);
+        this.logger.error(`Error in TRON block check: ${error.message}`);
+    } finally {
+        this.releaseLock('trx', network);
     }
   }
 
@@ -1108,6 +1109,12 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async checkXrpBlocks(network: string) {
+    // Check if already processing
+    if (!await this.getLock('xrp', network)) {
+        this.logger.debug(`XRP ${network} blocks already processing, skipping`);
+        return;
+    }
+
     try {
         const provider = this.providers.get(`xrp_${network}`) as Client;
         if (!provider) {
@@ -1148,6 +1155,8 @@ export class DepositTrackingService implements OnModuleInit {
         }
     } catch (error) {
         this.logger.error(`Error in XRP block check: ${error.message}`);
+    } finally {
+        this.releaseLock('xrp', network);
     }
   }
 
@@ -1233,5 +1242,19 @@ export class DepositTrackingService implements OnModuleInit {
     }
     
     return token.id.toString();
+  }
+
+  private async getLock(chain: string, network: string): Promise<boolean> {
+    const key = `${chain}_${network}`;
+    if (this.processingLocks.get(key)) {
+        return false;
+    }
+    this.processingLocks.set(key, true);
+    return true;
+  }
+
+  private releaseLock(chain: string, network: string) {
+    const key = `${chain}_${network}`;
+    this.processingLocks.set(key, false);
   }
 }
