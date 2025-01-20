@@ -20,6 +20,8 @@ import * as bitcoin from 'bitcoinjs-lib';
 const TronWeb = require('tronweb');
 type TronWebType = typeof TronWeb;
 type TronWebInstance = InstanceType<TronWebType>;
+import { Client } from 'xrpl';
+type XrplClient = Client;
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -38,7 +40,7 @@ interface BitcoinProvider {
 }
 
 interface Providers {
-  [key: string]: JsonRpcProvider | WebSocketProvider | BitcoinProvider | TronWebInstance;
+  [key: string]: JsonRpcProvider | WebSocketProvider | BitcoinProvider | TronWebInstance | XrplClient;
 }
 
 // Add this interface at the top with other interfaces
@@ -69,6 +71,10 @@ export class DepositTrackingService implements OnModuleInit {
     trx: {
       mainnet: 20,
       testnet: 10
+    },
+    xrp: {
+      mainnet: 4,
+      testnet: 2
     }
   } as const;
 
@@ -88,6 +94,10 @@ export class DepositTrackingService implements OnModuleInit {
     trx: {
       blockDelay: this.configService.get('TRON_BLOCK_DELAY', 5000),
       checkInterval: this.configService.get('TRON_CHECK_INTERVAL', 10000)
+    },
+    xrp: {
+      blockDelay: this.configService.get('XRP_BLOCK_DELAY', 2000),
+      checkInterval: this.configService.get('XRP_CHECK_INTERVAL', 30000)
     }
   };
 
@@ -95,7 +105,8 @@ export class DepositTrackingService implements OnModuleInit {
     eth: 'eth',
     bsc: 'bsc',
     bitcoin: 'btc',
-    trx: 'trx'
+    trx: 'trx',
+    xrp: 'xrp'
   } as const;
 
   private blockQueues: {
@@ -235,15 +246,35 @@ export class DepositTrackingService implements OnModuleInit {
         this.logger.error(`Failed to initialize TRON ${network} provider: ${error.message}`);
       }
     }
+
+    // Initialize XRP provider
+    const xrpNetworks = {
+      mainnet: this.configService.get('XRP_MAINNET_RPC'),
+      testnet: this.configService.get('XRP_TESTNET_RPC'),
+    };
+
+    for (const [network, rpcUrl] of Object.entries(xrpNetworks)) {
+      const providerKey = `xrp_${network}`;
+      try {
+        const provider = new Client(rpcUrl);
+        await provider.connect();
+        const info = await provider.request({
+          command: 'server_info'
+        });
+        this.providers.set(providerKey, provider);
+        this.logger.log(`XRP ${network} provider initialized successfully, current block: ${info.result.info.validated_ledger.seq}`);
+      } catch (error) {
+        this.logger.error(`Failed to initialize XRP ${network} provider: ${error.message}`);
+      }
+    }
   }
 
   private async startMonitoring() {
-    // Start monitoring for each chain
     await Promise.all([
       this.monitorEvmChains(),
       this.monitorBitcoin(),
       this.monitorTron(),
-      // Add other chains
+      this.monitorXrp(),
     ]);
   }
 
@@ -576,7 +607,7 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async processBitcoinBlock(chain: string, network: string, block: BitcoinBlock) {
-    this.logger.debug(`Received block data: ${JSON.stringify(block, null, 2)}`);
+    // this.logger.debug(`Received block data: ${JSON.stringify(block, null, 2)}`);
     
     if (!block || !block.tx) {
         this.logger.warn(`Skipping invalid Bitcoin block for ${chain} ${network}: ${JSON.stringify(block)}`);
@@ -1061,5 +1092,128 @@ export class DepositTrackingService implements OnModuleInit {
         this.logger.error(`Error processing Bitcoin transaction: ${error.message}`);
       throw error;
     }
+  }
+
+  private async monitorXrp() {
+    for (const network of ['mainnet', 'testnet']) {
+      const provider = this.providers.get(`xrp_${network}`);
+      if (!provider) continue;
+      
+      this.logger.log(`Started monitoring XRP ${network} blocks`);
+      
+      setInterval(async () => {
+        await this.checkXrpBlocks(network);
+      }, this.PROCESSING_DELAYS.xrp.checkInterval);
+    }
+  }
+
+  private async checkXrpBlocks(network: string) {
+    try {
+        const provider = this.providers.get(`xrp_${network}`) as Client;
+        if (!provider) {
+            this.logger.warn(`No XRP provider found for network ${network}`);
+            return;
+        }
+
+        // Get current ledger using server_info command
+        const serverInfo = await provider.request({
+            command: 'server_info'
+        });
+        const currentLedger = serverInfo.result.info.validated_ledger.seq;
+        const lastProcessedBlock = await this.getLastProcessedBlock('xrp', network);
+
+        this.logger.log(`XRP ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
+
+        for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
+            await this.processXrpLedger('xrp', network, ledgerIndex);
+            await this.saveLastProcessedBlock('xrp', network, ledgerIndex);
+        }
+    } catch (error) {
+        this.logger.error(`Error in XRP block check: ${error.message}`);
+    }
+  }
+
+  private async processXrpLedger(chain: string, network: string, ledgerIndex: number) {
+    try {
+        const provider = this.providers.get(`xrp_${network}`) as Client;
+        
+        // Get ledger with transactions
+        const ledgerResponse = await provider.request({
+            command: 'ledger',
+            ledger_index: ledgerIndex,
+            transactions: true,
+            expand: true
+        });
+        
+        const transactions = ledgerResponse.result.ledger.transactions || [];
+        this.logger.log(`XRP ${network}: Processing ledger ${ledgerIndex} with ${transactions.length} transactions`);
+
+        for (const tx of transactions) {
+            await this.processXrpTransaction(chain, network, tx);
+        }
+
+        this.logger.log(`XRP ${network}: Completed ledger ${ledgerIndex}`);
+    } catch (error) {
+        this.logger.error(`Error processing XRP ledger ${ledgerIndex}: ${error.message}`);
+    }
+  }
+
+  private async processXrpTransaction(chain: string, network: string, tx: any) {
+    try {
+      if (tx.TransactionType !== 'Payment') return;
+
+      const wallets = await this.walletRepository.find({
+        where: {
+          blockchain: chain,
+          network: network,
+        },
+      });
+
+      const walletAddresses = new Set(wallets.map(w => w.address));
+
+      if (walletAddresses.has(tx.Destination)) {
+        const wallet = wallets.find(w => w.address === tx.Destination);
+        if (!wallet) return;
+
+        const tokenId = await this.getXrpTokenId();
+
+        await this.depositRepository.save({
+          userId: wallet.userId.toString(),
+          walletId: wallet.id.toString(),
+          tokenId: tokenId.toString(),
+          txHash: tx.hash,
+          amount: tx.Amount,
+          blockchain: chain,
+          network: network,
+          networkVersion: 'NATIVE',
+          blockNumber: tx.ledger_index,
+          status: 'pending',
+          metadata: {
+            from: tx.Account,
+            blockHash: tx.ledger_hash,
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          confirmations: 0
+        });
+      }
+    } catch (error) {
+      this.logger.error(`Error processing XRP transaction: ${error.message}`);
+    }
+  }
+
+  private async getXrpTokenId(): Promise<string> {
+    const token = await this.tokenRepository.findOne({
+      where: {
+        symbol: 'XRP',
+        networkVersion: 'NATIVE'
+      }
+    });
+    
+    if (!token) {
+      throw new Error('XRP token not found in database');
+    }
+    
+    return token.id.toString();
   }
 }
