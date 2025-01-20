@@ -5,6 +5,7 @@ import { Deposit } from '../entities/deposit.entity';
 import { WalletBalance } from '../entities/wallet-balance.entity';
 import { Token } from '../entities/token.entity';
 import { Wallet } from '../entities/wallet.entity';
+import { SystemSettings } from '../entities/system-settings.entity';
 import { 
   providers,
   Contract,
@@ -16,7 +17,9 @@ import { ConfigService } from '@nestjs/config';
 import { Decimal } from 'decimal.js';
 import { In, Not, IsNull } from 'typeorm';
 import * as bitcoin from 'bitcoinjs-lib';
-import { TronWeb } from 'tronweb';
+const TronWeb = require('tronweb');
+type TronWebType = typeof TronWeb;
+type TronWebInstance = InstanceType<TronWebType>;
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -35,7 +38,15 @@ interface BitcoinProvider {
 }
 
 interface Providers {
-  [key: string]: JsonRpcProvider | WebSocketProvider | BitcoinProvider | TronWeb;
+  [key: string]: JsonRpcProvider | WebSocketProvider | BitcoinProvider | TronWebInstance;
+}
+
+// Add this interface at the top with other interfaces
+interface BitcoinBlock {
+  tx: Array<any>;
+  height: number;
+  hash: string;
+  // Add other relevant fields
 }
 
 @Injectable()
@@ -43,7 +54,7 @@ export class DepositTrackingService implements OnModuleInit {
   private readonly logger = new Logger(DepositTrackingService.name);
   private readonly providers = new Map<string, Providers[string]>();
   private readonly CONFIRMATION_BLOCKS = {
-    ethereum: {
+    eth: {
       mainnet: 12,
       testnet: 5
     },
@@ -51,7 +62,7 @@ export class DepositTrackingService implements OnModuleInit {
       mainnet: 15,
       testnet: 6
     },
-    bitcoin: {
+    btc: {
       mainnet: 3,
       testnet: 2
     },
@@ -59,7 +70,40 @@ export class DepositTrackingService implements OnModuleInit {
       mainnet: 20,
       testnet: 10
     }
+  } as const;
+
+  private readonly PROCESSING_DELAYS = {
+    eth: {
+      blockDelay: this.configService.get('ETHEREUM_BLOCK_DELAY', 1000),
+      checkInterval: this.configService.get('ETHEREUM_CHECK_INTERVAL', 30000)
+    },
+    bsc: {
+      blockDelay: this.configService.get('BSC_BLOCK_DELAY', 500),
+      checkInterval: this.configService.get('BSC_CHECK_INTERVAL', 30000)
+    },
+    bitcoin: {
+      blockDelay: this.configService.get('BITCOIN_BLOCK_DELAY', 2000),
+      checkInterval: this.configService.get('BITCOIN_CHECK_INTERVAL', 120000)
+    },
+    trx: {
+      blockDelay: this.configService.get('TRON_BLOCK_DELAY', 5000),
+      checkInterval: this.configService.get('TRON_CHECK_INTERVAL', 10000)
+    }
   };
+
+  private readonly CHAIN_KEYS = {
+    eth: 'eth',
+    bsc: 'bsc',
+    bitcoin: 'btc',
+    trx: 'trx'
+  } as const;
+
+  private blockQueues: {
+    [key: string]: {
+        isProcessing: boolean;
+        queue: number[];
+    };
+  } = {};
 
   constructor(
     @InjectRepository(Deposit)
@@ -71,9 +115,19 @@ export class DepositTrackingService implements OnModuleInit {
     @InjectRepository(Wallet)
     private walletRepository: Repository<Wallet>,
     private configService: ConfigService,
+    @InjectRepository(SystemSettings)
+    private systemSettingsRepository: Repository<SystemSettings>,
   ) {}
 
   async onModuleInit() {
+    // Initialize queues for each chain
+    ['eth_mainnet', 'eth_testnet', 'bsc_mainnet', 'bsc_testnet'].forEach(chain => {
+        this.blockQueues[chain] = {
+            isProcessing: false,
+            queue: []
+        };
+    });
+    
     await this.initializeProviders();
     await this.startMonitoring();
   }
@@ -81,7 +135,7 @@ export class DepositTrackingService implements OnModuleInit {
   private async initializeProviders() {
     // Initialize EVM providers (Ethereum, BSC)
     const evmNetworks = {
-      ethereum: {
+      eth: {
         mainnet: this.configService.get('ETHEREUM_MAINNET_RPC'),
         testnet: this.configService.get('ETHEREUM_TESTNET_RPC'),
       },
@@ -96,11 +150,19 @@ export class DepositTrackingService implements OnModuleInit {
       for (const [network, rpcUrl] of Object.entries(networks)) {
         const providerKey = `${chain}_${network}`;
         if (typeof rpcUrl === 'string') {
-          // Check if it's a WebSocket URL
-          if (rpcUrl.startsWith('ws')) {
-            this.providers.set(providerKey, new WebSocketProvider(rpcUrl));
-          } else {
-            this.providers.set(providerKey, new JsonRpcProvider(rpcUrl));
+          try {
+            let provider: JsonRpcProvider | WebSocketProvider;
+            if (rpcUrl.startsWith('ws')) {
+              provider = new WebSocketProvider(rpcUrl);
+            } else {
+              provider = new JsonRpcProvider(rpcUrl);
+            }
+            
+            const blockNumber = await provider.getBlockNumber();
+            this.providers.set(providerKey, provider);
+            this.logger.log(`${chain.toUpperCase()} ${network} provider initialized successfully, current block: ${blockNumber}`);
+          } catch (error) {
+            this.logger.error(`Failed to initialize ${chain.toUpperCase()} ${network} provider: ${error.message}`);
           }
         }
       }
@@ -113,14 +175,23 @@ export class DepositTrackingService implements OnModuleInit {
     };
 
     for (const [network, rpcUrl] of Object.entries(bitcoinNetworks)) {
-      const providerKey = `bitcoin_${network}`;
-      this.providers.set(providerKey, {
-        url: rpcUrl,
-        auth: {
-          username: this.configService.get('BITCOIN_RPC_USER'),
-          password: this.configService.get('BITCOIN_RPC_PASS'),
-        }
-      } as BitcoinProvider);
+      const providerKey = `btc_${network}`;
+      try {
+        const provider = {
+          url: rpcUrl,
+          auth: {
+            username: this.configService.get('BITCOIN_RPC_USER'),
+            password: this.configService.get('BITCOIN_RPC_PASS'),
+          }
+        } as BitcoinProvider;
+
+        // Test connection
+        const blockCount = await this.bitcoinRpcCall(provider, 'getblockcount', []);
+        this.providers.set(providerKey, provider);
+        this.logger.log(`Bitcoin ${network} provider initialized successfully, current block: ${blockCount}`);
+      } catch (error) {
+        this.logger.error(`Failed to initialize Bitcoin ${network} provider: ${error.message}`);
+      }
     }
 
     // Initialize TRON provider
@@ -131,10 +202,38 @@ export class DepositTrackingService implements OnModuleInit {
 
     for (const [network, apiUrl] of Object.entries(tronNetworks)) {
       const providerKey = `trx_${network}`;
-      this.providers.set(providerKey, new TronWeb({
-        fullHost: apiUrl,
-        headers: { "TRON-PRO-API-KEY": this.configService.get('TRON_API_KEY') },
-      }));
+      
+      try {
+        const apiKey = this.configService.get('TRON_API_KEY');
+        if (!apiKey) {
+          this.logger.error('TRON_API_KEY not found in environment variables');
+          continue;
+        }
+
+        // Create TronWeb instance
+        const tronWeb = new TronWeb({
+          fullNode: apiUrl,
+          solidityNode: apiUrl,
+          eventServer: apiUrl,
+          privateKey: '', // Empty for read-only
+          headers: {
+            "TRON-PRO-API-KEY": apiKey,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          }
+        });
+
+        // Test connection before setting provider
+        const block = await tronWeb.trx.getCurrentBlock();
+        if (!block) {
+          throw new Error('Could not fetch current block');
+        }
+
+        this.providers.set(providerKey, tronWeb);
+        this.logger.log(`TRON ${network} provider initialized successfully, current block: ${block.block_header.raw_data.number}`);
+      } catch (error) {
+        this.logger.error(`Failed to initialize TRON ${network} provider: ${error.message}`);
+      }
     }
   }
 
@@ -149,47 +248,104 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async monitorEvmChains() {
+    try {
     for (const [providerKey, provider] of this.providers.entries()) {
       const [chain, network] = providerKey.split('_');
-      if (['ethereum', 'bsc'].includes(chain)) {
-        // Monitor new blocks
+      if (['eth', 'bsc'].includes(chain)) {
+        this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
+          
+          // Add block to queue when received
         provider.on('block', async (blockNumber: number) => {
-          await this.handleEvmBlock(chain, network, blockNumber, provider);
-        });
+            const queueKey = `${chain}_${network}`;
+            this.blockQueues[queueKey].queue.push(blockNumber);
+            this.processQueueForChain(chain, network, provider);
+          });
+        }
       }
+    } catch (error) {
+      this.logger.error(`Error in EVM chain monitor: ${error.message}`);
     }
   }
 
-  private async handleEvmBlock(
-    chain: string,
-    network: string,
-    blockNumber: number,
-    provider: JsonRpcProvider | WebSocketProvider
-  ) {
+  private async processQueueForChain(chain: string, network: string, provider: any) {
+    const queueKey = `${chain}_${network}`;
+    const queue = this.blockQueues[queueKey];
+
+    // If already processing, return
+    if (queue.isProcessing) return;
+
     try {
-      const block = await provider.getBlock(blockNumber);
-      if (!block) return;
+        queue.isProcessing = true;
 
-      const txPromises = block.transactions.map(txHash => 
-        provider.getTransaction(txHash)
-      );
-      const transactions = await Promise.all(txPromises);
-
-      for (const tx of transactions) {
-        if (tx) {
-          await this.processEvmTransaction(chain, network, tx);
+        while (queue.queue.length > 0) {
+            const blockNumber = queue.queue.shift()!;
+            try {
+                await this.processEvmBlock(chain, network, blockNumber, provider);
+                // Add delay between blocks
+                await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS[chain].blockDelay));
+            } catch (error) {
+                this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
+                // Continue with next block even if current fails
+            }
         }
-      }
+    } finally {
+        queue.isProcessing = false;
+        
+        // Check if new blocks were added while processing
+        if (queue.queue.length > 0) {
+            this.processQueueForChain(chain, network, provider);
+        }
+    }
+  }
 
-      await this.updateEvmConfirmations(chain, network, blockNumber);
+  private async processEvmBlock(chain: string, network: string, blockNumber: number, provider: providers.Provider) {
+    try {
+        this.logger.debug(`Starting to process ${chain} ${network} block ${blockNumber}`);
+
+      const block = await provider.getBlock(blockNumber);
+        if (!block) {
+            this.logger.warn(`${chain} ${network}: Block ${blockNumber} not found`);
+            return;
+        }
+
+        this.logger.log(`${chain} ${network}: Processing block ${blockNumber} with ${block.transactions.length} transactions`);
+
+        // Process transactions with retry logic
+      for (const txHash of block.transactions) {
+        try {
+                const tx = await this.getEvmTransactionWithRetry(provider, txHash);
+          if (tx) {
+            await this.processEvmTransaction(chain, network, tx);
+          }
+        } catch (error) {
+          this.logger.error(`Error processing transaction ${txHash}: ${error.message}`);
+                // Continue processing other transactions
+                continue;
+            }
+        }
+
+        // Save progress
+        try {
+            await this.saveLastProcessedBlock(chain, network, blockNumber);
+            const savedBlock = await this.getLastProcessedBlock(chain, network);
+            this.logger.debug(`${chain} ${network}: Verified saved block ${savedBlock}`);
+            this.logger.log(`${chain} ${network}: Completed block ${blockNumber}`);
+      } catch (error) {
+            this.logger.error(`Error saving progress for ${chain} ${network} block ${blockNumber}: ${error.message}`);
+        throw error;
+      }
     } catch (error) {
-      this.logger.error(`Error processing ${chain} block ${blockNumber}: ${error.message}`);
+        this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
+        if (process.env.NODE_ENV === 'development') {
+      this.logger.error(error.stack);
+        }
+        throw error;
     }
   }
 
   private async updateEvmConfirmations(chain: string, network: string, currentBlock: number) {
     try {
-      // Get pending/confirming deposits for this chain/network
+      const chainKey = this.CHAIN_KEYS[chain] || chain;
       const deposits = await this.depositRepository.find({
         where: {
           blockchain: chain,
@@ -201,14 +357,13 @@ export class DepositTrackingService implements OnModuleInit {
 
       for (const deposit of deposits) {
         const confirmations = currentBlock - deposit.blockNumber;
-        const requiredConfirmations = this.CONFIRMATION_BLOCKS[chain][network];
+        const requiredConfirmations = this.CONFIRMATION_BLOCKS[chainKey][network];
 
         await this.depositRepository.update(deposit.id, {
           confirmations,
           status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
         });
 
-        // If deposit is now confirmed, update wallet balance
         if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
           await this.updateWalletBalance(deposit);
         }
@@ -265,7 +420,10 @@ export class DepositTrackingService implements OnModuleInit {
           from: tx.from,
           contractAddress: token.contractAddress,
           blockHash: tx.blockHash,
-        }
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        confirmations: 0
       });
 
     } catch (error) {
@@ -368,81 +526,81 @@ export class DepositTrackingService implements OnModuleInit {
 
   private async monitorBitcoin() {
     for (const network of ['mainnet', 'testnet']) {
-      const provider = this.providers.get(`bitcoin_${network}`);
+      const provider = this.providers.get(`btc_${network}`);
+      this.logger.log(`Started monitoring Bitcoin ${network} blocks`);
       
-      // Start monitoring new blocks
       setInterval(async () => {
-        try {
-          await this.checkBitcoinBlocks(network, provider);
-        } catch (error) {
-          this.logger.error(`Error checking Bitcoin ${network} blocks: ${error.message}`);
-        }
-      }, 60000); // Check every minute
+        await this.checkBitcoinBlocks(network);
+      }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
     }
   }
 
-  private async checkBitcoinBlocks(network: string, provider: any) {
+  private async checkBitcoinBlocks(network: string) {
     try {
-      // Get latest block
-      const blockCount = await this.bitcoinRpcCall(provider, 'getblockcount', []);
-      const lastProcessedBlock = await this.getLastProcessedBlock('bitcoin', network);
-
-      // Process new blocks
-      for (let height = lastProcessedBlock + 1; height <= blockCount; height++) {
-        const blockHash = await this.bitcoinRpcCall(provider, 'getblockhash', [height]);
-        const block = await this.bitcoinRpcCall(provider, 'getblock', [blockHash, 2]);
-        
-        await this.processBitcoinBlock(network, block);
-        await this.updateBitcoinConfirmations(network, height);
+      const chain = 'bitcoin';
+      const provider = this.providers.get(`btc_${network}`) as BitcoinProvider;
+      if (!provider) {
+        this.logger.warn(`No Bitcoin provider found for network ${network}`);
+        return;
       }
 
-      // Update last processed block
-      await this.setLastProcessedBlock('bitcoin', network, blockCount);
+      const currentHeight = await this.getBitcoinBlockHeight(provider);
+      const lastProcessedBlock = await this.getLastProcessedBlock(chain, network);
+
+      this.logger.log(`Bitcoin ${network}: Processing from block ${lastProcessedBlock + 1} to ${currentHeight}`);
+
+      // Process blocks in batches
+      const batchSize = 50;
+      for (let height = lastProcessedBlock + 1; height <= currentHeight; height += batchSize) {
+        const endBlock = Math.min(height + batchSize - 1, currentHeight);
+        
+        this.logger.log(`Bitcoin ${network}: Processing batch from block ${height} to ${endBlock}`);
+
+        for (let blockNum = height; blockNum <= endBlock; blockNum++) {
+          const block = await this.getBitcoinBlock(provider, blockNum);
+          if (!block) {
+            this.logger.warn(`Bitcoin ${network}: Block ${blockNum} not found`);
+            continue;
+          }
+
+          await this.processBitcoinBlock(chain, network, block);
+          this.logger.log(`Bitcoin ${network}: Completed block ${blockNum}`);
+        }
+
+        this.logger.log(`Bitcoin ${network}: Completed batch processing up to block ${endBlock}`);
+      }
     } catch (error) {
       this.logger.error(`Error in Bitcoin block check: ${error.message}`);
+      throw error;
     }
   }
 
-  private async processBitcoinBlock(network: string, block: any) {
-    // Get all Bitcoin wallets
-    const wallets = await this.walletRepository.find({
-      where: {
-        blockchain: 'bitcoin',
-        network: network,
-      },
-    });
+  private async processBitcoinBlock(chain: string, network: string, block: BitcoinBlock) {
+    this.logger.debug(`Received block data: ${JSON.stringify(block, null, 2)}`);
+    
+    if (!block || !block.tx) {
+        this.logger.warn(`Skipping invalid Bitcoin block for ${chain} ${network}: ${JSON.stringify(block)}`);
+        return;
+    }
 
-    const walletAddresses = new Set(wallets.map(w => w.address));
-
-    // Process each transaction
-    for (const tx of block.tx) {
-      for (const output of tx.vout) {
-        const addresses = output.scriptPubKey.addresses || [];
+    try {
+        this.logger.log(`${chain} ${network}: Processing block ${block.height} with ${block.tx.length} transactions`);
         
-        for (const address of addresses) {
-          if (walletAddresses.has(address)) {
-            const wallet = wallets.find(w => w.address === address);
-            
-            // Create deposit record
-            await this.depositRepository.save({
-              userId: wallet.userId,
-              walletId: wallet.id,
-              tokenId: await this.getBitcoinTokenId(),
-              txHash: tx.txid,
-              amount: output.value.toString(),
-              blockchain: 'bitcoin',
-              network: network,
-              networkVersion: 'NATIVE',
-              blockNumber: block.height,
-              status: 'pending',
-              metadata: {
-                from: tx.vin[0]?.scriptSig?.addresses?.[0] || 'unknown',
-                blockHash: block.hash,
-              }
-            });
-          }
+        // Process transactions
+    for (const tx of block.tx) {
+            await this.processBitcoinTransaction(chain, network, tx);
         }
-      }
+
+        // Save progress using btc prefix
+        await this.saveLastProcessedBlock(chain, network, block.height);
+        
+        const savedBlock = await this.getLastProcessedBlock(chain, network);
+        this.logger.debug(`${chain} ${network}: Verified saved block ${savedBlock}`);
+        
+        this.logger.log(`${chain} ${network}: Completed block ${block.height}`);
+    } catch (error) {
+        this.logger.error(`Error processing ${chain} ${network} block ${block.height}: ${error.message}`);
+        throw error;
     }
   }
 
@@ -451,9 +609,7 @@ export class DepositTrackingService implements OnModuleInit {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + Buffer.from(
-          `${provider.auth.username}:${provider.auth.password}`
-        ).toString('base64'),
+        // No need for Authorization header with QuickNode
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -473,171 +629,295 @@ export class DepositTrackingService implements OnModuleInit {
   private async getBitcoinTokenId(): Promise<string> {
     const token = await this.tokenRepository.findOne({
       where: {
-        blockchain: 'bitcoin',
-        networkVersion: 'NATIVE',
-        isActive: true
+        symbol: 'BTC',
+        networkVersion: 'NATIVE'
       }
     });
-    return token.id;
+    
+    if (!token) {
+      throw new Error('Bitcoin token not found in database');
+    }
+    
+    return token.id.toString();
   }
 
-  private async updateBitcoinConfirmations(network: string, currentBlock: number) {
+  private async getBitcoinBlockHeight(provider: BitcoinProvider): Promise<number> {
     try {
-      const deposits = await this.depositRepository.find({
-        where: {
-          blockchain: 'bitcoin',
-          network,
-          status: In(['pending', 'confirming']),
-          blockNumber: Not(IsNull()),
+      const response = await fetch(provider.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic ' + Buffer.from(`${provider.auth.username}:${provider.auth.password}`).toString('base64')
         },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'getblockcount',
+          params: [],
+          id: 1
+        })
       });
 
-      for (const deposit of deposits) {
-        const confirmations = currentBlock - deposit.blockNumber;
-        const requiredConfirmations = this.CONFIRMATION_BLOCKS.bitcoin[network];
-
-        await this.depositRepository.update(deposit.id, {
-          confirmations,
-          status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
-        });
-
-        // If deposit is now confirmed, update wallet balance
-        if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
-          await this.updateWalletBalance(deposit);
-        }
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(`Bitcoin RPC error: ${data.error.message}`);
       }
+
+      return data.result;
     } catch (error) {
-      this.logger.error(`Error updating Bitcoin confirmations: ${error.message}`);
+      this.logger.error(`Error getting Bitcoin block height: ${error.message}`);
+      throw error;
     }
   }
 
-  private async getLastProcessedBlock(blockchain: string, network: string): Promise<number> {
-    const key = `last_processed_block_${blockchain}_${network}`;
-    const result = await this.walletRepository.manager.query(
-      'SELECT value FROM system_settings WHERE key = $1',
-      [key]
-    );
-    return result[0]?.value ? parseInt(result[0].value) : 0;
+  private async getBitcoinBlock(provider: BitcoinProvider, blockNumber: number): Promise<BitcoinBlock> {
+    try {
+      // First get block hash
+      const hashResponse = await fetch(provider.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic ' + Buffer.from(`${provider.auth.username}:${provider.auth.password}`).toString('base64')
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'getblockhash',
+          params: [blockNumber],
+          id: 1
+        })
+      });
+
+      const hashData = await hashResponse.json();
+      if (hashData.error) {
+        throw new Error(`Bitcoin RPC error: ${hashData.error.message}`);
+      }
+
+      // Then get block details
+      const blockResponse = await fetch(provider.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Basic ' + Buffer.from(`${provider.auth.username}:${provider.auth.password}`).toString('base64')
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'getblock',
+          params: [hashData.result, 2], // Verbosity level 2 for full transaction details
+          id: 1
+        })
+      });
+
+      const blockData = await blockResponse.json();
+      if (blockData.error) {
+        throw new Error(`Bitcoin RPC error: ${blockData.error.message}`);
+      }
+
+      return blockData.result;
+    } catch (error) {
+      this.logger.error(`Error getting Bitcoin block ${blockNumber}: ${error.message}`);
+      throw error;
+    }
   }
 
-  private async setLastProcessedBlock(blockchain: string, network: string, blockNumber: number) {
-    const key = `last_processed_block_${blockchain}_${network}`;
-    await this.walletRepository.manager.query(
-      `INSERT INTO system_settings (key, value) 
-       VALUES ($1, $2) 
-       ON CONFLICT (key) DO UPDATE SET value = $2`,
-      [key, blockNumber.toString()]
-    );
+  private async getLastProcessedBlock(chain: string, network: string): Promise<number> {
+    const chainKey = chain.toLowerCase() === 'bitcoin' ? 'btc' : chain.toLowerCase();
+    const key = `last_processed_block_${chainKey}_${network}`;
+    
+    const setting = await this.systemSettingsRepository.findOne({ where: { key } });
+    return setting ? parseInt(setting.value) : 0;
+  }
+
+  private getChainKey(blockchain: string): string {
+    return this.CHAIN_KEYS[blockchain] || blockchain;
+  }
+
+  private async saveLastProcessedBlock(chain: string, network: string, blockNumber: number) {
+    const chainKey = chain.toLowerCase() === 'bitcoin' ? 'btc' : chain.toLowerCase();
+      const key = `last_processed_block_${chainKey}_${network}`;
+      
+    try {
+      this.logger.debug(`Attempting to save with key: ${key}, value: ${blockNumber}`);
+      
+        // Use raw query for debugging
+        await this.systemSettingsRepository.query(
+            `INSERT INTO system_settings (key, value, "createdAt", "updatedAt") 
+             VALUES ($1, $2, NOW(), NOW())
+             ON CONFLICT (key) DO UPDATE 
+             SET value = $2, "updatedAt" = NOW()`,
+        [key, blockNumber.toString()]
+      );
+      
+      this.logger.log(`Saved last processed block for ${chainKey} ${network}: ${blockNumber}`);
+        
+        // Verify the save
+        const saved = await this.systemSettingsRepository.findOne({ where: { key } });
+        if (saved && parseInt(saved.value) === blockNumber) {
+            this.logger.debug(`${chainKey} ${network} Debug - Block ${blockNumber} saved successfully. Verified value: ${saved.value}`);
+        } else {
+            this.logger.error(`Failed to verify saved block for ${chainKey} ${network}. Expected: ${blockNumber}, Got: ${saved?.value}`);
+            throw new Error(`Block save verification failed for ${chainKey} ${network}`);
+        }
+    } catch (error) {
+        this.logger.error(`Error saving last processed block for ${chainKey} ${network}: ${error.message}`);
+        throw error;
+    }
+  }
+
+  // Add retry logic for EVM transaction fetching
+  private async getEvmTransactionWithRetry(provider: providers.Provider, txHash: string, retries = 3): Promise<providers.TransactionResponse | null> {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const tx = await provider.getTransaction(txHash);
+            return tx;
+        } catch (error) {
+            if (i === retries - 1) {
+                throw error;
+            }
+            // Wait before retry, increasing delay each time
+            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+        }
+    }
+    return null;
   }
 
   private async monitorTron() {
     for (const network of ['mainnet', 'testnet']) {
-      const tronWeb = this.providers.get(`trx_${network}`);
+      const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
+      if (!tronWeb) continue;
+      
+      this.logger.log(`Started monitoring TRON ${network} blocks`);
       
       setInterval(async () => {
-        try {
-          await this.checkTronBlocks(network, tronWeb);
-        } catch (error) {
-          this.logger.error(`Error checking TRON ${network} blocks: ${error.message}`);
-        }
-      }, 3000); // Check every 3 seconds (TRON has faster block times)
+        await this.checkTronBlocks(network, tronWeb);
+      }, this.PROCESSING_DELAYS.trx.checkInterval);
     }
   }
 
-  private async checkTronBlocks(network: string, tronWeb: any) {
+  private async checkTronBlocks(network: string, tronWeb: TronWebInstance) {
     try {
       const currentBlock = await tronWeb.trx.getCurrentBlock();
       const lastProcessedBlock = await this.getLastProcessedBlock('trx', network);
+      const currentBlockNumber = currentBlock.block_header.raw_data.number;
 
-      // Process new blocks
-      for (let height = lastProcessedBlock + 1; height <= currentBlock.block_header.raw_data.number; height++) {
-        const block = await tronWeb.trx.getBlock(height);
-        await this.processTronBlock(network, block);
-        await this.updateTronConfirmations(network, height);
+      this.logger.log(`TRON ${network}: Processing blocks from ${lastProcessedBlock + 1} to ${currentBlockNumber}`);
+
+      // Process blocks in smaller batches to avoid rate limits
+      const batchSize = 5;
+      const startBlock = lastProcessedBlock + 1;
+      const endBlock = Math.min(startBlock + batchSize, currentBlockNumber);
+
+      this.logger.log(`TRON ${network}: Processing batch from block ${startBlock} to ${endBlock}`);
+
+      for (let height = startBlock; height <= endBlock; height++) {
+        try {
+          this.logger.log(`TRON ${network}: Processing block ${height}`);
+          
+          // Add configurable delay between blocks
+          await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS.trx.blockDelay));
+
+          // Get block with retry logic
+          const block = await this.getTronBlockWithRetry(tronWeb, height, 3);
+          if (!block) {
+            this.logger.warn(`Skipping TRON ${network} block ${height}: Could not fetch block data`);
+            continue;
+          }
+
+          // Log transactions found
+          const txCount = block.transactions?.length || 0;
+          this.logger.log(`TRON ${network}: Block ${height} has ${txCount} transactions`);
+
+          await this.processTronBlock(network, block);
+          await this.updateTronConfirmations(network, height);
+          await this.saveLastProcessedBlock('trx', network, height);
+
+          this.logger.log(`TRON ${network}: Successfully processed block ${height}`);
+
+        } catch (error) {
+          if (error.response?.status === 403) {
+            this.logger.error(`TRON API rate limit reached at block ${height}, waiting longer...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            continue;
+          }
+          this.logger.error(`Error processing TRON block ${height}: ${error.message}`);
+        }
       }
 
-      await this.setLastProcessedBlock('trx', network, currentBlock.block_header.raw_data.number);
+      this.logger.log(`TRON ${network}: Completed processing batch of blocks`);
     } catch (error) {
       this.logger.error(`Error in TRON block check: ${error.message}`);
     }
   }
 
-  private async processTronBlock(network: string, block: any) {
-    const tronWebInstance = this.providers.get(`trx_${network}`);
-    if (!tronWebInstance) {
-      throw new Error(`No TRON provider found for network ${network}`);
+  private async getTronBlockWithRetry(
+    tronWeb: TronWebInstance, 
+    height: number, 
+    maxRetries: number
+  ): Promise<any> {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const block = await tronWeb.trx.getBlock(height);
+        return block;
+      } catch (error) {
+        if (i === maxRetries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+      }
     }
+    return null;
+  }
 
-    // Get all TRON wallets
-    const wallets = await this.walletRepository.find({
-      where: {
-        blockchain: 'trx',
-        network,
-      },
-    });
+  private async processTronBlock(network: string, block: any) {
+    try {
+      // Get all TRON wallets
+      const wallets = await this.walletRepository.find({
+        where: {
+          blockchain: 'trx',
+          network,
+        },
+      });
 
-    const walletAddresses = new Set(wallets.map(w => w.address));
+      const walletAddresses = new Set(wallets.map(w => w.address));
+      const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
 
-    // Process each transaction
-    for (const tx of block.transactions || []) {
-      if (tx.raw_data?.contract?.[0]?.type === 'TransferContract' || 
-          tx.raw_data?.contract?.[0]?.type === 'TransferAssetContract') {
-        
-        const contract = tx.raw_data.contract[0];
-        const parameter = contract.parameter.value;
-        const toAddress = (tronWebInstance as TronWeb).address.fromHex(parameter.to_address);
+      // Process each transaction
+      for (const tx of block.transactions || []) {
+        if (tx.raw_data?.contract?.[0]?.type === 'TransferContract' || 
+            tx.raw_data?.contract?.[0]?.type === 'TransferAssetContract') {
+          
+          const contract = tx.raw_data.contract[0];
+          const parameter = contract.parameter.value;
+          const toAddress = tronWeb.address.fromHex(parameter.to_address);
 
-        if (walletAddresses.has(toAddress)) {
-          const wallet = wallets.find(w => w.address === toAddress);
-          const token = await this.getTronToken(contract.type, parameter.asset_name);
+          if (walletAddresses.has(toAddress)) {
+            const wallet = wallets.find(w => w.address === toAddress);
+            const token = await this.getTronToken(contract.type, parameter.asset_name);
 
-          if (token) {
-            await this.depositRepository.save({
-              userId: wallet.userId,
-              walletId: wallet.id,
-              tokenId: token.id,
-              txHash: tx.txID,
-              amount: (parameter.amount / Math.pow(10, token.decimals)).toString(),
-              blockchain: 'trx',
-              network,
-              networkVersion: token.networkVersion,
-              blockNumber: block.block_header.raw_data.number,
-              status: 'pending',
-              metadata: {
-                from: (tronWebInstance as TronWeb).address.fromHex(parameter.owner_address),
-                contractAddress: token.contractAddress,
-                blockHash: block.blockID,
-              }
-            });
+            if (token) {
+              await this.depositRepository.save({
+                userId: wallet.userId,
+                walletId: wallet.id,
+                tokenId: token.id,
+                txHash: tx.txID,
+                amount: (parameter.amount / Math.pow(10, token.decimals)).toString(),
+                blockchain: 'trx',
+                network,
+                networkVersion: token.networkVersion,
+                blockNumber: block.block_header.raw_data.number,
+                status: 'pending',
+                metadata: {
+                  from: tronWeb.address.fromHex(parameter.owner_address),
+                  contractAddress: token.contractAddress,
+                  blockHash: block.blockID,
+                },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                confirmations: 0
+              });
+            }
           }
         }
       }
+    } catch (error) {
+      this.logger.error(`Error processing TRON block: ${error.message}`);
     }
-  }
-
-  private async getTronToken(contractType: string, assetName?: string): Promise<Token | null> {
-    if (contractType === 'TransferContract') {
-      return this.tokenRepository.findOne({
-        where: {
-          blockchain: 'trx',
-          networkVersion: 'NATIVE',
-          isActive: true
-        }
-      });
-    }
-
-    if (contractType === 'TransferAssetContract' && assetName) {
-      return this.tokenRepository.findOne({
-        where: {
-          blockchain: 'trx',
-          networkVersion: 'TRC20',
-          symbol: assetName,
-          isActive: true
-        }
-      });
-    }
-
-    return null;
   }
 
   private async updateTronConfirmations(network: string, currentBlock: number) {
@@ -668,4 +948,118 @@ export class DepositTrackingService implements OnModuleInit {
       this.logger.error(`Error updating TRON confirmations: ${error.message}`);
     }
   }
-} 
+
+  private async getTronToken(contractType: string, assetName?: string): Promise<Token | null> {
+    if (contractType === 'TransferContract') {
+      return this.tokenRepository.findOne({
+        where: {
+          blockchain: 'trx',
+          networkVersion: 'NATIVE',
+          isActive: true
+        }
+      });
+    }
+
+    if (contractType === 'TransferAssetContract' && assetName) {
+      return this.tokenRepository.findOne({
+        where: {
+          blockchain: 'trx',
+          networkVersion: 'TRC20',
+          symbol: assetName,
+          isActive: true
+        }
+      });
+    }
+
+    return null;
+  }
+
+  public async testConnection(chain: string) {
+    try {
+      switch (chain) {
+        case 'ethereum':
+        case 'bsc': {
+          const provider = this.providers.get(`${chain}_mainnet`) as JsonRpcProvider;
+          const blockNumber = await provider.getBlockNumber();
+          return { blockNumber, network: 'mainnet' };
+        }
+        
+        case 'bitcoin': {
+          const provider = this.providers.get('btc_mainnet');
+          const blockCount = await this.bitcoinRpcCall(provider, 'getblockcount', []);
+          return { blockNumber: blockCount, network: 'mainnet' };
+        }
+        
+        case 'trx': {
+          const tronWeb = this.providers.get('trx_mainnet') as TronWebInstance;
+          const block = await tronWeb.trx.getCurrentBlock();
+          return { 
+            blockNumber: block.block_header.raw_data.number,
+            network: 'mainnet'
+          };
+        }
+        
+        default:
+          throw new Error(`Unsupported chain: ${chain}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error testing ${chain} connection: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Add this method to process Bitcoin transactions
+  private async processBitcoinTransaction(chain: string, network: string, tx: any) {
+    try {
+        // Get all Bitcoin wallets
+        const wallets = await this.walletRepository.find({
+            where: {
+                blockchain: chain,
+                network: network,
+            },
+        });
+
+        const walletAddresses = new Set(wallets.map(w => w.address));
+
+        // Process each output
+        for (const output of tx.vout) {
+            const addresses = output.scriptPubKey.addresses || [];
+            
+            for (const address of addresses) {
+                if (walletAddresses.has(address)) {
+                    const wallet = wallets.find(w => w.address === address);
+                    if (!wallet) continue;
+
+                    const tokenId = await this.getBitcoinTokenId();
+                    
+                    // Create deposit record with correct types
+                    await this.depositRepository.save({
+                        userId: wallet.userId.toString(), // Convert to string if needed
+                        walletId: wallet.id.toString(), // Convert to string if needed
+                        tokenId: tokenId.toString(), // Convert to string as per entity definition
+                        txHash: tx.txid,
+                        amount: output.value.toString(),
+                        blockchain: chain,
+                        network: network,
+                        networkVersion: 'NATIVE',
+                        blockNumber: tx.blockHeight,
+                        status: 'pending',
+                        metadata: {
+                            from: tx.vin[0]?.scriptSig?.addresses?.[0] || 'unknown',
+                            blockHash: tx.blockHash,
+                        },
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                        confirmations: 0
+                    });
+
+                    this.logger.debug(`Created deposit record for Bitcoin transaction ${tx.txid} to address ${address}`);
+                }
+            }
+        }
+    } catch (error) {
+        this.logger.error(`Error processing Bitcoin transaction: ${error.message}`);
+      throw error;
+    }
+  }
+}

@@ -31,7 +31,7 @@ import { TokenManagementModule } from './tokens/token-management.module';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         ...configService.get('database'),
-        logging: true,
+        logging: ['error', 'warn'],
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         migrations: ['dist/src/migrations/*.js'],
         migrationsRun: false,
