@@ -117,6 +117,10 @@ export class DepositTrackingService implements OnModuleInit {
 
   private processingLocks = new Map<string, boolean>();
 
+  private isMonitoring = false;
+  private monitoringIntervals: NodeJS.Timeout[] = [];
+  private stopMonitoring = false;
+
   constructor(
     @InjectRepository(Deposit)
     private depositRepository: Repository<Deposit>,
@@ -139,7 +143,8 @@ export class DepositTrackingService implements OnModuleInit {
     });
     
     await this.initializeProviders();
-    await this.startMonitoring();
+    // Remove automatic start of monitoring
+    // await this.startMonitoring();
   }
 
   private async initializeProviders() {
@@ -268,16 +273,54 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  private async startMonitoring() {
-    await Promise.all([
-      this.monitorEvmChains(),
-      this.monitorBitcoin(),
-      this.monitorTron(),
-      this.monitorXrp(),
-    ]);
+  async startMonitoring() {
+    if (this.isMonitoring) {
+      throw new Error('Monitoring is already running');
+    }
+
+    this.isMonitoring = true;
+    this.stopMonitoring = false;
+    this.logger.log('Starting deposit monitoring...');
+
+    // Start monitoring for each chain
+    this.monitorEvmChains();
+    this.monitorBitcoinChains();
+    this.monitorTronChains();
+    this.monitorXrpChains();
+
+    this.logger.log('Deposit monitoring started successfully');
   }
 
-  private async monitorEvmChains() {
+  async stopMonitoringDeposits() {
+    if (!this.isMonitoring) {
+      throw new Error('Monitoring is not running');
+    }
+
+    this.stopMonitoring = true;
+    this.logger.log('Stopping deposit monitoring...');
+    
+    // Wait for current processes to finish
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    this.isMonitoring = false;
+    this.logger.log('Deposit monitoring stopped successfully');
+    return { message: 'Deposit monitoring stopped successfully' };
+  }
+
+  private monitorXrpChains() {
+    if (!this.isMonitoring) return;
+
+    const interval = setInterval(() => {
+      this.checkXrpBlocks('mainnet');
+      this.checkXrpBlocks('testnet');
+    }, this.PROCESSING_DELAYS.xrp.checkInterval);
+
+    this.monitoringIntervals.push(interval);
+  }
+
+  // Add similar checks to other monitoring methods
+  private monitorEvmChains() {
+    if (!this.isMonitoring) return;
     try {
     for (const [providerKey, provider] of this.providers.entries()) {
       const [chain, network] = providerKey.split('_');
@@ -294,6 +337,32 @@ export class DepositTrackingService implements OnModuleInit {
       }
     } catch (error) {
       this.logger.error(`Error in EVM chain monitor: ${error.message}`);
+    }
+  }
+
+  private monitorBitcoinChains() {
+    if (!this.isMonitoring) return;
+    for (const network of ['mainnet', 'testnet']) {
+      const provider = this.providers.get(`btc_${network}`);
+      this.logger.log(`Started monitoring Bitcoin ${network} blocks`);
+      
+      setInterval(async () => {
+        await this.checkBitcoinBlocks(network);
+      }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
+    }
+  }
+
+  private monitorTronChains() {
+    if (!this.isMonitoring) return;
+    for (const network of ['mainnet', 'testnet']) {
+      const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
+      if (!tronWeb) continue;
+      
+      this.logger.log(`Started monitoring TRON ${network} blocks`);
+      
+      setInterval(async () => {
+        await this.checkTronBlocks(network, tronWeb);
+      }, this.PROCESSING_DELAYS.trx.checkInterval);
     }
   }
 
@@ -1109,7 +1178,6 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async checkXrpBlocks(network: string) {
-    // Check if already processing
     if (!await this.getLock('xrp', network)) {
         this.logger.debug(`XRP ${network} blocks already processing, skipping`);
         return;
@@ -1119,6 +1187,14 @@ export class DepositTrackingService implements OnModuleInit {
         const provider = this.providers.get(`xrp_${network}`) as Client;
         if (!provider) {
             this.logger.warn(`No XRP provider found for network ${network}`);
+            return;
+        }
+
+        // Add connection check
+        try {
+            await provider.connect();
+        } catch (connError) {
+            this.logger.error(`Failed to connect to XRP ${network}: ${connError.message}`);
             return;
         }
 
@@ -1157,6 +1233,16 @@ export class DepositTrackingService implements OnModuleInit {
         this.logger.error(`Error in XRP block check: ${error.message}`);
     } finally {
         this.releaseLock('xrp', network);
+        
+        // Try to disconnect cleanly
+        try {
+            const provider = this.providers.get(`xrp_${network}`) as Client;
+            if (provider) {
+                await provider.disconnect();
+            }
+        } catch (e) {
+            this.logger.warn(`Error disconnecting from XRP ${network}: ${e.message}`);
+        }
     }
   }
 

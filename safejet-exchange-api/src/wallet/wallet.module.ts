@@ -44,6 +44,6 @@ import { JwtModule } from '@nestjs/jwt';
     WalletController,
     AdminDepositController
   ],
-  exports: [WalletService],
+  exports: [WalletService, DepositTrackingService],
 })
 export class WalletModule {} 

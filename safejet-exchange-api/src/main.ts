@@ -33,12 +33,16 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
+    origin: [
+      'http://localhost:3001',           // Admin dashboard local
+      'http://192.168.0.103:3001',      // Admin on local network
+      /\.ngrok-free\.app$/,             // Any ngrok domain
+      'http://localhost:3000',          // Flutter web if needed
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+    exposedHeaders: ['Authorization'],
     credentials: true,
-    allowedHeaders: 'Content-Type, Accept, Authorization',
   });
 
   // Serve static files from public directory

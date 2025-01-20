@@ -5,7 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { Admin } from './entities/admin.entity';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminAuthController } from './admin-auth.controller';
+import { AdminDepositController } from './admin-deposit.controller';
 import { AdminGuard } from '../auth/admin.guard';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [
@@ -17,9 +19,10 @@ import { AdminGuard } from '../auth/admin.guard';
         signOptions: { expiresIn: '1d' },
       }),
     }),
+    WalletModule,
   ],
   providers: [AdminAuthService, AdminGuard],
-  controllers: [AdminAuthController],
+  controllers: [AdminAuthController, AdminDepositController],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
 export class AdminModule {} 
