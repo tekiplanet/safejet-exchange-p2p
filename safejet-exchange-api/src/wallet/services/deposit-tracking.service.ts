@@ -479,6 +479,14 @@ export class DepositTrackingService implements OnModuleInit {
           
           // Store the listener function so we can remove it later
           const listener = async (blockNumber: number) => {
+            // Check if monitoring is still active for this chain
+            if (!this.chainMonitoringStatus[chain][network]) {
+              provider.removeListener('block', listener);
+              this.evmBlockListeners.delete(providerKey);
+              this.logger.log(`Stopped EVM listener for ${chain} ${network}`);
+              return;
+            }
+
             const queueKey = `${chain}_${network}`;
             this.blockQueues[queueKey].queue.push(blockNumber);
             this.processQueueForChain(chain, network, provider);
@@ -490,6 +498,47 @@ export class DepositTrackingService implements OnModuleInit {
       }
     } catch (error) {
       this.logger.error(`Error in EVM chain monitor: ${error.message}`);
+    }
+  }
+
+  private monitorEvmChain(chain: string, network: string) {
+    try {
+      const providerKey = `${chain}_${network}`;
+      const provider = this.providers.get(providerKey);
+      
+      if (!provider) {
+        this.logger.warn(`No provider found for ${chain} ${network}`);
+        return;
+      }
+
+      // First remove any existing listener
+      const existingListener = this.evmBlockListeners.get(providerKey);
+      if (existingListener) {
+        provider.removeListener('block', existingListener);
+        this.evmBlockListeners.delete(providerKey);
+      }
+
+      this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
+      
+      // Store the listener function so we can remove it later
+      const listener = async (blockNumber: number) => {
+        // Check if monitoring is still active for this chain
+        if (!this.chainMonitoringStatus[chain][network]) {
+          provider.removeListener('block', listener);
+          this.evmBlockListeners.delete(providerKey);
+          this.logger.log(`Stopped EVM listener for ${chain} ${network}`);
+          return;
+        }
+
+        const queueKey = `${chain}_${network}`;
+        this.blockQueues[queueKey].queue.push(blockNumber);
+        this.processQueueForChain(chain, network, provider);
+      };
+      
+      provider.on('block', listener);
+      this.evmBlockListeners.set(providerKey, listener);
+    } catch (error) {
+      this.logger.error(`Error in ${chain} ${network} monitor: ${error.message}`);
     }
   }
 
@@ -1689,32 +1738,7 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   // Update the chain monitoring methods to accept network parameter
-  private monitorEvmChain(chain: string, network: string) {
-    try {
-      const providerKey = `${chain}_${network}`;
-      const provider = this.providers.get(providerKey);
-      
-      if (!provider) {
-        this.logger.warn(`No provider found for ${chain} ${network}`);
-        return;
-      }
-
-      this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
-      
-      // Store the listener function so we can remove it later
-      const listener = async (blockNumber: number) => {
-        const queueKey = `${chain}_${network}`;
-        this.blockQueues[queueKey].queue.push(blockNumber);
-        this.processQueueForChain(chain, network, provider);
-      };
-      
-      provider.on('block', listener);
-      this.evmBlockListeners.set(providerKey, listener);
-    } catch (error) {
-      this.logger.error(`Error in ${chain} ${network} monitor: ${error.message}`);
-    }
-  }
-
+  
   private monitorBitcoinChain(network: string) {
     const provider = this.providers.get(`btc_${network}`);
     if (!provider) {
