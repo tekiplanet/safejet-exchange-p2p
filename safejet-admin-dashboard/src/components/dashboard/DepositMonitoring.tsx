@@ -24,6 +24,7 @@ export default function DepositMonitoring() {
   const [isSaving, setIsSaving] = useState(false);
   const [chainStatus, setChainStatus] = useState<Record<string, Record<string, boolean>>>({});
   const [chainLoading, setChainLoading] = useState<{[key: string]: boolean}>({});
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   const handleToggleMonitoring = async () => {
     setLoading(true);
@@ -46,6 +47,10 @@ export default function DepositMonitoring() {
       const data = await response.json();
       setStatus(data.message);
       setIsMonitoring(!isMonitoring);
+
+      // Add these lines to refresh chain statuses
+      await checkChainStatus(); // Refresh individual chain statuses
+      await fetchBlockInfo(); // Refresh block info
     } catch (error: unknown) {
       if (error instanceof Error) {
         setStatus('Error: ' + error.message);
@@ -58,10 +63,27 @@ export default function DepositMonitoring() {
   };
 
   useEffect(() => {
+    // Initial load
     fetchBlockInfo();
     checkMonitoringStatus();
     checkChainStatus();
-  }, []);
+
+    // Only set up interval if autoRefresh is true
+    let refreshInterval: NodeJS.Timeout | null = null;
+    if (autoRefresh) {
+      refreshInterval = setInterval(() => {
+        // Only refresh monitoring status and chain status
+        checkMonitoringStatus();
+        checkChainStatus();
+      }, 10000); // Every 10 seconds
+    }
+
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [autoRefresh]); // Depend on autoRefresh
 
   const fetchBlockInfo = async () => {
     setIsLoadingBlocks(true);
@@ -218,6 +240,20 @@ export default function DepositMonitoring() {
     }
   };
 
+  // Add a manual refresh function
+  const handleManualRefresh = async () => {
+    setIsLoadingBlocks(true);
+    try {
+      await Promise.all([
+        fetchBlockInfo(),
+        checkMonitoringStatus(),
+        checkChainStatus()
+      ]);
+    } finally {
+      setIsLoadingBlocks(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Status Card */}
@@ -293,7 +329,40 @@ export default function DepositMonitoring() {
 
       {/* Block Configuration Section */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Block Configuration</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Block Configuration</h3>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="autoRefresh"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                className="mr-2"
+              />
+              <label htmlFor="autoRefresh" className="text-sm text-gray-600">
+                Auto Refresh Status
+              </label>
+            </div>
+            <button
+              onClick={handleManualRefresh}
+              disabled={isLoadingBlocks}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {isLoadingBlocks ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Refreshing...
+                </span>
+              ) : (
+                'Refresh'
+              )}
+            </button>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           {isLoadingBlocks ? (
             <div className="flex justify-center items-center py-8">
