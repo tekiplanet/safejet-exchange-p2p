@@ -37,6 +37,8 @@ export default function DepositMonitoring() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [startPoint, setStartPoint] = useState<'current' | 'start' | 'last'>('current');
   const [chainStartPoints, setChainStartPoints] = useState<{[key: string]: 'current' | 'start' | 'last'}>({});
+  const [chainErrors, setChainErrors] = useState<{[key: string]: string}>({});
+  const [chainRefreshing, setChainRefreshing] = useState<{[key: string]: boolean}>({});
   const router = useRouter();
 
   const API_BASE = '/api';
@@ -146,7 +148,9 @@ export default function DepositMonitoring() {
       }
     };
 
-    let lastError: Error;
+    // Initialize lastError outside the loop
+    let lastError: Error = new Error('Failed to fetch');
+
     for (let i = 0; i < retries; i++) {
       try {
         const response = await fetch(`${API_BASE}${url}`, fetchOptions);
@@ -160,12 +164,12 @@ export default function DepositMonitoring() {
         }
         return response;
       } catch (error) {
-        lastError = error as Error;
+        lastError = error instanceof Error ? error : new Error('Unknown error occurred');
         if (i === retries - 1) break;
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
       }
     }
-    throw lastError || new Error('Failed to fetch');
+    throw lastError;
   };
 
   const fetchBlockInfo = async () => {
@@ -300,35 +304,24 @@ export default function DepositMonitoring() {
     setChainLoading(prev => ({ ...prev, [key]: true }));
     
     try {
-      const token = localStorage.getItem('adminToken');
       const isMonitoring = chainStatus[chain]?.[network] || false;
       const endpoint = isMonitoring ? 'stop-chain-monitoring' : 'start-chain-monitoring';
-
-      // Temporarily disable auto-refresh
-      setAutoRefresh(false);
 
       const response = await fetchWithRetry(
         `/admin/deposits/${endpoint}`,
         {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({ 
             chain, 
             network,
-            startPoint: chainStartPoints[key] || 'current',
-            startBlock: chainStartPoints[key] === 'start' ? blockInfo?.savedBlocks?.[key] : 
-                       chainStartPoints[key] === 'last' ? blockInfo?.lastProcessedBlocks?.[key] : 
-                       undefined
-          }),
+            startPoint: chainStartPoints[key] || 'current'
+          })
         }
       );
 
       const data = await response.json();
       
-      // Update chain status safely
+      // Update only this chain's status
       setChainStatus(prev => ({
         ...prev,
         [chain]: {
@@ -337,23 +330,12 @@ export default function DepositMonitoring() {
         }
       }));
 
-      // Wait a moment for backend to update
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Do a single refresh of data
-      const [newBlockInfo, newChainStatus] = await Promise.all([
-        fetchBlockInfo(),
-        checkChainStatus()
-      ]);
-
-      if (newBlockInfo) setBlockInfo(newBlockInfo);
-      if (newChainStatus) setChainStatus(prev => ({ ...prev, ...newChainStatus }));
+      // Only refresh this chain's data
+      await handleRefreshChain(chain, network);
 
     } catch (error) {
-      console.error('Error toggling chain monitoring:', error);
-      setStatus(error instanceof Error ? error.message : 'Failed to toggle chain monitoring');
-      
-      // Revert chain status safely
+      console.error(`Error toggling ${chain} ${network} monitoring:`, error);
+      // Revert chain status on error
       setChainStatus(prev => ({
         ...prev,
         [chain]: {
@@ -363,8 +345,6 @@ export default function DepositMonitoring() {
       }));
     } finally {
       setChainLoading(prev => ({ ...prev, [key]: false }));
-      // Re-enable auto-refresh
-      setAutoRefresh(true);
     }
   };
 
@@ -391,6 +371,52 @@ export default function DepositMonitoring() {
       ...prev,
       [key]: value
     }));
+  };
+
+  // Add function to refresh individual chain
+  const handleRefreshChain = async (chain: string, network: string) => {
+    const key = `${chain}_${network}`;
+    setChainRefreshing(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      const response = await fetchWithRetry(
+        `/admin/deposits/chain-blocks/${chain}/${network}`,
+        { method: 'GET' }
+      );
+      
+      const data = await response.json();
+      
+      // Update only this chain's data in blockInfo
+      setBlockInfo(prev => prev ? {
+        currentBlocks: {
+          ...prev.currentBlocks,
+          [key]: data.currentBlock
+        },
+        savedBlocks: {
+          ...prev.savedBlocks,
+          [key]: data.savedBlock
+        },
+        lastProcessedBlocks: {
+          ...prev.lastProcessedBlocks,
+          [key]: data.lastProcessedBlock
+        }
+      } : null);
+
+      // Clear error for this chain
+      setChainErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[key];
+        return newErrors;
+      });
+
+    } catch (error) {
+      setChainErrors(prev => ({
+        ...prev,
+        [key]: 'Failed to fetch'
+      }));
+    } finally {
+      setChainRefreshing(prev => ({ ...prev, [key]: false }));
+    }
   };
 
   return (
@@ -528,13 +554,18 @@ export default function DepositMonitoring() {
                     const savedBlock = blockInfo.savedBlocks?.[key];
                     const isChainMonitoring = chainStatus[chain]?.[network];
                     const isChainLoading = chainLoading[`${chain}_${network}`];
+                    const chainError = chainErrors[key];
 
                     return (
                       <tr key={key}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{chain.toUpperCase()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{network}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {currentBlock > 0 ? currentBlock : 'Connection Error'}
+                          {chainError ? (
+                            <span className="text-red-500">{chainError}</span>
+                          ) : (
+                            currentBlock > 0 ? currentBlock : 'Connection Error'
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {isEditing ? (
@@ -595,45 +626,63 @@ export default function DepositMonitoring() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {isEditing ? (
-                            <div className="space-x-2">
-                              <button
-                                onClick={handleUpdateStartBlock}
-                                disabled={isSaving}
-                                className={`text-green-600 hover:text-green-900 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              >
-                                {isSaving ? (
-                                  <span className="flex items-center">
-                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <div className="flex space-x-2">
+                            {isEditing ? (
+                              <div className="space-x-2">
+                                <button
+                                  onClick={handleUpdateStartBlock}
+                                  disabled={isSaving}
+                                  className={`text-green-600 hover:text-green-900 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  {isSaving ? (
+                                    <span className="flex items-center">
+                                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                      </svg>
+                                      Saving...
+                                    </span>
+                                  ) : (
+                                    'Save'
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => setEditingBlock(null)}
+                                  disabled={isSaving}
+                                  className={`text-gray-600 hover:text-gray-900 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleRefreshChain(chain, network)}
+                                  disabled={chainRefreshing[`${chain}_${network}`]}
+                                  className="text-blue-600 hover:text-blue-900 mr-2"
+                                >
+                                  {chainRefreshing[`${chain}_${network}`] ? (
+                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    Saving...
-                                  </span>
-                                ) : (
-                                  'Save'
-                                )}
-                              </button>
-                              <button
-                                onClick={() => setEditingBlock(null)}
-                                disabled={isSaving}
-                                className={`text-gray-600 hover:text-gray-900 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setEditingBlock({
-                                chain,
-                                network,
-                                value: savedBlock || currentBlock.toString()
-                              })}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              Edit
-                            </button>
-                          )}
+                                  ) : (
+                                    '↻'
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => setEditingBlock({
+                                    chain,
+                                    network,
+                                    value: savedBlock || currentBlock.toString()
+                                  })}
+                                  className="text-blue-600 hover:text-blue-900"
+                                >
+                                  Edit
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

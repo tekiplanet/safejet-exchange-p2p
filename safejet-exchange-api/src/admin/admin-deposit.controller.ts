@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards, Get, Body, HttpException, HttpStatus, Header } from '@nestjs/common';
+import { Controller, Post, UseGuards, Get, Body, HttpException, HttpStatus, Header, Param } from '@nestjs/common';
 import { AdminGuard } from '../auth/admin.guard';
 import { DepositTrackingService } from '../wallet/services/deposit-tracking.service';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -19,7 +19,7 @@ export class AdminDepositController {
 
   @Get('chain-blocks')
   @Header('Content-Type', 'application/json')
-  async getChainBlocks() {
+  async getAllChainBlocks() {
     try {
       const blockInfo = await this.depositTrackingService.getBlockInfo();
       this.logger.debug('Block info received:', blockInfo);
@@ -37,6 +37,39 @@ export class AdminDepositController {
       this.logger.error('Error getting chain blocks:', error);
       throw new HttpException(
         error.message || 'Failed to get chain blocks', 
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('chain-blocks/:chain/:network')
+  async getChainBlocks(
+    @Param('chain') chain: string,
+    @Param('network') network: string
+  ) {
+    try {
+      // Get current block height
+      const currentBlock = await this.depositTrackingService.getCurrentBlockHeight(chain, network);
+
+      // Get saved block
+      const savedBlock = await this.systemSettingsRepository.findOne({
+        where: { key: `start_block_${chain}_${network}` }
+      });
+
+      // Get last processed block
+      const lastProcessed = await this.systemSettingsRepository.findOne({
+        where: { key: `last_processed_block_${chain}_${network}` }
+      });
+
+      return {
+        currentBlock,
+        savedBlock: savedBlock?.value,
+        lastProcessedBlock: lastProcessed?.value
+      };
+    } catch (error) {
+      this.logger.error(`Error getting chain blocks for ${chain}_${network}:`, error);
+      throw new HttpException(
+        `Failed to get chain blocks for ${chain}_${network}`,
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -190,4 +223,4 @@ export class AdminDepositController {
       );
     }
   }
-} 
+}
