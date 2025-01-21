@@ -343,6 +343,15 @@ export class DepositTrackingService implements OnModuleInit {
       }
     }
 
+    // Clear all EVM listeners
+    for (const [providerKey, listener] of this.evmBlockListeners.entries()) {
+      const provider = this.providers.get(providerKey);
+      if (provider) {
+        provider.removeListener('block', listener);
+      }
+    }
+    this.evmBlockListeners.clear();
+
     return true;
   }
 
@@ -1633,12 +1642,47 @@ export class DepositTrackingService implements OnModuleInit {
 
     // Stop specific chain monitoring
     this.clearChainIntervals(chain, network);
+    
+    // Clear EVM listeners if applicable
+    if (chain === 'eth' || chain === 'bsc') {
+      const providerKey = `${chain}_${network}`;
+      const listener = this.evmBlockListeners.get(providerKey);
+      const provider = this.providers.get(providerKey);
+      if (provider && listener) {
+        provider.removeListener('block', listener);
+        this.evmBlockListeners.delete(providerKey);
+      }
+    }
 
     // Update main monitoring status
     const anyChainActive = Object.values(this.chainMonitoringStatus)
       .some(networks => Object.values(networks).some(status => status));
     
-    this.monitoringActive = anyChainActive;
+    if (!anyChainActive) {
+      // If no chains are active, perform full stop
+      this.shouldStop = true;
+      this.monitoringActive = false;
+      
+      // Clear all queues
+      for (const key in this.blockQueues) {
+        this.blockQueues[key].queue = [];
+      }
+
+      // Reset all processing flags
+      this.isProcessingEthMainnet = false;
+      this.isProcessingEthTestnet = false;
+      this.isProcessingBscMainnet = false;
+      this.isProcessingBscTestnet = false;
+      this.isProcessingBtcMainnet = false;
+      this.isProcessingBtcTestnet = false;
+      this.isProcessingTronMainnet = false;
+      this.isProcessingTronTestnet = false;
+      this.isProcessingXrpMainnet = false;
+      this.isProcessingXrpTestnet = false;
+
+      // Wait for any in-progress operations
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
     
     this.logger.log(`Stopped monitoring ${chain} ${network}`);
     return true;
