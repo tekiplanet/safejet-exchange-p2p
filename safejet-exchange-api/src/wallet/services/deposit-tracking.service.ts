@@ -84,19 +84,19 @@ export class DepositTrackingService implements OnModuleInit {
       checkInterval: this.configService.get('ETHEREUM_CHECK_INTERVAL', 30000)
     },
     bsc: {
-      blockDelay: this.configService.get('BSC_BLOCK_DELAY', 500),
+      blockDelay: this.configService.get('BSC_BLOCK_DELAY', 1000),
       checkInterval: this.configService.get('BSC_CHECK_INTERVAL', 30000)
     },
     bitcoin: {
-      blockDelay: this.configService.get('BITCOIN_BLOCK_DELAY', 2000),
-      checkInterval: this.configService.get('BITCOIN_CHECK_INTERVAL', 120000)
+      blockDelay: this.configService.get('BITCOIN_BLOCK_DELAY', 1000),
+      checkInterval: this.configService.get('BITCOIN_CHECK_INTERVAL', 30000)
     },
     trx: {
-      blockDelay: this.configService.get('TRON_BLOCK_DELAY', 5000),
-      checkInterval: this.configService.get('TRON_CHECK_INTERVAL', 10000)
+      blockDelay: this.configService.get('TRON_BLOCK_DELAY', 1000),
+      checkInterval: this.configService.get('TRON_CHECK_INTERVAL', 30000)
     },
     xrp: {
-      blockDelay: this.configService.get('XRP_BLOCK_DELAY', 2000),
+      blockDelay: this.configService.get('XRP_BLOCK_DELAY', 1000),
       checkInterval: this.configService.get('XRP_CHECK_INTERVAL', 30000)
     }
   };
