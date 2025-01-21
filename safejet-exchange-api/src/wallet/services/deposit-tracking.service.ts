@@ -468,43 +468,10 @@ export class DepositTrackingService implements OnModuleInit {
     this.xrpTestnetInterval = testnetInterval;
   }
 
-  private monitorEvmChains() {
-    if (!this.monitoringActive) return;
-    
-    try {
-      for (const [providerKey, provider] of this.providers.entries()) {
-        const [chain, network] = providerKey.split('_');
-        if (['eth', 'bsc'].includes(chain)) {
-          this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
-          
-          // Store the listener function so we can remove it later
-          const listener = async (blockNumber: number) => {
-            // Check if monitoring is still active for this chain
-            if (!this.chainMonitoringStatus[chain][network]) {
-              provider.removeListener('block', listener);
-              this.evmBlockListeners.delete(providerKey);
-              this.logger.log(`Stopped EVM listener for ${chain} ${network}`);
-              return;
-            }
-
-            const queueKey = `${chain}_${network}`;
-            this.blockQueues[queueKey].queue.push(blockNumber);
-            this.processQueueForChain(chain, network, provider);
-          };
-          
-          provider.on('block', listener);
-          this.evmBlockListeners.set(providerKey, listener);
-        }
-      }
-    } catch (error) {
-      this.logger.error(`Error in EVM chain monitor: ${error.message}`);
-    }
-  }
-
-  private monitorEvmChain(chain: string, network: string) {
+  private async monitorEvmChain(chain: string, network: string) {
     try {
       const providerKey = `${chain}_${network}`;
-      const provider = this.providers.get(providerKey);
+      const provider = this.providers.get(providerKey) as providers.Provider;
       
       if (!provider) {
         this.logger.warn(`No provider found for ${chain} ${network}`);
@@ -518,98 +485,89 @@ export class DepositTrackingService implements OnModuleInit {
         this.evmBlockListeners.delete(providerKey);
       }
 
+      // Reset processing state
+      this.processingLocks.set(`${chain}_${network}`, false);
+      this.blockQueues[`${chain}_${network}`].queue = [];
+
       this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
       
       // Store the listener function so we can remove it later
       const listener = async (blockNumber: number) => {
-        // Check if monitoring is still active for this chain
-        if (!this.chainMonitoringStatus[chain][network]) {
-          provider.removeListener('block', listener);
-          this.evmBlockListeners.delete(providerKey);
-          this.logger.log(`Stopped EVM listener for ${chain} ${network}`);
-          return;
-        }
+        try {
+          const queueKey = `${chain}_${network}`;
+          
+          // Skip if monitoring stopped
+          if (!this.chainMonitoringStatus[chain][network]) {
+            provider.removeListener('block', listener);
+            this.evmBlockListeners.delete(providerKey);
+            this.processingLocks.set(queueKey, false);
+            this.logger.log(`Stopped EVM listener for ${chain} ${network}`);
+            return;
+          }
 
-        const queueKey = `${chain}_${network}`;
-        this.blockQueues[queueKey].queue.push(blockNumber);
-        this.processQueueForChain(chain, network, provider);
+          // Skip if already processing this block
+          if (this.blockQueues[queueKey].queue.includes(blockNumber)) {
+            return;
+          }
+
+          // Get lock before processing
+          if (!await this.getLock(chain, network)) {
+            this.logger.debug(`${chain} ${network} blocks already processing, skipping`);
+            return;
+          }
+
+          try {
+            // Process the block
+            this.blockQueues[queueKey].queue.push(blockNumber);
+            await this.processQueueForChain(chain, network, provider);
+          } finally {
+            this.releaseLock(chain, network);
+          }
+
+        } catch (error) {
+          this.logger.error(`Error processing block ${blockNumber} for ${chain} ${network}: ${error.message}`);
+          this.releaseLock(chain, network);
+        }
       };
-      
+
+      // Set monitoring status and add listener
+      this.chainMonitoringStatus[chain][network] = true;
       provider.on('block', listener);
       this.evmBlockListeners.set(providerKey, listener);
+      
+      // Log initial block number
+      const currentBlock = await provider.getBlockNumber();
+      this.logger.log(`${chain} ${network} monitoring started at block ${currentBlock}`);
+
     } catch (error) {
       this.logger.error(`Error in ${chain} ${network} monitor: ${error.message}`);
-    }
-  }
-
-  private monitorBitcoinChains() {
-    if (!this.monitoringActive) return;
-    
-    for (const network of ['mainnet', 'testnet']) {
-      const provider = this.providers.get(`btc_${network}`);
-      this.logger.log(`Started monitoring Bitcoin ${network} blocks`);
-      
-      const interval = setInterval(async () => {
-        await this.checkBitcoinBlocks(network);
-      }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
-
-      if (network === 'mainnet') {
-        this.btcMainnetInterval = interval;
-      } else {
-        this.btcTestnetInterval = interval;
-      }
-    }
-  }
-
-  private monitorTronChains() {
-    if (!this.monitoringActive) return;
-    
-    for (const network of ['mainnet', 'testnet']) {
-      const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
-      if (!tronWeb) continue;
-      
-      this.logger.log(`Started monitoring TRON ${network} blocks`);
-      
-      const interval = setInterval(async () => {
-        await this.checkTronBlocks(network, tronWeb);
-      }, this.PROCESSING_DELAYS.trx.checkInterval);
-
-      if (network === 'mainnet') {
-        this.tronMainnetInterval = interval;
-      } else {
-        this.tronTestnetInterval = interval;
-      }
+      this.processingLocks.set(`${chain}_${network}`, false);
+      this.chainMonitoringStatus[chain][network] = false;
     }
   }
 
   private async processQueueForChain(chain: string, network: string, provider: any) {
-    if (this.shouldStop) return;
-
-    // Check if already processing
-    if (!await this.getLock(chain, network)) {
-      this.logger.debug(`${chain} ${network} blocks already processing, skipping`);
-      return;
-    }
-
     const queueKey = `${chain}_${network}`;
     const queue = this.blockQueues[queueKey];
 
     try {
-      while (queue.queue.length > 0 && !this.shouldStop) {
+      while (queue.queue.length > 0) {
+        // Check monitoring status inside the loop
+        if (!this.chainMonitoringStatus[chain][network]) {
+          break;
+        }
+
         const blockNumber = queue.queue.shift()!;
         try {
           await this.processEvmBlock(chain, network, blockNumber, provider);
-          if (this.shouldStop) break;
           await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS[chain].blockDelay));
         } catch (error) {
           this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
         }
       }
     } finally {
-      this.releaseLock(chain, network);
-      
-      // Only continue if not stopping
-      if (queue.queue.length > 0 && !this.shouldStop) {
+      // Only continue if still monitoring and have blocks to process
+      if (queue.queue.length > 0 && this.chainMonitoringStatus[chain][network]) {
         setImmediate(() => this.processQueueForChain(chain, network, provider));
       }
     }
@@ -1592,8 +1550,8 @@ export class DepositTrackingService implements OnModuleInit {
 
   private async getLock(chain: string, network: string): Promise<boolean> {
     const key = `${chain}_${network}`;
-    if (this.processingLocks.get(key)) {
-        return false;
+    if (this.processingLocks.get(key) || !this.chainMonitoringStatus[chain][network]) {
+      return false;
     }
     this.processingLocks.set(key, true);
     return true;
