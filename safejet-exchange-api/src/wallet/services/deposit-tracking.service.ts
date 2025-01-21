@@ -196,140 +196,6 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async initializeProviders() {
-    // Initialize main providers (for monitoring)
-    await this.initializeMainProviders();
-    // Initialize info providers (for block info fetching)
-    await this.initializeInfoProviders();
-  }
-
-  private async initializeMainProviders() {
-    // Initialize EVM providers (Ethereum, BSC)
-    const evmNetworks = {
-      eth: {
-        mainnet: this.configService.get('ETHEREUM_MAINNET_RPC'),
-        testnet: this.configService.get('ETHEREUM_TESTNET_RPC'),
-      },
-      bsc: {
-        mainnet: this.configService.get('BSC_MAINNET_RPC'),
-        testnet: this.configService.get('BSC_TESTNET_RPC'),
-      }
-    };
-
-    // Setup EVM providers
-    for (const [chain, networks] of Object.entries(evmNetworks)) {
-      for (const [network, rpcUrl] of Object.entries(networks)) {
-        const providerKey = `${chain}_${network}`;
-        if (typeof rpcUrl === 'string') {
-          try {
-            let provider: JsonRpcProvider | WebSocketProvider;
-            if (rpcUrl.startsWith('ws')) {
-              provider = new WebSocketProvider(rpcUrl);
-            } else {
-              provider = new JsonRpcProvider(rpcUrl);
-            }
-            
-            const blockNumber = await provider.getBlockNumber();
-            this.providers.set(providerKey, provider);
-            this.logger.log(`${chain.toUpperCase()} ${network} provider initialized successfully, current block: ${blockNumber}`);
-          } catch (error) {
-            this.logger.error(`Failed to initialize ${chain.toUpperCase()} ${network} provider: ${error.message}`);
-          }
-        }
-      }
-    }
-
-    // Initialize Bitcoin provider
-    const bitcoinNetworks = {
-      mainnet: this.configService.get('BITCOIN_MAINNET_RPC'),
-      testnet: this.configService.get('BITCOIN_TESTNET_RPC'),
-    };
-
-    for (const [network, rpcUrl] of Object.entries(bitcoinNetworks)) {
-      const providerKey = `btc_${network}`;
-      try {
-        const provider = {
-          url: rpcUrl,
-          auth: {
-            username: this.configService.get('BITCOIN_RPC_USER'),
-            password: this.configService.get('BITCOIN_RPC_PASS'),
-          }
-        } as BitcoinProvider;
-
-        // Test connection
-        const blockCount = await this.bitcoinRpcCall(provider, 'getblockcount', []);
-        this.providers.set(providerKey, provider);
-        this.logger.log(`Bitcoin ${network} provider initialized successfully, current block: ${blockCount}`);
-      } catch (error) {
-        this.logger.error(`Failed to initialize Bitcoin ${network} provider: ${error.message}`);
-      }
-    }
-
-    // Initialize TRON provider
-    const tronNetworks = {
-      mainnet: this.configService.get('TRON_MAINNET_API'),
-      testnet: this.configService.get('TRON_TESTNET_API'),
-    };
-
-    for (const [network, apiUrl] of Object.entries(tronNetworks)) {
-      const providerKey = `trx_${network}`;
-      
-      try {
-        const apiKey = this.configService.get('TRON_API_KEY');
-        if (!apiKey) {
-          this.logger.error('TRON_API_KEY not found in environment variables');
-          continue;
-        }
-
-        // Create TronWeb instance
-        const tronWeb = new TronWeb({
-          fullNode: apiUrl,
-          solidityNode: apiUrl,
-          eventServer: apiUrl,
-          privateKey: '', // Empty for read-only
-          headers: {
-            "TRON-PRO-API-KEY": apiKey,
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          }
-        });
-
-        // Test connection before setting provider
-        const block = await tronWeb.trx.getCurrentBlock();
-        if (!block) {
-          throw new Error('Could not fetch current block');
-        }
-
-        this.providers.set(providerKey, tronWeb);
-        this.logger.log(`TRON ${network} provider initialized successfully, current block: ${block.block_header.raw_data.number}`);
-      } catch (error) {
-        this.logger.error(`Failed to initialize TRON ${network} provider: ${error.message}`);
-      }
-    }
-
-    // Initialize XRP provider
-    const xrpNetworks = {
-      mainnet: this.configService.get('XRP_MAINNET_RPC'),
-      testnet: this.configService.get('XRP_TESTNET_RPC'),
-    };
-
-    for (const [network, rpcUrl] of Object.entries(xrpNetworks)) {
-      const providerKey = `xrp_${network}`;
-      try {
-        const provider = new Client(rpcUrl);
-        await provider.connect();
-        const info = await provider.request({
-          command: 'server_info'
-        });
-        this.providers.set(providerKey, provider);
-        this.logger.log(`XRP ${network} provider initialized successfully, current block: ${info.result.info.validated_ledger.seq}`);
-      } catch (error) {
-        this.logger.error(`Failed to initialize XRP ${network} provider: ${error.message}`);
-      }
-    }
-  }
-
-  private async initializeInfoProviders() {
-    // Similar to initializeMainProviders but for this.infoProviders
     const chains = ['eth', 'bsc', 'btc', 'trx', 'xrp'];
     const networks = ['mainnet', 'testnet'];
 
@@ -337,12 +203,25 @@ export class DepositTrackingService implements OnModuleInit {
       for (const network of networks) {
         const key = `${chain}_${network}`;
         try {
-          // Create a new provider instance with the same config
-          const provider = await this.createProviderInstance(chain, network);
-          this.infoProviders[key] = provider;
-          this.logger.debug(`Info provider initialized for ${chain}_${network}`);
+          // Try to initialize both providers
+          const mainProvider = await this.createProviderInstance(chain, network);
+          const infoProvider = await this.createProviderInstance(chain, network);
+
+          // Only set providers if both initialize successfully
+          this.providers.set(key, mainProvider);
+          this.infoProviders[key] = infoProvider;
+
+          const blockNumber = await mainProvider.getBlockNumber?.() || 
+                            await this.getCurrentBlockHeight(chain, network, mainProvider);
+          this.logger.log(`${chain.toUpperCase()} ${network} providers initialized successfully, current block: ${blockNumber}`);
+
         } catch (error) {
-          this.logger.error(`Failed to initialize info provider for ${chain}_${network}:`, error);
+          // Log error and skip this chain/network combination
+          this.logger.error(`Failed to initialize providers for ${chain}_${network}:`, error);
+          // Clean up any partially initialized providers
+          this.providers.delete(key);
+          delete this.infoProviders[key];
+          continue;
         }
       }
     }
