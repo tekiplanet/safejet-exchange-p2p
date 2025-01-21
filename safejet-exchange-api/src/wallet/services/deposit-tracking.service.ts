@@ -468,7 +468,7 @@ export class DepositTrackingService implements OnModuleInit {
     this.xrpTestnetInterval = testnetInterval;
   }
 
-  private async monitorEvmChain(chain: string, network: string) {
+  private async monitorEvmChain(chain: string, network: string, startBlock?: number) {
     try {
       const providerKey = `${chain}_${network}`;
       const provider = this.providers.get(providerKey) as providers.Provider;
@@ -489,9 +489,21 @@ export class DepositTrackingService implements OnModuleInit {
       this.processingLocks.set(`${chain}_${network}`, false);
       this.blockQueues[`${chain}_${network}`].queue = [];
 
-      this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
+      // Get initial block number
+      const currentBlock = await provider.getBlockNumber();
+      const initialBlock = startBlock || currentBlock;
+
+      this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks from block ${initialBlock}`);
       
-      // Store the listener function so we can remove it later
+      // Process historical blocks first if needed
+      if (startBlock && startBlock < currentBlock) {
+        this.logger.log(`Processing historical blocks from ${startBlock} to ${currentBlock}`);
+        for (let block = startBlock; block <= currentBlock; block++) {
+          await this.processEvmBlock(chain, network, block, provider);
+        }
+      }
+
+      // Only start listening for new blocks after historical processing is done
       const listener = async (blockNumber: number) => {
         try {
           const queueKey = `${chain}_${network}`;
@@ -530,14 +542,9 @@ export class DepositTrackingService implements OnModuleInit {
         }
       };
 
-      // Set monitoring status and add listener
       this.chainMonitoringStatus[chain][network] = true;
       provider.on('block', listener);
       this.evmBlockListeners.set(providerKey, listener);
-      
-      // Log initial block number
-      const currentBlock = await provider.getBlockNumber();
-      this.logger.log(`${chain} ${network} monitoring started at block ${currentBlock}`);
 
     } catch (error) {
       this.logger.error(`Error in ${chain} ${network} monitor: ${error.message}`);
@@ -810,14 +817,11 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  private async checkBitcoinBlocks(network: string) {
-    // Check if already processing
+  private async checkBitcoinBlocks(network: string, startBlock?: number) {
     if (!await this.getLock('btc', network)) {
       this.logger.debug(`Bitcoin ${network} blocks already processing, skipping`);
       return;
     }
-
-    if (this.shouldStop) return;
 
     try {
       const provider = this.providers.get(`btc_${network}`);
@@ -827,17 +831,15 @@ export class DepositTrackingService implements OnModuleInit {
       }
 
       const currentHeight = await this.getBitcoinBlockHeight(provider);
-      const lastProcessedBlock = await this.getLastProcessedBlock('btc', network);
+      const lastProcessedBlock = startBlock || await this.getLastProcessedBlock('btc', network);
 
-      // Process one block at a time
-      if (lastProcessedBlock < currentHeight && !this.shouldStop) {
-        const nextBlock = lastProcessedBlock + 1;
-        this.logger.log(`Bitcoin ${network}: Processing block ${nextBlock}`);
-        
-        const block = await this.getBitcoinBlock(provider, nextBlock);
-        if (block && !this.shouldStop) {
+      // Process blocks sequentially
+      for (let height = lastProcessedBlock + 1; height <= currentHeight && !this.shouldStop; height++) {
+        this.logger.log(`Bitcoin ${network}: Processing block ${height}`);
+        const block = await this.getBitcoinBlock(provider, height);
+        if (block) {
           await this.processBitcoinBlock('btc', network, block);
-          await this.saveLastProcessedBlock('btc', network, nextBlock);
+          await this.saveLastProcessedBlock('btc', network, height);
         }
       }
     } catch (error) {
@@ -1099,7 +1101,7 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  private async checkTronBlocks(network: string, tronWeb: TronWebInstance) {
+  private async checkTronBlocks(network: string, tronWeb: TronWebInstance, initialBlock?: number) {
     // Check if already processing
     if (!await this.getLock('trx', network)) {
         this.logger.debug(`TRON ${network} blocks already processing, skipping`);
@@ -1109,20 +1111,23 @@ export class DepositTrackingService implements OnModuleInit {
     if (this.shouldStop) return;
 
     try {
-        const currentBlock = await tronWeb.trx.getCurrentBlock();
-        const lastProcessedBlock = await this.getLastProcessedBlock('trx', network);
-        const currentBlockNumber = currentBlock.block_header.raw_data.number;
-
+        // Get current block from TRON
+        const latestBlock = await tronWeb.trx.getCurrentBlock();
+        const currentBlockNumber = latestBlock.block_header.raw_data.number;
+        
+        // Determine starting point
+        const lastProcessedBlock = initialBlock || await this.getLastProcessedBlock('trx', network);
+        
         this.logger.log(`TRON ${network}: Processing blocks from ${lastProcessedBlock + 1} to ${currentBlockNumber}`);
 
         // Process blocks in smaller batches to avoid rate limits
         const batchSize = 5;
-        const startBlock = lastProcessedBlock + 1;
-        const endBlock = Math.min(startBlock + batchSize, currentBlockNumber);
+        const fromBlock = lastProcessedBlock + 1;
+        const toBlock = Math.min(fromBlock + batchSize, currentBlockNumber);
 
-        this.logger.log(`TRON ${network}: Processing batch from block ${startBlock} to ${endBlock}`);
+        this.logger.log(`TRON ${network}: Processing batch from block ${fromBlock} to ${toBlock}`);
 
-        for (let height = startBlock; height <= endBlock; height++) {
+        for (let height = fromBlock; height <= toBlock; height++) {
           try {
             this.logger.log(`TRON ${network}: Processing block ${height}`);
           
@@ -1393,7 +1398,7 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  private async checkXrpBlocks(network: string) {
+  private async checkXrpBlocks(network: string, startBlock?: number) {
     if (!await this.getLock('xrp', network)) {
         this.logger.debug(`XRP ${network} blocks already processing, skipping`);
         return;
@@ -1421,7 +1426,7 @@ export class DepositTrackingService implements OnModuleInit {
             command: 'server_info'
         });
         const currentLedger = serverInfo.result.info.validated_ledger.seq;
-        let lastProcessedBlock = await this.getLastProcessedBlock('xrp', network);
+        let lastProcessedBlock = startBlock || await this.getLastProcessedBlock('xrp', network);
 
         // If this is the first time (lastProcessedBlock is 0), start from current ledger
         if (lastProcessedBlock === 0) {
@@ -1611,33 +1616,55 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   // Add methods for chain-specific monitoring
-  async startChainMonitoring(chain: string, network: string) {
-    if (!this.chainMonitoringStatus[chain]) {
-      throw new Error(`Invalid chain: ${chain}`);
+  async startChainMonitoring(
+    chain: string, 
+    network: string, 
+    startPoint?: 'current' | 'start' | 'last',
+    startBlock?: string
+  ) {
+    try {
+      // Initialize block number based on startPoint
+      let blockNumber: number | undefined;
+
+      if (startPoint === 'start' && startBlock) {
+        blockNumber = parseInt(startBlock);
+      } else if (startPoint === 'last') {
+        const lastBlock = await this.systemSettingsRepository.findOne({
+          where: { key: `last_processed_block_${chain}_${network}` }
+        });
+        if (lastBlock) {
+          blockNumber = parseInt(lastBlock.value);
+        }
+      }
+      // If startPoint is 'current' or other cases fail, blockNumber remains undefined
+      // and the service will use the current block
+
+      this.chainMonitoringStatus[chain] = this.chainMonitoringStatus[chain] || {};
+      this.chainMonitoringStatus[chain][network] = true;
+
+      switch (chain) {
+        case 'eth':
+        case 'bsc':
+          await this.monitorEvmChain(chain, network, blockNumber);
+          break;
+        case 'btc':
+          this.monitorBitcoinChain(network, blockNumber);
+          break;
+        case 'trx':
+          this.monitorTronChain(network, blockNumber);
+          break;
+        case 'xrp':
+          this.monitorXrpChain(network, blockNumber);
+          break;
+        default:
+          throw new Error(`Unsupported chain: ${chain}`);
+      }
+
+      this.logger.log(`Started monitoring ${chain} ${network}`);
+    } catch (error) {
+      this.logger.error(`Error starting ${chain} ${network} monitoring:`, error);
+      throw error;
     }
-
-    this.chainMonitoringStatus[chain][network] = true;
-    this.monitoringActive = true;
-
-    // Start specific chain monitoring
-    switch (chain) {
-      case 'eth':
-      case 'bsc':
-        this.monitorEvmChain(chain, network);
-        break;
-      case 'btc':
-        this.monitorBitcoinChain(network);
-        break;
-      case 'trx':
-        this.monitorTronChain(network);
-        break;
-      case 'xrp':
-        this.monitorXrpChain(network);
-        break;
-    }
-
-    this.logger.log(`Started monitoring ${chain} ${network}`);
-    return true;
   }
 
   async stopChainMonitoring(chain: string, network: string) {
@@ -1697,17 +1724,17 @@ export class DepositTrackingService implements OnModuleInit {
 
   // Update the chain monitoring methods to accept network parameter
   
-  private monitorBitcoinChain(network: string) {
+  private monitorBitcoinChain(network: string, startBlock?: number) {
     const provider = this.providers.get(`btc_${network}`);
     if (!provider) {
       this.logger.warn(`No Bitcoin provider found for network ${network}`);
       return;
     }
 
-    this.logger.log(`Started monitoring Bitcoin ${network} blocks`);
+    this.logger.log(`Started monitoring Bitcoin ${network} blocks${startBlock ? ` from block ${startBlock}` : ''}`);
     
     const interval = setInterval(async () => {
-      await this.checkBitcoinBlocks(network);
+      await this.checkBitcoinBlocks(network, startBlock);
     }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
 
     if (network === 'mainnet') {
@@ -1717,17 +1744,17 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  private monitorTronChain(network: string) {
+  private monitorTronChain(network: string, startBlock?: number) {
     const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
     if (!tronWeb) {
       this.logger.warn(`No TRON provider found for network ${network}`);
       return;
     }
     
-    this.logger.log(`Started monitoring TRON ${network} blocks`);
+    this.logger.log(`Started monitoring TRON ${network} blocks${startBlock ? ` from block ${startBlock}` : ''}`);
     
     const interval = setInterval(async () => {
-      await this.checkTronBlocks(network, tronWeb);
+      await this.checkTronBlocks(network, tronWeb, startBlock);
     }, this.PROCESSING_DELAYS.trx.checkInterval);
 
     if (network === 'mainnet') {
@@ -1737,9 +1764,11 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  private monitorXrpChain(network: string) {
+  private monitorXrpChain(network: string, startBlock?: number) {
+    this.logger.log(`Started monitoring XRP ${network} blocks${startBlock ? ` from block ${startBlock}` : ''}`);
+    
     const interval = setInterval(() => {
-      this.checkXrpBlocks(network);
+      this.checkXrpBlocks(network, startBlock);
     }, this.PROCESSING_DELAYS.xrp.checkInterval);
 
     if (network === 'mainnet') {

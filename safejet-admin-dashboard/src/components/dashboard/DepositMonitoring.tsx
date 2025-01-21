@@ -7,6 +7,9 @@ interface BlockInfo {
   savedBlocks: {
     [key: string]: string;
   };
+  lastProcessedBlocks: {
+    [key: string]: string;
+  };
 }
 
 export default function DepositMonitoring() {
@@ -25,6 +28,7 @@ export default function DepositMonitoring() {
   const [chainStatus, setChainStatus] = useState<Record<string, Record<string, boolean>>>({});
   const [chainLoading, setChainLoading] = useState<{[key: string]: boolean}>({});
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [startPoint, setStartPoint] = useState<'current' | 'start' | 'last'>('current');
 
   const handleToggleMonitoring = async () => {
     setLoading(true);
@@ -222,7 +226,14 @@ export default function DepositMonitoring() {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
-        body: JSON.stringify({ chain, network }),
+        body: JSON.stringify({ 
+          chain, 
+          network,
+          startPoint,
+          startBlock: startPoint === 'start' ? blockInfo?.savedBlocks?.[key] : 
+                     startPoint === 'last' ? blockInfo?.lastProcessedBlocks?.[key] : 
+                     undefined
+        }),
       });
 
       if (!response.ok) {
@@ -231,8 +242,16 @@ export default function DepositMonitoring() {
 
       const data = await response.json();
       setStatus(data.message);
-      await checkChainStatus(); // Refresh chain status
-      await checkMonitoringStatus(); // Refresh overall status
+
+      // Add delay before checking status to allow backend to update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Refresh statuses
+      await Promise.all([
+        checkChainStatus(),
+        checkMonitoringStatus(),
+        fetchBlockInfo()
+      ]);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Failed to toggle chain monitoring');
     } finally {
@@ -330,38 +349,35 @@ export default function DepositMonitoring() {
       {/* Block Configuration Section */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900">Block Configuration</h3>
           <div className="flex items-center space-x-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="autoRefresh"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="mr-2"
-              />
-              <label htmlFor="autoRefresh" className="text-sm text-gray-600">
-                Auto Refresh Status
-              </label>
-            </div>
-            <button
-              onClick={handleManualRefresh}
-              disabled={isLoadingBlocks}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            <h3 className="text-lg font-medium text-gray-900">Block Configuration</h3>
+            <select
+              value={startPoint}
+              onChange={(e) => setStartPoint(e.target.value as 'current' | 'start' | 'last')}
+              className="ml-4 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {isLoadingBlocks ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Refreshing...
-                </span>
-              ) : (
-                'Refresh'
-              )}
-            </button>
+              <option value="current" className="text-gray-900">Start from Current Block</option>
+              <option value="start" className="text-gray-900">Start from Set Block</option>
+              <option value="last" className="text-gray-900">Start from Last Processed</option>
+            </select>
           </div>
+          <button
+            onClick={handleManualRefresh}
+            disabled={isLoadingBlocks}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            {isLoadingBlocks ? (
+              <span className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Refreshing...
+              </span>
+            ) : (
+              'Refresh'
+            )}
+          </button>
         </div>
         <div className="overflow-x-auto">
           {isLoadingBlocks ? (
@@ -377,6 +393,7 @@ export default function DepositMonitoring() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Network</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Block</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Block</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Processed</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monitoring</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -412,6 +429,9 @@ export default function DepositMonitoring() {
                           ) : (
                             savedBlock || 'Not set'
                           )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {blockInfo.lastProcessedBlocks?.[key] || 'Not processed'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <button

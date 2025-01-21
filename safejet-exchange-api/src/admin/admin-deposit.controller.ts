@@ -32,10 +32,8 @@ export class AdminDepositController {
         xrp_testnet: await this.depositTrackingService.getCurrentBlockHeight('xrp', 'testnet'),
       };
 
-      // console.log('Current blocks:', blocks);
-
-      // Get saved values from system settings
-      const savedBlocks = await Promise.all(
+      // Get start blocks from system settings
+      const startBlocks = await Promise.all(
         Object.keys(blocks).map(async (chain) => {
           const setting = await this.systemSettingsRepository.findOne({
             where: { key: `start_block_${chain}` }
@@ -44,16 +42,26 @@ export class AdminDepositController {
         })
       );
 
-      // console.log('Saved blocks:', savedBlocks);
+      // Get last processed blocks
+      const lastProcessedBlocks = await Promise.all(
+        Object.keys(blocks).map(async (chain) => {
+          const setting = await this.systemSettingsRepository.findOne({
+            where: { key: `last_processed_block_${chain}` }
+          });
+          return { chain, value: setting?.value };
+        })
+      );
 
       const response = {
         currentBlocks: blocks,
         savedBlocks: Object.fromEntries(
-          savedBlocks.map(({ chain, value }) => [chain, value])
+          startBlocks.map(({ chain, value }) => [chain, value])
+        ),
+        lastProcessedBlocks: Object.fromEntries(
+          lastProcessedBlocks.map(({ chain, value }) => [chain, value])
         )
       };
 
-      // console.log('Sending response:', response);
       return response;
     } catch (error: unknown) {
       console.error('Error in getChainBlocks:', error);
@@ -150,10 +158,20 @@ export class AdminDepositController {
 
   @Post('start-chain-monitoring')
   async startChainMonitoring(
-    @Body() dto: { chain: string; network: string }
+    @Body() dto: { 
+      chain: string; 
+      network: string;
+      startPoint?: 'current' | 'start' | 'last';
+      startBlock?: string;
+    }
   ) {
     try {
-      await this.depositTrackingService.startChainMonitoring(dto.chain, dto.network);
+      await this.depositTrackingService.startChainMonitoring(
+        dto.chain, 
+        dto.network, 
+        dto.startPoint,
+        dto.startBlock
+      );
       return { message: `Started monitoring ${dto.chain} ${dto.network}` };
     } catch (error) {
       throw new HttpException(
