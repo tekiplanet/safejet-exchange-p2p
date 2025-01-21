@@ -2,52 +2,57 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 
 export default function LoginForm() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const router = useRouter();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setLoading(true);
     setError('');
 
+    const formData = new FormData(event.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
     try {
-      console.log('Attempting login to:', `${process.env.NEXT_PUBLIC_API_URL}/admin/auth/login`);
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/auth/login`, {
+      console.log('Attempting login for:', email);
+      const response = await fetch('/api/admin/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify({ email, password }),
-        mode: 'cors',
-        credentials: 'include',
       });
 
       console.log('Response status:', response.status);
-      
-      const data = await response.json();
-      console.log('Response data:', data);
 
       if (!response.ok) {
-        throw new Error(data.message || 'Invalid credentials');
+        const text = await response.text();
+        console.log('Error response:', text);
+        
+        try {
+          const errorData = JSON.parse(text);
+          throw new Error(errorData.message || 'Login failed');
+        } catch (e) {
+          throw new Error(`Login failed: ${text}`);
+        }
       }
 
+      const data = await response.json();
+      console.log('Login response:', data);
+      
       if (data.access_token) {
-        console.log('Setting token and redirecting...');
         localStorage.setItem('adminToken', data.access_token);
-        
-        // Force a hard redirect
-        window.location.href = '/dashboard';
+        router.push('/dashboard');
       } else {
         throw new Error('No access token received');
       }
-    } catch (err) {
-      console.error('Login error:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred during login');
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to login');
     } finally {
       setLoading(false);
     }
@@ -78,8 +83,6 @@ export default function LoginForm() {
               required
               className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
               placeholder="Email address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div>
@@ -93,8 +96,6 @@ export default function LoginForm() {
               required
               className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
               placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           <div>

@@ -15,7 +15,7 @@ import { WebSocketProvider, JsonRpcProvider } from '@ethersproject/providers';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Decimal } from 'decimal.js';
-import { In, Not, IsNull } from 'typeorm';
+import { In, Not, IsNull, Like } from 'typeorm';
 import * as bitcoin from 'bitcoinjs-lib';
 const TronWeb = require('tronweb');
 type TronWebType = typeof TronWeb;
@@ -50,6 +50,15 @@ interface BitcoinBlock {
   hash: string;
   // Add other relevant fields
 }
+
+// Add this at the top with other interfaces
+export const SUPPORTED_CHAINS = {
+  eth: true,
+  bsc: true,
+  btc: true,
+  trx: true,
+  xrp: true
+};
 
 @Injectable()
 export class DepositTrackingService implements OnModuleInit {
@@ -148,13 +157,11 @@ export class DepositTrackingService implements OnModuleInit {
   private evmBlockListeners = new Map<string, any>();
 
   // Add chain monitoring status tracking
-  private chainMonitoringStatus = {
-    eth: { mainnet: false, testnet: false },
-    bsc: { mainnet: false, testnet: false },
-    btc: { mainnet: false, testnet: false },
-    trx: { mainnet: false, testnet: false },
-    xrp: { mainnet: false, testnet: false }
-  };
+  private chainMonitoringStatus: Record<string, Record<string, boolean>> = {};
+
+  private currentBlocks: Record<string, number> = {};
+  private savedBlocks: Record<string, string> = {};
+  private lastProcessedBlocks: Record<string, string> = {};
 
   constructor(
     @InjectRepository(Deposit)
@@ -475,81 +482,54 @@ export class DepositTrackingService implements OnModuleInit {
       
       if (!provider) {
         this.logger.warn(`No provider found for ${chain} ${network}`);
-        return;
+        return false;
       }
 
-      // First remove any existing listener
-      const existingListener = this.evmBlockListeners.get(providerKey);
-      if (existingListener) {
-        provider.removeListener('block', existingListener);
+      // Clear any existing interval and listener
+      if (this.evmBlockListeners.has(providerKey)) {
+        const oldListener = this.evmBlockListeners.get(providerKey);
+        provider.removeListener('block', oldListener);
         this.evmBlockListeners.delete(providerKey);
       }
 
-      // Reset processing state
-      this.processingLocks.set(`${chain}_${network}`, false);
-      this.blockQueues[`${chain}_${network}`].queue = [];
+      // Set monitoring status
+      if (!this.chainMonitoringStatus[chain]) {
+        this.chainMonitoringStatus[chain] = {};
+      }
+      this.chainMonitoringStatus[chain][network] = true;
 
-      // Get initial block number
-      const currentBlock = await provider.getBlockNumber();
-      const initialBlock = startBlock || currentBlock;
-
-      this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks from block ${initialBlock}`);
-      
-      // Process historical blocks first if needed
-      if (startBlock && startBlock < currentBlock) {
-        this.logger.log(`Processing historical blocks from ${startBlock} to ${currentBlock}`);
-        for (let block = startBlock; block <= currentBlock; block++) {
-          await this.processEvmBlock(chain, network, block, provider);
-        }
+      // Get initial block height if not provided
+      if (!startBlock) {
+        startBlock = await this.getCurrentBlockHeight(chain, network);
       }
 
-      // Only start listening for new blocks after historical processing is done
-      const listener = async (blockNumber: number) => {
+      this.logger.log(`Started monitoring ${chain} ${network} blocks from block ${startBlock}`);
+
+      // Create block listener
+      const blockListener = async (blockNumber: number) => {
+        if (!this.chainMonitoringStatus[chain]?.[network]) {
+          provider.removeListener('block', blockListener);
+          return;
+        }
+
         try {
-          const queueKey = `${chain}_${network}`;
-          
-          // Skip if monitoring stopped
-          if (!this.chainMonitoringStatus[chain][network]) {
-            provider.removeListener('block', listener);
-            this.evmBlockListeners.delete(providerKey);
-            this.processingLocks.set(queueKey, false);
-            this.logger.log(`Stopped EVM listener for ${chain} ${network}`);
-            return;
-          }
-
-          // Skip if already processing this block
-          if (this.blockQueues[queueKey].queue.includes(blockNumber)) {
-            return;
-          }
-
-          // Get lock before processing
-          if (!await this.getLock(chain, network)) {
-            this.logger.debug(`${chain} ${network} blocks already processing, skipping`);
-            return;
-          }
-
-          try {
-            // Process the block
-            this.blockQueues[queueKey].queue.push(blockNumber);
-            await this.processQueueForChain(chain, network, provider);
-          } finally {
-            this.releaseLock(chain, network);
-          }
-
+          await this.processEvmBlock(chain, network, blockNumber, provider);
+          await this.updateLastProcessedBlock(chain, network, blockNumber);
+          this.logger.debug(`Processed ${chain} ${network} block ${blockNumber}`);
         } catch (error) {
-          this.logger.error(`Error processing block ${blockNumber} for ${chain} ${network}: ${error.message}`);
-          this.releaseLock(chain, network);
+          this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, error);
         }
       };
 
-      this.chainMonitoringStatus[chain][network] = true;
-      provider.on('block', listener);
-      this.evmBlockListeners.set(providerKey, listener);
+      // Start listening for new blocks
+      provider.on('block', blockListener);
+      this.evmBlockListeners.set(providerKey, blockListener);
 
+      return true;
     } catch (error) {
-      this.logger.error(`Error in ${chain} ${network} monitor: ${error.message}`);
-      this.processingLocks.set(`${chain}_${network}`, false);
+      this.logger.error(`Failed to start ${chain} ${network} monitoring:`, error);
       this.chainMonitoringStatus[chain][network] = false;
+      return false;
     }
   }
 
@@ -582,46 +562,37 @@ export class DepositTrackingService implements OnModuleInit {
 
   private async processEvmBlock(chain: string, network: string, blockNumber: number, provider: providers.Provider) {
     try {
-        this.logger.debug(`Starting to process ${chain} ${network} block ${blockNumber}`);
-
+      // Get block with transactions
       const block = await provider.getBlock(blockNumber);
-        if (!block) {
-            this.logger.warn(`${chain} ${network}: Block ${blockNumber} not found`);
-            return;
-        }
+      if (!block) return;
 
-        this.logger.log(`${chain} ${network}: Processing block ${blockNumber} with ${block.transactions.length} transactions`);
+      // Get transaction details
+      const txPromises = block.transactions.map(txHash => 
+        this.getEvmTransactionWithRetry(provider, txHash)
+      );
+      
+      const transactions = await Promise.all(txPromises);
+      this.logger.log(`${chain} ${network}: Processing block ${blockNumber} with ${transactions.length} transactions`);
 
-        // Process transactions with retry logic
-      for (const txHash of block.transactions) {
-        try {
-                const tx = await this.getEvmTransactionWithRetry(provider, txHash);
-          if (tx) {
+      // Process each transaction
+      for (const tx of transactions) {
+        if (tx) {
+          try {
             await this.processEvmTransaction(chain, network, tx);
+          } catch (error) {
+            this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
+            // Continue processing other transactions
+            continue;
           }
-        } catch (error) {
-          this.logger.error(`Error processing transaction ${txHash}: ${error.message}`);
-                // Continue processing other transactions
-                continue;
-            }
         }
-
-        // Save progress
-        try {
-            await this.saveLastProcessedBlock(chain, network, blockNumber);
-            const savedBlock = await this.getLastProcessedBlock(chain, network);
-            this.logger.debug(`${chain} ${network}: Verified saved block ${savedBlock}`);
-            this.logger.log(`${chain} ${network}: Completed block ${blockNumber}`);
-      } catch (error) {
-            this.logger.error(`Error saving progress for ${chain} ${network} block ${blockNumber}: ${error.message}`);
-        throw error;
       }
+
+      // Update last processed block after successful processing
+      await this.updateLastProcessedBlock(chain, network, blockNumber);
+      
     } catch (error) {
-        this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
-        if (process.env.NODE_ENV === 'development') {
-      this.logger.error(error.stack);
-        }
-        throw error;
+      this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, error);
+      throw error;
     }
   }
 
@@ -818,32 +789,31 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async checkBitcoinBlocks(network: string, startBlock?: number) {
-    if (!await this.getLock('btc', network)) {
-      this.logger.debug(`Bitcoin ${network} blocks already processing, skipping`);
-      return;
-    }
+    if (!await this.getLock('btc', network)) return;
 
     try {
       const provider = this.providers.get(`btc_${network}`);
-      if (!provider) {
-        this.logger.warn(`No Bitcoin provider found for network ${network}`);
-        return;
-      }
+      if (!provider) return;
 
       const currentHeight = await this.getBitcoinBlockHeight(provider);
       const lastProcessedBlock = startBlock || await this.getLastProcessedBlock('btc', network);
 
-      // Process blocks sequentially
-      for (let height = lastProcessedBlock + 1; height <= currentHeight && !this.shouldStop; height++) {
-        this.logger.log(`Bitcoin ${network}: Processing block ${height}`);
-        const block = await this.getBitcoinBlock(provider, height);
-        if (block) {
-          await this.processBitcoinBlock('btc', network, block);
-          await this.saveLastProcessedBlock('btc', network, height);
+      for (let height = lastProcessedBlock + 1; height <= currentHeight; height++) {
+        if (!this.chainMonitoringStatus['btc'][network]) break;
+
+        try {
+          const block = await this.getBitcoinBlock(provider, height);
+          if (block) {
+            await this.processBitcoinBlock('btc', network, block);
+            // Update last processed block after each successful block
+            await this.updateLastProcessedBlock('btc', network, height);
+          }
+        } catch (error) {
+          this.logger.error(`Error processing Bitcoin block ${height}:`, error);
         }
       }
-    } catch (error) {
-      this.logger.error(`Error in Bitcoin block check: ${error.message}`);
+
+      return currentHeight;
     } finally {
       this.releaseLock('btc', network);
     }
@@ -1102,70 +1072,29 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async checkTronBlocks(network: string, tronWeb: TronWebInstance, initialBlock?: number) {
-    // Check if already processing
-    if (!await this.getLock('trx', network)) {
-        this.logger.debug(`TRON ${network} blocks already processing, skipping`);
-        return;
-    }
-
-    if (this.shouldStop) return;
+    if (!await this.getLock('trx', network)) return;
 
     try {
-        // Get current block from TRON
-        const latestBlock = await tronWeb.trx.getCurrentBlock();
-        const currentBlockNumber = latestBlock.block_header.raw_data.number;
-        
-        // Determine starting point
-        const lastProcessedBlock = initialBlock || await this.getLastProcessedBlock('trx', network);
-        
-        this.logger.log(`TRON ${network}: Processing blocks from ${lastProcessedBlock + 1} to ${currentBlockNumber}`);
+      const latestBlock = await tronWeb.trx.getCurrentBlock();
+      const currentBlockNumber = latestBlock.block_header.raw_data.number;
+      const lastProcessedBlock = initialBlock || await this.getLastProcessedBlock('trx', network);
 
-        // Process blocks in smaller batches to avoid rate limits
-        const batchSize = 5;
-        const fromBlock = lastProcessedBlock + 1;
-        const toBlock = Math.min(fromBlock + batchSize, currentBlockNumber);
+      for (let height = lastProcessedBlock + 1; height <= currentBlockNumber; height++) {
+        if (!this.chainMonitoringStatus['trx'][network]) break;
 
-        this.logger.log(`TRON ${network}: Processing batch from block ${fromBlock} to ${toBlock}`);
-
-        for (let height = fromBlock; height <= toBlock; height++) {
-          try {
-            this.logger.log(`TRON ${network}: Processing block ${height}`);
-          
-            // Add configurable delay between blocks
-            await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS.trx.blockDelay));
-
-            // Get block with retry logic
-            const block = await this.getTronBlockWithRetry(tronWeb, height, 3);
-            if (!block) {
-              this.logger.warn(`Skipping TRON ${network} block ${height}: Could not fetch block data`);
-              continue;
-            }
-
-            // Log transactions found
-            const txCount = block.transactions?.length || 0;
-            this.logger.log(`TRON ${network}: Block ${height} has ${txCount} transactions`);
-
+        try {
+          const block = await this.getTronBlockWithRetry(tronWeb, height, 3);
+          if (block) {
             await this.processTronBlock(network, block);
-            await this.updateTronConfirmations(network, height);
-            await this.saveLastProcessedBlock('trx', network, height);
-
-            this.logger.log(`TRON ${network}: Successfully processed block ${height}`);
-
-          } catch (error) {
-            if (error.response?.status === 403) {
-              this.logger.error(`TRON API rate limit reached at block ${height}, waiting longer...`);
-              await new Promise(resolve => setTimeout(resolve, 2000));
-              continue;
-            }
-            this.logger.error(`Error processing TRON block ${height}: ${error.message}`);
+            // Update last processed block after each successful block
+            await this.updateLastProcessedBlock('trx', network, height);
           }
+        } catch (error) {
+          this.logger.error(`Error processing TRON block ${height}:`, error);
         }
-
-        this.logger.log(`TRON ${network}: Completed processing batch of blocks`);
-    } catch (error) {
-        this.logger.error(`Error in TRON block check: ${error.message}`);
+      }
     } finally {
-        this.releaseLock('trx', network);
+      this.releaseLock('trx', network);
     }
   }
 
@@ -1399,73 +1328,33 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async checkXrpBlocks(network: string, startBlock?: number) {
-    if (!await this.getLock('xrp', network)) {
-        this.logger.debug(`XRP ${network} blocks already processing, skipping`);
-        return;
-    }
-
-    if (this.shouldStop) return;
+    if (!await this.getLock('xrp', network)) return;
 
     try {
-        const provider = this.providers.get(`xrp_${network}`) as Client;
-        if (!provider) {
-            this.logger.warn(`No XRP provider found for network ${network}`);
-            return;
-        }
+      const provider = this.providers.get(`xrp_${network}`) as Client;
+      if (!provider) return;
 
-        // Add connection check
+      await provider.connect();
+      const serverInfo = await provider.request({ command: 'server_info' });
+      const currentLedger = serverInfo.result.info.validated_ledger.seq;
+      let lastProcessedBlock = startBlock || await this.getLastProcessedBlock('xrp', network);
+
+      for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
+        if (!this.chainMonitoringStatus['xrp'][network]) break;
+
         try {
-            await provider.connect();
-        } catch (connError) {
-            this.logger.error(`Failed to connect to XRP ${network}: ${connError.message}`);
-            return;
+          await this.processXrpLedger('xrp', network, ledgerIndex);
+          // Update last processed block after each successful ledger
+          await this.updateLastProcessedBlock('xrp', network, ledgerIndex);
+        } catch (error) {
+          if (!error.message.includes('ledgerNotFound')) {
+            this.logger.error(`Error processing XRP ledger ${ledgerIndex}:`, error);
+            break;
+          }
         }
-
-        // Get current ledger using server_info command
-        const serverInfo = await provider.request({
-            command: 'server_info'
-        });
-        const currentLedger = serverInfo.result.info.validated_ledger.seq;
-        let lastProcessedBlock = startBlock || await this.getLastProcessedBlock('xrp', network);
-
-        // If this is the first time (lastProcessedBlock is 0), start from current ledger
-        if (lastProcessedBlock === 0) {
-            lastProcessedBlock = currentLedger - 1;  // Start from one block before current
-            await this.saveLastProcessedBlock('xrp', network, lastProcessedBlock);
-        }
-
-        // Only process if there are new blocks
-        if (lastProcessedBlock < currentLedger && !this.shouldStop) {
-            this.logger.log(`XRP ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
-
-            for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
-                try {
-                    await this.processXrpLedger('xrp', network, ledgerIndex);
-                    await this.saveLastProcessedBlock('xrp', network, ledgerIndex);
-                } catch (error) {
-                    if (error.message.includes('ledgerNotFound')) {
-                        // If ledger not found, skip to next one
-                        this.logger.warn(`XRP ${network}: Ledger ${ledgerIndex} not found, skipping`);
-                        continue;
-                    }
-                    throw error;
-                }
-            }
-        }
-    } catch (error) {
-        this.logger.error(`Error in XRP block check: ${error.message}`);
+      }
     } finally {
-        this.releaseLock('xrp', network);
-        
-        // Try to disconnect cleanly
-        try {
-            const provider = this.providers.get(`xrp_${network}`) as Client;
-            if (provider) {
-                await provider.disconnect();
-            }
-        } catch (e) {
-            this.logger.warn(`Error disconnecting from XRP ${network}: ${e.message}`);
-        }
+      this.releaseLock('xrp', network);
     }
   }
 
@@ -1611,8 +1500,16 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   // Public getter method
-  public getMonitoringStatus(): boolean {
-    return this.monitoringActive;
+  async getMonitoringStatus() {
+    this.logger.debug('Getting monitoring status...');
+    try {
+      return {
+        isMonitoring: this.monitoringActive
+      };
+    } catch (error) {
+      this.logger.error('Error getting monitoring status:', error);
+      throw error;
+    }
   }
 
   // Add methods for chain-specific monitoring
@@ -1623,24 +1520,42 @@ export class DepositTrackingService implements OnModuleInit {
     startBlock?: string
   ) {
     try {
-      // Initialize block number based on startPoint
+      this.logger.debug(`Starting chain monitoring for ${chain} ${network} with startPoint: ${startPoint}`);
+      
       let blockNumber: number | undefined;
 
       if (startPoint === 'start' && startBlock) {
         blockNumber = parseInt(startBlock);
+        this.logger.debug(`Using provided start block: ${blockNumber}`);
       } else if (startPoint === 'last') {
         const lastBlock = await this.systemSettingsRepository.findOne({
           where: { key: `last_processed_block_${chain}_${network}` }
         });
-        if (lastBlock) {
+        
+        if (lastBlock?.value) {
           blockNumber = parseInt(lastBlock.value);
+          // Add 1 to start from next block after last processed
+          blockNumber += 1;
+          this.logger.debug(`Using last processed block + 1: ${blockNumber}`);
+        } else {
+          this.logger.warn(`No last processed block found for ${chain} ${network}, using current block`);
+          blockNumber = await this.getCurrentBlockHeight(chain, network);
+          this.logger.debug(`Using current block: ${blockNumber}`);
         }
+      } else {
+        // For 'current' or undefined startPoint
+        blockNumber = await this.getCurrentBlockHeight(chain, network);
+        this.logger.debug(`Using current block: ${blockNumber}`);
       }
-      // If startPoint is 'current' or other cases fail, blockNumber remains undefined
-      // and the service will use the current block
 
-      this.chainMonitoringStatus[chain] = this.chainMonitoringStatus[chain] || {};
+      // Initialize chain status if not exists
+      if (!this.chainMonitoringStatus[chain]) {
+        this.chainMonitoringStatus[chain] = {};
+      }
       this.chainMonitoringStatus[chain][network] = true;
+
+      // Log the monitoring status after setting
+      this.logger.debug(`Chain monitoring status for ${chain} ${network}: ${this.chainMonitoringStatus[chain][network]}`);
 
       switch (chain) {
         case 'eth':
@@ -1660,121 +1575,376 @@ export class DepositTrackingService implements OnModuleInit {
           throw new Error(`Unsupported chain: ${chain}`);
       }
 
-      this.logger.log(`Started monitoring ${chain} ${network}`);
+      this.logger.log(`Started monitoring ${chain} ${network} from block ${blockNumber}`);
+      return true;
     } catch (error) {
       this.logger.error(`Error starting ${chain} ${network} monitoring:`, error);
+      // Reset monitoring status on error
+      if (this.chainMonitoringStatus[chain]) {
+        this.chainMonitoringStatus[chain][network] = false;
+      }
       throw error;
     }
   }
 
   async stopChainMonitoring(chain: string, network: string) {
+    this.logger.debug(`Stopping ${chain} ${network} monitoring`);
+    
     if (!this.chainMonitoringStatus[chain]) {
-      throw new Error(`Invalid chain: ${chain}`);
+      this.chainMonitoringStatus[chain] = {};
     }
-
     this.chainMonitoringStatus[chain][network] = false;
 
-    // Stop specific chain monitoring
-    this.clearChainIntervals(chain, network);
-    
-    // Clear EVM listeners if applicable
-    if (chain === 'eth' || chain === 'bsc') {
-      const providerKey = `${chain}_${network}`;
-      const listener = this.evmBlockListeners.get(providerKey);
-      const provider = this.providers.get(providerKey);
-      if (provider && listener) {
-        provider.removeListener('block', listener);
-        this.evmBlockListeners.delete(providerKey);
-      }
-    }
-
-    // Update main monitoring status
-    const anyChainActive = Object.values(this.chainMonitoringStatus)
-      .some(networks => Object.values(networks).some(status => status));
-    
-    if (!anyChainActive) {
-      // If no chains are active, perform full stop
-      this.shouldStop = true;
-      this.monitoringActive = false;
+    // Clear intervals and listeners based on chain type
+    switch (chain) {
+      case 'btc':
+        if (network === 'mainnet' && this.btcMainnetInterval) {
+          clearInterval(this.btcMainnetInterval);
+          this.btcMainnetInterval = null;
+        } else if (network === 'testnet' && this.btcTestnetInterval) {
+          clearInterval(this.btcTestnetInterval);
+          this.btcTestnetInterval = null;
+        }
+        break;
       
-      // Clear all queues
-      for (const key in this.blockQueues) {
-        this.blockQueues[key].queue = [];
-      }
+      case 'eth':
+      case 'bsc':
+        const providerKey = `${chain}_${network}`;
+        const provider = this.providers.get(providerKey) as providers.Provider;
+        const listener = this.evmBlockListeners.get(providerKey);
+        if (provider && listener) {
+          provider.removeListener('block', listener);
+          this.evmBlockListeners.delete(providerKey);
+        }
+        break;
 
-      // Reset all processing flags
-      this.isProcessingEthMainnet = false;
-      this.isProcessingEthTestnet = false;
-      this.isProcessingBscMainnet = false;
-      this.isProcessingBscTestnet = false;
-      this.isProcessingBtcMainnet = false;
-      this.isProcessingBtcTestnet = false;
-      this.isProcessingTronMainnet = false;
-      this.isProcessingTronTestnet = false;
-      this.isProcessingXrpMainnet = false;
-      this.isProcessingXrpTestnet = false;
+      case 'trx':
+        if (network === 'mainnet' && this.tronMainnetInterval) {
+          clearInterval(this.tronMainnetInterval);
+          this.tronMainnetInterval = null;
+        } else if (network === 'testnet' && this.tronTestnetInterval) {
+          clearInterval(this.tronTestnetInterval);
+          this.tronTestnetInterval = null;
+        }
+        break;
 
-      // Wait for any in-progress operations
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      case 'xrp':
+        if (network === 'mainnet' && this.xrpMainnetInterval) {
+          clearInterval(this.xrpMainnetInterval);
+          this.xrpMainnetInterval = null;
+        } else if (network === 'testnet' && this.xrpTestnetInterval) {
+          clearInterval(this.xrpTestnetInterval);
+          this.xrpTestnetInterval = null;
+        }
+        break;
     }
-    
+
     this.logger.log(`Stopped monitoring ${chain} ${network}`);
     return true;
   }
 
   // Update the chain monitoring methods to accept network parameter
   
-  private monitorBitcoinChain(network: string, startBlock?: number) {
+  private async monitorBitcoinChain(network: string, startBlock?: number) {
+    // First clear any existing interval
+    if (network === 'mainnet' && this.btcMainnetInterval) {
+      clearInterval(this.btcMainnetInterval);
+      this.btcMainnetInterval = null;
+    } else if (network === 'testnet' && this.btcTestnetInterval) {
+      clearInterval(this.btcTestnetInterval);
+      this.btcTestnetInterval = null;
+    }
+
     const provider = this.providers.get(`btc_${network}`);
     if (!provider) {
       this.logger.warn(`No Bitcoin provider found for network ${network}`);
-      return;
+      return false;
     }
 
-    this.logger.log(`Started monitoring Bitcoin ${network} blocks${startBlock ? ` from block ${startBlock}` : ''}`);
-    
-    const interval = setInterval(async () => {
-      await this.checkBitcoinBlocks(network, startBlock);
-    }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
+    try {
+      // Set monitoring status
+      if (!this.chainMonitoringStatus['btc']) {
+        this.chainMonitoringStatus['btc'] = {};
+      }
+      this.chainMonitoringStatus['btc'][network] = true;
 
-    if (network === 'mainnet') {
-      this.btcMainnetInterval = interval;
-    } else {
-      this.btcTestnetInterval = interval;
+      // Get initial block height if not provided
+      if (!startBlock) {
+        startBlock = await this.getCurrentBlockHeight('btc', network);
+      }
+
+      this.logger.log(`Started monitoring Bitcoin ${network} blocks from block ${startBlock}`);
+
+      // Start the monitoring interval
+      const interval = setInterval(async () => {
+        if (!this.chainMonitoringStatus['btc']?.[network]) {
+          clearInterval(interval);
+          return;
+        }
+
+        try {
+          const currentHeight = await this.getBitcoinBlockHeight(provider);
+          const lastProcessed = await this.getLastProcessedBlock('btc', network);
+
+          // Process new blocks
+          for (let height = lastProcessed + 1; height <= currentHeight; height++) {
+            if (!this.chainMonitoringStatus['btc']?.[network]) break;
+
+            const block = await this.getBitcoinBlock(provider, height);
+            if (block) {
+              await this.processBitcoinBlock('btc', network, block);
+              await this.updateLastProcessedBlock('btc', network, height);
+              this.logger.debug(`Processed Bitcoin ${network} block ${height}`);
+            }
+          }
+        } catch (error) {
+          this.logger.error(`Error in Bitcoin ${network} monitoring:`, error);
+        }
+      }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
+
+      if (network === 'mainnet') {
+        this.btcMainnetInterval = interval;
+      } else {
+        this.btcTestnetInterval = interval;
+      }
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to start Bitcoin ${network} monitoring:`, error);
+      this.chainMonitoringStatus['btc'][network] = false;
+      return false;
     }
   }
 
-  private monitorTronChain(network: string, startBlock?: number) {
+  private async monitorTronChain(network: string, startBlock?: number) {
+    // First clear any existing interval
+    if (network === 'mainnet' && this.tronMainnetInterval) {
+      clearInterval(this.tronMainnetInterval);
+      this.tronMainnetInterval = null;
+    } else if (network === 'testnet' && this.tronTestnetInterval) {
+      clearInterval(this.tronTestnetInterval);
+      this.tronTestnetInterval = null;
+    }
+
     const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
     if (!tronWeb) {
       this.logger.warn(`No TRON provider found for network ${network}`);
-      return;
+      return false;
     }
-    
-    this.logger.log(`Started monitoring TRON ${network} blocks${startBlock ? ` from block ${startBlock}` : ''}`);
-    
-    const interval = setInterval(async () => {
-      await this.checkTronBlocks(network, tronWeb, startBlock);
-    }, this.PROCESSING_DELAYS.trx.checkInterval);
 
-    if (network === 'mainnet') {
-      this.tronMainnetInterval = interval;
-    } else {
-      this.tronTestnetInterval = interval;
+    try {
+      // Set monitoring status
+      if (!this.chainMonitoringStatus['trx']) {
+        this.chainMonitoringStatus['trx'] = {};
+      }
+      this.chainMonitoringStatus['trx'][network] = true;
+
+      // Get initial block height if not provided
+      if (!startBlock) {
+        startBlock = await this.getCurrentBlockHeight('trx', network);
+      }
+
+      this.logger.log(`Started monitoring TRON ${network} blocks from block ${startBlock}`);
+
+      // Start the monitoring interval
+      const interval = setInterval(async () => {
+        if (!this.chainMonitoringStatus['trx']?.[network]) {
+          clearInterval(interval);
+          return;
+        }
+
+        try {
+          const latestBlock = await tronWeb.trx.getCurrentBlock();
+          const currentBlockNumber = latestBlock.block_header.raw_data.number;
+          const lastProcessed = await this.getLastProcessedBlock('trx', network);
+
+          // Process new blocks
+          for (let height = lastProcessed + 1; height <= currentBlockNumber; height++) {
+            if (!this.chainMonitoringStatus['trx']?.[network]) break;
+
+            const block = await this.getTronBlockWithRetry(tronWeb, height, 3);
+            if (block) {
+              await this.processTronBlock(network, block);
+              await this.updateLastProcessedBlock('trx', network, height);
+              this.logger.debug(`Processed TRON ${network} block ${height}`);
+            }
+          }
+        } catch (error) {
+          this.logger.error(`Error in TRON ${network} monitoring:`, error);
+        }
+      }, this.PROCESSING_DELAYS.trx.checkInterval);
+
+      if (network === 'mainnet') {
+        this.tronMainnetInterval = interval;
+      } else {
+        this.tronTestnetInterval = interval;
+      }
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to start TRON ${network} monitoring:`, error);
+      this.chainMonitoringStatus['trx'][network] = false;
+      return false;
     }
   }
 
-  private monitorXrpChain(network: string, startBlock?: number) {
-    this.logger.log(`Started monitoring XRP ${network} blocks${startBlock ? ` from block ${startBlock}` : ''}`);
-    
-    const interval = setInterval(() => {
-      this.checkXrpBlocks(network, startBlock);
-    }, this.PROCESSING_DELAYS.xrp.checkInterval);
+  private async monitorXrpChain(network: string, startBlock?: number) {
+    // First clear any existing interval
+    if (network === 'mainnet' && this.xrpMainnetInterval) {
+      clearInterval(this.xrpMainnetInterval);
+      this.xrpMainnetInterval = null;
+    } else if (network === 'testnet' && this.xrpTestnetInterval) {
+      clearInterval(this.xrpTestnetInterval);
+      this.xrpTestnetInterval = null;
+    }
 
-    if (network === 'mainnet') {
-      this.xrpMainnetInterval = interval;
-    } else {
-      this.xrpTestnetInterval = interval;
+    const provider = this.providers.get(`xrp_${network}`) as Client;
+    if (!provider) {
+      this.logger.warn(`No XRP provider found for network ${network}`);
+      return false;
+    }
+
+    try {
+      // Set monitoring status
+      if (!this.chainMonitoringStatus['xrp']) {
+        this.chainMonitoringStatus['xrp'] = {};
+      }
+      this.chainMonitoringStatus['xrp'][network] = true;
+
+      // Get initial block height if not provided
+      if (!startBlock) {
+        startBlock = await this.getCurrentBlockHeight('xrp', network);
+      }
+
+      this.logger.log(`Started monitoring XRP ${network} blocks from block ${startBlock}`);
+
+      // Start the monitoring interval
+      const interval = setInterval(async () => {
+        if (!this.chainMonitoringStatus['xrp']?.[network]) {
+          clearInterval(interval);
+          return;
+        }
+
+        try {
+          await provider.connect();
+          const serverInfo = await provider.request({ command: 'server_info' });
+          const currentLedger = serverInfo.result.info.validated_ledger.seq;
+          const lastProcessed = await this.getLastProcessedBlock('xrp', network);
+
+          // Process new blocks
+          for (let ledgerIndex = lastProcessed + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
+            if (!this.chainMonitoringStatus['xrp']?.[network]) break;
+
+            try {
+              await this.processXrpLedger('xrp', network, ledgerIndex);
+              await this.updateLastProcessedBlock('xrp', network, ledgerIndex);
+              this.logger.debug(`Processed XRP ${network} ledger ${ledgerIndex}`);
+            } catch (error) {
+              if (!error.message.includes('ledgerNotFound')) {
+                this.logger.error(`Error processing XRP ledger ${ledgerIndex}:`, error);
+                break;
+              }
+            }
+          }
+        } catch (error) {
+          this.logger.error(`Error in XRP ${network} monitoring:`, error);
+        }
+      }, this.PROCESSING_DELAYS.xrp.checkInterval);
+
+      if (network === 'mainnet') {
+        this.xrpMainnetInterval = interval;
+      } else {
+        this.xrpTestnetInterval = interval;
+      }
+
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to start XRP ${network} monitoring:`, error);
+      this.chainMonitoringStatus['xrp'][network] = false;
+      return false;
+    }
+  }
+
+  async getBlockInfo() {
+    try {
+      const currentBlocks: { [key: string]: number } = {};
+      const savedBlocks: { [key: string]: string } = {};
+      const lastProcessedBlocks: { [key: string]: string } = {};
+
+      // Get current blocks for each chain
+      const chains = ['eth', 'bsc', 'btc', 'trx', 'xrp'];
+      const networks = ['mainnet', 'testnet'];
+
+      for (const chain of chains) {
+        for (const network of networks) {
+          try {
+            // Get current block height
+            const currentBlock = await this.getCurrentBlockHeight(chain, network);
+            if (currentBlock > 0) { // Only set if we got a valid block number
+              currentBlocks[`${chain}_${network}`] = currentBlock;
+            }
+
+            // Get saved blocks from system settings
+            const savedBlock = await this.systemSettingsRepository.findOne({
+              where: { key: `start_block_${chain}_${network}` }
+            });
+            if (savedBlock?.value) {
+              savedBlocks[`${chain}_${network}`] = savedBlock.value;
+            }
+
+            // Get last processed blocks
+            const lastProcessed = await this.systemSettingsRepository.findOne({
+              where: { key: `last_processed_block_${chain}_${network}` }
+            });
+            if (lastProcessed?.value) {
+              lastProcessedBlocks[`${chain}_${network}`] = lastProcessed.value;
+            }
+
+            this.logger.debug(`Block info for ${chain}_${network}:`, {
+              currentBlock: currentBlocks[`${chain}_${network}`],
+              savedBlock: savedBlocks[`${chain}_${network}`],
+              lastProcessed: lastProcessedBlocks[`${chain}_${network}`]
+            });
+
+          } catch (error) {
+            this.logger.error(`Error getting block info for ${chain}_${network}:`, error);
+            // Don't set currentBlocks[key] = -1, just skip this chain/network
+          }
+        }
+      }
+
+      // Only return if we have at least some data
+      if (Object.keys(currentBlocks).length === 0) {
+        throw new Error('No block information available from any chain');
+      }
+
+      return {
+        currentBlocks,
+        savedBlocks,
+        lastProcessedBlocks
+      };
+    } catch (error) {
+      this.logger.error('Error in getBlockInfo:', error);
+      throw error;
+    }
+  }
+
+  private async updateLastProcessedBlock(chain: string, network: string, blockNumber: number) {
+    try {
+      const key = `last_processed_block_${chain}_${network}`;
+      await this.systemSettingsRepository.upsert(
+        {
+          key,
+          value: blockNumber.toString(),
+        },
+        ['key']
+      );
+      // Update local cache
+      this.lastProcessedBlocks[`${chain}_${network}`] = blockNumber.toString();
+      this.logger.debug(`Updated last processed block for ${chain} ${network} to ${blockNumber}`);
+    } catch (error) {
+      this.logger.error(`Failed to update last processed block for ${chain} ${network}:`, error);
+      throw error;
     }
   }
 }

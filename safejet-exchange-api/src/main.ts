@@ -6,9 +6,30 @@ import * as bodyParser from 'body-parser';
 import * as path from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { 
+    cors: {
+      origin: true,
+      methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'ngrok-skip-browser-warning'],
+      exposedHeaders: ['Content-Range', 'X-Content-Range'],
+      preflightContinue: false,
+      optionsSuccessStatus: 204
+    }
+  });
 
-  // Important: This must come before any other middleware
+  // CORS middleware should be first
+  app.enableCors({
+    origin: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'ngrok-skip-browser-warning'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+  });
+
+  // Then other middleware
   app.use(
     bodyParser.json({
       limit: '10mb',
@@ -31,20 +52,6 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-
-  app.enableCors({
-    origin: [
-      'http://localhost:3001',           // Admin dashboard local
-      'http://192.168.0.103:3001',      // Admin on local network
-      /\.ngrok-free\.app$/,             // Any ngrok domain
-      'http://localhost:3000',          // Flutter web if needed
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'ngrok-skip-browser-warning'],
-    exposedHeaders: ['Authorization'],
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
-  });
 
   // Serve static files from public directory
   const publicPath = path.join(process.cwd(), 'public');
@@ -72,6 +79,8 @@ async function bootstrap() {
   
   console.log(availableRoutes);
 
+  // Listen on all interfaces
   await app.listen(3000, '0.0.0.0');
+  console.log('Application is running on: http://localhost:3000');
 }
 bootstrap();

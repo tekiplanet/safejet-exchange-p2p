@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 
 interface BlockInfo {
   currentBlocks: {
@@ -25,10 +26,20 @@ export default function DepositMonitoring() {
   const [updateStatus, setUpdateStatus] = useState('');
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [chainStatus, setChainStatus] = useState<Record<string, Record<string, boolean>>>({});
+  const [chainStatus, setChainStatus] = useState<Record<string, Record<string, boolean>>>({
+    eth: { mainnet: false, testnet: false },
+    bsc: { mainnet: false, testnet: false },
+    btc: { mainnet: false, testnet: false },
+    trx: { mainnet: false, testnet: false },
+    xrp: { mainnet: false, testnet: false }
+  });
   const [chainLoading, setChainLoading] = useState<{[key: string]: boolean}>({});
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [startPoint, setStartPoint] = useState<'current' | 'start' | 'last'>('current');
+  const [chainStartPoints, setChainStartPoints] = useState<{[key: string]: 'current' | 'start' | 'last'}>({});
+  const router = useRouter();
+
+  const API_BASE = '/api';
 
   const handleToggleMonitoring = async () => {
     setLoading(true);
@@ -36,96 +47,169 @@ export default function DepositMonitoring() {
       const token = localStorage.getItem('adminToken');
       const endpoint = isMonitoring ? 'stop-monitoring' : 'start-monitoring';
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'ngrok-skip-browser-warning': 'true'
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to toggle monitoring');
-      }
+      const response = await fetchWithRetry(
+        `/admin/deposits/${endpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({
+            startPoint
+          })
+        }
+      );
 
       const data = await response.json();
-      setStatus(data.message);
-      setIsMonitoring(!isMonitoring);
+      
+      // Immediately update monitoring state
+      const newMonitoringState = !isMonitoring;
+      setIsMonitoring(newMonitoringState);
+      
+      // Update all chain statuses to match
+      const updatedChainStatus: Record<string, Record<string, boolean>> = {};
+      Object.keys(chainStatus).forEach(chain => {
+        updatedChainStatus[chain] = {};
+        Object.keys(chainStatus[chain]).forEach(network => {
+          updatedChainStatus[chain][network] = newMonitoringState;
+        });
+      });
+      setChainStatus(updatedChainStatus);
 
-      // Add these lines to refresh chain statuses
-      await checkChainStatus(); // Refresh individual chain statuses
-      await fetchBlockInfo(); // Refresh block info
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        setStatus('Error: ' + error.message);
-      } else {
-        setStatus('An unknown error occurred');
-      }
+      // Set status message
+      setStatus(data.message);
+
+      // Fetch updated data
+      await Promise.all([
+        fetchBlockInfo().catch(console.error),
+        checkMonitoringStatus().catch(console.error)
+      ]);
+
+    } catch (error) {
+      console.error('Error toggling monitoring:', error);
+      setStatus(error instanceof Error ? error.message : 'Failed to toggle monitoring');
+      // Revert states on error
+      setIsMonitoring(!isMonitoring);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Initial load
-    fetchBlockInfo();
-    checkMonitoringStatus();
-    checkChainStatus();
+    let mounted = true;
+    let retryTimeout: NodeJS.Timeout;
 
-    // Only set up interval if autoRefresh is true
-    let refreshInterval: NodeJS.Timeout | null = null;
-    if (autoRefresh) {
-      refreshInterval = setInterval(() => {
-        // Only refresh monitoring status and chain status
-        checkMonitoringStatus();
-        checkChainStatus();
-      }, 10000); // Every 10 seconds
-    }
-
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
+    const loadInitialData = async () => {
+      try {
+        await Promise.all([
+          fetchBlockInfo(),
+          checkMonitoringStatus(),
+          checkChainStatus()
+        ]);
+      } catch (error) {
+        console.error('Error loading initial data:', error);
+        if (mounted) {
+          retryTimeout = setTimeout(loadInitialData, 5000);
+        }
       }
     };
-  }, [autoRefresh]); // Depend on autoRefresh
+
+    loadInitialData();
+
+    return () => {
+      mounted = false;
+      if (retryTimeout) clearTimeout(retryTimeout);
+    };
+  }, []);
+
+  const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      router.push('/login');
+      throw new Error('No auth token found');
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true'
+    };
+
+    const fetchOptions = {
+      ...options,
+      headers: {
+        ...headers,
+        ...options.headers
+      }
+    };
+
+    let lastError: Error;
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(`${API_BASE}${url}`, fetchOptions);
+        if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('adminToken');
+            router.push('/login');
+            throw new Error('Session expired');
+          }
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response;
+      } catch (error) {
+        lastError = error as Error;
+        if (i === retries - 1) break;
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+      }
+    }
+    throw lastError || new Error('Failed to fetch');
+  };
 
   const fetchBlockInfo = async () => {
     setIsLoadingBlocks(true);
     try {
-      const token = localStorage.getItem('adminToken');
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/chain-blocks`;
-      console.log('Fetching from:', url);
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-      });
-
+      const response = await fetchWithRetry(
+        `/admin/deposits/chain-blocks`,
+        {
+          method: 'GET',
+        }
+      );
+      
       // Log the raw response for debugging
       const text = await response.text();
-      console.log('Raw response:', text);
-
+      console.log('Raw chain-blocks response:', text);
+      
+      let data;
       try {
-        // Try to parse the text as JSON
-        const data = JSON.parse(text);
-        setBlockInfo(data);
-      } catch (parseError) {
-        console.error('Failed to parse response as JSON:', {
-          text,
-          error: parseError
-        });
-        throw new TypeError('Response was not valid JSON');
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse chain-blocks response:', e);
+        setStatus('Error: Invalid response from server');
+        return null;
       }
-    } catch (error: unknown) {
-      console.error('Error fetching block info:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      setUpdateStatus('Failed to fetch block information');
+
+      if (!data) {
+        setStatus('Error: No data received from server');
+        return null;
+      }
+
+      // Initialize empty objects if they don't exist
+      const formattedData = {
+        currentBlocks: data.currentBlocks || {},
+        savedBlocks: data.savedBlocks || {},
+        lastProcessedBlocks: data.lastProcessedBlocks || {}
+      };
+
+      setBlockInfo(formattedData);
+      setStatus(''); // Clear any error status
+      return formattedData;
+    } catch (error) {
+      console.error('Error fetching block info:', error);
+      setStatus('Error fetching block information. Please try again.');
+      return null;
     } finally {
       setIsLoadingBlocks(false);
     }
@@ -133,45 +217,46 @@ export default function DepositMonitoring() {
 
   const checkMonitoringStatus = async () => {
     try {
-      const token = localStorage.getItem('adminToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/monitoring-status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'ngrok-skip-browser-warning': 'true'
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get monitoring status');
-      }
+      const response = await fetchWithRetry(
+        `/admin/deposits/monitoring-status`,
+        {
+          method: 'GET',
+        }
+      );
 
       const data = await response.json();
-      setIsMonitoring(data.isMonitoring);
+      if (data?.isMonitoring !== undefined) {
+        setIsMonitoring(data.isMonitoring);
+        return data.isMonitoring;
+      }
+      return false;
     } catch (error) {
       console.error('Error checking monitoring status:', error);
-      // Optionally show error in UI
-      setStatus('Error checking monitoring status');
+      return false;
     }
   };
 
   const checkChainStatus = async () => {
     try {
-      const token = localStorage.getItem('adminToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/chain-status`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'ngrok-skip-browser-warning': 'true'
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get chain status');
-      }
+      const response = await fetchWithRetry(
+        `/admin/deposits/chain-status`,
+        {
+          method: 'GET',
+        }
+      );
 
       const data = await response.json();
-      setChainStatus(data.status);
+      if (data?.status) {
+        setChainStatus(prev => ({
+          ...prev,
+          ...data.status
+        }));
+        return data.status;
+      }
+      return null;
     } catch (error) {
       console.error('Error checking chain status:', error);
+      return null;
     }
   };
 
@@ -181,7 +266,7 @@ export default function DepositMonitoring() {
     setIsSaving(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/set-start-block`, {
+      const response = await fetch(`${API_BASE}/admin/deposits/set-start-block`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -216,61 +301,96 @@ export default function DepositMonitoring() {
     
     try {
       const token = localStorage.getItem('adminToken');
-      const isMonitoring = chainStatus[chain]?.[network];
+      const isMonitoring = chainStatus[chain]?.[network] || false;
       const endpoint = isMonitoring ? 'stop-chain-monitoring' : 'start-chain-monitoring';
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ 
-          chain, 
-          network,
-          startPoint,
-          startBlock: startPoint === 'start' ? blockInfo?.savedBlocks?.[key] : 
-                     startPoint === 'last' ? blockInfo?.lastProcessedBlocks?.[key] : 
-                     undefined
-        }),
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to toggle chain monitoring');
-      }
+      // Temporarily disable auto-refresh
+      setAutoRefresh(false);
+
+      const response = await fetchWithRetry(
+        `/admin/deposits/${endpoint}`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            chain, 
+            network,
+            startPoint: chainStartPoints[key] || 'current',
+            startBlock: chainStartPoints[key] === 'start' ? blockInfo?.savedBlocks?.[key] : 
+                       chainStartPoints[key] === 'last' ? blockInfo?.lastProcessedBlocks?.[key] : 
+                       undefined
+          }),
+        }
+      );
 
       const data = await response.json();
-      setStatus(data.message);
-
-      // Add delay before checking status to allow backend to update
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Refresh statuses
-      await Promise.all([
-        checkChainStatus(),
-        checkMonitoringStatus(),
-        fetchBlockInfo()
+      // Update chain status safely
+      setChainStatus(prev => ({
+        ...prev,
+        [chain]: {
+          ...(prev[chain] || {}),
+          [network]: !isMonitoring
+        }
+      }));
+
+      // Wait a moment for backend to update
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Do a single refresh of data
+      const [newBlockInfo, newChainStatus] = await Promise.all([
+        fetchBlockInfo(),
+        checkChainStatus()
       ]);
+
+      if (newBlockInfo) setBlockInfo(newBlockInfo);
+      if (newChainStatus) setChainStatus(prev => ({ ...prev, ...newChainStatus }));
+
     } catch (error) {
+      console.error('Error toggling chain monitoring:', error);
       setStatus(error instanceof Error ? error.message : 'Failed to toggle chain monitoring');
+      
+      // Revert chain status safely
+      setChainStatus(prev => ({
+        ...prev,
+        [chain]: {
+          ...(prev[chain] || {}),
+          [network]: chainStatus[chain]?.[network] || false
+        }
+      }));
     } finally {
       setChainLoading(prev => ({ ...prev, [key]: false }));
+      // Re-enable auto-refresh
+      setAutoRefresh(true);
     }
   };
 
   // Add a manual refresh function
-  const handleManualRefresh = async () => {
-    setIsLoadingBlocks(true);
+  const handleRefresh = async () => {
     try {
+      setIsLoadingBlocks(true);
       await Promise.all([
         fetchBlockInfo(),
         checkMonitoringStatus(),
         checkChainStatus()
       ]);
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      setStatus('Failed to refresh data');
     } finally {
       setIsLoadingBlocks(false);
     }
+  };
+
+  const handleChainStartPointChange = (chain: string, network: string, value: 'current' | 'start' | 'last') => {
+    const key = `${chain}_${network}`;
+    setChainStartPoints(prev => ({
+      ...prev,
+      [key]: value
+    }));
   };
 
   return (
@@ -291,32 +411,38 @@ export default function DepositMonitoring() {
               </p>
             </div>
           </div>
-          <button
-            onClick={handleToggleMonitoring}
-            disabled={loading}
-            className={`
-              px-6 py-2 rounded-md text-white font-medium
-              transition-colors duration-150 ease-in-out
-              focus:outline-none focus:ring-2 focus:ring-offset-2
-              ${loading ? 'cursor-not-allowed opacity-60' : ''}
-              ${isMonitoring 
-                ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500' 
-                : 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
-              }
-            `}
-          >
-            {loading ? (
-              <div className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing...
-              </div>
-            ) : (
-              isMonitoring ? "Stop Monitoring" : "Start Monitoring"
-            )}
-          </button>
+          <div className="flex items-center space-x-4">
+            <select
+              value={startPoint}
+              onChange={(e) => setStartPoint(e.target.value as 'current' | 'last')}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={isMonitoring}
+            >
+              <option value="current" className="text-gray-900">Start from Current Block</option>
+              <option value="last" className="text-gray-900">Start from Last Processed</option>
+            </select>
+            <button
+              onClick={handleToggleMonitoring}
+              disabled={loading}
+              className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                isMonitoring
+                  ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                  : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+              } disabled:opacity-50`}
+            >
+              {loading ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : (
+                isMonitoring ? 'Stop Monitoring' : 'Start Monitoring'
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Status Messages */}
@@ -349,20 +475,11 @@ export default function DepositMonitoring() {
       {/* Block Configuration Section */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center">
             <h3 className="text-lg font-medium text-gray-900">Block Configuration</h3>
-            <select
-              value={startPoint}
-              onChange={(e) => setStartPoint(e.target.value as 'current' | 'start' | 'last')}
-              className="ml-4 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="current" className="text-gray-900">Start from Current Block</option>
-              <option value="start" className="text-gray-900">Start from Set Block</option>
-              <option value="last" className="text-gray-900">Start from Last Processed</option>
-            </select>
           </div>
           <button
-            onClick={handleManualRefresh}
+            onClick={handleRefresh}
             disabled={isLoadingBlocks}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
@@ -385,7 +502,11 @@ export default function DepositMonitoring() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
               <span className="ml-2 text-gray-600">Loading block information...</span>
             </div>
-          ) : blockInfo ? (
+          ) : blockInfo === null ? (
+            <div className="text-center py-4 text-red-600">
+              Failed to load block information. Please try refreshing the page.
+            </div>
+          ) : (
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -434,32 +555,44 @@ export default function DepositMonitoring() {
                           {blockInfo.lastProcessedBlocks?.[key] || 'Not processed'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <button
-                            onClick={() => handleToggleChainMonitoring(chain, network)}
-                            disabled={isChainLoading}
-                            className={`
-                              px-4 py-2 rounded-md text-white font-medium
-                              transition-colors duration-150 ease-in-out
-                              focus:outline-none focus:ring-2 focus:ring-offset-2
-                              ${isChainLoading ? 'cursor-not-allowed opacity-60' : ''}
-                              ${isChainMonitoring 
-                                ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500' 
-                                : 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
-                              }
-                            `}
-                          >
-                            {isChainLoading ? (
-                              <div className="flex items-center">
-                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Processing...
-                              </div>
-                            ) : (
-                              isChainMonitoring ? "Stop" : "Start"
-                            )}
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            <select
+                              value={chainStartPoints[`${chain}_${network}`] || 'current'}
+                              onChange={(e) => handleChainStartPointChange(chain, network, e.target.value as 'current' | 'start' | 'last')}
+                              className="px-2 py-1 border border-gray-300 rounded-md text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              disabled={isChainMonitoring}
+                            >
+                              <option value="current">Current Block</option>
+                              <option value="start">Set Block</option>
+                              <option value="last">Last Processed</option>
+                            </select>
+                            <button
+                              onClick={() => handleToggleChainMonitoring(chain, network)}
+                              disabled={isChainLoading}
+                              className={`
+                                px-4 py-2 rounded-md text-white font-medium
+                                transition-colors duration-150 ease-in-out
+                                focus:outline-none focus:ring-2 focus:ring-offset-2
+                                ${isChainLoading ? 'cursor-not-allowed opacity-60' : ''}
+                                ${isChainMonitoring 
+                                  ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500' 
+                                  : 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
+                                }
+                              `}
+                            >
+                              {isChainLoading ? (
+                                <div className="flex items-center">
+                                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Processing...
+                                </div>
+                              ) : (
+                                isChainMonitoring ? "Stop" : "Start"
+                              )}
+                            </button>
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {isEditing ? (
@@ -507,10 +640,6 @@ export default function DepositMonitoring() {
                   })}
               </tbody>
             </table>
-          ) : (
-            <div className="text-center py-4 text-gray-500">
-              No block information available
-            </div>
           )}
         </div>
 

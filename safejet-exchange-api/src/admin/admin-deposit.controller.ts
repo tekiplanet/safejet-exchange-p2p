@@ -4,10 +4,13 @@ import { DepositTrackingService } from '../wallet/services/deposit-tracking.serv
 import { InjectRepository } from '@nestjs/typeorm';
 import { SystemSettings } from '../wallet/entities/system-settings.entity';
 import { Repository } from 'typeorm';
+import { Logger } from '@nestjs/common';
 
 @Controller('admin/deposits')
 @UseGuards(AdminGuard)
 export class AdminDepositController {
+  private readonly logger = new Logger(AdminDepositController.name);
+
   constructor(
     private readonly depositTrackingService: DepositTrackingService,
     @InjectRepository(SystemSettings)
@@ -18,56 +21,22 @@ export class AdminDepositController {
   @Header('Content-Type', 'application/json')
   async getChainBlocks() {
     try {
-      console.log('Fetching chain blocks...');
-      const blocks = {
-        eth_mainnet: await this.depositTrackingService.getCurrentBlockHeight('eth', 'mainnet'),
-        eth_testnet: await this.depositTrackingService.getCurrentBlockHeight('eth', 'testnet'),
-        bsc_mainnet: await this.depositTrackingService.getCurrentBlockHeight('bsc', 'mainnet'),
-        bsc_testnet: await this.depositTrackingService.getCurrentBlockHeight('bsc', 'testnet'),
-        btc_mainnet: await this.depositTrackingService.getCurrentBlockHeight('btc', 'mainnet'),
-        btc_testnet: await this.depositTrackingService.getCurrentBlockHeight('btc', 'testnet'),
-        trx_mainnet: await this.depositTrackingService.getCurrentBlockHeight('trx', 'mainnet'),
-        trx_testnet: await this.depositTrackingService.getCurrentBlockHeight('trx', 'testnet'),
-        xrp_mainnet: await this.depositTrackingService.getCurrentBlockHeight('xrp', 'mainnet'),
-        xrp_testnet: await this.depositTrackingService.getCurrentBlockHeight('xrp', 'testnet'),
+      const blockInfo = await this.depositTrackingService.getBlockInfo();
+      this.logger.debug('Block info received:', blockInfo);
+      
+      if (!blockInfo) {
+        throw new HttpException('No block info available', HttpStatus.NOT_FOUND);
+      }
+
+      return {
+        currentBlocks: blockInfo.currentBlocks || {},
+        savedBlocks: blockInfo.savedBlocks || {},
+        lastProcessedBlocks: blockInfo.lastProcessedBlocks || {}
       };
-
-      // Get start blocks from system settings
-      const startBlocks = await Promise.all(
-        Object.keys(blocks).map(async (chain) => {
-          const setting = await this.systemSettingsRepository.findOne({
-            where: { key: `start_block_${chain}` }
-          });
-          return { chain, value: setting?.value };
-        })
-      );
-
-      // Get last processed blocks
-      const lastProcessedBlocks = await Promise.all(
-        Object.keys(blocks).map(async (chain) => {
-          const setting = await this.systemSettingsRepository.findOne({
-            where: { key: `last_processed_block_${chain}` }
-          });
-          return { chain, value: setting?.value };
-        })
-      );
-
-      const response = {
-        currentBlocks: blocks,
-        savedBlocks: Object.fromEntries(
-          startBlocks.map(({ chain, value }) => [chain, value])
-        ),
-        lastProcessedBlocks: Object.fromEntries(
-          lastProcessedBlocks.map(({ chain, value }) => [chain, value])
-        )
-      };
-
-      return response;
-    } catch (error: unknown) {
-      console.error('Error in getChainBlocks:', error);
-      const message = error instanceof Error ? error.message : 'Unknown error occurred';
+    } catch (error) {
+      this.logger.error('Error getting chain blocks:', error);
       throw new HttpException(
-        `Error fetching chain blocks: ${message}`,
+        error.message || 'Failed to get chain blocks', 
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
@@ -146,13 +115,12 @@ export class AdminDepositController {
   @Get('monitoring-status')
   async getMonitoringStatus() {
     try {
-      const isMonitoring = this.depositTrackingService.getMonitoringStatus();
-      return { isMonitoring };
+      const status = await this.depositTrackingService.getMonitoringStatus();
+      this.logger.debug('Monitoring status response:', status);
+      return status;
     } catch (error) {
-      throw new HttpException(
-        `Failed to get monitoring status: ${error.message}`,
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.logger.error('Error getting monitoring status:', error);
+      throw error;
     }
   }
 
@@ -166,14 +134,28 @@ export class AdminDepositController {
     }
   ) {
     try {
-      await this.depositTrackingService.startChainMonitoring(
+      this.logger.debug('Starting chain monitoring with params:', dto);
+      
+      const success = await this.depositTrackingService.startChainMonitoring(
         dto.chain, 
         dto.network, 
         dto.startPoint,
         dto.startBlock
       );
-      return { message: `Started monitoring ${dto.chain} ${dto.network}` };
+
+      if (!success) {
+        throw new Error('Failed to start monitoring');
+      }
+
+      const status = await this.depositTrackingService.getChainStatus();
+      this.logger.debug(`Chain status after start:`, status);
+
+      return { 
+        message: `Started monitoring ${dto.chain} ${dto.network}`,
+        status: status[dto.chain]?.[dto.network]
+      };
     } catch (error) {
+      this.logger.error(`Failed to start chain monitoring:`, error);
       throw new HttpException(
         `Failed to start chain monitoring: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR
