@@ -198,8 +198,10 @@ export default function DepositMonitoring() {
       // Only show error if we have no data at all
       if (Object.keys(formattedData.currentBlocks).length === 0) {
         setStatus('Warning: No block information available');
+      } else if (Object.keys(formattedData.currentBlocks).length < Object.keys(chainStatus).length) {
+        setStatus('Warning: Some chains failed to load');
       } else {
-        setStatus(''); // Clear error status if we have some data
+        setStatus(''); // Clear error status if we have all data
       }
 
       setBlockInfo(formattedData);

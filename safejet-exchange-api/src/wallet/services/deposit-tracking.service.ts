@@ -1878,24 +1878,31 @@ export class DepositTrackingService implements OnModuleInit {
       for (const chain of chains) {
         for (const network of networks) {
           try {
-            // Get current block height
-            const currentBlock = await this.getCurrentBlockHeight(chain, network);
-            if (currentBlock > 0) { // Only set if we got a valid block number
+            // Get current block height with timeout
+            const currentBlock = await Promise.race<number>([
+              this.getCurrentBlockHeight(chain, network),
+              new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), 10000)
+              )
+            ]);
+
+            if (typeof currentBlock === 'number' && currentBlock > 0) {
               currentBlocks[`${chain}_${network}`] = currentBlock;
             }
 
-            // Get saved blocks from system settings
-            const savedBlock = await this.systemSettingsRepository.findOne({
-              where: { key: `start_block_${chain}_${network}` }
-            });
+            // Get saved and last processed blocks
+            const [savedBlock, lastProcessed] = await Promise.all([
+              this.systemSettingsRepository.findOne({
+                where: { key: `start_block_${chain}_${network}` }
+              }),
+              this.systemSettingsRepository.findOne({
+                where: { key: `last_processed_block_${chain}_${network}` }
+              })
+            ]);
+
             if (savedBlock?.value) {
               savedBlocks[`${chain}_${network}`] = savedBlock.value;
             }
-
-            // Get last processed blocks
-            const lastProcessed = await this.systemSettingsRepository.findOne({
-              where: { key: `last_processed_block_${chain}_${network}` }
-            });
             if (lastProcessed?.value) {
               lastProcessedBlocks[`${chain}_${network}`] = lastProcessed.value;
             }
@@ -1908,7 +1915,7 @@ export class DepositTrackingService implements OnModuleInit {
 
           } catch (error) {
             this.logger.error(`Error getting block info for ${chain}_${network}:`, error);
-            // Skip this chain/network pair on error
+            // Skip this chain but continue with others
             continue;
           }
         }
