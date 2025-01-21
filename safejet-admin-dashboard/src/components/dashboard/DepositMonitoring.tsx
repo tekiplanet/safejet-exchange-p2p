@@ -21,6 +21,9 @@ export default function DepositMonitoring() {
   } | null>(null);
   const [updateStatus, setUpdateStatus] = useState('');
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [chainStatus, setChainStatus] = useState<Record<string, Record<string, boolean>>>({});
+  const [chainLoading, setChainLoading] = useState<{[key: string]: boolean}>({});
 
   const handleToggleMonitoring = async () => {
     setLoading(true);
@@ -56,6 +59,8 @@ export default function DepositMonitoring() {
 
   useEffect(() => {
     fetchBlockInfo();
+    checkMonitoringStatus();
+    checkChainStatus();
   }, []);
 
   const fetchBlockInfo = async () => {
@@ -100,9 +105,54 @@ export default function DepositMonitoring() {
     }
   };
 
+  const checkMonitoringStatus = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/monitoring-status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true'
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get monitoring status');
+      }
+
+      const data = await response.json();
+      setIsMonitoring(data.isMonitoring);
+    } catch (error) {
+      console.error('Error checking monitoring status:', error);
+      // Optionally show error in UI
+      setStatus('Error checking monitoring status');
+    }
+  };
+
+  const checkChainStatus = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/chain-status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'ngrok-skip-browser-warning': 'true'
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get chain status');
+      }
+
+      const data = await response.json();
+      setChainStatus(data.status);
+    } catch (error) {
+      console.error('Error checking chain status:', error);
+    }
+  };
+
   const handleUpdateStartBlock = async () => {
     if (!editingBlock) return;
-
+    
+    setIsSaving(true);
     try {
       const token = localStorage.getItem('adminToken');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/set-start-block`, {
@@ -110,6 +160,7 @@ export default function DepositMonitoring() {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify({
           chain: editingBlock.chain,
@@ -124,10 +175,46 @@ export default function DepositMonitoring() {
 
       const data = await response.json();
       setUpdateStatus(data.message);
-      fetchBlockInfo(); // Refresh block info
+      await fetchBlockInfo(); // Wait for block info to update
       setEditingBlock(null);
     } catch (error: unknown) {
       setUpdateStatus(error instanceof Error ? error.message : 'Failed to update start block');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleChainMonitoring = async (chain: string, network: string) => {
+    const key = `${chain}_${network}`;
+    setChainLoading(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      const isMonitoring = chainStatus[chain]?.[network];
+      const endpoint = isMonitoring ? 'stop-chain-monitoring' : 'start-chain-monitoring';
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deposits/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ chain, network }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle chain monitoring');
+      }
+
+      const data = await response.json();
+      setStatus(data.message);
+      await checkChainStatus(); // Refresh chain status
+      await checkMonitoringStatus(); // Refresh overall status
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to toggle chain monitoring');
+    } finally {
+      setChainLoading(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -221,67 +308,114 @@ export default function DepositMonitoring() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Network</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Block</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Block</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monitoring</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {Object.entries(blockInfo.currentBlocks).map(([key, currentBlock]) => {
-                  const [chain, network] = key.split('_');
-                  const isEditing = editingBlock?.chain === chain && editingBlock?.network === network;
-                  const savedBlock = blockInfo.savedBlocks[key];
+                {blockInfo && blockInfo.currentBlocks && Object.entries(blockInfo.currentBlocks)
+                  .filter(([_, currentBlock]) => currentBlock !== null && currentBlock !== undefined)
+                  .map(([key, currentBlock]) => {
+                    const [chain, network] = key.split('_');
+                    const isEditing = editingBlock?.chain === chain && editingBlock?.network === network;
+                    const savedBlock = blockInfo.savedBlocks?.[key];
+                    const isChainMonitoring = chainStatus[chain]?.[network];
+                    const isChainLoading = chainLoading[`${chain}_${network}`];
 
-                  return (
-                    <tr key={key}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{chain.toUpperCase()}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{network}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{currentBlock}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            className="border rounded px-2 py-1 w-32"
-                            value={editingBlock.value}
-                            onChange={(e) => setEditingBlock({
-                              ...editingBlock,
-                              value: e.target.value
-                            })}
-                          />
-                        ) : (
-                          savedBlock || 'Not set'
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {isEditing ? (
-                          <div className="space-x-2">
-                            <button
-                              onClick={handleUpdateStartBlock}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setEditingBlock(null)}
-                              className="text-gray-600 hover:text-gray-900"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
+                    return (
+                      <tr key={key}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{chain.toUpperCase()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{network}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {currentBlock > 0 ? currentBlock : 'Connection Error'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              className="border rounded px-2 py-1 w-32"
+                              value={editingBlock.value}
+                              onChange={(e) => setEditingBlock({
+                                ...editingBlock,
+                                value: e.target.value
+                              })}
+                            />
+                          ) : (
+                            savedBlock || 'Not set'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <button
-                            onClick={() => setEditingBlock({
-                              chain,
-                              network,
-                              value: savedBlock || currentBlock.toString()
-                            })}
-                            className="text-blue-600 hover:text-blue-900"
+                            onClick={() => handleToggleChainMonitoring(chain, network)}
+                            disabled={isChainLoading}
+                            className={`
+                              px-4 py-2 rounded-md text-white font-medium
+                              transition-colors duration-150 ease-in-out
+                              focus:outline-none focus:ring-2 focus:ring-offset-2
+                              ${isChainLoading ? 'cursor-not-allowed opacity-60' : ''}
+                              ${isChainMonitoring 
+                                ? 'bg-red-500 hover:bg-red-600 focus:ring-red-500' 
+                                : 'bg-green-500 hover:bg-green-600 focus:ring-green-500'
+                              }
+                            `}
                           >
-                            Edit
+                            {isChainLoading ? (
+                              <div className="flex items-center">
+                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Processing...
+                              </div>
+                            ) : (
+                              isChainMonitoring ? "Stop" : "Start"
+                            )}
                           </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {isEditing ? (
+                            <div className="space-x-2">
+                              <button
+                                onClick={handleUpdateStartBlock}
+                                disabled={isSaving}
+                                className={`text-green-600 hover:text-green-900 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                {isSaving ? (
+                                  <span className="flex items-center">
+                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Saving...
+                                  </span>
+                                ) : (
+                                  'Save'
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setEditingBlock(null)}
+                                disabled={isSaving}
+                                className={`text-gray-600 hover:text-gray-900 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setEditingBlock({
+                                chain,
+                                network,
+                                value: savedBlock || currentBlock.toString()
+                              })}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           ) : (

@@ -134,4 +134,60 @@ export class AdminDepositController {
       );
     }
   }
+
+  @Get('monitoring-status')
+  async getMonitoringStatus() {
+    try {
+      const isMonitoring = this.depositTrackingService.getMonitoringStatus();
+      return { isMonitoring };
+    } catch (error) {
+      throw new HttpException(
+        `Failed to get monitoring status: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('start-chain-monitoring')
+  async startChainMonitoring(
+    @Body() dto: { chain: string; network: string }
+  ) {
+    try {
+      await this.depositTrackingService.startChainMonitoring(dto.chain, dto.network);
+      return { message: `Started monitoring ${dto.chain} ${dto.network}` };
+    } catch (error) {
+      throw new HttpException(
+        `Failed to start chain monitoring: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('stop-chain-monitoring')
+  async stopChainMonitoring(
+    @Body() dto: { chain: string; network: string }
+  ) {
+    try {
+      await this.depositTrackingService.stopChainMonitoring(dto.chain, dto.network);
+      return { message: `Stopped monitoring ${dto.chain} ${dto.network}` };
+    } catch (error) {
+      throw new HttpException(
+        `Failed to stop chain monitoring: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('chain-status')
+  async getChainStatus() {
+    try {
+      const status = this.depositTrackingService.getChainStatus();
+      return { status };
+    } catch (error) {
+      throw new HttpException(
+        `Failed to get chain status: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 } 

@@ -117,7 +117,7 @@ export class DepositTrackingService implements OnModuleInit {
 
   private processingLocks = new Map<string, boolean>();
 
-  private isMonitoring = false;
+  private monitoringActive = false;
   private monitoringInterval: NodeJS.Timeout | null = null;
   private shouldStop = false;
 
@@ -146,6 +146,15 @@ export class DepositTrackingService implements OnModuleInit {
   private isProcessingXrpTestnet = false;
 
   private evmBlockListeners = new Map<string, any>();
+
+  // Add chain monitoring status tracking
+  private chainMonitoringStatus = {
+    eth: { mainnet: false, testnet: false },
+    bsc: { mainnet: false, testnet: false },
+    btc: { mainnet: false, testnet: false },
+    trx: { mainnet: false, testnet: false },
+    xrp: { mainnet: false, testnet: false }
+  };
 
   constructor(
     @InjectRepository(Deposit)
@@ -300,97 +309,97 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   async startMonitoring() {
-    if (this.isMonitoring) {
+    if (this.monitoringActive) {
       throw new Error('Monitoring is already running');
     }
 
     this.shouldStop = false;
-    this.isMonitoring = true;
-    this.logger.log('Starting deposit monitoring...');
+    this.monitoringActive = true;
 
-    // Start monitoring for each chain
-    this.monitorEvmChains();
-    this.monitorBitcoinChains();
-    this.monitorTronChains();
-    this.monitorXrpChains();
-
-    this.logger.log('Deposit monitoring started successfully');
-
-    this.monitoringInterval = setInterval(() => {
-      this.checkForNewDeposits();
-    }, 30000); // Check every 30 seconds
+    // Start all chains
+    for (const chain of Object.keys(this.chainMonitoringStatus)) {
+      for (const network of Object.keys(this.chainMonitoringStatus[chain])) {
+        this.chainMonitoringStatus[chain][network] = true;
+        await this.startChainMonitoring(chain, network);
+      }
+    }
 
     return true;
   }
 
   async stopMonitoring() {
-    if (!this.isMonitoring) {
+    if (!this.monitoringActive) {
       throw new Error('Monitoring is not running');
     }
 
     this.shouldStop = true;
-    this.isMonitoring = false;
+    this.monitoringActive = false;
 
-    // Remove EVM event listeners
-    for (const [providerKey, listener] of this.evmBlockListeners.entries()) {
-      const provider = this.providers.get(providerKey);
-      if (provider) {
-        provider.removeListener('block', listener);
+    // Stop all chains
+    for (const chain of Object.keys(this.chainMonitoringStatus)) {
+      for (const network of Object.keys(this.chainMonitoringStatus[chain])) {
+        this.chainMonitoringStatus[chain][network] = false;
+        await this.stopChainMonitoring(chain, network);
       }
     }
-    this.evmBlockListeners.clear();
 
-    // Clear all intervals
-    if (this.ethMainnetInterval) clearInterval(this.ethMainnetInterval);
-    if (this.ethTestnetInterval) clearInterval(this.ethTestnetInterval);
-    if (this.bscMainnetInterval) clearInterval(this.bscMainnetInterval);
-    if (this.bscTestnetInterval) clearInterval(this.bscTestnetInterval);
-    if (this.btcMainnetInterval) clearInterval(this.btcMainnetInterval);
-    if (this.btcTestnetInterval) clearInterval(this.btcTestnetInterval);
-    if (this.tronMainnetInterval) clearInterval(this.tronMainnetInterval);
-    if (this.tronTestnetInterval) clearInterval(this.tronTestnetInterval);
-    if (this.xrpMainnetInterval) clearInterval(this.xrpMainnetInterval);
-    if (this.xrpTestnetInterval) clearInterval(this.xrpTestnetInterval);
-
-    // Reset interval variables
-    this.ethMainnetInterval = null;
-    this.ethTestnetInterval = null;
-    this.bscMainnetInterval = null;
-    this.bscTestnetInterval = null;
-    this.btcMainnetInterval = null;
-    this.btcTestnetInterval = null;
-    this.tronMainnetInterval = null;
-    this.tronTestnetInterval = null;
-    this.xrpMainnetInterval = null;
-    this.xrpTestnetInterval = null;
-
-    // Clear all queues
-    for (const key in this.blockQueues) {
-      this.blockQueues[key].queue = [];
-    }
-
-    // Reset processing flags
-    this.isProcessingEthMainnet = false;
-    this.isProcessingEthTestnet = false;
-    this.isProcessingBscMainnet = false;
-    this.isProcessingBscTestnet = false;
-    this.isProcessingBtcMainnet = false;
-    this.isProcessingBtcTestnet = false;
-    this.isProcessingTronMainnet = false;
-    this.isProcessingTronTestnet = false;
-    this.isProcessingXrpMainnet = false;
-    this.isProcessingXrpTestnet = false;
-
-    // Wait a bit for any in-progress operations to complete
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    if (this.monitoringInterval) {
-      clearInterval(this.monitoringInterval);
-      this.monitoringInterval = null;
-    }
-
-    this.logger.log('Deposit monitoring stopped successfully');
     return true;
+  }
+
+  // Add method to get chain status
+  public getChainStatus(): Record<string, Record<string, boolean>> {
+    return { ...this.chainMonitoringStatus };
+  }
+
+  // Helper method to clear intervals
+  private clearChainIntervals(chain: string, network: string) {
+    switch (chain) {
+      case 'eth':
+        if (network === 'mainnet' && this.ethMainnetInterval) {
+          clearInterval(this.ethMainnetInterval);
+          this.ethMainnetInterval = null;
+        } else if (network === 'testnet' && this.ethTestnetInterval) {
+          clearInterval(this.ethTestnetInterval);
+          this.ethTestnetInterval = null;
+        }
+        break;
+      case 'bsc':
+        if (network === 'mainnet' && this.bscMainnetInterval) {
+          clearInterval(this.bscMainnetInterval);
+          this.bscMainnetInterval = null;
+        } else if (network === 'testnet' && this.bscTestnetInterval) {
+          clearInterval(this.bscTestnetInterval);
+          this.bscTestnetInterval = null;
+        }
+        break;
+      case 'btc':
+        if (network === 'mainnet' && this.btcMainnetInterval) {
+          clearInterval(this.btcMainnetInterval);
+          this.btcMainnetInterval = null;
+        } else if (network === 'testnet' && this.btcTestnetInterval) {
+          clearInterval(this.btcTestnetInterval);
+          this.btcTestnetInterval = null;
+        }
+        break;
+      case 'trx':
+        if (network === 'mainnet' && this.tronMainnetInterval) {
+          clearInterval(this.tronMainnetInterval);
+          this.tronMainnetInterval = null;
+        } else if (network === 'testnet' && this.tronTestnetInterval) {
+          clearInterval(this.tronTestnetInterval);
+          this.tronTestnetInterval = null;
+        }
+        break;
+      case 'xrp':
+        if (network === 'mainnet' && this.xrpMainnetInterval) {
+          clearInterval(this.xrpMainnetInterval);
+          this.xrpMainnetInterval = null;
+        } else if (network === 'testnet' && this.xrpTestnetInterval) {
+          clearInterval(this.xrpTestnetInterval);
+          this.xrpTestnetInterval = null;
+        }
+        break;
+    }
   }
 
   private async checkForNewDeposits() {
@@ -436,7 +445,7 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private monitorXrpChains() {
-    if (!this.isMonitoring) return;
+    if (!this.monitoringActive) return;
 
     const mainnetInterval = setInterval(() => {
       this.checkXrpBlocks('mainnet');
@@ -451,7 +460,7 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private monitorEvmChains() {
-    if (!this.isMonitoring) return;
+    if (!this.monitoringActive) return;
     
     try {
       for (const [providerKey, provider] of this.providers.entries()) {
@@ -476,7 +485,7 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private monitorBitcoinChains() {
-    if (!this.isMonitoring) return;
+    if (!this.monitoringActive) return;
     
     for (const network of ['mainnet', 'testnet']) {
       const provider = this.providers.get(`btc_${network}`);
@@ -495,7 +504,7 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private monitorTronChains() {
-    if (!this.isMonitoring) return;
+    if (!this.monitoringActive) return;
     
     for (const network of ['mainnet', 'testnet']) {
       const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
@@ -1557,17 +1566,160 @@ export class DepositTrackingService implements OnModuleInit {
           return block.block_header.raw_data.number;
         
         case 'xrp':
-          const serverInfo = await provider.request({
-            command: 'server_info'
-          });
-          return serverInfo.result.info.validated_ledger.seq;
+          try {
+            await (provider as Client).connect();
+            const serverInfo = await (provider as Client).request({
+              command: 'server_info'
+            });
+            if (!serverInfo?.result?.info?.validated_ledger?.seq) {
+              throw new Error('Invalid XRP server response');
+            }
+            return serverInfo.result.info.validated_ledger.seq;
+          } catch (xrpError) {
+            this.logger.error(`XRP ${network} connection error: ${xrpError.message}`);
+            return 0; // Return 0 for XRP when connection fails
+          }
         
         default:
           throw new Error(`Unsupported chain: ${chain}`);
       }
     } catch (error) {
       this.logger.error(`Error getting current block height for ${chain} ${network}: ${error.message}`);
-      throw error;
+      return 0; // Return 0 for any chain that fails
+    }
+  }
+
+  // Public getter method
+  public getMonitoringStatus(): boolean {
+    return this.monitoringActive;
+  }
+
+  // Add methods for chain-specific monitoring
+  async startChainMonitoring(chain: string, network: string) {
+    if (!this.chainMonitoringStatus[chain]) {
+      throw new Error(`Invalid chain: ${chain}`);
+    }
+
+    this.chainMonitoringStatus[chain][network] = true;
+    this.monitoringActive = true;
+
+    // Start specific chain monitoring
+    switch (chain) {
+      case 'eth':
+      case 'bsc':
+        this.monitorEvmChain(chain, network);
+        break;
+      case 'btc':
+        this.monitorBitcoinChain(network);
+        break;
+      case 'trx':
+        this.monitorTronChain(network);
+        break;
+      case 'xrp':
+        this.monitorXrpChain(network);
+        break;
+    }
+
+    this.logger.log(`Started monitoring ${chain} ${network}`);
+    return true;
+  }
+
+  async stopChainMonitoring(chain: string, network: string) {
+    if (!this.chainMonitoringStatus[chain]) {
+      throw new Error(`Invalid chain: ${chain}`);
+    }
+
+    this.chainMonitoringStatus[chain][network] = false;
+
+    // Stop specific chain monitoring
+    this.clearChainIntervals(chain, network);
+
+    // Update main monitoring status
+    const anyChainActive = Object.values(this.chainMonitoringStatus)
+      .some(networks => Object.values(networks).some(status => status));
+    
+    this.monitoringActive = anyChainActive;
+    
+    this.logger.log(`Stopped monitoring ${chain} ${network}`);
+    return true;
+  }
+
+  // Update the chain monitoring methods to accept network parameter
+  private monitorEvmChain(chain: string, network: string) {
+    try {
+      const providerKey = `${chain}_${network}`;
+      const provider = this.providers.get(providerKey);
+      
+      if (!provider) {
+        this.logger.warn(`No provider found for ${chain} ${network}`);
+        return;
+      }
+
+      this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks`);
+      
+      // Store the listener function so we can remove it later
+      const listener = async (blockNumber: number) => {
+        const queueKey = `${chain}_${network}`;
+        this.blockQueues[queueKey].queue.push(blockNumber);
+        this.processQueueForChain(chain, network, provider);
+      };
+      
+      provider.on('block', listener);
+      this.evmBlockListeners.set(providerKey, listener);
+    } catch (error) {
+      this.logger.error(`Error in ${chain} ${network} monitor: ${error.message}`);
+    }
+  }
+
+  private monitorBitcoinChain(network: string) {
+    const provider = this.providers.get(`btc_${network}`);
+    if (!provider) {
+      this.logger.warn(`No Bitcoin provider found for network ${network}`);
+      return;
+    }
+
+    this.logger.log(`Started monitoring Bitcoin ${network} blocks`);
+    
+    const interval = setInterval(async () => {
+      await this.checkBitcoinBlocks(network);
+    }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
+
+    if (network === 'mainnet') {
+      this.btcMainnetInterval = interval;
+    } else {
+      this.btcTestnetInterval = interval;
+    }
+  }
+
+  private monitorTronChain(network: string) {
+    const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
+    if (!tronWeb) {
+      this.logger.warn(`No TRON provider found for network ${network}`);
+      return;
+    }
+    
+    this.logger.log(`Started monitoring TRON ${network} blocks`);
+    
+    const interval = setInterval(async () => {
+      await this.checkTronBlocks(network, tronWeb);
+    }, this.PROCESSING_DELAYS.trx.checkInterval);
+
+    if (network === 'mainnet') {
+      this.tronMainnetInterval = interval;
+    } else {
+      this.tronTestnetInterval = interval;
+    }
+  }
+
+  private monitorXrpChain(network: string) {
+    const interval = setInterval(() => {
+      this.checkXrpBlocks(network);
+    }, this.PROCESSING_DELAYS.xrp.checkInterval);
+
+    if (network === 'mainnet') {
+      this.xrpMainnetInterval = interval;
+    } else {
+      this.xrpTestnetInterval = interval;
     }
   }
 }
