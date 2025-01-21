@@ -163,6 +163,12 @@ export class DepositTrackingService implements OnModuleInit {
   private savedBlocks: Record<string, string> = {};
   private lastProcessedBlocks: Record<string, string> = {};
 
+  private monitoringProviders: { [key: string]: any } = {};
+  private infoProviders: { [key: string]: any } = {};
+
+  // Add at the top with other private properties
+  private isMonitoring: { [key: string]: boolean } = {};
+
   constructor(
     @InjectRepository(Deposit)
     private depositRepository: Repository<Deposit>,
@@ -190,6 +196,13 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async initializeProviders() {
+    // Initialize main providers (for monitoring)
+    await this.initializeMainProviders();
+    // Initialize info providers (for block info fetching)
+    await this.initializeInfoProviders();
+  }
+
+  private async initializeMainProviders() {
     // Initialize EVM providers (Ethereum, BSC)
     const evmNetworks = {
       eth: {
@@ -315,51 +328,78 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  async startMonitoring() {
-    if (this.monitoringActive) {
-      throw new Error('Monitoring is already running');
-    }
+  private async initializeInfoProviders() {
+    // Similar to initializeMainProviders but for this.infoProviders
+    const chains = ['eth', 'bsc', 'btc', 'trx', 'xrp'];
+    const networks = ['mainnet', 'testnet'];
 
-    this.shouldStop = false;
-    this.monitoringActive = true;
-
-    // Start all chains
-    for (const chain of Object.keys(this.chainMonitoringStatus)) {
-      for (const network of Object.keys(this.chainMonitoringStatus[chain])) {
-        this.chainMonitoringStatus[chain][network] = true;
-        await this.startChainMonitoring(chain, network);
+    for (const chain of chains) {
+      for (const network of networks) {
+        const key = `${chain}_${network}`;
+        try {
+          // Create a new provider instance with the same config
+          const provider = await this.createProviderInstance(chain, network);
+          this.infoProviders[key] = provider;
+          this.logger.debug(`Info provider initialized for ${chain}_${network}`);
+        } catch (error) {
+          this.logger.error(`Failed to initialize info provider for ${chain}_${network}:`, error);
+        }
       }
     }
-
-    return true;
   }
 
-  async stopMonitoring() {
-    if (!this.monitoringActive) {
-      throw new Error('Monitoring is not running');
-    }
-
-    this.shouldStop = true;
-    this.monitoringActive = false;
-
-    // Stop all chains
-    for (const chain of Object.keys(this.chainMonitoringStatus)) {
-      for (const network of Object.keys(this.chainMonitoringStatus[chain])) {
+  async startMonitoring(chain?: string, network?: string) {
+    if (chain && network) {
+      // Start monitoring for specific chain/network
+      const key = `${chain}_${network}`;
+      this.isMonitoring[key] = true;
+      this.chainMonitoringStatus[chain] = {
+        ...this.chainMonitoringStatus[chain],
+        [network]: true
+      };
+      
+      this.processBlocks(chain, network).catch(error => {
+        this.logger.error(`Error in monitoring process for ${chain} ${network}:`, error);
+        this.isMonitoring[key] = false;
         this.chainMonitoringStatus[chain][network] = false;
-        await this.stopChainMonitoring(chain, network);
+      });
+
+      this.logger.log(`Started monitoring ${chain} ${network}`);
+    } else {
+      // Start monitoring all chains
+      const chains = ['eth', 'bsc', 'btc', 'trx', 'xrp'];
+      const networks = ['mainnet', 'testnet'];
+
+      for (const c of chains) {
+        this.chainMonitoringStatus[c] = {};
+        for (const n of networks) {
+          await this.startMonitoring(c, n);
+        }
       }
     }
+  }
 
-    // Clear all EVM listeners
-    for (const [providerKey, listener] of this.evmBlockListeners.entries()) {
-      const provider = this.providers.get(providerKey);
-      if (provider) {
-        provider.removeListener('block', listener);
+  async stopMonitoring(chain?: string, network?: string) {
+    if (chain && network) {
+      // Stop monitoring for specific chain/network
+      const key = `${chain}_${network}`;
+      this.isMonitoring[key] = false;
+      this.chainMonitoringStatus[chain] = {
+        ...this.chainMonitoringStatus[chain],
+        [network]: false
+      };
+      this.logger.log(`Stopped monitoring ${chain} ${network}`);
+    } else {
+      // Stop monitoring all chains
+      const chains = ['eth', 'bsc', 'btc', 'trx', 'xrp'];
+      const networks = ['mainnet', 'testnet'];
+
+      for (const c of chains) {
+        for (const n of networks) {
+          await this.stopMonitoring(c, n);
+        }
       }
     }
-    this.evmBlockListeners.clear();
-
-    return true;
   }
 
   // Add method to get chain status
@@ -885,21 +925,24 @@ export class DepositTrackingService implements OnModuleInit {
     return token.id.toString();
   }
 
-  private async getBitcoinBlockHeight(provider: BitcoinProvider): Promise<number> {
+  private async getBitcoinBlockHeight(provider: any): Promise<number> {
     try {
       const response = await fetch(provider.url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + Buffer.from(`${provider.auth.username}:${provider.auth.password}`).toString('base64')
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'getblockcount',
           params: [],
-          id: 1
+          id: Date.now()
         })
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
       if (data.error) {
@@ -908,25 +951,24 @@ export class DepositTrackingService implements OnModuleInit {
 
       return data.result;
     } catch (error) {
-      this.logger.error(`Error getting Bitcoin block height: ${error.message}`);
+      this.logger.error('Error getting Bitcoin block height:', error);
       throw error;
     }
   }
 
-  private async getBitcoinBlock(provider: BitcoinProvider, blockNumber: number): Promise<BitcoinBlock> {
+  private async getBitcoinBlock(provider: any, blockNumber: number): Promise<BitcoinBlock> {
     try {
       // First get block hash
       const hashResponse = await fetch(provider.url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + Buffer.from(`${provider.auth.username}:${provider.auth.password}`).toString('base64')
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'getblockhash',
           params: [blockNumber],
-          id: 1
+          id: Date.now()
         })
       });
 
@@ -939,14 +981,13 @@ export class DepositTrackingService implements OnModuleInit {
       const blockResponse = await fetch(provider.url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + Buffer.from(`${provider.auth.username}:${provider.auth.password}`).toString('base64')
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'getblock',
           params: [hashData.result, 2], // Verbosity level 2 for full transaction details
-          id: 1
+          id: Date.now()
         })
       });
 
@@ -957,7 +998,7 @@ export class DepositTrackingService implements OnModuleInit {
 
       return blockData.result;
     } catch (error) {
-      this.logger.error(`Error getting Bitcoin block ${blockNumber}: ${error.message}`);
+      this.logger.error(`Error getting Bitcoin block ${blockNumber}:`, error);
       throw error;
     }
   }
@@ -1126,7 +1167,7 @@ export class DepositTrackingService implements OnModuleInit {
       });
 
       const walletAddresses = new Set(wallets.map(w => w.address));
-      const tronWeb = this.providers.get(`trx_${network}`) as TronWebInstance;
+      const provider = this.providers.get(`trx_${network}`) as TronWebInstance;
 
       // Process each transaction
       for (const tx of block.transactions || []) {
@@ -1135,7 +1176,7 @@ export class DepositTrackingService implements OnModuleInit {
           
           const contract = tx.raw_data.contract[0];
           const parameter = contract.parameter.value;
-          const toAddress = tronWeb.address.fromHex(parameter.to_address);
+          const toAddress = provider.address.fromHex(parameter.to_address);
 
           if (walletAddresses.has(toAddress)) {
             const wallet = wallets.find(w => w.address === toAddress);
@@ -1154,7 +1195,7 @@ export class DepositTrackingService implements OnModuleInit {
                 blockNumber: block.block_header.raw_data.number,
                 status: 'pending',
                 metadata: {
-                  from: tronWeb.address.fromHex(parameter.owner_address),
+                  from: provider.address.fromHex(parameter.owner_address),
                   contractAddress: token.contractAddress,
                   blockHash: block.blockID,
                 },
@@ -1340,7 +1381,7 @@ export class DepositTrackingService implements OnModuleInit {
       let lastProcessedBlock = startBlock || await this.getLastProcessedBlock('xrp', network);
 
       for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
-        if (!this.chainMonitoringStatus['xrp'][network]) break;
+        if (!this.chainMonitoringStatus['xrp']?.[network]) break;
 
         try {
           await this.processXrpLedger('xrp', network, ledgerIndex);
@@ -1456,29 +1497,27 @@ export class DepositTrackingService implements OnModuleInit {
     this.processingLocks.set(key, false);
   }
 
-  async getCurrentBlockHeight(chain: string, network: string): Promise<number> {
+  async getCurrentBlockHeight(chain: string, network: string, provider?: any): Promise<number> {
     try {
-      const provider = this.providers.get(`${chain}_${network}`);
-      if (!provider) {
+      // Use passed provider or get from initialized providers
+      const rpcProvider = provider || this.providers.get(`${chain}_${network}`);
+      if (!rpcProvider) {
         throw new Error(`No provider found for ${chain} ${network}`);
       }
 
       switch (chain) {
         case 'eth':
         case 'bsc':
-          return await provider.getBlockNumber();
-        
+          return await rpcProvider.getBlockNumber();
         case 'btc':
-          return await this.getBitcoinBlockHeight(provider);
-        
+          return await this.getBitcoinBlockHeight(rpcProvider);
         case 'trx':
-          const block = await provider.trx.getCurrentBlock();
+          const block = await rpcProvider.trx.getCurrentBlock();
           return block.block_header.raw_data.number;
-        
         case 'xrp':
           try {
-            await (provider as Client).connect();
-            const serverInfo = await (provider as Client).request({
+            await (rpcProvider as Client).connect();
+            const serverInfo = await (rpcProvider as Client).request({
               command: 'server_info'
             });
             if (!serverInfo?.result?.info?.validated_ledger?.seq) {
@@ -1487,15 +1526,14 @@ export class DepositTrackingService implements OnModuleInit {
             return serverInfo.result.info.validated_ledger.seq;
           } catch (xrpError) {
             this.logger.error(`XRP ${network} connection error: ${xrpError.message}`);
-            return 0; // Return 0 for XRP when connection fails
+            throw xrpError;
           }
-        
         default:
           throw new Error(`Unsupported chain: ${chain}`);
       }
     } catch (error) {
-      this.logger.error(`Error getting current block height for ${chain} ${network}: ${error.message}`);
-      return 0; // Return 0 for any chain that fails
+      this.logger.error(`Error getting block height for ${chain}_${network}:`, error);
+      throw error;
     }
   }
 
@@ -1826,26 +1864,9 @@ export class DepositTrackingService implements OnModuleInit {
         }
 
         try {
-          await provider.connect();
-          const serverInfo = await provider.request({ command: 'server_info' });
-          const currentLedger = serverInfo.result.info.validated_ledger.seq;
-          const lastProcessed = await this.getLastProcessedBlock('xrp', network);
-
-          // Process new blocks
-          for (let ledgerIndex = lastProcessed + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
-            if (!this.chainMonitoringStatus['xrp']?.[network]) break;
-
-            try {
-              await this.processXrpLedger('xrp', network, ledgerIndex);
-              await this.updateLastProcessedBlock('xrp', network, ledgerIndex);
-              this.logger.debug(`Processed XRP ${network} ledger ${ledgerIndex}`);
-            } catch (error) {
-              if (!error.message.includes('ledgerNotFound')) {
-                this.logger.error(`Error processing XRP ledger ${ledgerIndex}:`, error);
-                break;
-              }
-            }
-          }
+          await this.processXrpLedger('xrp', network, startBlock);
+          await this.updateLastProcessedBlock('xrp', network, startBlock);
+          this.logger.debug(`Processed XRP ${network} ledger ${startBlock}`);
         } catch (error) {
           this.logger.error(`Error in XRP ${network} monitoring:`, error);
         }
@@ -1949,6 +1970,139 @@ export class DepositTrackingService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Failed to update last processed block for ${chain} ${network}:`, error);
       throw error;
+    }
+  }
+
+  // Separate provider getters
+  private getMonitoringProvider(chain: string, network: string) {
+    const key = `${chain}_${network}`;
+    const provider = this.providers.get(key);
+    if (!provider) {
+      throw new Error(`No monitoring provider found for ${chain} ${network}`);
+    }
+    return provider;
+  }
+
+  private getInfoProvider(chain: string, network: string) {
+    const key = `${chain}_${network}`;
+    const provider = this.infoProviders[key];
+    if (!provider) {
+      throw new Error(`No info provider found for ${chain} ${network}`);
+    }
+    return provider;
+  }
+
+  // Use monitoring provider in processBlocks
+  private async processBlocks(chain: string, network: string) {
+    const provider = this.getMonitoringProvider(chain, network);
+    const key = `${chain}_${network}`;
+    
+    while (this.isMonitoring[key]) {
+      try {
+        const currentBlock = await this.getCurrentBlockHeight(chain, network, provider);
+        const lastProcessed = this.lastProcessedBlocks[key];
+        const startBlock = lastProcessed ? parseInt(lastProcessed) + 1 : currentBlock;
+
+        for (let blockNumber = startBlock; blockNumber <= currentBlock; blockNumber++) {
+          if (!this.isMonitoring[key]) break;
+          
+          try {
+            // Process block logic here...
+            await this.updateLastProcessedBlock(chain, network, blockNumber);
+            this.logger.debug(`Processed ${chain} ${network} block ${blockNumber}`);
+          } catch (blockError) {
+            this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, blockError);
+            // Continue to next block even if current fails
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Error processing ${chain} ${network} block:`, error);
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait before retrying
+      }
+    }
+  }
+
+  // Add the getRpcUrl method
+  private getRpcUrl(chain: string, network: string): string {
+    switch (chain) {
+      case 'eth':
+        return this.configService.get(
+          network === 'mainnet' ? 'ETHEREUM_MAINNET_RPC' : 'ETHEREUM_TESTNET_RPC'
+        );
+      case 'bsc':
+        return this.configService.get(
+          network === 'mainnet' ? 'BSC_MAINNET_RPC' : 'BSC_TESTNET_RPC'
+        );
+      case 'btc':
+        return this.configService.get(
+          network === 'mainnet' ? 'BITCOIN_MAINNET_RPC' : 'BITCOIN_TESTNET_RPC'
+        );
+      case 'trx':
+        return this.configService.get(
+          network === 'mainnet' ? 'TRON_MAINNET_API' : 'TRON_TESTNET_API'
+        );
+      case 'xrp':
+        return this.configService.get(
+          network === 'mainnet' ? 'XRP_MAINNET_RPC' : 'XRP_TESTNET_RPC'
+        );
+      default:
+        throw new Error(`Unsupported chain: ${chain}`);
+    }
+  }
+
+  private async createProviderInstance(chain: string, network: string) {
+    const rpcUrl = this.getRpcUrl(chain, network);
+    if (!rpcUrl) {
+      throw new Error(`No RPC URL configured for ${chain} ${network}`);
+    }
+
+    switch (chain) {
+      case 'eth':
+      case 'bsc': {
+        // Match the working implementation from initializeMainProviders
+        let provider: JsonRpcProvider | WebSocketProvider;
+        if (rpcUrl.startsWith('ws')) {
+          provider = new WebSocketProvider(rpcUrl);
+        } else {
+          provider = new JsonRpcProvider(rpcUrl);
+        }
+        await provider.getBlockNumber(); // Test connection
+        return provider;
+      }
+      case 'btc': {
+        const provider = {
+          url: rpcUrl,
+          timeout: 30000,
+          keepalive: true,
+          requestOptions: {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        };
+        await this.getBitcoinBlockHeight(provider);
+        return provider;
+      }
+      case 'trx': {
+        const tronWeb = new TronWeb({
+          fullHost: rpcUrl,
+          headers: { 
+            "TRON-PRO-API-KEY": this.configService.get('TRON_API_KEY')
+          }
+        });
+        await tronWeb.trx.getCurrentBlock();
+        return tronWeb;
+      }
+      case 'xrp': {
+        const client = new Client(rpcUrl);
+        client.on('error', (error) => {
+          this.logger.error(`XRP ${network} client error:`, error);
+        });
+        await client.connect();
+        return client;
+      }
+      default:
+        throw new Error(`Unsupported chain: ${chain}`);
     }
   }
 }
