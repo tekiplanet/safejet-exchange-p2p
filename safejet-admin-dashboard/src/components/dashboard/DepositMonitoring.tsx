@@ -178,10 +178,7 @@ export default function DepositMonitoring() {
         }
       );
       
-      // Log the raw response for debugging
       const text = await response.text();
-      console.log('Raw chain-blocks response:', text);
-      
       let data;
       try {
         data = JSON.parse(text);
@@ -191,20 +188,21 @@ export default function DepositMonitoring() {
         return null;
       }
 
-      if (!data) {
-        setStatus('Error: No data received from server');
-        return null;
-      }
-
-      // Initialize empty objects if they don't exist
+      // Accept partial data
       const formattedData = {
-        currentBlocks: data.currentBlocks || {},
-        savedBlocks: data.savedBlocks || {},
-        lastProcessedBlocks: data.lastProcessedBlocks || {}
+        currentBlocks: data?.currentBlocks || {},
+        savedBlocks: data?.savedBlocks || {},
+        lastProcessedBlocks: data?.lastProcessedBlocks || {}
       };
 
+      // Only show error if we have no data at all
+      if (Object.keys(formattedData.currentBlocks).length === 0) {
+        setStatus('Warning: No block information available');
+      } else {
+        setStatus(''); // Clear error status if we have some data
+      }
+
       setBlockInfo(formattedData);
-      setStatus(''); // Clear any error status
       return formattedData;
     } catch (error) {
       console.error('Error fetching block info:', error);

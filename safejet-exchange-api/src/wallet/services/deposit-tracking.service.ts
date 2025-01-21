@@ -1908,16 +1908,13 @@ export class DepositTrackingService implements OnModuleInit {
 
           } catch (error) {
             this.logger.error(`Error getting block info for ${chain}_${network}:`, error);
-            // Don't set currentBlocks[key] = -1, just skip this chain/network
+            // Skip this chain/network pair on error
+            continue;
           }
         }
       }
 
-      // Only return if we have at least some data
-      if (Object.keys(currentBlocks).length === 0) {
-        throw new Error('No block information available from any chain');
-      }
-
+      // Return even if we only have partial data
       return {
         currentBlocks,
         savedBlocks,
