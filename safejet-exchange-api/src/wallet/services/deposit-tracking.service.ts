@@ -1875,6 +1875,9 @@ export class DepositTrackingService implements OnModuleInit {
   private async processBlocks(chain: string, network: string) {
     const provider = this.getMonitoringProvider(chain, network);
     const key = `${chain}_${network}`;
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 5000; // 5 seconds
     
     while (this.isMonitoring[key]) {
       try {
@@ -1886,17 +1889,47 @@ export class DepositTrackingService implements OnModuleInit {
           if (!this.isMonitoring[key]) break;
           
           try {
-            // Process block logic here...
-            await this.updateLastProcessedBlock(chain, network, blockNumber);
-            this.logger.debug(`Processed ${chain} ${network} block ${blockNumber}`);
+            // Process block with retry logic
+            await this.processBlockWithRetry(chain, network, blockNumber, MAX_RETRIES);
+            retryCount = 0; // Reset retry count on success
           } catch (blockError) {
             this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, blockError);
-            // Continue to next block even if current fails
+            
+            if (blockError.code === 'TIMEOUT' || blockError.code === 'SERVER_ERROR') {
+              // For provider errors, increment retry count
+              retryCount++;
+              if (retryCount >= MAX_RETRIES) {
+                this.logger.error(`Max retries reached for ${chain} ${network}, pausing monitoring`);
+                await this.stopChainMonitoring(chain, network);
+                break;
+              }
+              // Wait before retrying
+              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+              blockNumber--; // Retry the same block
+              continue;
+            }
+            
+            // For other errors, continue to next block
+            await this.updateLastProcessedBlock(chain, network, blockNumber);
           }
         }
       } catch (error) {
-        this.logger.error(`Error processing ${chain} ${network} block:`, error);
-        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait before retrying
+        this.logger.error(`Error in ${chain} ${network} monitoring loop:`, error);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      }
+    }
+  }
+
+  private async processBlockWithRetry(chain: string, network: string, blockNumber: number, maxRetries: number) {
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        // Your existing block processing logic
+        await this.updateLastProcessedBlock(chain, network, blockNumber);
+        this.logger.debug(`Processed ${chain} ${network} block ${blockNumber}`);
+        return;
+      } catch (error) {
+        if (i === maxRetries - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, 5000 * (i + 1)));
       }
     }
   }
