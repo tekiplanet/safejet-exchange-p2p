@@ -251,10 +251,13 @@ export default function DepositMonitoring() {
 
       const data = await response.json();
       if (data?.status) {
-        setChainStatus(prev => ({
-          ...prev,
+        const newChainStatus = {
+          ...chainStatus,
           ...data.status
-        }));
+        };
+        setChainStatus(newChainStatus);
+        // Update global monitoring status when chain statuses are loaded
+        updateGlobalMonitoringStatus(newChainStatus);
         return data.status;
       }
       return null;
@@ -321,14 +324,20 @@ export default function DepositMonitoring() {
 
       const data = await response.json();
       
-      // Update only this chain's status
-      setChainStatus(prev => ({
-        ...prev,
+      // Create new chain status first
+      const newChainStatus = {
+        ...chainStatus,
         [chain]: {
-          ...(prev[chain] || {}),
+          ...(chainStatus[chain] || {}),
           [network]: !isMonitoring
         }
-      }));
+      };
+      
+      // Update chain status
+      setChainStatus(newChainStatus);
+      
+      // Update global status with new chain status
+      updateGlobalMonitoringStatus(newChainStatus);
 
       // Only refresh this chain's data
       await handleRefreshChain(chain, network);
@@ -417,6 +426,15 @@ export default function DepositMonitoring() {
     } finally {
       setChainRefreshing(prev => ({ ...prev, [key]: false }));
     }
+  };
+
+  // Add this helper function
+  const updateGlobalMonitoringStatus = (chainStatuses: Record<string, Record<string, boolean>>) => {
+    // Check if any chain is running
+    const isAnyChainRunning = Object.values(chainStatuses).some(networkStatus => 
+      Object.values(networkStatus).some(status => status === true)
+    );
+    setIsMonitoring(isAnyChainRunning);
   };
 
   return (
