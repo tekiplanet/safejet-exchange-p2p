@@ -124,7 +124,7 @@ export class DepositTrackingService implements OnModuleInit {
     };
   } = {};
 
-  private processingLocks = new Map<string, boolean>();
+  private processingLocks: Map<string, boolean> = new Map();
 
   private monitoringActive = false;
   private monitoringInterval: NodeJS.Timeout | null = null;
@@ -168,6 +168,8 @@ export class DepositTrackingService implements OnModuleInit {
 
   // Add at the top with other private properties
   private isMonitoring: { [key: string]: boolean } = {};
+
+  private bitcoinIntervals: { [key: string]: NodeJS.Timeout | null } = {};
 
   constructor(
     @InjectRepository(Deposit)
@@ -395,62 +397,82 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async monitorEvmChain(chain: string, network: string, startBlock?: number) {
+    const key = `${chain}_${network}`;
+    
     try {
-      const providerKey = `${chain}_${network}`;
-      const provider = this.providers.get(providerKey) as providers.Provider;
-      
-      if (!provider) {
-        this.logger.warn(`No provider found for ${chain} ${network}`);
-        return false;
-      }
-
-      // Clear any existing interval and listener
-      if (this.evmBlockListeners.has(providerKey)) {
-        const oldListener = this.evmBlockListeners.get(providerKey);
-        provider.removeListener('block', oldListener);
-        this.evmBlockListeners.delete(providerKey);
-      }
-
-      // Set monitoring status
-      if (!this.chainMonitoringStatus[chain]) {
-        this.chainMonitoringStatus[chain] = {};
-      }
-      this.chainMonitoringStatus[chain][network] = true;
-
-      // Get initial block height if not provided
-      if (!startBlock) {
-        startBlock = await this.getCurrentBlockHeight(chain, network);
-      }
-
-      this.logger.log(`Started monitoring ${chain} ${network} blocks from block ${startBlock}`);
-
-      // Create block listener
-      const blockListener = async (blockNumber: number) => {
-        if (!this.chainMonitoringStatus[chain]?.[network]) {
-          provider.removeListener('block', blockListener);
-          return;
+        const provider = this.providers.get(key) as providers.Provider;
+        
+        if (!provider) {
+            this.logger.warn(`No provider found for ${chain} ${network}`);
+            return false;
         }
 
-        try {
-          await this.processEvmBlock(chain, network, blockNumber, provider);
-          await this.updateLastProcessedBlock(chain, network, blockNumber);
-          this.logger.debug(`Processed ${chain} ${network} block ${blockNumber}`);
-        } catch (error) {
-          this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, error);
+        // Clear any existing interval and listener
+        if (this.evmBlockListeners.has(key)) {
+            const oldListener = this.evmBlockListeners.get(key);
+            provider.removeListener('block', oldListener);
+            this.evmBlockListeners.delete(key);
         }
-      };
 
-      // Start listening for new blocks
-      provider.on('block', blockListener);
-      this.evmBlockListeners.set(providerKey, blockListener);
+        // Initialize monitoring status
+        if (!this.chainMonitoringStatus[chain]) {
+            this.chainMonitoringStatus[chain] = {};
+        }
+        this.chainMonitoringStatus[chain][network] = true;
 
-      return true;
+        // Get initial block height if not provided
+        if (!startBlock) {
+            startBlock = await this.getCurrentBlockHeight(chain, network);
+        }
+
+        // Initialize last processed block
+        this.lastProcessedBlocks[key] = (startBlock - 1).toString();
+
+        this.logger.log(`Started monitoring ${chain} ${network} blocks from block ${startBlock}`);
+
+        // Create block listener
+        const blockListener = async (blockNumber: number) => {
+            if (!this.chainMonitoringStatus[chain]?.[network]) {
+                provider.removeListener('block', blockListener);
+                return;
+            }
+
+            // Check if already processing
+            if (this.processingLocks.get(key)) {
+                return;
+            }
+
+            try {
+                this.processingLocks.set(key, true);
+                const currentBlock = await provider.getBlockNumber();
+                
+                this.logger.debug(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} (Current: ${currentBlock})`);
+                const block = await provider.getBlock(blockNumber);
+                
+                if (block) {
+                    this.logger.log(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} with ${block.transactions.length} transactions`);
+                    await this.processEvmBlock(chain, network, blockNumber, provider);
+                    await this.updateLastProcessedBlock(chain, network, blockNumber);
+                    this.lastProcessedBlocks[key] = blockNumber.toString();
+                }
+            } catch (error) {
+                this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, error);
+            } finally {
+                this.processingLocks.set(key, false);
+            }
+        };
+
+        // Start listening for new blocks
+        provider.on('block', blockListener);
+        this.evmBlockListeners.set(key, blockListener);
+
+        return true;
     } catch (error) {
-      this.logger.error(`Failed to start ${chain} ${network} monitoring:`, error);
-      this.chainMonitoringStatus[chain][network] = false;
-      return false;
+        this.logger.error(`Failed to start ${chain} ${network} monitoring:`, error);
+        this.chainMonitoringStatus[chain][network] = false;
+        return false;
     }
-  }
+}
 
   private async processQueueForChain(chain: string, network: string, provider: any) {
     const queueKey = `${chain}_${network}`;
@@ -1614,75 +1636,84 @@ export class DepositTrackingService implements OnModuleInit {
   // Update the chain monitoring methods to accept network parameter
   
   private async monitorBitcoinChain(network: string, startBlock?: number) {
-    // First clear any existing interval
-    if (network === 'mainnet' && this.btcMainnetInterval) {
-      clearInterval(this.btcMainnetInterval);
-      this.btcMainnetInterval = null;
-    } else if (network === 'testnet' && this.btcTestnetInterval) {
-      clearInterval(this.btcTestnetInterval);
-      this.btcTestnetInterval = null;
-    }
-
-    const provider = this.providers.get(`btc_${network}`);
-    if (!provider) {
-      this.logger.warn(`No Bitcoin provider found for network ${network}`);
-      return false;
+    const key = `btc_${network}`;
+    
+    // Clear any existing interval
+    if (this.bitcoinIntervals[network]) {
+        clearInterval(this.bitcoinIntervals[network]);
+        this.bitcoinIntervals[network] = null;
     }
 
     try {
-      // Set monitoring status
-      if (!this.chainMonitoringStatus['btc']) {
-        this.chainMonitoringStatus['btc'] = {};
-      }
-      this.chainMonitoringStatus['btc'][network] = true;
+        // Initialize monitoring status
+        if (!this.chainMonitoringStatus['btc']) {
+            this.chainMonitoringStatus['btc'] = {};
+        }
+        this.chainMonitoringStatus['btc'][network] = true;
 
-      // Get initial block height if not provided
-      if (!startBlock) {
-        startBlock = await this.getCurrentBlockHeight('btc', network);
-      }
-
-      this.logger.log(`Started monitoring Bitcoin ${network} blocks from block ${startBlock}`);
-
-      // Start the monitoring interval
-      const interval = setInterval(async () => {
-        if (!this.chainMonitoringStatus['btc']?.[network]) {
-          clearInterval(interval);
-          return;
+        // Get initial block height if not provided
+        if (!startBlock) {
+            startBlock = await this.getCurrentBlockHeight('btc', network);
         }
 
-        try {
-          const currentHeight = await this.getBitcoinBlockHeight(provider);
-          const lastProcessed = await this.getLastProcessedBlock('btc', network);
+        // Initialize last processed block
+        this.lastProcessedBlocks[key] = (startBlock - 1).toString();
+        
+        this.logger.log(`Started monitoring Bitcoin ${network} blocks from block ${startBlock}`);
 
-          // Process new blocks
-          for (let height = lastProcessed + 1; height <= currentHeight; height++) {
-            if (!this.chainMonitoringStatus['btc']?.[network]) break;
-
-            const block = await this.getBitcoinBlock(provider, height);
-            if (block) {
-              await this.processBitcoinBlock('btc', network, block);
-              await this.updateLastProcessedBlock('btc', network, height);
-              this.logger.debug(`Processed Bitcoin ${network} block ${height}`);
+        const interval = setInterval(async () => {
+            if (!this.chainMonitoringStatus['btc']?.[network]) {
+                clearInterval(interval);
+                return;
             }
-          }
-        } catch (error) {
-          this.logger.error(`Error in Bitcoin ${network} monitoring:`, error);
-        }
-      }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
 
-      if (network === 'mainnet') {
-        this.btcMainnetInterval = interval;
-      } else {
-        this.btcTestnetInterval = interval;
-      }
+            // Check if already processing
+            if (this.processingLocks.get(key)) {
+                return;
+            }
 
-      return true;
+            try {
+                this.processingLocks.set(key, true);
+                const currentBlock = await this.getCurrentBlockHeight('btc', network);
+                const lastProcessed = parseInt(this.lastProcessedBlocks[key] || '0');
+                const nextBlock = lastProcessed + 1;
+
+                if (nextBlock > currentBlock) {
+                    this.processingLocks.set(key, false);
+                    return; // Caught up, wait for next interval
+                }
+
+                this.logger.debug(`BTC ${network}: Processing block ${nextBlock} (Current: ${currentBlock})`);
+                const provider = this.providers.get(`btc_${network}`);
+                if (!provider) {
+                    this.logger.error(`No Bitcoin provider found for network ${network}`);
+                    this.processingLocks.set(key, false);
+                    return;
+                }
+                const block = await this.getBitcoinBlock(provider, nextBlock);
+                
+                if (block) {
+                    this.logger.log(`BTC ${network}: Processing block ${nextBlock} with ${block.tx?.length || 0} transactions`);
+                    await this.processBitcoinBlock('btc', network, block);
+                    await this.updateLastProcessedBlock('btc', network, nextBlock);
+                    this.lastProcessedBlocks[key] = nextBlock.toString();
+                    this.logger.debug(`Processed Bitcoin ${network} block ${nextBlock}`);
+                }
+            } catch (error) {
+                this.logger.error(`Error in Bitcoin ${network} monitoring:`, error);
+            } finally {
+                this.processingLocks.set(key, false);
+            }
+        }, this.PROCESSING_DELAYS.bitcoin.checkInterval);
+
+        this.bitcoinIntervals[network] = interval;
+        return true;
     } catch (error) {
-      this.logger.error(`Failed to start Bitcoin ${network} monitoring:`, error);
-      this.chainMonitoringStatus['btc'][network] = false;
-      return false;
+        this.logger.error(`Failed to start Bitcoin ${network} monitoring:`, error);
+        this.chainMonitoringStatus['btc'][network] = false;
+        return false;
     }
-  }
+}
 
   private async monitorTronChain(network: string, startBlock?: number) {
     // First clear any existing interval
