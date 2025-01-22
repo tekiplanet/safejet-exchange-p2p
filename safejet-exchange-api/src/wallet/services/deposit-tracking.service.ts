@@ -428,7 +428,7 @@ export class DepositTrackingService implements OnModuleInit {
         // Initialize last processed block
         this.lastProcessedBlocks[key] = (startBlock - 1).toString();
 
-        this.logger.log(`Started monitoring ${chain} ${network} blocks from block ${startBlock}`);
+        this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks from block ${startBlock}`);
 
         // Create block listener
         const blockListener = async (blockNumber: number) => {
@@ -444,13 +444,13 @@ export class DepositTrackingService implements OnModuleInit {
 
             try {
                 this.processingLocks.set(key, true);
-                const currentBlock = await provider.getBlockNumber();
+                // const currentBlock = await provider.getBlockNumber();
                 
-                this.logger.debug(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} (Current: ${currentBlock})`);
+                // this.logger.debug(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} (Current: ${currentBlock})`);
                 const block = await provider.getBlock(blockNumber);
                 
                 if (block) {
-                    this.logger.log(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} with ${block.transactions.length} transactions`);
+                    this.logger.log(`${chain.toUpperCase()} ${network}: Now Processing block ${blockNumber} with ${block.transactions.length} transactions`);
                     await this.processEvmBlock(chain, network, blockNumber, provider);
                     await this.updateLastProcessedBlock(chain, network, blockNumber);
                     this.lastProcessedBlocks[key] = blockNumber.toString();
@@ -509,11 +509,11 @@ export class DepositTrackingService implements OnModuleInit {
 
       // Get transaction details
       const txPromises = block.transactions.map(txHash => 
-        this.getEvmTransactionWithRetry(provider, txHash)
+        provider.getTransaction(txHash)
       );
       
       const transactions = await Promise.all(txPromises);
-      this.logger.log(`${chain} ${network}: Processing block ${blockNumber} with ${transactions.length} transactions`);
+      this.logger.log(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} with ${transactions.length} transactions`);
 
       // Process each transaction
       for (const tx of transactions) {
@@ -1565,7 +1565,7 @@ export class DepositTrackingService implements OnModuleInit {
           throw new Error(`Unsupported chain: ${chain}`);
       }
 
-      this.logger.log(`Started monitoring ${chain} ${network} from block ${blockNumber}`);
+      this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} from block ${blockNumber}`);
       return true;
     } catch (error) {
       this.logger.error(`Error starting ${chain} ${network} monitoring:`, error);
