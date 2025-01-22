@@ -204,8 +204,8 @@ export class DepositTrackingService implements OnModuleInit {
         const key = `${chain}_${network}`;
         try {
           // Try to initialize both providers
-          const mainProvider = await this.createProviderInstance(chain, network);
-          const infoProvider = await this.createProviderInstance(chain, network);
+          const mainProvider = await this.createProviderWithFallback(chain, network);
+          const infoProvider = await this.createProviderWithFallback(chain, network);
 
           // Only set providers if both initialize successfully
           this.providers.set(key, mainProvider);
@@ -1962,59 +1962,125 @@ export class DepositTrackingService implements OnModuleInit {
     }
   }
 
-  private async createProviderInstance(chain: string, network: string) {
-    const rpcUrl = this.getRpcUrl(chain, network);
-    if (!rpcUrl) {
+  private async createProviderWithFallback(chain: string, network: string) {
+    const primaryRpcUrl = this.getRpcUrl(chain, network);
+    const fallbackRpcUrl = this.configService.get(`${chain.toUpperCase()}_${network.toUpperCase()}_RPC_FALLBACK`);
+    
+    if (!primaryRpcUrl) {
       throw new Error(`No RPC URL configured for ${chain} ${network}`);
     }
 
-    switch (chain) {
-      case 'eth':
-      case 'bsc': {
-        // Match the working implementation from initializeMainProviders
-        let provider: JsonRpcProvider | WebSocketProvider;
-        if (rpcUrl.startsWith('ws')) {
-          provider = new WebSocketProvider(rpcUrl);
-        } else {
-          provider = new JsonRpcProvider(rpcUrl);
-        }
-        await provider.getBlockNumber(); // Test connection
-        return provider;
-      }
-      case 'btc': {
-        const provider = {
-          url: rpcUrl,
-          timeout: 30000,
-          keepalive: true,
-          requestOptions: {
-            headers: {
-              'Content-Type': 'application/json'
+    try {
+      switch (chain) {
+        case 'eth':
+        case 'bsc': {
+          try {
+            const provider = new JsonRpcProvider(primaryRpcUrl);
+            await provider.getBlockNumber();
+            this.logger.log(`Connected to primary RPC for ${chain} ${network}`);
+            return provider;
+          } catch (error) {
+            if (fallbackRpcUrl) {
+              this.logger.warn(`Primary RPC failed for ${chain} ${network}, trying fallback`);
+              const fallbackProvider = new JsonRpcProvider(fallbackRpcUrl);
+              await fallbackProvider.getBlockNumber();
+              this.logger.log(`Connected to fallback RPC for ${chain} ${network}`);
+              return fallbackProvider;
             }
+            throw error;
           }
-        };
-        await this.getBitcoinBlockHeight(provider);
-        return provider;
-      }
-      case 'trx': {
-        const tronWeb = new TronWeb({
-          fullHost: rpcUrl,
-          headers: { 
-            "TRON-PRO-API-KEY": this.configService.get('TRON_API_KEY')
+        }
+
+        case 'btc': {
+          try {
+            const provider = {
+              url: primaryRpcUrl,
+              timeout: 30000,
+              keepalive: true,
+              requestOptions: {
+                headers: { 'Content-Type': 'application/json' }
+              }
+            };
+            await this.getBitcoinBlockHeight(provider);
+            this.logger.log(`Connected to primary RPC for ${chain} ${network}`);
+            return provider;
+          } catch (error) {
+            if (fallbackRpcUrl) {
+              this.logger.warn(`Primary RPC failed for ${chain} ${network}, trying fallback`);
+              const fallbackProvider = {
+                url: fallbackRpcUrl,
+                timeout: 30000,
+                keepalive: true,
+                requestOptions: {
+                  headers: { 'Content-Type': 'application/json' }
+                }
+              };
+              await this.getBitcoinBlockHeight(fallbackProvider);
+              this.logger.log(`Connected to fallback RPC for ${chain} ${network}`);
+              return fallbackProvider;
+            }
+            throw error;
           }
-        });
-        await tronWeb.trx.getCurrentBlock();
-        return tronWeb;
+        }
+
+        case 'trx': {
+          try {
+            const tronWeb = new TronWeb({
+              fullHost: primaryRpcUrl,
+              headers: { 
+                "TRON-PRO-API-KEY": this.configService.get('TRON_API_KEY')
+              }
+            });
+            await tronWeb.trx.getCurrentBlock();
+            this.logger.log(`Connected to primary RPC for ${chain} ${network}`);
+            return tronWeb;
+          } catch (error) {
+            if (fallbackRpcUrl) {
+              this.logger.warn(`Primary RPC failed for ${chain} ${network}, trying fallback`);
+              const fallbackTronWeb = new TronWeb({
+                fullHost: fallbackRpcUrl,
+                headers: { 
+                  "TRON-PRO-API-KEY": this.configService.get('TRON_API_KEY')
+                }
+              });
+              await fallbackTronWeb.trx.getCurrentBlock();
+              this.logger.log(`Connected to fallback RPC for ${chain} ${network}`);
+              return fallbackTronWeb;
+            }
+            throw error;
+          }
+        }
+
+        case 'xrp': {
+          try {
+            const client = new Client(primaryRpcUrl);
+            client.on('error', (error) => {
+              this.logger.error(`XRP ${network} primary client error:`, error);
+            });
+            await client.connect();
+            this.logger.log(`Connected to primary RPC for ${chain} ${network}`);
+            return client;
+          } catch (error) {
+            if (fallbackRpcUrl) {
+              this.logger.warn(`Primary RPC failed for ${chain} ${network}, trying fallback`);
+              const fallbackClient = new Client(fallbackRpcUrl);
+              fallbackClient.on('error', (error) => {
+                this.logger.error(`XRP ${network} fallback client error:`, error);
+              });
+              await fallbackClient.connect();
+              this.logger.log(`Connected to fallback RPC for ${chain} ${network}`);
+              return fallbackClient;
+            }
+            throw error;
+          }
+        }
+
+        default:
+          throw new Error(`Unsupported chain: ${chain}`);
       }
-      case 'xrp': {
-        const client = new Client(rpcUrl);
-        client.on('error', (error) => {
-          this.logger.error(`XRP ${network} client error:`, error);
-        });
-        await client.connect();
-        return client;
-      }
-      default:
-        throw new Error(`Unsupported chain: ${chain}`);
+    } catch (error) {
+      this.logger.error(`Failed to connect to ${chain} ${network} RPC:`, error);
+      throw error;
     }
   }
 }
