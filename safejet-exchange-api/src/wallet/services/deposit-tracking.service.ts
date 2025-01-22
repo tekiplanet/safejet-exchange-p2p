@@ -1251,27 +1251,73 @@ export class DepositTrackingService implements OnModuleInit {
     if (!await this.getLock('xrp', network)) return;
 
     try {
-      const provider = this.providers.get(`xrp_${network}`) as Client;
+      let provider = this.providers.get(`xrp_${network}`) as Client;
       if (!provider) return;
 
-      await provider.connect();
+      // Get current ledger info
       const serverInfo = await provider.request({ command: 'server_info' });
       const currentLedger = serverInfo.result.info.validated_ledger.seq;
       let lastProcessedBlock = startBlock || await this.getLastProcessedBlock('xrp', network);
 
+      // If we're caught up, just wait
+      if (lastProcessedBlock >= currentLedger) {
+        this.logger.debug(`XRP ${network}: Caught up at ledger ${currentLedger}, waiting for new ledgers...`);
+        await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS.xrp.blockDelay));
+        return;
+      }
+
+      // Process blocks sequentially
+      this.logger.debug(`XRP ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
+      
       for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
         if (!this.chainMonitoringStatus['xrp']?.[network]) break;
 
         try {
-          await this.processXrpLedger('xrp', network, ledgerIndex);
-          // Update last processed block after each successful ledger
-          await this.updateLastProcessedBlock('xrp', network, ledgerIndex);
-        } catch (error) {
-          if (!error.message.includes('ledgerNotFound')) {
-            this.logger.error(`Error processing XRP ledger ${ledgerIndex}:`, error);
-            break;
+          // Ensure connection
+          if (!provider.isConnected()) {
+            await provider.connect();
           }
+
+          await this.processXrpLedger('xrp', network, ledgerIndex);
+          await this.updateLastProcessedBlock('xrp', network, ledgerIndex);
+          lastProcessedBlock = ledgerIndex;
+          
+          this.logger.debug(`XRP ${network}: Processed ledger ${ledgerIndex}`);
+        } catch (error) {
+          if (error.message.includes('ledgerNotFound')) {
+            this.logger.warn(`XRP ${network}: Ledger ${ledgerIndex} not found, skipping`);
+            continue;
+          }
+
+          // Handle connection issues
+          if (error.message.includes('websocket was closed') || error.message.includes('NotConnectedError')) {
+            this.logger.warn(`XRP ${network}: Connection lost, attempting to reconnect...`);
+            try {
+              await provider.connect();
+              ledgerIndex--; // Retry the same ledger after reconnecting
+              continue;
+            } catch (reconnectError) {
+              this.logger.error(`Failed to reconnect XRP ${network}:`, reconnectError);
+              
+              // Try fallback provider
+              const fallbackProvider = await this.createProviderWithFallback('xrp', network) as Client;
+              if (fallbackProvider) {
+                // Update provider in the map and local variable
+                this.providers.set(`xrp_${network}`, fallbackProvider);
+                provider = fallbackProvider;
+                ledgerIndex--; // Retry with fallback
+                continue;
+              }
+              break;
+            }
+          }
+
+          this.logger.error(`Error processing XRP ledger ${ledgerIndex}:`, error);
+          continue;
         }
+
+        // Add small delay between ledgers
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     } finally {
       this.releaseLock('xrp', network);
@@ -1290,6 +1336,10 @@ export class DepositTrackingService implements OnModuleInit {
             expand: true
         });
         
+        if (!ledgerResponse.result.ledger) {
+            throw new Error('ledgerNotFound');
+        }
+        
         const transactions = ledgerResponse.result.ledger.transactions || [];
         this.logger.log(`XRP ${network}: Processing ledger ${ledgerIndex} with ${transactions.length} transactions`);
 
@@ -1300,6 +1350,7 @@ export class DepositTrackingService implements OnModuleInit {
         this.logger.log(`XRP ${network}: Completed ledger ${ledgerIndex}`);
     } catch (error) {
         this.logger.error(`Error processing XRP ledger ${ledgerIndex}: ${error.message}`);
+        throw error; // Re-throw the error to be handled by checkXrpBlocks
     }
   }
 
@@ -1708,62 +1759,97 @@ export class DepositTrackingService implements OnModuleInit {
   private async monitorXrpChain(network: string, startBlock?: number) {
     // First clear any existing interval
     if (network === 'mainnet' && this.xrpMainnetInterval) {
-      clearInterval(this.xrpMainnetInterval);
-      this.xrpMainnetInterval = null;
+        clearInterval(this.xrpMainnetInterval);
+        this.xrpMainnetInterval = null;
     } else if (network === 'testnet' && this.xrpTestnetInterval) {
-      clearInterval(this.xrpTestnetInterval);
-      this.xrpTestnetInterval = null;
+        clearInterval(this.xrpTestnetInterval);
+        this.xrpTestnetInterval = null;
     }
 
     const provider = this.providers.get(`xrp_${network}`) as Client;
     if (!provider) {
-      this.logger.warn(`No XRP provider found for network ${network}`);
-      return false;
+        this.logger.warn(`No XRP provider found for network ${network}`);
+        return false;
     }
 
     try {
-      // Set monitoring status
-      if (!this.chainMonitoringStatus['xrp']) {
-        this.chainMonitoringStatus['xrp'] = {};
-      }
-      this.chainMonitoringStatus['xrp'][network] = true;
+        if (!this.chainMonitoringStatus['xrp']) {
+            this.chainMonitoringStatus['xrp'] = {};
+        }
+        this.chainMonitoringStatus['xrp'][network] = true;
 
-      // Get initial block height if not provided
-      if (!startBlock) {
-        startBlock = await this.getCurrentBlockHeight('xrp', network);
-      }
+        // Initialize with startBlock
+        if (!startBlock) {
+            startBlock = await this.getCurrentBlockHeight('xrp', network);
+        }
+        
+        // Set initial last processed block
+        const key = `xrp_${network}`;
+        this.lastProcessedBlocks[key] = (startBlock - 1).toString();  // Add this line
 
-      this.logger.log(`Started monitoring XRP ${network} blocks from block ${startBlock}`);
+        this.logger.log(`Started monitoring XRP ${network} blocks from block ${startBlock}`);
 
-      // Start the monitoring interval
-      const interval = setInterval(async () => {
-        if (!this.chainMonitoringStatus['xrp']?.[network]) {
-          clearInterval(interval);
-          return;
+        const interval = setInterval(async () => {
+            if (!this.chainMonitoringStatus['xrp']?.[network]) {
+                clearInterval(interval);
+                return;
+            }
+
+            try {
+                const serverInfo = await provider.request({ command: 'server_info' });
+                const currentLedger = serverInfo.result.info.validated_ledger.seq;
+                const lastProcessed = this.lastProcessedBlocks[key];
+                const nextBlock = lastProcessed ? parseInt(lastProcessed) + 1 : currentLedger;
+
+                if (nextBlock > currentLedger) {
+                    this.logger.debug(`XRP ${network}: Caught up at ledger ${currentLedger}, waiting for new ledgers...`);
+                    return;
+                }
+
+                this.logger.debug(`XRP ${network}: Processing ledger ${nextBlock} (Current: ${currentLedger})`);
+                await this.processXrpLedger('xrp', network, nextBlock);
+                await this.updateLastProcessedBlock('xrp', network, nextBlock);
+                this.logger.debug(`Processed XRP ${network} ledger ${nextBlock}`);
+
+            } catch (error) {
+                if (error.message.includes('ledgerNotFound')) {
+                    this.logger.warn(`XRP ${network}: Ledger not found, skipping`);
+                    return;
+                }
+
+                // Handle connection issues
+                if (error.message.includes('websocket was closed') || error.message.includes('NotConnectedError')) {
+                    this.logger.warn(`XRP ${network}: Connection lost, attempting to reconnect...`);
+                    try {
+                        await provider.connect();
+                    } catch (reconnectError) {
+                        this.logger.error(`Failed to reconnect XRP ${network}:`, reconnectError);
+                        
+                        // Try fallback provider
+                        const fallbackProvider = await this.createProviderWithFallback('xrp', network) as Client;
+                        if (fallbackProvider) {
+                            this.providers.set(`xrp_${network}`, fallbackProvider);
+                        }
+                    }
+                }
+
+                this.logger.error(`Error in XRP ${network} monitoring:`, error);
+            }
+        }, this.PROCESSING_DELAYS.xrp.checkInterval);
+
+        if (network === 'mainnet') {
+            this.xrpMainnetInterval = interval;
+        } else {
+            this.xrpTestnetInterval = interval;
         }
 
-        try {
-          await this.processXrpLedger('xrp', network, startBlock);
-          await this.updateLastProcessedBlock('xrp', network, startBlock);
-          this.logger.debug(`Processed XRP ${network} ledger ${startBlock}`);
-        } catch (error) {
-          this.logger.error(`Error in XRP ${network} monitoring:`, error);
-        }
-      }, this.PROCESSING_DELAYS.xrp.checkInterval);
-
-      if (network === 'mainnet') {
-        this.xrpMainnetInterval = interval;
-      } else {
-        this.xrpTestnetInterval = interval;
-      }
-
-      return true;
+        return true;
     } catch (error) {
-      this.logger.error(`Failed to start XRP ${network} monitoring:`, error);
-      this.chainMonitoringStatus['xrp'][network] = false;
-      return false;
+        this.logger.error(`Failed to start XRP ${network} monitoring:`, error);
+        this.chainMonitoringStatus['xrp'][network] = false;
+        return false;
     }
-  }
+}
 
   async getBlockInfo() {
     try {
@@ -1880,45 +1966,41 @@ export class DepositTrackingService implements OnModuleInit {
     const RETRY_DELAY = 5000; // 5 seconds
     
     while (this.isMonitoring[key]) {
-      try {
-        const currentBlock = await this.getCurrentBlockHeight(chain, network, provider);
-        const lastProcessed = this.lastProcessedBlocks[key];
-        const startBlock = lastProcessed ? parseInt(lastProcessed) + 1 : currentBlock;
+        try {
+            const currentBlock = await this.getCurrentBlockHeight(chain, network, provider);
+            const lastProcessed = this.lastProcessedBlocks[key];
+            const startBlock = lastProcessed ? parseInt(lastProcessed) + 1 : currentBlock;
 
-        for (let blockNumber = startBlock; blockNumber <= currentBlock; blockNumber++) {
-          if (!this.isMonitoring[key]) break;
-          
-          try {
-            // Process block with retry logic
-            await this.processBlockWithRetry(chain, network, blockNumber, MAX_RETRIES);
-            retryCount = 0; // Reset retry count on success
-          } catch (blockError) {
-            this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, blockError);
-            
-            if (blockError.code === 'TIMEOUT' || blockError.code === 'SERVER_ERROR') {
-              // For provider errors, increment retry count
-              retryCount++;
-              if (retryCount >= MAX_RETRIES) {
-                this.logger.error(`Max retries reached for ${chain} ${network}, pausing monitoring`);
-                await this.stopChainMonitoring(chain, network);
-                break;
-              }
-              // Wait before retrying
-              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-              blockNumber--; // Retry the same block
-              continue;
+            for (let blockNumber = startBlock; blockNumber <= currentBlock; blockNumber++) {
+                if (!this.isMonitoring[key]) break;
+                
+                try {
+                    await this.processBlockWithRetry(chain, network, blockNumber, MAX_RETRIES);
+                    retryCount = 0; // Reset retry count on success
+                } catch (blockError) {
+                    this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, blockError);
+                    
+                    if (blockError.code === 'TIMEOUT' || blockError.code === 'SERVER_ERROR') {
+                        retryCount++;
+                        if (retryCount >= MAX_RETRIES) {
+                            this.logger.error(`Max retries reached for ${chain} ${network}, pausing monitoring`);
+                            await this.stopChainMonitoring(chain, network);
+                            break;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                        blockNumber--; // Retry the same block
+                        continue;
+                    }
+                    
+                    await this.updateLastProcessedBlock(chain, network, blockNumber);
+                }
             }
-            
-            // For other errors, continue to next block
-            await this.updateLastProcessedBlock(chain, network, blockNumber);
-          }
+        } catch (error) {
+            this.logger.error(`Error in ${chain} ${network} monitoring loop:`, error);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
         }
-      } catch (error) {
-        this.logger.error(`Error in ${chain} ${network} monitoring loop:`, error);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-      }
     }
-  }
+}
 
   private async processBlockWithRetry(chain: string, network: string, blockNumber: number, maxRetries: number) {
     for (let i = 0; i < maxRetries; i++) {
