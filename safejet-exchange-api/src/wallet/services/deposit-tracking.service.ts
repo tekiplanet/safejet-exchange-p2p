@@ -90,23 +90,23 @@ export class DepositTrackingService implements OnModuleInit {
   private readonly PROCESSING_DELAYS = {
     eth: {
       blockDelay: this.configService.get('ETHEREUM_BLOCK_DELAY', 1000),
-      checkInterval: this.configService.get('ETHEREUM_CHECK_INTERVAL', 30000)
+      checkInterval: this.configService.get('ETHEREUM_CHECK_INTERVAL', 3000)
     },
     bsc: {
       blockDelay: this.configService.get('BSC_BLOCK_DELAY', 1000),
-      checkInterval: this.configService.get('BSC_CHECK_INTERVAL', 30000)
+      checkInterval: this.configService.get('BSC_CHECK_INTERVAL', 3000)
     },
     bitcoin: {
       blockDelay: this.configService.get('BITCOIN_BLOCK_DELAY', 1000),
-      checkInterval: this.configService.get('BITCOIN_CHECK_INTERVAL', 30000)
+      checkInterval: this.configService.get('BITCOIN_CHECK_INTERVAL', 3000)
     },
     trx: {
       blockDelay: this.configService.get('TRON_BLOCK_DELAY', 1000),
-      checkInterval: this.configService.get('TRON_CHECK_INTERVAL', 30000)
+      checkInterval: this.configService.get('TRON_CHECK_INTERVAL', 3000)
     },
     xrp: {
       blockDelay: this.configService.get('XRP_BLOCK_DELAY', 1000),
-      checkInterval: this.configService.get('XRP_CHECK_INTERVAL', 30000)
+      checkInterval: this.configService.get('XRP_CHECK_INTERVAL', 3000)
     }
   };
 
@@ -1707,14 +1707,17 @@ export class DepositTrackingService implements OnModuleInit {
       }
       this.chainMonitoringStatus['trx'][network] = true;
 
-      // Get initial block height if not provided
+      // Initialize with startBlock
       if (!startBlock) {
         startBlock = await this.getCurrentBlockHeight('trx', network);
       }
+      
+      // Set initial last processed block
+      const key = `trx_${network}`;
+      this.lastProcessedBlocks[key] = (startBlock - 1).toString();
 
       this.logger.log(`Started monitoring TRON ${network} blocks from block ${startBlock}`);
 
-      // Start the monitoring interval
       const interval = setInterval(async () => {
         if (!this.chainMonitoringStatus['trx']?.[network]) {
           clearInterval(interval);
@@ -1724,18 +1727,21 @@ export class DepositTrackingService implements OnModuleInit {
         try {
           const latestBlock = await tronWeb.trx.getCurrentBlock();
           const currentBlockNumber = latestBlock.block_header.raw_data.number;
-          const lastProcessed = await this.getLastProcessedBlock('trx', network);
+          const lastProcessed = this.lastProcessedBlocks[key];
+          const nextBlock = lastProcessed ? parseInt(lastProcessed) + 1 : currentBlockNumber;
 
-          // Process new blocks
-          for (let height = lastProcessed + 1; height <= currentBlockNumber; height++) {
-            if (!this.chainMonitoringStatus['trx']?.[network]) break;
+          if (nextBlock > currentBlockNumber) {
+            this.logger.debug(`TRON ${network}: Caught up at block ${currentBlockNumber}, waiting...`);
+            return;
+          }
 
-            const block = await this.getTronBlockWithRetry(tronWeb, height, 3);
-            if (block) {
-              await this.processTronBlock(network, block);
-              await this.updateLastProcessedBlock('trx', network, height);
-              this.logger.debug(`Processed TRON ${network} block ${height}`);
-            }
+          this.logger.debug(`TRON ${network}: Processing block ${nextBlock} (Current: ${currentBlockNumber})`);
+          const block = await this.getTronBlockWithRetry(tronWeb, nextBlock, 3);
+          if (block) {
+            this.logger.log(`TRON ${network}: Processing block ${nextBlock} with ${block.transactions?.length || 0} transactions`);
+            await this.processTronBlock(network, block);
+            await this.updateLastProcessedBlock('trx', network, nextBlock);
+            this.logger.debug(`Processed TRON ${network} block ${nextBlock}`);
           }
         } catch (error) {
           this.logger.error(`Error in TRON ${network} monitoring:`, error);
