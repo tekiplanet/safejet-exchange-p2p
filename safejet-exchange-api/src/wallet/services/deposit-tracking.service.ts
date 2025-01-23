@@ -22,6 +22,8 @@ type TronWebType = typeof TronWeb;
 type TronWebInstance = InstanceType<TronWebType>;
 import { Client } from 'xrpl';
 type XrplClient = Client;
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -170,6 +172,7 @@ export class DepositTrackingService implements OnModuleInit {
   private isMonitoring: { [key: string]: boolean } = {};
 
   private bitcoinIntervals: { [key: string]: NodeJS.Timeout | null } = {};
+  private logStream: fs.WriteStream;
 
   constructor(
     @InjectRepository(Deposit)
@@ -183,7 +186,24 @@ export class DepositTrackingService implements OnModuleInit {
     private configService: ConfigService,
     @InjectRepository(SystemSettings)
     private systemSettingsRepository: Repository<SystemSettings>,
-  ) {}
+  ) {
+    // Create logs directory if it doesn't exist
+    const logsDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir);
+    }
+
+    // Create or append to log file
+    this.logStream = fs.createWriteStream(
+      path.join(logsDir, `deposit-tracking-${new Date().toISOString().split('T')[0]}.log`),
+      { flags: 'a' }
+    );
+  }
+
+  private logToFile(message: string) {
+    const timestamp = new Date().toISOString();
+    this.logStream.write(`[${timestamp}] ${message}\n`);
+  }
 
   async onModuleInit() {
     ['eth_mainnet', 'eth_testnet', 'bsc_mainnet', 'bsc_testnet'].forEach(chain => {
@@ -1204,57 +1224,92 @@ export class DepositTrackingService implements OnModuleInit {
   // Add this method to process Bitcoin transactions
   private async processBitcoinTransaction(chain: string, network: string, tx: any) {
     try {
-        // Get all Bitcoin wallets
+        this.logToFile(`Processing Bitcoin transaction: ${tx.txid}`);
+        this.logger.debug(`Processing Bitcoin transaction: ${tx.txid}`);
+
+        // Get all wallets for this chain/network
         const wallets = await this.walletRepository.find({
             where: {
                 blockchain: chain,
                 network: network,
-            },
+            }
         });
 
-        const walletAddresses = new Set(wallets.map(w => w.address));
+        this.logToFile(`Found ${wallets.length} ${chain} ${network} wallets to check against`);
+        this.logger.debug(`Found ${wallets.length} ${chain} ${network} wallets to check against`);
 
-        // Process each output
-        for (const output of tx.vout) {
-            const addresses = output.scriptPubKey.addresses || [];
-            
-            for (const address of addresses) {
-                if (walletAddresses.has(address)) {
-                    const wallet = wallets.find(w => w.address === address);
-                    if (!wallet) continue;
+        // Create address lookup map for efficient checking
+        const walletMap = new Map(wallets.map(w => [w.address, w]));
 
-                    const tokenId = await this.getBitcoinTokenId();
-                    
-                    // Create deposit record with correct types
+        // Check each output in the transaction
+        if (tx.vout && Array.isArray(tx.vout)) {
+            this.logToFile(`Transaction ${tx.txid} has ${tx.vout.length} outputs`);
+            for (const output of tx.vout) {
+                // Handle different address formats in scriptPubKey
+                const address = output.scriptPubKey?.address || 
+                              (output.scriptPubKey?.addresses && output.scriptPubKey.addresses[0]);
+
+                this.logToFile(`Checking output - Address: ${address}, Amount: ${output.value}`);
+
+                if (!address) {
+                    continue;
+                }
+
+                const wallet = walletMap.get(address);
+
+                if (wallet) {
+                    this.logToFile(`🎯 Found matching deposit! Address: ${address}, Amount: ${output.value}`);
+                    this.logger.log(`Found deposit to wallet ${wallet.address} in tx ${tx.txid}`);
+
+                    // Get BTC token record
+                    const token = await this.tokenRepository.findOne({
+                        where: {
+                            symbol: 'BTC',
+                            blockchain: chain,  // 'btc'
+                            isActive: true     // Make sure token is active
+                        }
+                    });
+
+                    if (!token) {
+                        this.logger.error(`BTC token not found for ${chain}`);
+                        continue;
+                    }
+
+                    // Check if network config exists
+                    if (!token.networkConfigs?.[network]) {
+                        this.logger.error(`Network config not found for BTC ${network}`);
+                        continue;
+                    }
+
+                    // Create deposit record
                     await this.depositRepository.save({
-                        userId: wallet.userId.toString(), // Convert to string if needed
-                        walletId: wallet.id.toString(), // Convert to string if needed
-                        tokenId: tokenId.toString(), // Convert to string as per entity definition
+                        userId: wallet.userId,
+                        walletId: wallet.id,
+                        tokenId: token.id,
                         txHash: tx.txid,
                         amount: output.value.toString(),
                         blockchain: chain,
                         network: network,
                         networkVersion: 'NATIVE',
-                        blockNumber: tx.blockHeight,
+                        blockNumber: tx.blockheight || tx.height,
                         status: 'pending',
                         metadata: {
-                            from: tx.vin[0]?.scriptSig?.addresses?.[0] || 'unknown',
-                            blockHash: tx.blockHash,
-                        },
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                        confirmations: 0
+                            from: tx.vin[0]?.scriptSig?.address || '',
+                            blockHash: tx.blockhash,
+                            fee: tx.fee?.toString() || ''
+                        }
                     });
 
-                    this.logger.debug(`Created deposit record for Bitcoin transaction ${tx.txid} to address ${address}`);
+                    this.logger.log(`Created deposit record for tx ${tx.txid}`);
                 }
             }
         }
     } catch (error) {
-        this.logger.error(`Error processing Bitcoin transaction: ${error.message}`);
-      throw error;
+        this.logger.error(`Error processing Bitcoin transaction ${tx.txid}: ${error.message}`);
+        this.logToFile(`Error: ${error.message}`);
+        // Don't throw to prevent blocking other transactions
     }
-  }
+}
 
   private async monitorXrp() {
     for (const network of ['mainnet', 'testnet']) {
@@ -1657,7 +1712,7 @@ export class DepositTrackingService implements OnModuleInit {
         }
 
         // Initialize last processed block
-        this.lastProcessedBlocks[key] = (startBlock - 1).toString();
+        this.lastProcessedBlocks[key] = startBlock ? (startBlock - 1).toString() : '0';
         
         this.logger.log(`Started monitoring Bitcoin ${network} blocks from block ${startBlock}`);
 

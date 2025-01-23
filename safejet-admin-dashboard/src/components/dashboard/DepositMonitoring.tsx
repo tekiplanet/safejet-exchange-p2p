@@ -66,34 +66,15 @@ export default function DepositMonitoring() {
 
       const data = await response.json();
       
-      // Immediately update monitoring state
-      const newMonitoringState = !isMonitoring;
-      setIsMonitoring(newMonitoringState);
-      
-      // Update all chain statuses to match
-      const updatedChainStatus: Record<string, Record<string, boolean>> = {};
-      Object.keys(chainStatus).forEach(chain => {
-        updatedChainStatus[chain] = {};
-        Object.keys(chainStatus[chain]).forEach(network => {
-          updatedChainStatus[chain][network] = newMonitoringState;
-        });
-      });
-      setChainStatus(updatedChainStatus);
-
-      // Set status message
-      setStatus(data.message);
-
       // Fetch updated data
       await Promise.all([
         fetchBlockInfo().catch(console.error),
-        checkMonitoringStatus().catch(console.error)
+        checkChainStatus().catch(console.error)
       ]);
 
     } catch (error) {
       console.error('Error toggling monitoring:', error);
       setStatus(error instanceof Error ? error.message : 'Failed to toggle monitoring');
-      // Revert states on error
-      setIsMonitoring(!isMonitoring);
     } finally {
       setLoading(false);
     }
@@ -310,6 +291,9 @@ export default function DepositMonitoring() {
       const isMonitoring = chainStatus[chain]?.[network] || false;
       const endpoint = isMonitoring ? 'stop-chain-monitoring' : 'start-chain-monitoring';
 
+      // Get the saved block from blockInfo
+      const savedBlock = blockInfo?.savedBlocks[key];
+
       const response = await fetchWithRetry(
         `/admin/deposits/${endpoint}`,
         {
@@ -317,7 +301,8 @@ export default function DepositMonitoring() {
           body: JSON.stringify({ 
             chain, 
             network,
-            startPoint: chainStartPoints[key] || 'current'
+            startPoint: 'start',
+            startBlock: savedBlock // Use the actual saved block number
           })
         }
       );
