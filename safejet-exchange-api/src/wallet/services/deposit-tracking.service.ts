@@ -1282,14 +1282,23 @@ export class DepositTrackingService implements OnModuleInit {
 
                     // Create deposit record with the found version
                     try {
-                        // Get the sender address from vin
-                        const fromAddress = tx.vin[0]?.prevout?.scriptPubKey?.address ||  // Some providers use this format
-                                          tx.vin[0]?.address ||                           // Some use this format
-                                          tx.vin[0]?.scriptSig?.addresses?.[0] ||        // Or this format
-                                          tx.vin[0]?.scriptPubKey?.addresses?.[0] ||     // Or this format
-                                          '';
-
-                        this.logToFile(`Transaction input address: ${fromAddress}`);
+                        // Get the previous transaction to find the sender address
+                        const prevTx = tx.vin[0];
+                        let fromAddress = '';
+                        
+                        if (prevTx?.txid) {
+                            try {
+                                const provider = this.providers.get(`btc_${network}`);
+                                const prevTxDetails = await this.getBitcoinTransaction(provider, prevTx.txid);
+                                // Get address from the previous transaction's output that was spent
+                                fromAddress = prevTxDetails?.vout[prevTx.vout]?.scriptPubKey?.address || 
+                                             prevTxDetails?.vout[prevTx.vout]?.scriptPubKey?.addresses?.[0] || '';
+                                
+                                this.logToFile(`Previous transaction output address: ${fromAddress}`);
+                            } catch (error) {
+                                this.logToFile(`Error getting previous transaction: ${error.message}`);
+                            }
+                        }
 
                         const deposit = await this.depositRepository.save({
                             userId: walletMap.get(address).userId,
@@ -1320,6 +1329,18 @@ export class DepositTrackingService implements OnModuleInit {
         this.logger.error(`Error processing Bitcoin transaction ${tx.txid}: ${error.message}`);
         this.logToFile(`Error: ${error.message}`);
         // Don't throw to prevent blocking other transactions
+    }
+}
+
+
+private async getBitcoinTransaction(provider: any, txid: string) {
+    try {
+        // Use the existing bitcoinRpcCall method instead of direct fetch
+        const txDetails = await this.bitcoinRpcCall(provider, 'getrawtransaction', [txid, true]);
+        return txDetails;
+    } catch (error) {
+        this.logToFile(`❌ Error getting Bitcoin transaction ${txid}: ${error.message}`);
+        throw error;
     }
 }
 
