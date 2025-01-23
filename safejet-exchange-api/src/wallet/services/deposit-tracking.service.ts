@@ -1225,82 +1225,94 @@ export class DepositTrackingService implements OnModuleInit {
   private async processBitcoinTransaction(chain: string, network: string, tx: any) {
     try {
         this.logToFile(`Processing Bitcoin transaction: ${tx.txid}`);
-        this.logger.debug(`Processing Bitcoin transaction: ${tx.txid}`);
-
+        
         // Get all wallets for this chain/network
         const wallets = await this.walletRepository.find({
             where: {
-                blockchain: chain,
+                blockchain: 'bitcoin', // Changed from 'btc' to 'bitcoin'
                 network: network,
             }
         });
 
-        this.logToFile(`Found ${wallets.length} ${chain} ${network} wallets to check against`);
-        this.logger.debug(`Found ${wallets.length} ${chain} ${network} wallets to check against`);
-
+        this.logToFile(`Found ${wallets.length} bitcoin ${network} wallets to check against`);
+        
         // Create address lookup map for efficient checking
         const walletMap = new Map(wallets.map(w => [w.address, w]));
 
         // Check each output in the transaction
         if (tx.vout && Array.isArray(tx.vout)) {
             this.logToFile(`Transaction ${tx.txid} has ${tx.vout.length} outputs`);
+            
             for (const output of tx.vout) {
-                // Handle different address formats in scriptPubKey
                 const address = output.scriptPubKey?.address || 
-                              (output.scriptPubKey?.addresses && output.scriptPubKey.addresses[0]);
-
+                             (output.scriptPubKey?.addresses && output.scriptPubKey.addresses[0]);
+                
                 this.logToFile(`Checking output - Address: ${address}, Amount: ${output.value}`);
-
-                if (!address) {
-                    continue;
-                }
-
-                const wallet = walletMap.get(address);
-
-                if (wallet) {
-                    this.logToFile(`🎯 Found matching deposit! Address: ${address}, Amount: ${output.value}`);
-                    this.logger.log(`Found deposit to wallet ${wallet.address} in tx ${tx.txid}`);
-
-                    // Get BTC token record
+                
+                if (address && walletMap.has(address)) {
+                    this.logToFile(`🎯 Found matching deposit to wallet ${walletMap.get(address).address} in tx ${tx.txid}`);
+                    
                     const token = await this.tokenRepository.findOne({
                         where: {
                             symbol: 'BTC',
-                            blockchain: chain,  // 'btc'
-                            isActive: true     // Make sure token is active
+                            blockchain: 'bitcoin',
+                            isActive: true
                         }
                     });
+
+                    this.logToFile(`Token found: ${token ? 'yes' : 'no'}, tokenId: ${token?.id}`);
+                    this.logToFile(`Network configs: ${JSON.stringify(token?.networkConfigs)}`);
 
                     if (!token) {
-                        this.logger.error(`BTC token not found for ${chain}`);
-                        continue;
+                        this.logToFile(`❌ BTC token not found for ${chain}`);
+                        return;
                     }
 
-                    // Check if network config exists
-                    if (!token.networkConfigs?.[network]) {
-                        this.logger.error(`Network config not found for BTC ${network}`);
-                        continue;
+                    // Check all versions for network support
+                    const supportedVersion = Object.keys(token.networkConfigs || {}).find(version => 
+                        token.networkConfigs[version]?.[network]?.isActive
+                    );
+
+                    this.logToFile(`Supported versions found: ${supportedVersion || 'none'}`);
+
+                    if (!supportedVersion) {
+                        this.logToFile(`❌ No active network config found for BTC ${network}`);
+                        return;
                     }
 
-                    // Create deposit record
-                    await this.depositRepository.save({
-                        userId: wallet.userId,
-                        walletId: wallet.id,
-                        tokenId: token.id,
-                        txHash: tx.txid,
-                        amount: output.value.toString(),
-                        blockchain: chain,
-                        network: network,
-                        networkVersion: 'NATIVE',
-                        blockNumber: tx.blockheight || tx.height,
-                        status: 'pending',
-                        metadata: {
-                            from: tx.vin[0]?.scriptSig?.address || '',
-                            blockHash: tx.blockhash,
-                            fee: tx.fee?.toString() || ''
-                        }
-                    });
+                    // Create deposit record with the found version
+                    try {
+                        // Get the sender address from vin
+                        const fromAddress = tx.vin[0]?.prevout?.scriptPubKey?.address ||  // Some providers use this format
+                                          tx.vin[0]?.address ||                           // Some use this format
+                                          tx.vin[0]?.scriptSig?.addresses?.[0] ||        // Or this format
+                                          tx.vin[0]?.scriptPubKey?.addresses?.[0] ||     // Or this format
+                                          '';
 
-                    this.logger.log(`Created deposit record for tx ${tx.txid}`);
+                        this.logToFile(`Transaction input address: ${fromAddress}`);
+
+                        const deposit = await this.depositRepository.save({
+                            userId: walletMap.get(address).userId,
+                            walletId: walletMap.get(address).id,
+                            tokenId: token.id,
+                            txHash: tx.txid,
+                            amount: output.value.toString(),
+                            blockchain: chain,
+                            network: network,
+                            networkVersion: supportedVersion || 'NATIVE',
+                            blockNumber: tx.blockheight || tx.height,
+                            status: 'pending',
+                            metadata: {
+                                from: fromAddress,
+                                blockHash: tx.blockhash,
+                                fee: tx.fee?.toString() || ''
+                            }
+                        });
+                        this.logToFile(`✅ Created deposit record ${deposit.id} for tx ${tx.txid} using version ${supportedVersion}`);
+                    } catch (error) {
+                        this.logToFile(`❌ Error creating deposit: ${error.message}`);
+                        throw error;
+                    }
                 }
             }
         }
