@@ -291,8 +291,17 @@ export default function DepositMonitoring() {
       const isMonitoring = chainStatus[chain]?.[network] || false;
       const endpoint = isMonitoring ? 'stop-chain-monitoring' : 'start-chain-monitoring';
 
-      // Get the saved block from blockInfo
-      const savedBlock = blockInfo?.savedBlocks[key];
+      // Get the selected start point for this chain
+      const selectedStartPoint = chainStartPoints[`${chain}_${network}`] || 'current';
+      
+      // Determine which block number to use based on selection
+      let startBlock = null;
+      if (selectedStartPoint === 'start') {
+        startBlock = blockInfo?.savedBlocks[key];
+      } else if (selectedStartPoint === 'last') {
+        startBlock = blockInfo?.lastProcessedBlocks[key];
+      }
+      // For 'current', leave startBlock as null
 
       const response = await fetchWithRetry(
         `/admin/deposits/${endpoint}`,
@@ -301,8 +310,8 @@ export default function DepositMonitoring() {
           body: JSON.stringify({ 
             chain, 
             network,
-            startPoint: 'start',
-            startBlock: savedBlock // Use the actual saved block number
+            startPoint: selectedStartPoint,
+            startBlock: startBlock
           })
         }
       );

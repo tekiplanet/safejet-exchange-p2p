@@ -781,8 +781,10 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async processBitcoinBlock(chain: string, network: string, block: BitcoinBlock) {
-    // this.logger.debug(`Received block data: ${JSON.stringify(block, null, 2)}`);
+    // Add this debug log
+    this.logToFile(`Full Bitcoin block data: ${JSON.stringify(block, null, 2)}`);
     
+    // Rest of the existing code stays exactly the same
     if (!block || !block.tx) {
         this.logger.warn(`Skipping invalid Bitcoin block for ${chain} ${network}: ${JSON.stringify(block)}`);
         return;
@@ -792,9 +794,14 @@ export class DepositTrackingService implements OnModuleInit {
         this.logger.log(`${chain} ${network}: Processing block ${block.height} with ${block.tx.length} transactions`);
         
         // Process transactions
-    for (const tx of block.tx) {
+        for (const tx of block.tx) {
+            // Add block height to tx object instead of changing method signature
+            tx.blockHeight = block.height;  // Add this line
             await this.processBitcoinTransaction(chain, network, tx);
         }
+
+        // Add this line to update confirmations
+        await this.updateBitcoinConfirmations(network, block.height);
 
         // Save progress using btc prefix
         await this.saveLastProcessedBlock(chain, network, block.height);
@@ -1300,6 +1307,13 @@ export class DepositTrackingService implements OnModuleInit {
                             }
                         }
 
+                        // Add this right before the depositRepository.save call
+                        this.logToFile(`Transaction data for ${tx.txid}:`);
+                        this.logToFile(`Block height: ${tx.blockheight}`);
+                        this.logToFile(`Block height alt: ${tx.height}`);
+                        this.logToFile(`Block hash: ${tx.blockhash}`);
+                        this.logToFile(`Raw tx data: ${JSON.stringify(tx, null, 2)}`);
+
                         const deposit = await this.depositRepository.save({
                             userId: walletMap.get(address).userId,
                             walletId: walletMap.get(address).id,
@@ -1309,7 +1323,7 @@ export class DepositTrackingService implements OnModuleInit {
                             blockchain: chain,
                             network: network,
                             networkVersion: supportedVersion || 'NATIVE',
-                            blockNumber: tx.blockheight || tx.height,
+                            blockNumber: tx.blockHeight,  // Use the height we added to tx
                             status: 'pending',
                             metadata: {
                                 from: fromAddress,
@@ -1456,6 +1470,9 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         for (const tx of transactions) {
             await this.processXrpTransaction(chain, network, tx);
         }
+
+        // Add this line to update confirmations
+        await this.updateXrpConfirmations(network, ledgerIndex);
 
         this.logger.log(`XRP ${network}: Completed ledger ${ledgerIndex}`);
     } catch (error) {
@@ -2290,4 +2307,73 @@ private async getBitcoinTransaction(provider: any, txid: string) {
       throw error;
     }
   }
+
+  // Add this method alongside other confirmation update methods
+  private async updateBitcoinConfirmations(network: string, currentBlock: number) {
+    try {
+        // Add logging to debug
+        this.logToFile(`Updating Bitcoin confirmations for network ${network}, current block ${currentBlock}`);
+
+        const deposits = await this.depositRepository.find({
+            where: {
+                blockchain: 'btc',  // Changed from 'bitcoin' to 'btc'
+                network: network,
+                status: In(['pending', 'confirming']),
+                blockNumber: Not(IsNull()),
+            },
+        });
+
+        this.logToFile(`Found ${deposits.length} deposits to update`);
+
+        for (const deposit of deposits) {
+            const confirmations = currentBlock - deposit.blockNumber;
+            const requiredConfirmations = this.CONFIRMATION_BLOCKS.btc[network];
+
+            this.logToFile(`Deposit ${deposit.id}: blockNumber ${deposit.blockNumber}, confirmations ${confirmations}, required ${requiredConfirmations}`);
+
+            await this.depositRepository.update(deposit.id, {
+                confirmations,
+                status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
+            });
+
+            if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+                await this.updateWalletBalance(deposit);
+                this.logToFile(`Updated wallet balance for deposit ${deposit.id}`);
+            }
+        }
+    } catch (error) {
+        this.logger.error(`Error updating Bitcoin confirmations: ${error.message}`);
+    }
+}
+
+  // Add XRP Confirmation Update
+  private async updateXrpConfirmations(network: string, currentBlock: number) {
+    try {
+        const deposits = await this.depositRepository.find({
+            where: {
+                blockchain: 'xrp',
+                network: network,
+                status: In(['pending', 'confirming']),
+                blockNumber: Not(IsNull()),
+            },
+        });
+
+        for (const deposit of deposits) {
+            const confirmations = currentBlock - deposit.blockNumber;
+            const requiredConfirmations = this.CONFIRMATION_BLOCKS.xrp[network];
+
+            await this.depositRepository.update(deposit.id, {
+                confirmations,
+                status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
+            });
+
+            // Update wallet balance when required confirmations are reached
+            if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+                await this.updateWalletBalance(deposit);
+            }
+        }
+    } catch (error) {
+        this.logger.error(`Error updating XRP confirmations: ${error.message}`);
+    }
+}
 }
