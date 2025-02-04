@@ -113,7 +113,7 @@ export class DepositTrackingService implements OnModuleInit {
   };
 
   private readonly CHAIN_KEYS = {
-    eth: 'eth',
+    eth: 'ethereum',      // Changed from 'eth' to 'ethereum' to match database
     bsc: 'bsc',
     bitcoin: 'btc',
     trx: 'trx',
@@ -123,6 +123,7 @@ export class DepositTrackingService implements OnModuleInit {
   private blockQueues: {
     [key: string]: {
         queue: number[];
+        processing: boolean;
     };
   } = {};
 
@@ -208,7 +209,8 @@ export class DepositTrackingService implements OnModuleInit {
   async onModuleInit() {
     ['eth_mainnet', 'eth_testnet', 'bsc_mainnet', 'bsc_testnet'].forEach(chain => {
         this.blockQueues[chain] = {
-            queue: []
+            queue: [],
+            processing: false  // Add the processing property here
         };
     });
     
@@ -417,263 +419,332 @@ export class DepositTrackingService implements OnModuleInit {
   }
 
   private async monitorEvmChain(chain: string, network: string, startBlock?: number) {
-    const key = `${chain}_${network}`;
-    
-    try {
-        const provider = this.providers.get(key) as providers.Provider;
-        
-        if (!provider) {
-            this.logger.warn(`No provider found for ${chain} ${network}`);
-            return false;
-        }
+    const provider = this.providers.get(`${chain}_${network}`) as providers.Provider;
+    if (!provider) return;
 
-        // Clear any existing interval and listener
-        if (this.evmBlockListeners.has(key)) {
-            const oldListener = this.evmBlockListeners.get(key);
-            provider.removeListener('block', oldListener);
-            this.evmBlockListeners.delete(key);
-        }
+    this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks from block ${startBlock}`);
 
-        // Initialize monitoring status
-        if (!this.chainMonitoringStatus[chain]) {
-            this.chainMonitoringStatus[chain] = {};
-        }
-        this.chainMonitoringStatus[chain][network] = true;
-
-        // Get initial block height if not provided
-        if (!startBlock) {
-            startBlock = await this.getCurrentBlockHeight(chain, network);
-        }
-
-        // Initialize last processed block
-        this.lastProcessedBlocks[key] = (startBlock - 1).toString();
-
-        this.logger.log(`Started monitoring ${chain.toUpperCase()} ${network} blocks from block ${startBlock}`);
-
-        // Create block listener
-        const blockListener = async (blockNumber: number) => {
-            if (!this.chainMonitoringStatus[chain]?.[network]) {
-                provider.removeListener('block', blockListener);
-                return;
-            }
-
-            // Check if already processing
-            if (this.processingLocks.get(key)) {
-                return;
-            }
-
-            try {
-                this.processingLocks.set(key, true);
-                // const currentBlock = await provider.getBlockNumber();
-                
-                // this.logger.debug(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} (Current: ${currentBlock})`);
-                const block = await provider.getBlock(blockNumber);
-                
-                if (block) {
-                    this.logger.log(`${chain.toUpperCase()} ${network}: Now Processing block ${blockNumber} with ${block.transactions.length} transactions`);
-                    await this.processEvmBlock(chain, network, blockNumber, provider);
-                    await this.updateLastProcessedBlock(chain, network, blockNumber);
-                    this.lastProcessedBlocks[key] = blockNumber.toString();
-                }
-            } catch (error) {
-                this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, error);
-            } finally {
-                this.processingLocks.set(key, false);
-            }
+    // Initialize block queue if not exists
+    const queueKey = `${chain}_${network}`;
+    if (!this.blockQueues[queueKey]) {
+        this.blockQueues[queueKey] = {
+            queue: [],
+            processing: false
         };
-
-        // Start listening for new blocks
-        provider.on('block', blockListener);
-        this.evmBlockListeners.set(key, blockListener);
-
-        return true;
-    } catch (error) {
-        this.logger.error(`Failed to start ${chain} ${network} monitoring:`, error);
-        this.chainMonitoringStatus[chain][network] = false;
-        return false;
     }
+
+    // Initialize queue with the starting block
+    if (startBlock) {
+        this.blockQueues[queueKey].queue = [startBlock];
+        await this.updateLastProcessedBlock(chain, network, startBlock - 1);
+    }
+
+    // Start interval to check new blocks
+    setInterval(async () => {
+        try {
+            if (!this.chainMonitoringStatus[chain][network]) return;
+
+            const currentBlock = await provider.getBlockNumber();
+            const lastProcessedBlock = await this.getLastProcessedBlock(chain, network);
+
+            // Add new blocks to queue sequentially
+            for (let i = lastProcessedBlock + 1; i <= currentBlock; i++) {
+                if (!this.blockQueues[queueKey].queue.includes(i)) {
+                    this.blockQueues[queueKey].queue.push(i);
+                }
+            }
+
+            // Start processing queue if not already processing
+            if (!this.blockQueues[queueKey].processing) {
+                await this.processQueueForChain(chain, network, provider);
+            }
+
+        } catch (error) {
+            this.logger.error(`Error monitoring ${chain} ${network} blocks:`, error);
+        }
+    }, this.PROCESSING_DELAYS[chain].checkInterval);
 }
 
   private async processQueueForChain(chain: string, network: string, provider: any) {
     const queueKey = `${chain}_${network}`;
     const queue = this.blockQueues[queueKey];
+    queue.processing = true;
 
     try {
-      while (queue.queue.length > 0) {
-        // Check monitoring status inside the loop
-        if (!this.chainMonitoringStatus[chain][network]) {
-          break;
-        }
+        while (queue.queue.length > 0) {
+            // Check monitoring status inside the loop
+            if (!this.chainMonitoringStatus[chain][network]) {
+                break;
+            }
 
-        const blockNumber = queue.queue.shift()!;
-        try {
-          await this.processEvmBlock(chain, network, blockNumber, provider);
-          await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS[chain].blockDelay));
-        } catch (error) {
-          this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
+            // Always process the first block in queue (FIFO)
+            const blockNumber = queue.queue[0];
+            try {
+                this.logger.log(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber}`);
+                await this.processEvmBlock(chain, network, blockNumber, provider);
+                
+                // Only remove block from queue after successful processing
+                queue.queue.shift();
+                
+                // Add delay between blocks
+                await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS[chain].blockDelay));
+            } catch (error) {
+                this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}: ${error.message}`);
+                // On error, remove block and continue
+                queue.queue.shift();
+            }
         }
-      }
     } finally {
-      // Only continue if still monitoring and have blocks to process
-      if (queue.queue.length > 0 && this.chainMonitoringStatus[chain][network]) {
-        setImmediate(() => this.processQueueForChain(chain, network, provider));
-      }
+        queue.processing = false;
+        // If still have blocks and monitoring, start processing again
+        if (queue.queue.length > 0 && this.chainMonitoringStatus[chain][network]) {
+            setImmediate(() => this.processQueueForChain(chain, network, provider));
+        }
     }
-  }
+}
 
   private async processEvmBlock(chain: string, network: string, blockNumber: number, provider: providers.Provider) {
     try {
-      // Get block with transactions
-      const block = await provider.getBlock(blockNumber);
-      if (!block) return;
-
-      // Get transaction details
-      const txPromises = block.transactions.map(txHash => 
-        provider.getTransaction(txHash)
-      );
-      
-      const transactions = await Promise.all(txPromises);
-      this.logger.log(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} with ${transactions.length} transactions`);
-
-      // Process each transaction
-      for (const tx of transactions) {
-        if (tx) {
-          try {
-            await this.processEvmTransaction(chain, network, tx);
-          } catch (error) {
-            this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
-            // Continue processing other transactions
-            continue;
-          }
+        // Get block with transactions
+        const block = await provider.getBlock(blockNumber);
+        if (!block) {
+            this.logToFile(`${chain} ${network}: Block ${blockNumber} not found`);
+            return;
         }
-      }
 
-      // Update last processed block after successful processing
-      await this.updateLastProcessedBlock(chain, network, blockNumber);
-      
+        // Get transaction details with full info
+        const txPromises = block.transactions.map(txHash => 
+            provider.getTransaction(txHash)
+        );
+        
+        const transactions = await Promise.all(txPromises);
+        this.logger.log(`${chain.toUpperCase()} ${network}: Processing block ${blockNumber} with ${transactions.length} transactions`);
+
+        // Get all wallet addresses for this chain/network
+        const chainKey = this.CHAIN_KEYS[chain] || chain;
+        this.logToFile(`Looking up wallets with blockchain: ${chainKey}, network: ${network}`);
+        
+        const wallets = await this.walletRepository.find({
+            where: { 
+                blockchain: chainKey,
+                network: network
+            }
+        });
+
+        // Debug logging
+        this.logToFile(`Found ${wallets.length} wallets for ${chain} ${network}`);
+        wallets.forEach(wallet => {
+            this.logToFile(`Wallet found: blockchain=${wallet.blockchain}, network=${wallet.network}, address=${wallet.address}`);
+        });
+
+        const walletAddresses = new Set(wallets.map(w => w.address.toLowerCase()));
+        this.logToFile(`Checking ${walletAddresses.size} wallet addresses for ${chain} ${network}`);
+        this.logToFile(`Our wallet addresses: ${Array.from(walletAddresses).join(', ')}`);
+
+        // Process each transaction
+        for (const tx of transactions) {
+            if (tx) {
+                try {
+                    this.logToFile(`Processing transaction: ${tx.hash}`);
+                    this.logToFile(`Transaction to: ${tx.to?.toLowerCase()}`);
+                    
+                    if (tx.to && walletAddresses.has(tx.to.toLowerCase())) {
+                        this.logToFile(`Found deposit transaction to our wallet: ${tx.hash}`);
+                        this.logToFile(`Transaction details: ${JSON.stringify({
+                            hash: tx.hash,
+                            to: tx.to,
+                            from: tx.from,
+                            value: tx.value.toString(),
+                            data: tx.data
+                        }, null, 2)}`);
+                        
+                        await this.processEvmTransaction(chain, network, tx);
+                    }
+                } catch (error) {
+                    this.logToFile(`Error processing transaction ${tx.hash}: ${error.message}`);
+                    this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
+                    continue;
+                }
+            }
+        }
+
+        // Add this line to update confirmations after processing all transactions
+        await this.updateEvmConfirmations(chain, network, blockNumber);
+
     } catch (error) {
-      this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, error);
-      throw error;
+        this.logger.error(`Error processing ${chain} ${network} block ${blockNumber}:`, error);
+        throw error;
     }
-  }
+}
 
   private async updateEvmConfirmations(chain: string, network: string, currentBlock: number) {
     try {
-      const chainKey = this.CHAIN_KEYS[chain] || chain;
-      const deposits = await this.depositRepository.find({
-        where: {
-          blockchain: chain,
-          network: network,
-          status: In(['pending', 'confirming']),
-          blockNumber: Not(IsNull()),
-        },
-      });
+        this.logToFile(`[updateEvmConfirmations] Starting for ${chain} ${network}, current block ${currentBlock}`);
 
-      for (const deposit of deposits) {
-        const confirmations = currentBlock - deposit.blockNumber;
-        const requiredConfirmations = this.CONFIRMATION_BLOCKS[chainKey][network];
+        const chainKey = this.CHAIN_KEYS[chain] || chain;
+        this.logToFile(`[updateEvmConfirmations] Using chainKey: ${chainKey}`);
 
-        await this.depositRepository.update(deposit.id, {
-          confirmations,
-          status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
+        const deposits = await this.depositRepository.find({
+            where: {
+                blockchain: chainKey,
+                network: network,
+                status: In(['pending', 'confirming']),
+                blockNumber: Not(IsNull()),
+            },
         });
 
-        if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
-          await this.updateWalletBalance(deposit);
+        this.logToFile(`[updateEvmConfirmations] Found ${deposits.length} deposits to update`);
+        
+        for (const deposit of deposits) {
+            this.logToFile(`[updateEvmConfirmations] Processing deposit: ${JSON.stringify({
+                id: deposit.id,
+                blockNumber: deposit.blockNumber,
+                status: deposit.status,
+                currentBlock: currentBlock
+            })}`);
+
+            const confirmations = currentBlock - deposit.blockNumber;
+            const requiredConfirmations = this.CONFIRMATION_BLOCKS[chain][network];
+
+            this.logToFile(`[updateEvmConfirmations] Deposit ${deposit.id}: currentBlock ${currentBlock}, depositBlock ${deposit.blockNumber}, confirmations ${confirmations}, required ${requiredConfirmations}`);
+
+            await this.depositRepository.update(deposit.id, {
+                confirmations,
+                status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
+            });
+
+            this.logToFile(`[updateEvmConfirmations] Updated deposit ${deposit.id} with confirmations ${confirmations} and status ${confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'}`);
+
+            if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+                await this.updateWalletBalance(deposit);
+                this.logToFile(`[updateEvmConfirmations] Updated wallet balance for deposit ${deposit.id}`);
+            }
         }
-      }
     } catch (error) {
-      this.logger.error(`Error updating ${chain} confirmations: ${error.message}`);
+        this.logToFile(`[updateEvmConfirmations] Error: ${error.message}`);
+        this.logger.error(`Error updating ${chain} confirmations: ${error.message}`);
     }
-  }
+}
 
-  private async processEvmTransaction(
-    chain: string,
-    network: string,
-    tx: providers.TransactionResponse
-  ) {
+  private async processEvmTransaction(chain: string, network: string, tx: providers.TransactionResponse) {
     try {
-      // Get all user wallets for this chain/network
-      const wallets = await this.walletRepository.find({
-        where: {
-          blockchain: chain,
-          network: network,
-        },
-      });
+        this.logToFile(`Starting processEvmTransaction for ${tx.hash}`);
+        
+        // Get transaction receipt to get gas used
+        const receipt = await tx.wait();
+        const gasUsed = receipt.gasUsed;
+        const gasPrice = tx.gasPrice;
+        const fee = gasUsed.mul(gasPrice);
+        const feeInEth = utils.formatEther(fee);  // Convert wei to ETH
+        this.logToFile(`Transaction fee: ${feeInEth} ETH`);
 
-      // Create a map of addresses to wallet IDs for quick lookup
-      const walletMap = new Map(wallets.map(w => [w.address.toLowerCase(), w]));
+        // Get all user wallets for this chain/network
+        const chainKey = this.CHAIN_KEYS[chain] || chain;
+        const wallets = await this.walletRepository.find({
+            where: {
+                blockchain: chainKey,
+                network: network,
+            },
+        });
+        this.logToFile(`Found ${wallets.length} wallets`);
 
-      // Check if transaction is to one of our wallets
-      const toAddress = tx.to?.toLowerCase();
-      if (!toAddress || !walletMap.has(toAddress)) return;
+        // Create a map of addresses to wallet IDs for quick lookup
+        const walletMap = new Map(wallets.map(w => [w.address.toLowerCase(), w]));
+        
+        // Check if transaction is to one of our wallets
+        const toAddress = tx.to?.toLowerCase();
+        if (!toAddress || !walletMap.has(toAddress)) {
+            this.logToFile(`Transaction ${tx.hash} not to our wallet`);
+            return;
+        }
 
-      const wallet = walletMap.get(toAddress);
-      
-      // Get token for this transaction
-      const token = await this.getTokenForTransaction(chain, tx);
-      if (!token) return;
+        const wallet = walletMap.get(toAddress);
+        this.logToFile(`Found wallet: ${JSON.stringify(wallet)}`);
+        
+        // Get token for this transaction
+        const token = await this.getTokenForTransaction(chain, tx);
+        this.logToFile(`Found token: ${JSON.stringify(token)}`);
+        if (!token) {
+            this.logToFile(`No token found for transaction ${tx.hash}`);
+            return;
+        }
 
-      // Get amount based on token type
-      const amount = await this.getTransactionAmount(tx, token);
-      if (!amount) return;
+        // Get amount based on token type
+        const amount = await this.getTransactionAmount(tx, token);
+        this.logToFile(`Calculated amount: ${amount}`);
+        if (!amount) {
+            this.logToFile(`No amount calculated for transaction ${tx.hash}`);
+            return;
+        }
 
-      // Create deposit record
-      await this.depositRepository.save({
-        userId: wallet.userId,
-        walletId: wallet.id,
-        tokenId: token.id,
-        txHash: tx.hash,
-        amount: amount,
-        blockchain: chain,
-        network: network,
-        networkVersion: token.networkVersion,
-        blockNumber: tx.blockNumber,
-        status: 'pending',
-        metadata: {
-          from: tx.from,
-          contractAddress: token.contractAddress,
-          blockHash: tx.blockHash,
-        },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        confirmations: 0
-      });
+        // Create deposit record
+        const deposit = await this.depositRepository.save({
+            userId: wallet.userId,
+            walletId: wallet.id,
+            tokenId: token.id,
+            txHash: tx.hash,
+            amount: amount,
+            blockchain: chainKey,  // Use chainKey instead of chain to match 'ethereum'
+            network: network,
+            networkVersion: token.networkVersion,
+            blockNumber: tx.blockNumber,
+            status: 'pending',
+            metadata: {
+                from: tx.from,
+                contractAddress: token.contractAddress,
+                blockHash: tx.blockHash,
+                fee: feeInEth
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            confirmations: 0
+        });
+        this.logToFile(`Created deposit: ${JSON.stringify(deposit)}`);
 
     } catch (error) {
-      this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
+        this.logToFile(`Error in processEvmTransaction: ${error.message}`);
+        this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
     }
-  }
+}
 
   private async getTokenForTransaction(chain: string, tx: providers.TransactionResponse): Promise<Token | null> {
     try {
-      if (!tx.to) return null;
+        if (!tx.to) return null;
 
-      // For native token transfers
-      if (!tx.data || tx.data === '0x') {
-        return this.tokenRepository.findOne({
-          where: {
-            blockchain: chain,
-            networkVersion: 'NATIVE',
-            isActive: true
-          }
-        });
-      }
-
-      // For token transfers
-      return this.tokenRepository.findOne({
-        where: {
-          blockchain: chain,
-          contractAddress: tx.to.toLowerCase(),
-          isActive: true
+        const chainKey = this.CHAIN_KEYS[chain] || chain;
+        this.logToFile(`Getting token for tx ${tx.hash}`);
+        
+        // For native token transfers
+        if (!tx.data || tx.data === '0x') {
+            this.logToFile(`Native token transfer detected for ${chainKey}`);
+            const token = await this.tokenRepository.findOne({
+                where: {
+                    blockchain: chainKey,  // Use chainKey instead of chain
+                    networkVersion: 'NATIVE',
+                    isActive: true
+                }
+            });
+            this.logToFile(`Found native token: ${JSON.stringify(token)}`);
+            return token;
         }
-      });
+
+        // For token transfers
+        const token = await this.tokenRepository.findOne({
+            where: {
+                blockchain: chainKey,  // Use chainKey here too for consistency
+                contractAddress: tx.to.toLowerCase(),
+                isActive: true
+            }
+        });
+        this.logToFile(`Found token contract: ${JSON.stringify(token)}`);
+        return token;
 
     } catch (error) {
-      this.logger.error(`Error getting token for tx ${tx.hash}: ${error.message}`);
-      return null;
+        this.logToFile(`Error getting token for tx ${tx.hash}: ${error.message}`);
+        this.logger.error(`Error getting token for tx ${tx.hash}: ${error.message}`);
+        return null;
     }
-  }
+}
 
   private async getTransactionAmount(tx: providers.TransactionResponse, token: Token): Promise<string | null> {
     try {
@@ -721,7 +792,7 @@ export class DepositTrackingService implements OnModuleInit {
         where: {
           userId: deposit.userId,
           baseSymbol: token.baseSymbol || token.symbol,
-          type: 'spot'
+          type: 'funding'
         }
       });
 
