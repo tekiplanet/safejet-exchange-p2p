@@ -11,12 +11,13 @@ import { Token } from './entities/token.entity';
 import { WalletBalance } from './entities/wallet-balance.entity';
 import { Deposit } from './entities/deposit.entity';
 import { SystemSettings } from './entities/system-settings.entity';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthModule } from '../auth/auth.module';
 import { WalletListener } from './wallet.listener';
 import { ExchangeModule } from '../exchange/exchange.module';
 import { AdminDepositController } from './admin/deposit.controller';
 import { JwtModule } from '@nestjs/jwt';
+import { AdminTokenController } from './admin/token.controller';
 
 @Module({
   imports: [
@@ -30,7 +31,13 @@ import { JwtModule } from '@nestjs/jwt';
     ]),
     EventEmitterModule.forRoot(),
     ConfigModule,
-    JwtModule.register({}),
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get('JWT_SECRET'),
+        signOptions: { expiresIn: config.get('JWT_EXPIRATION') },
+      }),
+    }),
     forwardRef(() => AuthModule),
     ExchangeModule,
   ],
@@ -42,8 +49,13 @@ import { JwtModule } from '@nestjs/jwt';
   ],
   controllers: [
     WalletController,
-    AdminDepositController
+    AdminDepositController,
+    AdminTokenController
   ],
   exports: [WalletService, DepositTrackingService],
 })
-export class WalletModule {} 
+export class WalletModule {
+  constructor() {
+    console.log('WalletModule JWT_SECRET:', process.env.JWT_SECRET ? 'Present' : 'Missing');
+  }
+} 

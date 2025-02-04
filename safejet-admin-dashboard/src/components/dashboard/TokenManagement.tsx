@@ -36,30 +36,42 @@ export default function TokenManagement() {
     const [loading, setLoading] = useState(false);
     const [status, setStatus] = useState('');
     const [editToken, setEditToken] = useState<Partial<Token> | null>(null);
+    const [page, setPage] = useState(1);
+    const [totalTokens, setTotalTokens] = useState(0);
+    const [pageSize, setPageSize] = useState(10);
     const router = useRouter();
 
-    const API_BASE = '/api';
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
     const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
         const token = localStorage.getItem('adminToken');
+        
+        // Add debug logging
+        console.log('Current token:', token);
+        console.log('API URL:', `${API_BASE}${url}`);
+        
         if (!token) {
             router.push('/login');
             throw new Error('No auth token found');
         }
 
         const headers = {
-            'Authorization': `Bearer ${token}`,
+            'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`,
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'ngrok-skip-browser-warning': 'true'
         };
 
-        const fetchOptions = {
+        // Log headers
+        console.log('Request headers:', headers);
+
+        const fetchOptions: RequestInit = {
             ...options,
             headers: {
                 ...headers,
                 ...options.headers
-            }
+            },
+            credentials: 'include' as RequestCredentials
         };
 
         let lastError: Error = new Error('Failed to fetch');
@@ -67,16 +79,34 @@ export default function TokenManagement() {
         for (let i = 0; i < retries; i++) {
             try {
                 const response = await fetch(`${API_BASE}${url}`, fetchOptions);
+                
                 if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('API Error:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        body: errorText,
+                        url: `${API_BASE}${url}`,
+                        headers: headers
+                    });
+
                     if (response.status === 401) {
-                        localStorage.removeItem('adminToken');
-                        router.push('/login');
-                        throw new Error('Session expired');
+                        try {
+                            const errorData = JSON.parse(errorText);
+                            if (errorData.message === 'Unauthorized' || errorData.message === 'Invalid token') {
+                                localStorage.removeItem('adminToken');
+                                router.push('/login');
+                                throw new Error('Session expired');
+                            }
+                        } catch (e) {
+                            console.error('Error parsing error response:', e);
+                        }
                     }
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 return response;
             } catch (error) {
+                console.error('Fetch error:', error);
                 lastError = error instanceof Error ? error : new Error('Unknown error occurred');
                 if (i === retries - 1) break;
                 await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
@@ -85,16 +115,13 @@ export default function TokenManagement() {
         throw lastError;
     };
 
-    useEffect(() => {
-        fetchTokens();
-    }, []);
-
     const fetchTokens = async () => {
         setLoading(true);
         try {
-            const response = await fetchWithRetry('/admin/tokens', { method: 'GET' });
+            const response = await fetchWithRetry(`/admin/deposits/tokens?page=${page}&limit=${pageSize}`, { method: 'GET' });
             const data = await response.json();
-            setTokens(data);
+            setTokens(data.data);
+            setTotalTokens(data.total);
             setStatus('');
         } catch (error) {
             console.error('Error fetching tokens:', error);
@@ -104,6 +131,12 @@ export default function TokenManagement() {
         }
     };
 
+    useEffect(() => {
+        if (localStorage.getItem('adminToken')) {
+            fetchTokens();
+        }
+    }, [page, pageSize]); // Refetch when page or pageSize changes
+
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!editToken) return;
@@ -111,12 +144,12 @@ export default function TokenManagement() {
         setLoading(true);
         try {
             if (editToken.id) {
-                await fetchWithRetry(`/admin/tokens/${editToken.id}`, {
+                await fetchWithRetry(`/admin/deposits/tokens/${editToken.id}`, {
                     method: 'PUT',
                     body: JSON.stringify(editToken)
                 });
             } else {
-                await fetchWithRetry('/admin/tokens', {
+                await fetchWithRetry('/admin/deposits/tokens', {
                     method: 'POST',
                     body: JSON.stringify(editToken)
                 });
@@ -129,6 +162,15 @@ export default function TokenManagement() {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handlePageChange = (newPage: number) => {
+        setPage(newPage);
+    };
+
+    const handlePageSizeChange = (newPageSize: number) => {
+        setPageSize(newPageSize);
+        setPage(1); // Reset to first page when changing page size
     };
 
     return (
@@ -226,6 +268,45 @@ export default function TokenManagement() {
                     )}
                 </div>
             </div>
+
+            {/* Add pagination controls below the table */}
+            {!loading && tokens.length > 0 && (
+                <div className="flex justify-between items-center mt-4 pt-4 border-t">
+                    <div className="flex items-center text-sm text-gray-700">
+                        <span className="mr-2">Rows per page:</span>
+                        <select
+                            value={pageSize}
+                            onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                            className="border rounded px-2 py-1 bg-white"
+                        >
+                            {[10, 20, 50].map((size) => (
+                                <option key={size} value={size}>
+                                    {size}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <button
+                            onClick={() => handlePageChange(page - 1)}
+                            disabled={page === 1}
+                            className="px-3 py-1 border rounded bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                            Previous
+                        </button>
+                        <span className="text-sm text-gray-700">
+                            Page {page} of {Math.max(1, Math.ceil(totalTokens / pageSize))}
+                        </span>
+                        <button
+                            onClick={() => handlePageChange(page + 1)}
+                            disabled={page >= Math.ceil(totalTokens / pageSize)}
+                            className="px-3 py-1 border rounded bg-white text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                            Next
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Edit/Add Dialog */}
             <Dialog 
