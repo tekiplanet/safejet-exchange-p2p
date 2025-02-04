@@ -124,6 +124,7 @@ export class DepositTrackingService implements OnModuleInit {
     [key: string]: {
         queue: number[];
         processing: boolean;
+        lastQueuedBlock?: number;
     };
   } = {};
 
@@ -429,13 +430,15 @@ export class DepositTrackingService implements OnModuleInit {
     if (!this.blockQueues[queueKey]) {
         this.blockQueues[queueKey] = {
             queue: [],
-            processing: false
+            processing: false,
+            lastQueuedBlock: startBlock - 1  // Initialize last queued block
         };
     }
 
     // Initialize queue with the starting block
     if (startBlock) {
         this.blockQueues[queueKey].queue = [startBlock];
+        this.blockQueues[queueKey].lastQueuedBlock = startBlock - 1;  // Reset last queued block
         await this.updateLastProcessedBlock(chain, network, startBlock - 1);
     }
 
@@ -445,14 +448,18 @@ export class DepositTrackingService implements OnModuleInit {
             if (!this.chainMonitoringStatus[chain][network]) return;
 
             const currentBlock = await provider.getBlockNumber();
-            const lastProcessedBlock = await this.getLastProcessedBlock(chain, network);
+            const lastQueuedBlock = this.blockQueues[queueKey].lastQueuedBlock;
 
-            // Add new blocks to queue sequentially
-            for (let i = lastProcessedBlock + 1; i <= currentBlock; i++) {
+            // Add all blocks sequentially
+            for (let i = lastQueuedBlock + 1; i <= currentBlock; i++) {
                 if (!this.blockQueues[queueKey].queue.includes(i)) {
+                    this.logToFile(`Adding block ${i} to queue for ${chain} ${network}`);
                     this.blockQueues[queueKey].queue.push(i);
                 }
             }
+            
+            // Update last queued block only after successfully adding blocks
+            this.blockQueues[queueKey].lastQueuedBlock = currentBlock;
 
             // Start processing queue if not already processing
             if (!this.blockQueues[queueKey].processing) {
@@ -719,7 +726,7 @@ export class DepositTrackingService implements OnModuleInit {
             this.logToFile(`Native token transfer detected for ${chainKey}`);
             const token = await this.tokenRepository.findOne({
                 where: {
-                    blockchain: chainKey,  // Use chainKey instead of chain
+                    blockchain: chainKey,
                     networkVersion: 'NATIVE',
                     isActive: true
                 }
@@ -729,9 +736,15 @@ export class DepositTrackingService implements OnModuleInit {
         }
 
         // For token transfers
+        this.logToFile(`Token transfer detected:`);
+        this.logToFile(`- Chain: ${chainKey}`);
+        this.logToFile(`- Contract Address: ${tx.to}`);
+        this.logToFile(`- Data: ${tx.data}`);
+        this.logToFile(`- Value: ${tx.value.toString()}`);
+
         const token = await this.tokenRepository.findOne({
             where: {
-                blockchain: chainKey,  // Use chainKey here too for consistency
+                blockchain: chainKey,
                 contractAddress: tx.to.toLowerCase(),
                 isActive: true
             }
