@@ -282,4 +282,33 @@ export class AdminWalletController {
             };
         }
     }
+
+    @Get('addresses/:userId')
+    async getUserWalletAddresses(@Param('userId') userId: string) {
+        const wallets = await this.walletRepository.find({
+            where: { userId },
+            select: ['blockchain', 'network', 'address', 'memo', 'tag']
+        });
+
+        // Group by blockchain for better organization
+        const groupedWallets = wallets.reduce((acc, wallet) => {
+            if (!acc[wallet.blockchain]) {
+                acc[wallet.blockchain] = [];
+            }
+            acc[wallet.blockchain].push({
+                network: wallet.network,
+                address: wallet.address,
+                memo: wallet.memo,
+                tag: wallet.tag
+            });
+            return acc;
+        }, {} as Record<string, Array<{
+            network: string;
+            address: string;
+            memo?: string;
+            tag?: string;
+        }>>);
+
+        return groupedWallets;
+    }
 } 

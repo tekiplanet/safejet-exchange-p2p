@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import {
     Box,
@@ -22,8 +22,21 @@ import {
     FormControl,
     InputLabel,
     CircularProgress,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    IconButton,
+    Tooltip,
+    List,
+    ListItem,
+    ListItemText,
+    Divider,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Search as SearchIcon, SyncAlt as SyncIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Search as SearchIcon, SyncAlt as SyncIcon, AccountBalanceWallet as WalletIcon, ExpandMore as ExpandMoreIcon, ContentCopy as CopyIcon } from '@mui/icons-material';
 
 interface WalletBalance {
     symbol: string;
@@ -80,6 +93,18 @@ export function UserWalletBalances() {
             spotBalances: number;
             fundingBalances: number;
         };
+    } | null>(null);
+    const [walletAddresses, setWalletAddresses] = useState<Record<string, Array<{
+        network: string;
+        address: string;
+        memo?: string;
+        tag?: string;
+    }>>>({});
+    const [showAddresses, setShowAddresses] = useState(false);
+    const [loadingAddresses, setLoadingAddresses] = useState(false);
+    const [copyMessage, setCopyMessage] = useState<{
+        type: 'success' | 'error';
+        text: string;
     } | null>(null);
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
@@ -195,6 +220,57 @@ export function UserWalletBalances() {
         }
     };
 
+    const fetchWalletAddresses = async () => {
+        if (!id) return;
+        setLoadingAddresses(true);
+        
+        try {
+            const response = await fetchWithRetry(
+                `/admin/wallet-balances/addresses/${id}`,
+                { method: 'GET' }
+            );
+            const data = await response.json();
+            setWalletAddresses(data);
+        } catch (error) {
+            console.error('Error fetching wallet addresses:', error);
+            setSyncMessage({
+                type: 'error',
+                text: 'Failed to load wallet addresses'
+            });
+        } finally {
+            setLoadingAddresses(false);
+        }
+    };
+
+    const copyToClipboard = (text: string) => {
+        try {
+            // Just copy the wallet address directly
+            document.execCommand('copy');
+            const selection = window.getSelection();
+            const range = document.createRange();
+            const addressElement = document.createElement('span');
+            addressElement.textContent = text;
+            document.body.appendChild(addressElement);
+            range.selectNodeContents(addressElement);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+            document.execCommand('copy');
+            document.body.removeChild(addressElement);
+            
+            setCopyMessage({
+                type: 'success',
+                text: 'Address copied to clipboard!'
+            });
+        } catch (err) {
+            console.error('Copy failed:', err);
+            setCopyMessage({
+                type: 'error',
+                text: 'Failed to copy address. Please try again.'
+            });
+        }
+        setTimeout(() => setCopyMessage(null), 2000);
+    };
+
     useEffect(() => {
         if (id) {
             if (searchTimeout) {
@@ -255,14 +331,27 @@ export function UserWalletBalances() {
                         <Typography variant="h6">
                             Wallet Balances
                         </Typography>
-                        <Button
-                            variant="contained"
-                            onClick={handleSync}
-                            disabled={isSyncing}
-                            startIcon={isSyncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
-                        >
-                            {isSyncing ? 'Syncing...' : 'Sync Wallets'}
-                        </Button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <Button
+                                variant="outlined"
+                                onClick={() => {
+                                    fetchWalletAddresses();
+                                    setShowAddresses(true);
+                                }}
+                                startIcon={<WalletIcon />}
+                                disabled={loadingAddresses}
+                            >
+                                View Addresses
+                            </Button>
+                            <Button
+                                variant="contained"
+                                onClick={handleSync}
+                                disabled={isSyncing}
+                                startIcon={isSyncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
+                            >
+                                {isSyncing ? 'Syncing...' : 'Sync Wallets'}
+                            </Button>
+                        </div>
                     </Box>
 
                     {syncMessage && (
@@ -381,6 +470,94 @@ export function UserWalletBalances() {
                     rowsPerPageOptions={[10, 25, 50, 100]}
                 />
             </Paper>
+
+            <Dialog
+                open={showAddresses}
+                onClose={() => {
+                    setShowAddresses(false);
+                    setCopyMessage(null);
+                }}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>Wallet Addresses</DialogTitle>
+                <DialogContent>
+                    {copyMessage && (
+                        <Alert 
+                            severity={copyMessage.type}
+                            onClose={() => setCopyMessage(null)}
+                            sx={{ mb: 2 }}
+                        >
+                            {copyMessage.text}
+                        </Alert>
+                    )}
+                    {loadingAddresses ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        Object.entries(walletAddresses).map(([blockchain, addresses]) => (
+                            <Accordion key={blockchain}>
+                                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                                    <Typography variant="subtitle1" sx={{ textTransform: 'uppercase' }}>
+                                        {blockchain}
+                                    </Typography>
+                                </AccordionSummary>
+                                <AccordionDetails>
+                                    <List dense>
+                                        {addresses.map((wallet, idx) => (
+                                            <React.Fragment key={`${blockchain}-${wallet.network}-${idx}`}>
+                                                <ListItem
+                                                    secondaryAction={
+                                                        <Tooltip title="Copy Address">
+                                                            <IconButton 
+                                                                edge="end" 
+                                                                onClick={() => copyToClipboard(wallet.address)}
+                                                            >
+                                                                <CopyIcon />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    }
+                                                >
+                                                    <ListItemText
+                                                        primary={`${wallet.network}`}
+                                                        secondary={
+                                                            <React.Fragment>
+                                                                <Typography component="span" variant="body2">
+                                                                    {wallet.address}
+                                                                </Typography>
+                                                                {wallet.memo && (
+                                                                    <Typography component="div" variant="caption">
+                                                                        Memo: {wallet.memo}
+                                                                    </Typography>
+                                                                )}
+                                                                {wallet.tag && (
+                                                                    <Typography component="div" variant="caption">
+                                                                        Tag: {wallet.tag}
+                                                                    </Typography>
+                                                                )}
+                                                            </React.Fragment>
+                                                        }
+                                                    />
+                                                </ListItem>
+                                                <Divider />
+                                            </React.Fragment>
+                                        ))}
+                                    </List>
+                                </AccordionDetails>
+                            </Accordion>
+                        ))
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => {
+                        setShowAddresses(false);
+                        setCopyMessage(null);
+                    }}>
+                        Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </div>
     );
 } 
