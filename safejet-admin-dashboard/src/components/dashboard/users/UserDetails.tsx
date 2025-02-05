@@ -459,7 +459,7 @@ export default function UserDetails() {
                                 variant="contained"
                                 color="primary"
                                 fullWidth
-                                onClick={() => router.push(`/dashboard/users/${user.id}/wallets`)}
+                                onClick={() => router.push(`/dashboard/users/wallets?id=${user.id}`)}
                             >
                                 View All Balances
                             </Button>

@@ -59,26 +59,51 @@ export class AdminWalletController {
 
     @Get(':userId')
     async getUserBalances(@Param('userId') userId: string) {
-        this.logger.debug(`Fetching wallet balances for user: ${userId}`);
-        
         const balances = await this.walletBalanceRepository.find({
             where: { userId },
             order: { baseSymbol: 'ASC' }
         });
 
-        this.logger.debug(`Found ${balances.length} balances for user ${userId}`);
-        this.logger.debug('Raw balances:', balances);
+        // Get token prices
+        const tokenSymbols = [...new Set(balances.map(b => b.baseSymbol))];
+        const tokens = await this.tokenRepository.find({
+            where: { baseSymbol: In(tokenSymbols) }
+        });
 
-        // Group balances by symbol
+        const tokenPrices = tokens.reduce((acc, token) => {
+            acc[token.baseSymbol] = token.currentPrice;
+            return acc;
+        }, {} as Record<string, number>);
+
+        // Group balances with USD values
         const groupedBalances = balances.reduce((acc, balance) => {
             if (!acc[balance.baseSymbol]) {
-                acc[balance.baseSymbol] = { spot: '0', funding: '0' };
+                acc[balance.baseSymbol] = { 
+                    spot: '0', 
+                    funding: '0',
+                    spotUsdValue: 0,
+                    fundingUsdValue: 0
+                };
             }
-            acc[balance.baseSymbol][balance.type] = balance.balance;
-            return acc;
-        }, {} as Record<string, { spot: string; funding: string }>);
+            const price = tokenPrices[balance.baseSymbol] || 0;
+            const amount = parseFloat(balance.balance) || 0;
+            const usdValue = amount * price;
 
-        this.logger.debug('Grouped balances:', groupedBalances);
+            if (balance.type === 'spot') {
+                acc[balance.baseSymbol].spot = balance.balance;
+                acc[balance.baseSymbol].spotUsdValue = usdValue;
+            } else {
+                acc[balance.baseSymbol].funding = balance.balance;
+                acc[balance.baseSymbol].fundingUsdValue = usdValue;
+            }
+            return acc;
+        }, {} as Record<string, { 
+            spot: string; 
+            funding: string;
+            spotUsdValue: number;
+            fundingUsdValue: number;
+        }>);
+
         return groupedBalances;
     }
 } 
