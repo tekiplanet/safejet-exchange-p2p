@@ -1,10 +1,11 @@
-import { Controller, Get, Param, UseGuards, Logger, Query } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Logger, Query, Post } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
 import { AdminGuard } from '../auth/admin.guard';
 import { Token } from '../wallet/entities/token.entity';
 import { In } from 'typeorm';
+import { Wallet } from '../wallet/entities/wallet.entity';
 
 @Controller('admin/wallet-balances')
 @UseGuards(AdminGuard)
@@ -16,6 +17,8 @@ export class AdminWalletController {
         private walletBalanceRepository: Repository<WalletBalance>,
         @InjectRepository(Token)
         private tokenRepository: Repository<Token>,
+        @InjectRepository(Wallet)
+        private walletRepository: Repository<Wallet>,
     ) {}
 
     @Get('summary/:userId')
@@ -176,5 +179,107 @@ export class AdminWalletController {
                 totalPages: Math.ceil(total / limit)
             }
         };
+    }
+
+    @Post('sync/:userId')
+    async syncUserWallets(@Param('userId') userId: string) {
+        this.logger.debug(`Syncing wallet balances for user: ${userId}`);
+
+        // Get ALL tokens
+        const tokens = await this.tokenRepository.find({
+            where: { isActive: true }
+        });
+
+        // Get existing balances
+        const existingBalances = await this.walletBalanceRepository.find({
+            where: { userId }
+        });
+
+        // Get user's wallets
+        const userWallets = await this.walletRepository.find({
+            where: { userId }
+        });
+
+        // Group tokens by baseSymbol
+        const tokenGroups = tokens.reduce<Record<string, Token[]>>((groups, token) => {
+            const baseSymbol = token.baseSymbol || token.symbol;
+            if (!groups[baseSymbol]) {
+                groups[baseSymbol] = [];
+            }
+            groups[baseSymbol].push(token);
+            return groups;
+        }, {});
+
+        const newBalances: WalletBalance[] = [];
+        const existingSymbols = new Set(existingBalances.map(b => b.baseSymbol));
+
+        // Process each token group that doesn't exist yet
+        for (const [baseSymbol, groupTokens] of Object.entries(tokenGroups)) {
+            if (existingSymbols.has(baseSymbol)) continue;
+
+            const types: ('spot' | 'funding')[] = ['spot', 'funding'];
+            
+            for (const type of types) {
+                try {
+                    // Build networks metadata
+                    const networks = {};
+                    
+                    // Build metadata for each token variant
+                    for (const token of groupTokens) {
+                        // Find matching wallets for this token's blockchain
+                        const matchingWallets = userWallets.filter(w => 
+                            w.blockchain === token.blockchain
+                        );
+
+                        for (const wallet of matchingWallets) {
+                            const networkKey = `${token.blockchain}_${wallet.network}`;
+                            networks[networkKey] = {
+                                walletId: wallet.id,
+                                tokenId: token.id,
+                                networkVersion: token.networkVersion,
+                                contractAddress: token.contractAddress,
+                                network: wallet.network
+                            };
+                        }
+                    }
+
+                    // Only create if we have network metadata
+                    if (Object.keys(networks).length > 0) {
+                        const balance = new WalletBalance();
+                        balance.userId = userId;
+                        balance.baseSymbol = baseSymbol;
+                        balance.type = type;
+                        balance.balance = '0';
+                        balance.metadata = { networks };
+                        newBalances.push(balance);
+                    }
+                } catch (error) {
+                    this.logger.error(`Failed to create balance for ${baseSymbol}:`, error);
+                }
+            }
+        }
+
+        if (newBalances.length > 0) {
+            await this.walletBalanceRepository.save(newBalances);
+            return {
+                message: `Successfully synced ${newBalances.length / 2} new tokens`,
+                details: {
+                    newTokens: [...new Set(newBalances.map(b => b.baseSymbol))].sort(),
+                    totalCreated: newBalances.length,
+                    spotBalances: newBalances.filter(b => b.type === 'spot').length,
+                    fundingBalances: newBalances.filter(b => b.type === 'funding').length
+                }
+            };
+        } else {
+            return {
+                message: 'No new tokens to sync. User wallet balances are up to date.',
+                details: {
+                    newTokens: [],
+                    totalCreated: 0,
+                    spotBalances: 0,
+                    fundingBalances: 0
+                }
+            };
+        }
     }
 } 

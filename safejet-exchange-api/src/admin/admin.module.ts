@@ -14,6 +14,7 @@ import { AdminP2PTraderSettingsController } from './p2p-trader-settings.controll
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
 import { AdminWalletController } from './admin-wallet.controller';
 import { Token } from '../wallet/entities/token.entity';
+import { Wallet } from '../wallet/entities/wallet.entity';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { Token } from '../wallet/entities/token.entity';
       P2PTraderSettings, 
       WalletBalance,
       Token,
+      Wallet,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],

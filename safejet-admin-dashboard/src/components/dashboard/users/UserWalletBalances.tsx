@@ -21,8 +21,9 @@ import {
     MenuItem,
     FormControl,
     InputLabel,
+    CircularProgress,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Search as SearchIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Search as SearchIcon, SyncAlt as SyncIcon } from '@mui/icons-material';
 
 interface WalletBalance {
     symbol: string;
@@ -69,6 +70,17 @@ export function UserWalletBalances() {
     const [hideZeroBalances, setHideZeroBalances] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>('symbol');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState<{
+        type: 'success' | 'error';
+        text: string;
+        details?: {
+            newTokens: string[];
+            totalCreated: number;
+            spotBalances: number;
+            fundingBalances: number;
+        };
+    } | null>(null);
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -150,6 +162,39 @@ export function UserWalletBalances() {
         }
     };
 
+    const handleSync = async () => {
+        if (!id) return;
+        setIsSyncing(true);
+        setSyncMessage(null);
+
+        try {
+            const response = await fetchWithRetry(
+                `/admin/wallet-balances/sync/${id}`,
+                { method: 'POST' }
+            );
+
+            if (response.ok) {
+                const data = await response.json();
+                setSyncMessage({
+                    type: 'success',
+                    text: data.message,
+                    details: data.details
+                });
+                // Refresh balances
+                fetchBalances();
+            } else {
+                throw new Error('Failed to sync wallets');
+            }
+        } catch (error) {
+            setSyncMessage({
+                type: 'error',
+                text: 'Failed to sync wallet balances. Please try again.'
+            });
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     useEffect(() => {
         if (id) {
             if (searchTimeout) {
@@ -206,7 +251,42 @@ export function UserWalletBalances() {
 
             <Paper className="p-6">
                 <div className="flex flex-col space-y-4 mb-4">
-                    {/* Search and Filters Row */}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="h6">
+                            Wallet Balances
+                        </Typography>
+                        <Button
+                            variant="contained"
+                            onClick={handleSync}
+                            disabled={isSyncing}
+                            startIcon={isSyncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
+                        >
+                            {isSyncing ? 'Syncing...' : 'Sync Wallets'}
+                        </Button>
+                    </Box>
+
+                    {syncMessage && (
+                        <Alert 
+                            severity={syncMessage.type}
+                            onClose={() => setSyncMessage(null)}
+                            sx={{ mb: 2 }}
+                        >
+                            <div>
+                                <div>{syncMessage.text}</div>
+                                {syncMessage.type === 'success' && syncMessage.details && syncMessage.details.totalCreated > 0 && (
+                                    <div style={{ marginTop: '8px' }}>
+                                        <Typography variant="body2" component="div">
+                                            Created {syncMessage.details.spotBalances} spot and {syncMessage.details.fundingBalances} funding balances for tokens:
+                                        </Typography>
+                                        <Typography variant="body2" component="div" sx={{ mt: 1 }}>
+                                            {syncMessage.details.newTokens.join(', ')}
+                                        </Typography>
+                                    </div>
+                                )}
+                            </div>
+                        </Alert>
+                    )}
+
                     <div className="flex items-center space-x-4">
                         <TextField
                             className="flex-grow"
@@ -245,7 +325,6 @@ export function UserWalletBalances() {
                         </Button>
                     </div>
 
-                    {/* Toggle Zero Balances */}
                     <FormControlLabel
                         control={
                             <Switch
