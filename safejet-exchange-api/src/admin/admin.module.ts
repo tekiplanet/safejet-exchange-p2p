@@ -9,10 +9,12 @@ import { AdminDepositController } from './admin-deposit.controller';
 import { AdminGuard } from '../auth/admin.guard';
 import { WalletModule } from '../wallet/wallet.module';
 import { SystemSettings } from '../wallet/entities/system-settings.entity';
+import { P2PTraderSettings } from '../p2p-settings/entities/p2p-trader-settings.entity';
+import { AdminP2PTraderSettingsController } from './p2p-trader-settings.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin, SystemSettings]),
+    TypeOrmModule.forFeature([Admin, SystemSettings, P2PTraderSettings]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -23,7 +25,11 @@ import { SystemSettings } from '../wallet/entities/system-settings.entity';
     WalletModule,
   ],
   providers: [AdminAuthService, AdminGuard],
-  controllers: [AdminAuthController, AdminDepositController],
+  controllers: [
+    AdminAuthController, 
+    AdminDepositController,
+    AdminP2PTraderSettingsController,
+  ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
 export class AdminModule {} 

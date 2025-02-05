@@ -73,6 +73,19 @@ interface NotificationPreferences {
     };
 }
 
+interface P2PTraderSettings {
+    id: string;
+    userId: string;
+    currency: string;
+    autoAcceptOrders: boolean;
+    onlyVerifiedUsers: boolean;
+    showOnlineStatus: boolean;
+    enableInstantTrade: boolean;
+    timezone: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
 interface User {
     id: string;
     email: string;
@@ -99,6 +112,7 @@ interface User {
     lastPasswordChangeAt: string;
     failedLoginAttempts: number;
     forcePasswordReset?: boolean;
+    p2pTraderSettings?: P2PTraderSettings;
 }
 
 export default function UserDetails() {
@@ -195,12 +209,58 @@ export default function UserDetails() {
         }
     };
 
+    const fetchP2PSettings = async () => {
+        if (!user?.id) return;
+        console.log('Attempting to fetch P2P settings for user:', user.id);
+        try {
+            const response = await fetchWithRetry(`/admin/p2p-trader-settings/${user.id}`, { method: 'GET' });
+            const data = await response.json();
+            console.log('P2P Settings API response:', data);
+            setUser(prev => {
+                console.log('Updating user with P2P settings:', data);
+                return prev ? { ...prev, p2pTraderSettings: data } : null;
+            });
+        } catch (error) {
+            console.error('Error fetching P2P settings:', error);
+        }
+    };
+
+    const updateP2PSettings = async (updates: Partial<P2PTraderSettings>) => {
+        if (!user?.id || !user.p2pTraderSettings?.id) return;
+        
+        setSaving(true);
+        try {
+            const response = await fetchWithRetry(`/admin/p2p-trader-settings/${user.p2pTraderSettings.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updates)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update P2P settings');
+            }
+
+            await fetchP2PSettings(); // Refresh P2P settings
+            setStatus('P2P settings updated successfully');
+        } catch (error) {
+            console.error('Error updating P2P settings:', error);
+            setStatus(error instanceof Error ? error.message : 'Error updating P2P settings');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     useEffect(() => {
         if (id) {
             fetchUser();
             fetchCurrencies();
         }
     }, [id]);
+
+    useEffect(() => {
+        if (user?.id) {
+            fetchP2PSettings();
+        }
+    }, [user?.id]);
 
     const handleUpdateUser = async (updates: Partial<User>) => {
         if (!user?.id) return;
@@ -460,6 +520,94 @@ export default function UserDetails() {
                                 }
                                 label={`Account Status (${user.isActive ? 'Active' : 'Suspended'})`}
                             />
+                        </div>
+                    </Paper>
+                </Grid>
+
+                {/* P2P Trader Settings */}
+                <Grid item xs={12} md={12}>
+                    <Paper className="p-6">
+                        <Typography variant="h6" className="mb-4">P2P Trader Settings</Typography>
+                        <div className="space-y-4">
+                            <FormControl fullWidth>
+                                <InputLabel>Trading Currency</InputLabel>
+                                <Select
+                                    value={user.p2pTraderSettings?.currency?.toLowerCase() || 'ngn'}
+                                    onChange={(e) => updateP2PSettings({ currency: e.target.value.toUpperCase() })}
+                                    label="Trading Currency"
+                                    disabled={saving || !user.p2pTraderSettings}
+                                >
+                                    {availableCurrencies.map((currency) => (
+                                        <MenuItem key={currency} value={currency.toLowerCase()}>
+                                            {currency.toUpperCase()}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={Boolean(user.p2pTraderSettings?.autoAcceptOrders)}
+                                        onChange={(e) => updateP2PSettings({ autoAcceptOrders: e.target.checked })}
+                                        disabled={saving || !user.p2pTraderSettings}
+                                    />
+                                }
+                                label="Auto Accept Orders"
+                            />
+
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={Boolean(user.p2pTraderSettings?.onlyVerifiedUsers)}
+                                        onChange={(e) => updateP2PSettings({ onlyVerifiedUsers: e.target.checked })}
+                                        disabled={saving || !user.p2pTraderSettings}
+                                    />
+                                }
+                                label="Only Verified Users"
+                            />
+
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={Boolean(user.p2pTraderSettings?.showOnlineStatus)}
+                                        onChange={(e) => updateP2PSettings({ showOnlineStatus: e.target.checked })}
+                                        disabled={saving || !user.p2pTraderSettings}
+                                    />
+                                }
+                                label="Show Online Status"
+                            />
+
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={Boolean(user.p2pTraderSettings?.enableInstantTrade)}
+                                        onChange={(e) => updateP2PSettings({ enableInstantTrade: e.target.checked })}
+                                        disabled={saving || !user.p2pTraderSettings}
+                                    />
+                                }
+                                label="Enable Instant Trade"
+                            />
+
+                            <FormControl fullWidth>
+                                <InputLabel>Timezone</InputLabel>
+                                <Select
+                                    value={user.p2pTraderSettings?.timezone || 'Africa/Lagos'}
+                                    onChange={(e) => updateP2PSettings({ timezone: e.target.value })}
+                                    label="Timezone"
+                                    disabled={saving || !user.p2pTraderSettings}
+                                >
+                                    <MenuItem value="Africa/Lagos">Africa/Lagos</MenuItem>
+                                    <MenuItem value="UTC">UTC</MenuItem>
+                                    {/* Add more timezones as needed */}
+                                </Select>
+                            </FormControl>
+
+                            <Typography variant="caption" color="textSecondary">
+                                Last Updated: {user.p2pTraderSettings?.updatedAt ? 
+                                    new Date(user.p2pTraderSettings.updatedAt).toLocaleString() : 
+                                    'Never'}
+                            </Typography>
                         </div>
                     </Paper>
                 </Grid>
