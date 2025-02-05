@@ -46,6 +46,33 @@ interface KYCData {
     };
 }
 
+interface NotificationPreferences {
+    P2P: {
+        'New Messages': boolean;
+        'Order Status': boolean;
+        'Dispute Updates': boolean;
+        'Payment Confirmations': boolean;
+    };
+    Wallet: {
+        'Deposits': boolean;
+        'Withdrawals': boolean;
+        'Balance Updates': boolean;
+        'Transfer Confirmations': boolean;
+    };
+    Trading: {
+        'Price Alerts': boolean;
+        'Order Updates': boolean;
+        'Market Updates': boolean;
+        'Trade Confirmations': boolean;
+    };
+    Security: {
+        'Login Alerts': boolean;
+        'Device Changes': boolean;
+        'Password Changes': boolean;
+        'Suspicious Activity': boolean;
+    };
+}
+
 interface User {
     id: string;
     email: string;
@@ -62,6 +89,16 @@ interface User {
         level: number;
         title: string;
     };
+    notificationPreferences: NotificationPreferences;
+    language: string;
+    isActive: boolean;
+    currency: string;
+    countryCode: string;
+    twoFactorEnabled: boolean;
+    lastLoginAt: string;
+    lastPasswordChangeAt: string;
+    failedLoginAttempts: number;
+    forcePasswordReset?: boolean;
 }
 
 export default function UserDetails() {
@@ -345,6 +382,178 @@ export default function UserDetails() {
                         </div>
                     </Paper>
                 </Grid>
+
+                {/* Account Settings */}
+                <Grid item xs={12} md={6}>
+                    <Paper className="p-6">
+                        <Typography variant="h6" className="mb-4">Account Settings</Typography>
+                        <div className="space-y-4">
+                            <FormControl fullWidth>
+                                <InputLabel>Language</InputLabel>
+                                <Select
+                                    value={user.language || 'en'}
+                                    onChange={(e) => handleUpdateUser({ language: e.target.value as string })}
+                                    label="Language"
+                                    disabled={saving}
+                                >
+                                    <MenuItem value="en">English</MenuItem>
+                                    <MenuItem value="es">Spanish</MenuItem>
+                                    <MenuItem value="fr">French</MenuItem>
+                                </Select>
+                            </FormControl>
+
+                            <FormControl fullWidth>
+                                <InputLabel>Currency</InputLabel>
+                                <Select
+                                    value={user.currency || 'USD'}
+                                    onChange={(e) => handleUpdateUser({ currency: e.target.value as string })}
+                                    label="Currency"
+                                    disabled={saving}
+                                >
+                                    <MenuItem value="USD">USD</MenuItem>
+                                    <MenuItem value="EUR">EUR</MenuItem>
+                                    <MenuItem value="GBP">GBP</MenuItem>
+                                </Select>
+                            </FormControl>
+                        </div>
+                    </Paper>
+                </Grid>
+
+                {/* Security Information */}
+                <Grid item xs={12} md={6}>
+                    <Paper className="p-6">
+                        <Typography variant="h6" className="mb-4">Security Information</Typography>
+                        <div className="space-y-4">
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={Boolean(user.twoFactorEnabled)}
+                                        onChange={(e) => handleUpdateUser({ twoFactorEnabled: e.target.checked })}
+                                        disabled={saving}
+                                    />
+                                }
+                                label="Two-Factor Authentication (2FA)"
+                            />
+
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={Boolean(user.isActive)}
+                                        onChange={(e) => handleUpdateUser({ isActive: e.target.checked })}
+                                        disabled={saving}
+                                    />
+                                }
+                                label={`Account Status (${user.isActive ? 'Active' : 'Suspended'})`}
+                            />
+                        </div>
+                    </Paper>
+                </Grid>
+
+                {/* Location Information */}
+                <Grid item xs={12} md={12}>
+                    <Paper className="p-6">
+                        <Typography variant="h6" className="mb-4">Location Information</Typography>
+                        <div className="space-y-3">
+                            <Typography><strong>Country:</strong> {user.countryName}</Typography>
+                            <Typography><strong>Country Code:</strong> {user.countryCode}</Typography>
+                            <Typography><strong>Phone Code:</strong> {user.phone?.split(' ')[0]}</Typography>
+                            <Typography><strong>Local Number:</strong> {user.phone?.split(' ')[1]}</Typography>
+                        </div>
+                    </Paper>
+                </Grid>
+
+                {/* KYC Verification Timeline */}
+                {user.kycData?.verificationStatus && (
+                    <Grid item xs={12}>
+                        <Paper className="p-6">
+                            <Typography variant="h6" className="mb-4">KYC Verification Timeline</Typography>
+                            <div className="space-y-4">
+                                {user.kycData.identityDetails && (
+                                    <div>
+                                        <Typography variant="subtitle2" color="textSecondary">
+                                            Documents Submitted
+                                        </Typography>
+                                        <Typography>
+                                            {new Date(user.kycData.identityDetails.submittedAt).toLocaleString()}
+                                        </Typography>
+                                    </div>
+                                )}
+                                {user.kycData.verificationStatus.identity && (
+                                    <div>
+                                        <Typography variant="subtitle2" color="textSecondary">
+                                            Identity Verification
+                                        </Typography>
+                                        <div className="ml-4">
+                                            <Typography><strong>Status:</strong> {user.kycData.verificationStatus.identity.status}</Typography>
+                                            {user.kycData.verificationStatus.identity.lastAttempt && (
+                                                <Typography><strong>Last Attempt:</strong> {new Date(user.kycData.verificationStatus.identity.lastAttempt).toLocaleString()}</Typography>
+                                            )}
+                                            {user.kycData.verificationStatus.identity.documentType && (
+                                                <Typography><strong>Document Type:</strong> {user.kycData.verificationStatus.identity.documentType}</Typography>
+                                            )}
+                                            {user.kycData.verificationStatus.identity.failureReason && (
+                                                <Typography color="error"><strong>Failure Reason:</strong> {user.kycData.verificationStatus.identity.failureReason}</Typography>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                {user.kycData.verificationStatus.advanced && (
+                                    <div>
+                                        <Typography variant="subtitle2" color="textSecondary">
+                                            Advanced Verification
+                                        </Typography>
+                                        <div className="ml-4">
+                                            <Typography><strong>Status:</strong> {user.kycData.verificationStatus.advanced.status}</Typography>
+                                            <Typography><strong>Last Check:</strong> {new Date(user.kycData.verificationStatus.advanced.lastAttempt).toLocaleString()}</Typography>
+                                            {user.kycData.verificationStatus.advanced.reviewAnswer && (
+                                                <Typography><strong>Review Result:</strong> {user.kycData.verificationStatus.advanced.reviewAnswer}</Typography>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </Paper>
+                    </Grid>
+                )}
+
+                {/* Notification Preferences */}
+                {user.notificationPreferences && (
+                    <Grid item xs={12}>
+                        <Paper className="p-6">
+                            <Typography variant="h6" className="mb-4">Notification Preferences</Typography>
+                            {Object.entries(user.notificationPreferences).map(([category, settings]) => (
+                                <div key={category} className="mb-6">
+                                    <Typography variant="subtitle1" className="mb-2">{category}</Typography>
+                                    <Grid container spacing={2}>
+                                        {Object.entries(settings).map(([setting, enabled]) => (
+                                            <Grid item xs={12} sm={6} md={3} key={setting}>
+                                                <FormControlLabel
+                                                    control={
+                                                        <Switch
+                                                            checked={Boolean(enabled)}
+                                                            onChange={(e) => {
+                                                                const newPreferences = {
+                                                                    ...user.notificationPreferences,
+                                                                    [category]: {
+                                                                        ...user.notificationPreferences[category as keyof NotificationPreferences],
+                                                                        [setting]: e.target.checked
+                                                                    }
+                                                                } as NotificationPreferences;
+                                                                handleUpdateUser({ notificationPreferences: newPreferences });
+                                                            }}
+                                                            disabled={saving}
+                                                        />
+                                                    }
+                                                    label={setting}
+                                                />
+                                            </Grid>
+                                        ))}
+                                    </Grid>
+                                </div>
+                            ))}
+                        </Paper>
+                    </Grid>
+                )}
             </Grid>
         </div>
     );

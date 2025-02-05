@@ -30,6 +30,50 @@ class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   phoneVerified?: boolean;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @IsOptional()
+  @IsString()
+  currency?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  notificationPreferences?: {
+    P2P?: {
+      'New Messages'?: boolean;
+      'Order Status'?: boolean;
+      'Dispute Updates'?: boolean;
+      'Payment Confirmations'?: boolean;
+    };
+    Wallet?: {
+      'Deposits'?: boolean;
+      'Withdrawals'?: boolean;
+      'Balance Updates'?: boolean;
+      'Transfer Confirmations'?: boolean;
+    };
+    Trading?: {
+      'Price Alerts'?: boolean;
+      'Order Updates'?: boolean;
+      'Market Updates'?: boolean;
+      'Trade Confirmations'?: boolean;
+    };
+    Security?: {
+      'Login Alerts'?: boolean;
+      'Device Changes'?: boolean;
+      'Password Changes'?: boolean;
+      'Suspicious Activity'?: boolean;
+    };
+  };
+
+  @IsOptional()
+  @IsBoolean()
+  forcePasswordReset?: boolean;
 }
 
 @Controller('admin/users')

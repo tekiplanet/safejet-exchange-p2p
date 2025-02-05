@@ -179,4 +179,7 @@ export class User {
     default: false 
   })
   biometricEnabled: boolean;
+
+  @Column({ default: true })
+  isActive: boolean;
 }
