@@ -12,8 +12,11 @@ import {
     TableHead,
     TableRow,
     Alert,
+    TextField,
+    TablePagination,
+    InputAdornment,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Search as SearchIcon } from '@mui/icons-material';
 
 interface WalletBalance {
     symbol: string;
@@ -49,6 +52,11 @@ export function UserWalletBalances() {
     const [balances, setBalances] = useState<WalletBalance[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10);
+    const [search, setSearch] = useState('');
+    const [total, setTotal] = useState(0);
+    const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout>();
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -104,8 +112,11 @@ export function UserWalletBalances() {
         if (!id) return;
         
         try {
-            const response = await fetchWithRetry(`/admin/wallet-balances/${id}`, { method: 'GET' });
-            const data = await response.json();
+            const response = await fetchWithRetry(
+                `/admin/wallet-balances/${id}?page=${page + 1}&limit=${rowsPerPage}&search=${search}`,
+                { method: 'GET' }
+            );
+            const { data, pagination } = await response.json();
             setBalances(Object.entries(data).map(([symbol, balance]: [string, any]) => ({
                 symbol,
                 spot: {
@@ -117,6 +128,7 @@ export function UserWalletBalances() {
                     usdValue: balance.fundingUsdValue || 0
                 }
             })));
+            setTotal(pagination.total);
             setError('');
         } catch (error) {
             console.error('Error fetching balances:', error);
@@ -128,9 +140,23 @@ export function UserWalletBalances() {
 
     useEffect(() => {
         if (id) {
-            fetchBalances();
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            setSearchTimeout(setTimeout(() => {
+                fetchBalances();
+            }, 500));
         }
-    }, [id]);
+    }, [id, page, rowsPerPage, search]);
+
+    const handleChangePage = (_: unknown, newPage: number) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(0);
+    };
 
     if (loading) {
         return (
@@ -167,6 +193,23 @@ export function UserWalletBalances() {
             </div>
 
             <Paper className="p-6">
+                <div className="mb-4">
+                    <TextField
+                        fullWidth
+                        variant="outlined"
+                        placeholder="Search by token symbol..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start">
+                                    <SearchIcon />
+                                </InputAdornment>
+                            ),
+                        }}
+                    />
+                </div>
+
                 <TableContainer>
                     <Table>
                         <TableHead>
@@ -201,6 +244,16 @@ export function UserWalletBalances() {
                         </TableBody>
                     </Table>
                 </TableContainer>
+
+                <TablePagination
+                    component="div"
+                    count={total}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    rowsPerPageOptions={[10, 25, 50, 100]}
+                />
             </Paper>
         </div>
     );

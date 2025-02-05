@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards, Logger } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Logger, Query } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
@@ -58,7 +58,13 @@ export class AdminWalletController {
     }
 
     @Get(':userId')
-    async getUserBalances(@Param('userId') userId: string) {
+    async getUserBalances(
+        @Param('userId') userId: string,
+        @Query('page') page = 1,
+        @Query('limit') limit = 10,
+        @Query('search') search?: string,
+    ) {
+        // First get ALL balances for the user
         const balances = await this.walletBalanceRepository.find({
             where: { userId },
             order: { baseSymbol: 'ASC' }
@@ -75,7 +81,7 @@ export class AdminWalletController {
             return acc;
         }, {} as Record<string, number>);
 
-        // Group balances with USD values
+        // Group ALL balances with USD values
         const groupedBalances = balances.reduce((acc, balance) => {
             if (!acc[balance.baseSymbol]) {
                 acc[balance.baseSymbol] = { 
@@ -104,6 +110,45 @@ export class AdminWalletController {
             fundingUsdValue: number;
         }>);
 
-        return groupedBalances;
+        // Convert to array for easier filtering and pagination
+        let balanceArray = Object.entries(groupedBalances).map(([symbol, balance]) => ({
+            symbol,
+            ...balance
+        }));
+
+        // Apply search if provided
+        if (search) {
+            balanceArray = balanceArray.filter(balance => 
+                balance.symbol.toLowerCase().includes(search.toLowerCase())
+            );
+        }
+
+        // Get total count after search
+        const total = balanceArray.length;
+
+        // Apply pagination
+        const paginatedBalances = balanceArray
+            .slice((page - 1) * limit, page * limit);
+
+        // Convert back to object format
+        const paginatedData = paginatedBalances.reduce((acc, balance) => {
+            acc[balance.symbol] = {
+                spot: balance.spot,
+                funding: balance.funding,
+                spotUsdValue: balance.spotUsdValue,
+                fundingUsdValue: balance.fundingUsdValue
+            };
+            return acc;
+        }, {} as Record<string, any>);
+
+        return {
+            data: paginatedData,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
     }
 } 
