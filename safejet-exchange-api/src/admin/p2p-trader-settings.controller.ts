@@ -47,7 +47,7 @@ export class AdminP2PTraderSettingsController {
             where: { userId }
         });
 
-        console.log('Found settings:', settings);
+        // console.log('Found settings:', settings);
 
         if (!settings) {
             throw new NotFoundException('P2P trader settings not found');

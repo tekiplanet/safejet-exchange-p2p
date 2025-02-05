@@ -118,7 +118,28 @@ interface User {
     p2pTraderSettings?: P2PTraderSettings;
 }
 
+interface WalletBalances {
+    [symbol: string]: {
+        spot: string;
+        funding: string;
+    };
+}
+
+interface WalletSummary {
+    totalSpot: number;
+    totalFunding: number;
+}
+
 const timeZones = moment.tz.names(); // Gets all timezone names
+
+const formatUSD = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(value);
+};
 
 export default function UserDetails() {
     const router = useRouter();
@@ -128,6 +149,8 @@ export default function UserDetails() {
     const [status, setStatus] = useState('');
     const [saving, setSaving] = useState(false);
     const [availableCurrencies, setAvailableCurrencies] = useState<string[]>([]);
+    const [walletBalances, setWalletBalances] = useState<WalletBalances>({});
+    const [walletSummary, setWalletSummary] = useState<WalletSummary>({ totalSpot: 0, totalFunding: 0 });
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -254,6 +277,28 @@ export default function UserDetails() {
         }
     };
 
+    const fetchWalletBalances = async () => {
+        if (!user?.id) return;
+        try {
+            const response = await fetchWithRetry(`/admin/wallet-balances/${user.id}`, { method: 'GET' });
+            const data = await response.json();
+            setWalletBalances(data);
+        } catch (error) {
+            console.error('Error fetching wallet balances:', error);
+        }
+    };
+
+    const fetchWalletSummary = async () => {
+        if (!user?.id) return;
+        try {
+            const response = await fetchWithRetry(`/admin/wallet-balances/summary/${user.id}`, { method: 'GET' });
+            const data = await response.json();
+            setWalletSummary(data);
+        } catch (error) {
+            console.error('Error fetching wallet summary:', error);
+        }
+    };
+
     useEffect(() => {
         if (id) {
             fetchUser();
@@ -264,6 +309,8 @@ export default function UserDetails() {
     useEffect(() => {
         if (user?.id) {
             fetchP2PSettings();
+            fetchWalletBalances();
+            fetchWalletSummary();
         }
     }, [user?.id]);
 
@@ -391,6 +438,31 @@ export default function UserDetails() {
                                 }
                                 label="Phone Verified"
                             />
+                        </div>
+                    </Paper>
+                </Grid>
+
+                {/* Wallet Summary */}
+                <Grid item xs={12} md={12}>
+                    <Paper className="p-6">
+                        <Typography variant="h6" className="mb-4">Wallet Summary</Typography>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <Typography>Total Spot Balance</Typography>
+                                <Typography>{formatUSD(walletSummary.totalSpot)}</Typography>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <Typography>Total Funding Balance</Typography>
+                                <Typography>{formatUSD(walletSummary.totalFunding)}</Typography>
+                            </div>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                fullWidth
+                                onClick={() => router.push(`/dashboard/users/${user.id}/wallets`)}
+                            >
+                                View All Balances
+                            </Button>
                         </div>
                     </Paper>
                 </Grid>
