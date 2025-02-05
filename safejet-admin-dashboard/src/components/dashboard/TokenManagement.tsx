@@ -14,22 +14,75 @@ import {
     DialogContent,
     TextField,
     DialogActions,
-    IconButton
+    IconButton,
+    Select,
+    MenuItem,
+    FormControl,
+    InputLabel,
+    Switch,
+    FormControlLabel,
+    Tooltip,
+    Checkbox,
+    ListItemText
 } from '@mui/material';
-import { Edit as EditIcon, Add as AddIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Add as AddIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { TOKEN_CONFIG, NetworkVersion, Network, Blockchain, PriceFeedProvider } from '../../config/tokens';
 
 
 interface Token {
     id: string;
     symbol: string;
     name: string;
-    blockchain: string;
+    blockchain: Blockchain;
     contractAddress: string | null;
     decimals: number;
-    networkVersion: string;
     isActive: boolean;
-    baseSymbol: string;
+    networkVersion: NetworkVersion;
+    metadata: {
+        icon: string;
+        isNative?: boolean;
+        networks: Network[];
+        priceFeeds: {
+            [network: string]: {
+                provider: PriceFeedProvider;
+                address?: string;
+                symbol?: string;
+                interval: number;
+            }
+        }
+    };
+    networkConfigs: {
+        [version: string]: {
+            [network: string]: {
+                network: Network;
+                version: NetworkVersion;
+                isActive: boolean;
+                blockchain: Blockchain;
+                arrivalTime: string;
+                requiredFields: {
+                    tag: boolean;
+                    memo: boolean;
+                }
+            }
+        }
+    };
 }
+
+const getDefaultNetworkVersion = (blockchain: Blockchain): NetworkVersion => {
+    switch (blockchain) {
+        case 'ethereum':
+            return 'ERC20';
+        case 'bsc':
+            return 'BEP20';
+        case 'trx':
+            return 'TRC20';
+        case 'bitcoin':
+        case 'xrp':
+            return 'NATIVE';
+        default:
+            return 'ERC20';
+    }
+};
 
 export default function TokenManagement() {
     const [tokens, setTokens] = useState<Token[]>([]);
@@ -39,6 +92,8 @@ export default function TokenManagement() {
     const [page, setPage] = useState(1);
     const [totalTokens, setTotalTokens] = useState(0);
     const [pageSize, setPageSize] = useState(10);
+    const [viewNetworkConfig, setViewNetworkConfig] = useState<Token | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const router = useRouter();
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
@@ -94,9 +149,9 @@ export default function TokenManagement() {
                         try {
                             const errorData = JSON.parse(errorText);
                             if (errorData.message === 'Unauthorized' || errorData.message === 'Invalid token') {
-                                localStorage.removeItem('adminToken');
-                                router.push('/login');
-                                throw new Error('Session expired');
+                        localStorage.removeItem('adminToken');
+                        router.push('/login');
+                        throw new Error('Session expired');
                             }
                         } catch (e) {
                             console.error('Error parsing error response:', e);
@@ -118,7 +173,11 @@ export default function TokenManagement() {
     const fetchTokens = async () => {
         setLoading(true);
         try {
-            const response = await fetchWithRetry(`/admin/deposits/tokens?page=${page}&limit=${pageSize}`, { method: 'GET' });
+            const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : '';
+            const response = await fetchWithRetry(
+                `/admin/deposits/tokens?page=${page}&limit=${pageSize}${searchParam}`, 
+                { method: 'GET' }
+            );
             const data = await response.json();
             setTokens(data.data);
             setTotalTokens(data.total);
@@ -132,6 +191,15 @@ export default function TokenManagement() {
     };
 
     useEffect(() => {
+        const timer = setTimeout(() => {
+            setPage(1); // Reset to first page when searching
+            fetchTokens();
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]); // Fetch when search query changes
+
+    useEffect(() => {
         if (localStorage.getItem('adminToken')) {
             fetchTokens();
         }
@@ -139,25 +207,55 @@ export default function TokenManagement() {
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!editToken) return;
+        if (!editToken || !editToken.networkVersion) return;
 
         setLoading(true);
         try {
+            const selectedNetworks = editToken.metadata?.networks || [];
+            const version = editToken.networkVersion as NetworkVersion;
+            
+            const networkConfigs = {
+                [version]: Object.fromEntries(
+                    selectedNetworks.map(network => [
+                        network,
+                        editToken.networkConfigs?.[version]?.[network] || {
+                            network,
+                            version,
+                            isActive: true,
+                            blockchain: editToken.blockchain,
+                            arrivalTime: version === 'NATIVE' 
+                                ? TOKEN_CONFIG.defaults.arrivalTimes.NATIVE 
+                                : TOKEN_CONFIG.defaults.arrivalTimes.default,
+                            requiredFields: {
+                                tag: editToken.blockchain === 'xrp',
+                                memo: false
+                            }
+                        }
+                    ])
+                )
+            };
+
+            const tokenToSubmit = {
+                ...editToken,
+                networkConfigs
+            };
+
             if (editToken.id) {
                 await fetchWithRetry(`/admin/deposits/tokens/${editToken.id}`, {
                     method: 'PUT',
-                    body: JSON.stringify(editToken)
+                    body: JSON.stringify(tokenToSubmit)
                 });
             } else {
-                await fetchWithRetry('/admin/deposits/tokens', {
+                await fetchWithRetry('/admin/tokens', {
                     method: 'POST',
-                    body: JSON.stringify(editToken)
+                    body: JSON.stringify(tokenToSubmit)
                 });
             }
             setEditToken(null);
             await fetchTokens();
             setStatus('Token saved successfully');
         } catch (error) {
+            console.error('Error saving token:', error);
             setStatus('Error saving token. Please try again.');
         } finally {
             setLoading(false);
@@ -173,6 +271,89 @@ export default function TokenManagement() {
         setPage(1); // Reset to first page when changing page size
     };
 
+    const handleNetworkVersionChange = (version: NetworkVersion) => {
+        const blockchain = editToken?.blockchain || '';
+        const networks = editToken?.metadata?.networks || ['mainnet'];
+        
+        const networkConfigs: Token['networkConfigs'] = {
+            [version]: Object.fromEntries(
+                networks.map(network => {
+                    // Get existing config for this network if it exists
+                    const existingConfig = editToken?.networkConfigs?.[version]?.[network];
+                    
+                    return [
+                        network,
+                        {
+                            network: network as Network,
+                            version: version,
+                            isActive: existingConfig?.isActive ?? true,
+                            blockchain: blockchain as Blockchain,
+                            // Preserve existing arrival time or use default
+                            arrivalTime: existingConfig?.arrivalTime || (
+                                version === 'NATIVE' 
+                                    ? TOKEN_CONFIG.defaults.arrivalTimes.NATIVE 
+                                    : TOKEN_CONFIG.defaults.arrivalTimes.default
+                            ),
+                            requiredFields: {
+                                tag: existingConfig?.requiredFields?.tag ?? (blockchain === 'xrp'),
+                                memo: existingConfig?.requiredFields?.memo ?? false
+                            }
+                        }
+                    ];
+                })
+            )
+        };
+
+        setEditToken({
+            ...editToken,
+            networkVersion: version,
+            networkConfigs
+        });
+    };
+
+    const createToken = async (token: Token) => {
+        try {
+            const response = await fetch('/api/admin/tokens', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify(token)
+            });
+            
+            if (!response.ok) throw new Error('Failed to create token');
+            
+            const data = await response.json();
+            // Refresh token list after creation
+            fetchTokens();
+            return data;
+        } catch (error) {
+            console.error('Error creating token:', error);
+            throw error;
+        }
+    };
+
+    const updateTokenStatus = async (id: string, active: boolean) => {
+        try {
+            const endpoint = active ? 'activate' : 'deactivate';
+            const response = await fetch(`/api/admin/tokens/${id}/${endpoint}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+            
+            if (!response.ok) throw new Error(`Failed to ${endpoint} token`);
+            
+            // Refresh token list after update
+            fetchTokens();
+        } catch (error) {
+            console.error(`Error ${active ? 'activating' : 'deactivating'} token:`, error);
+            throw error;
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header Section */}
@@ -181,14 +362,50 @@ export default function TokenManagement() {
                     <div className="space-y-2 mb-4 md:mb-0">
                         <h2 className="text-lg font-medium text-gray-900">Token Management</h2>
                     </div>
+                    <div className="flex space-x-4">
+                        {/* Add search input */}
+                        <TextField
+                            placeholder="Search tokens..."
+                            size="small"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="min-w-[200px]"
+                            InputProps={{
+                                startAdornment: (
+                                    <svg className="h-5 w-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                ),
+                            }}
+                        />
                     <Button
                         startIcon={<AddIcon />}
                         variant="contained"
-                        onClick={() => setEditToken({})}
+                            onClick={() => {
+                                const defaultBlockchain: Blockchain = 'ethereum';
+                                const defaultVersion = getDefaultNetworkVersion(defaultBlockchain);
+                                
+                                setEditToken({
+                                    isActive: true,
+                                    blockchain: defaultBlockchain,
+                                    networkVersion: defaultVersion,
+                                    metadata: {
+                                        networks: ['mainnet'],
+                                        icon: '',
+                                        priceFeeds: {
+                                            mainnet: {
+                                                provider: TOKEN_CONFIG.priceFeedProviders[0].value,
+                                                interval: TOKEN_CONFIG.defaults.interval
+                                            }
+                                        }
+                                    } as Token['metadata']
+                                });
+                            }}
                         className="bg-indigo-600 hover:bg-indigo-700"
                     >
                         Add Token
                     </Button>
+                    </div>
                 </div>
 
                 {/* Status Messages */}
@@ -257,9 +474,14 @@ export default function TokenManagement() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <div className="flex space-x-2">
                                             <IconButton onClick={() => setEditToken(token)}>
                                                 <EditIcon />
                                             </IconButton>
+                                                <IconButton onClick={() => setViewNetworkConfig(token)}>
+                                                    <VisibilityIcon />
+                                                </IconButton>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -318,22 +540,638 @@ export default function TokenManagement() {
                 <DialogTitle>{editToken?.id ? 'Edit Token' : 'Add Token'}</DialogTitle>
                 <form onSubmit={handleSubmit}>
                     <DialogContent>
+                        <div className="grid grid-cols-2 gap-4">
+                            <TextField
+                                fullWidth
+                                label="Symbol"
+                                value={editToken?.symbol || ''}
+                                onChange={(e) => setEditToken({ ...editToken, symbol: e.target.value })}
+                                margin="normal"
+                                required
+                            />
+                            <TextField
+                                fullWidth
+                                label="Name"
+                                value={editToken?.name || ''}
+                                onChange={(e) => setEditToken({ ...editToken, name: e.target.value })}
+                                margin="normal"
+                                required
+                            />
+                        </div>
+
+                        <FormControl fullWidth margin="normal" required>
+                            <InputLabel>Blockchain</InputLabel>
+                            <Select
+                                value={editToken?.blockchain || ''}
+                                onChange={(e) => setEditToken({ ...editToken, blockchain: e.target.value as Blockchain })}
+                                label="Blockchain"
+                            >
+                                {TOKEN_CONFIG.blockchains.map(blockchain => (
+                                    <MenuItem key={blockchain.value} value={blockchain.value}>
+                                        {blockchain.label}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+
                         <TextField
                             fullWidth
-                            label="Symbol"
-                            value={editToken?.symbol || ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-                                setEditToken({ ...editToken, symbol: e.target.value })}
+                            label="Contract Address"
+                            value={editToken?.contractAddress || ''}
+                            onChange={(e) => setEditToken({ ...editToken, contractAddress: e.target.value })}
+                            margin="normal"
+                            helperText="Leave empty for native tokens like BTC"
+                        />
+
+                        {/* <div className="grid grid-cols-2 gap-4"> */}
+                            <TextField
+                                fullWidth
+                                label="Decimals"
+                                type="number"
+                                value={editToken?.decimals || ''}
+                                onChange={(e) => setEditToken({ 
+                                    ...editToken, 
+                                    decimals: parseInt(e.target.value) 
+                                })}
+                                margin="normal"
+                                required
+                                inputProps={{ min: 0, max: 18 }}
+                            />
+                        {/* </div> */}
+
+                        <Box marginY={2}>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        checked={editToken?.isActive || false}
+                                        onChange={(e) => setEditToken({ 
+                                            ...editToken, 
+                                            isActive: e.target.checked 
+                                        })}
+                                    />
+                                }
+                                label="Active"
+                            />
+                        </Box>
+
+                        {/* Basic Metadata */}
+                        <TextField
+                            fullWidth
+                            label="Icon URL"
+                            value={editToken?.metadata?.icon || ''}
+                            onChange={(e) => setEditToken({
+                                ...editToken,
+                                metadata: {
+                                    ...(editToken?.metadata || {}),
+                                    icon: e.target.value,
+                                    networks: editToken?.metadata?.networks || ['mainnet'],
+                                    priceFeeds: editToken?.metadata?.priceFeeds || {
+                                        mainnet: {
+                                            provider: "chainlink" as const,
+                                            interval: 60
+                                        }
+                                    }
+                                }
+                            })}
                             margin="normal"
                             required
                         />
-                        {/* ... other fields with proper event typing ... */}
+
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    checked={editToken?.metadata?.isNative || false}
+                                    onChange={(e) => {
+                                        const currentMetadata = editToken?.metadata || {
+                                            icon: '',
+                                            networks: ['mainnet'],
+                                            priceFeeds: {
+                                                mainnet: {
+                                                    provider: TOKEN_CONFIG.priceFeedProviders[0].value,
+                                                    interval: TOKEN_CONFIG.defaults.interval
+                                                }
+                                            }
+                                        };
+
+                                        setEditToken({
+                                            ...editToken,
+                                            metadata: {
+                                                ...currentMetadata,
+                                                isNative: e.target.checked
+                                            }
+                                        });
+                                    }}
+                                />
+                            }
+                            label="Native Token"
+                        />
+
+                        <Box sx={{ mt: 3, mb: 2 }}>
+                            <Typography variant="subtitle1" gutterBottom>
+                                Networks
+                            </Typography>
+                            
+                            <FormControl fullWidth margin="normal">
+                                <InputLabel>Available Networks</InputLabel>
+                                <Select
+                                    multiple
+                                    value={editToken?.metadata?.networks || []}
+                                    onChange={(e) => {
+                                        const networks = e.target.value as Network[];
+                                        const currentMetadata = editToken?.metadata || {
+                                            icon: '',
+                                            networks: [],
+                                            priceFeeds: {}
+                                        };
+
+                                        // Create default price feeds for new networks
+                                        const updatedPriceFeeds = { ...currentMetadata.priceFeeds };
+                                        networks.forEach(network => {
+                                            if (!updatedPriceFeeds[network]) {
+                                                updatedPriceFeeds[network] = {
+                                                    provider: TOKEN_CONFIG.priceFeedProviders[0].value,
+                                                    interval: TOKEN_CONFIG.defaults.interval
+                                                };
+                                            }
+                                        });
+
+                                        // Create default network configs for new networks
+                                        const version = editToken?.networkVersion;
+                                        if (version) {
+                                            const currentConfigs = editToken?.networkConfigs || {};
+                                            const updatedConfigs: Token['networkConfigs'] = { ...currentConfigs };
+                                            
+                                            networks.forEach(network => {
+                                                if (!updatedConfigs[version]?.[network]) {
+                                                    const networkConfig = {
+                                                        [network]: {
+                                                            network: network as Network,
+                                                            version: version,
+                                                            isActive: true,
+                                                            blockchain: editToken?.blockchain as Blockchain,
+                                                            arrivalTime: version === 'NATIVE' 
+                                                                ? TOKEN_CONFIG.defaults.arrivalTimes.NATIVE 
+                                                                : TOKEN_CONFIG.defaults.arrivalTimes.default,
+                                                            requiredFields: {
+                                                                tag: editToken?.blockchain === 'xrp',
+                                                                memo: false
+                                                            }
+                                                        }
+                                                    };
+
+                                                    updatedConfigs[version] = {
+                                                        ...(updatedConfigs[version] || {}),
+                                                        ...networkConfig
+                                                    };
+                                                }
+                                            });
+
+                                            setEditToken({
+                                                ...editToken,
+                                                metadata: {
+                                                    ...currentMetadata,
+                                                    networks,
+                                                    priceFeeds: updatedPriceFeeds
+                                                },
+                                                networkConfigs: updatedConfigs
+                                            });
+                                        } else {
+                                            setEditToken({
+                                                ...editToken,
+                                                metadata: {
+                                                    ...currentMetadata,
+                                                    networks,
+                                                    priceFeeds: updatedPriceFeeds
+                                                }
+                                            });
+                                        }
+                                    }}
+                                    renderValue={(selected) => (selected as Network[]).join(', ')}
+                                    label="Available Networks"
+                                >
+                                    {TOKEN_CONFIG.networks.map(network => (
+                                        <MenuItem key={network.value} value={network.value}>
+                                            <Checkbox checked={editToken?.metadata?.networks?.includes(network.value) || false} />
+                                            <ListItemText primary={network.label} />
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+
+                            {editToken?.metadata?.networks?.map((network) => (
+                                <Box key={network} sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                                    <Typography variant="subtitle2" gutterBottom>
+                                        {network.charAt(0).toUpperCase() + network.slice(1)} Settings
+                                    </Typography>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={(() => {
+                                                    const version = editToken?.networkVersion;
+                                                    if (!version) return false;
+                                                    return editToken?.networkConfigs?.[version]?.[network]?.isActive || false;
+                                                })()}
+                                                onChange={(e) => {
+                                                    if (!editToken?.networkVersion) return;
+                                                    const currentConfigs = editToken?.networkConfigs || {};
+                                                    
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        networkConfigs: {
+                                                            ...currentConfigs,
+                                                            [editToken.networkVersion]: {
+                                                                ...currentConfigs[editToken.networkVersion],
+                                                                [network]: {
+                                                                    ...currentConfigs[editToken.networkVersion]?.[network],
+                                                                    isActive: e.target.checked
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                            />
+                                        }
+                                        label="Active"
+                                    />
+                                </Box>
+                            ))}
+                        </Box>
+
+                        <Box sx={{ mt: 3, mb: 2 }}>
+                            <Typography variant="subtitle1" gutterBottom>
+                                Network Configuration
+                            </Typography>
+
+                            <FormControl fullWidth margin="normal" required>
+                                <InputLabel>Network Version</InputLabel>
+                                <Select
+                                    value={editToken?.networkVersion || ''}
+                                    onChange={(e) => handleNetworkVersionChange(e.target.value as NetworkVersion)}
+                                    label="Network Version"
+                                >
+                                    {TOKEN_CONFIG.networkVersions.map(version => (
+                                        <MenuItem key={version.value} value={version.value}>
+                                            {version.label}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+
+                            {editToken?.networkVersion && (
+                                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                                    <Typography variant="subtitle2" gutterBottom>
+                                        {editToken.networkVersion} Configuration
+                                    </Typography>
+
+                                    {editToken?.metadata?.networks.map((network) => (
+                                        <Box key={network} sx={{ mt: 2, p: 2, border: '1px solid #e5e7eb', borderRadius: 1 }}>
+                                            <Typography variant="subtitle2" color="textSecondary">
+                                                {network.charAt(0).toUpperCase() + network.slice(1)}
+                                            </Typography>
+
+                                            <div className="grid grid-cols-2 gap-4 mt-2">
+                                                <TextField
+                                                    fullWidth
+                                                    label="Arrival Time"
+                                                    value={(() => {
+                                                        const version = editToken?.networkVersion;
+                                                        if (!version) return '';
+                                                        return editToken?.networkConfigs?.[version]?.[network]?.arrivalTime || '';
+                                                    })()}
+                                                    onChange={(e) => {
+                                                        const currentConfigs = editToken?.networkConfigs || {};
+                                                        const version = editToken?.networkVersion || '';
+                                                        
+                                                        setEditToken({
+                                                            ...editToken,
+                                                            networkConfigs: {
+                                                                ...currentConfigs,
+                                                                [version]: {
+                                                                    ...currentConfigs[version],
+                                                                    [network]: {
+                                                                        ...currentConfigs[version]?.[network],
+                                                                        arrivalTime: e.target.value
+                                                                    }
+                                                                }
+                                                            }
+                                                        });
+                                                    }}
+                                                    margin="normal"
+                                                />
+
+                                                <FormControlLabel
+                                                    control={
+                                                        <Switch
+                                                            checked={(() => {
+                                                                const version = editToken?.networkVersion;
+                                                                if (!version) return false;
+                                                                return editToken?.networkConfigs?.[version]?.[network]?.isActive || false;
+                                                            })()}
+                                                            onChange={(e) => {
+                                                                const currentConfigs = editToken?.networkConfigs || {};
+                                                                const version = editToken?.networkVersion || '';
+                                                                
+                                                                setEditToken({
+                                                                    ...editToken,
+                                                                    networkConfigs: {
+                                                                        ...currentConfigs,
+                                                                        [version]: {
+                                                                            ...currentConfigs[version],
+                                                                            [network]: {
+                                                                                ...currentConfigs[version]?.[network],
+                                                                                isActive: e.target.checked
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }}
+                                                        />
+                                                    }
+                                                    label="Active"
+                                                />
+
+                                                <FormControlLabel
+                                                    control={
+                                                        <Switch
+                                                            checked={(() => {
+                                                                const version = editToken?.networkVersion;
+                                                                if (!version) return false;
+                                                                return editToken?.networkConfigs?.[version]?.[network]?.requiredFields?.tag || false;
+                                                            })()}
+                                                            onChange={(e) => {
+                                                                const currentConfigs = editToken?.networkConfigs || {};
+                                                                const version = editToken?.networkVersion || '';
+                                                                
+                                                                setEditToken({
+                                                                    ...editToken,
+                                                                    networkConfigs: {
+                                                                        ...currentConfigs,
+                                                                        [version]: {
+                                                                            ...currentConfigs[version],
+                                                                            [network]: {
+                                                                                ...currentConfigs[version]?.[network],
+                                                                                requiredFields: {
+                                                                                    ...currentConfigs[version]?.[network]?.requiredFields,
+                                                                                    tag: e.target.checked
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }}
+                                                        />
+                                                    }
+                                                    label="Requires Tag"
+                                                />
+
+                                                <FormControlLabel
+                                                    control={
+                                                        <Switch
+                                                            checked={(() => {
+                                                                const version = editToken?.networkVersion;
+                                                                if (!version) return false;
+                                                                return editToken?.networkConfigs?.[version]?.[network]?.requiredFields?.memo || false;
+                                                            })()}
+                                                            onChange={(e) => {
+                                                                const currentConfigs = editToken?.networkConfigs || {};
+                                                                const version = editToken?.networkVersion || '';
+                                                                
+                                                                setEditToken({
+                                                                    ...editToken,
+                                                                    networkConfigs: {
+                                                                        ...currentConfigs,
+                                                                        [version]: {
+                                                                            ...currentConfigs[version],
+                                                                            [network]: {
+                                                                                ...currentConfigs[version]?.[network],
+                                                                                requiredFields: {
+                                                                                    ...currentConfigs[version]?.[network]?.requiredFields,
+                                                                                    memo: e.target.checked
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }}
+                                                        />
+                                                    }
+                                                    label="Requires Memo"
+                                                />
+                                            </div>
+                                        </Box>
+                                    ))}
+                                </Box>
+                            )}
+                        </Box>
+
+                        <Box sx={{ mt: 3, mb: 2 }}>
+                            <Typography variant="subtitle1" gutterBottom>
+                                Price Feed Configuration
+                            </Typography>
+
+                            {editToken?.metadata?.networks.map((network) => (
+                                <Box key={network} sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                                    <Typography variant="subtitle2" gutterBottom>
+                                        {network.charAt(0).toUpperCase() + network.slice(1)} Price Feed
+                                    </Typography>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormControl fullWidth margin="normal">
+                                            <InputLabel>Provider</InputLabel>
+                                            <Select
+                                                value={editToken?.metadata?.priceFeeds?.[network]?.provider || 'chainlink'}
+                                                onChange={(e) => {
+                                                    const provider = e.target.value as PriceFeedProvider;
+                                                    const currentMetadata = editToken?.metadata || {
+                                                        networks: [network],
+                                                        icon: '',
+                                                        priceFeeds: {}
+                                                    };
+
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        metadata: {
+                                                            ...currentMetadata,
+                                                            priceFeeds: {
+                                                                ...currentMetadata.priceFeeds,
+                                                                [network]: {
+                                                                    provider,
+                                                                    interval: 60,
+                                                                    ...(provider === 'chainlink' ? { address: '' } : { symbol: '' })
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                                label="Provider"
+                                            >
+                                                {TOKEN_CONFIG.priceFeedProviders.map(provider => (
+                                                    <MenuItem key={provider.value} value={provider.value}>
+                                                        {provider.label}
+                                                    </MenuItem>
+                                                ))}
+                                            </Select>
+                                        </FormControl>
+
+                                        {editToken?.metadata?.priceFeeds?.[network]?.provider === 'chainlink' ? (
+                                            <TextField
+                                                fullWidth
+                                                label="Oracle Address"
+                                                value={editToken?.metadata?.priceFeeds?.[network]?.address || ''}
+                                                onChange={(e) => {
+                                                    const currentMetadata = editToken?.metadata || {
+                                                        networks: [network],
+                                                        icon: '',
+                                                        priceFeeds: {}
+                                                    };
+
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        metadata: {
+                                                            ...currentMetadata,
+                                                            priceFeeds: {
+                                                                ...currentMetadata.priceFeeds,
+                                                                [network]: {
+                                                                    ...currentMetadata.priceFeeds[network],
+                                                                    address: e.target.value
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                                margin="normal"
+                                            />
+                                        ) : (
+                                            <TextField
+                                                fullWidth
+                                                label="Symbol"
+                                                value={editToken?.metadata?.priceFeeds?.[network]?.symbol || ''}
+                                                onChange={(e) => {
+                                                    const currentMetadata = editToken?.metadata || {
+                                                        networks: [network],
+                                                        icon: '',
+                                                        priceFeeds: {}
+                                                    };
+
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        metadata: {
+                                                            ...currentMetadata,
+                                                            priceFeeds: {
+                                                                ...currentMetadata.priceFeeds,
+                                                                [network]: {
+                                                                    ...currentMetadata.priceFeeds[network],
+                                                                    symbol: e.target.value
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                                margin="normal"
+                                            />
+                                        )}
+
+                                        <TextField
+                                            fullWidth
+                                            label="Update Interval (seconds)"
+                                            type="number"
+                                            value={editToken?.metadata?.priceFeeds?.[network]?.interval || 60}
+                                            onChange={(e) => {
+                                                const currentMetadata = editToken?.metadata || {
+                                                    networks: [network],
+                                                    icon: '',
+                                                    priceFeeds: {}
+                                                };
+
+                                                setEditToken({
+                                                    ...editToken,
+                                                    metadata: {
+                                                        ...currentMetadata,
+                                                        priceFeeds: {
+                                                            ...currentMetadata.priceFeeds,
+                                                            [network]: {
+                                                                ...currentMetadata.priceFeeds[network],
+                                                                interval: parseInt(e.target.value)
+                                                            }
+                                                        }
+                                                    }
+                                                });
+                                            }}
+                                            margin="normal"
+                                            inputProps={{ min: 1 }}
+                                        />
+                                    </div>
+                                </Box>
+                            ))}
+                        </Box>
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={() => setEditToken(null)}>Cancel</Button>
                         <Button type="submit" variant="contained">Save</Button>
                     </DialogActions>
                 </form>
+            </Dialog>
+
+            {/* Network Config Dialog */}
+            <Dialog
+                open={viewNetworkConfig !== null}
+                onClose={() => setViewNetworkConfig(null)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>Network Configurations - {viewNetworkConfig?.symbol}</DialogTitle>
+                <DialogContent>
+                    <div className="space-y-4 mt-4">
+                        {viewNetworkConfig?.metadata.networks.map((network) => (
+                            <Box key={network} sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                                <Typography variant="subtitle1" gutterBottom>
+                                    {network.charAt(0).toUpperCase() + network.slice(1)}
+                                </Typography>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Typography variant="caption" color="textSecondary">
+                                            Provider
+                                        </Typography>
+                                        <Typography>
+                                            {viewNetworkConfig?.metadata.priceFeeds[network]?.provider}
+                                        </Typography>
+                                    </div>
+                                    <div>
+                                        <Typography variant="caption" color="textSecondary">
+                                            Interval
+                                        </Typography>
+                                        <Typography>
+                                            {viewNetworkConfig?.metadata.priceFeeds[network]?.interval} seconds
+                                        </Typography>
+                                    </div>
+                                    {viewNetworkConfig?.metadata.priceFeeds[network]?.address && (
+                                        <div className="col-span-2">
+                                            <Typography variant="caption" color="textSecondary">
+                                                Oracle Address
+                                            </Typography>
+                                            <Typography className="break-all">
+                                                {viewNetworkConfig.metadata.priceFeeds[network].address}
+                                            </Typography>
+                                        </div>
+                                    )}
+                                    {viewNetworkConfig?.metadata.priceFeeds[network]?.symbol && (
+                                        <div className="col-span-2">
+                                            <Typography variant="caption" color="textSecondary">
+                                                Symbol
+                                            </Typography>
+                                            <Typography>
+                                                {viewNetworkConfig.metadata.priceFeeds[network].symbol}
+                                            </Typography>
+                                        </div>
+                                    )}
+                                </div>
+                            </Box>
+                        ))}
+                    </div>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setViewNetworkConfig(null)}>Close</Button>
+                </DialogActions>
             </Dialog>
         </div>
     );

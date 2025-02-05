@@ -36,12 +36,19 @@ export class TokenManagementService {
       }
     }
 
-    // Set default values if not provided
+    // Merge existing and new token data
     const tokenData = {
       ...createTokenDto,
       baseSymbol: createTokenDto.baseSymbol || createTokenDto.symbol,
       networkVersion: createTokenDto.networkVersion || 'NATIVE',
       isActive: createTokenDto.isActive ?? true,
+      // Add new network configs if provided
+      networkConfigs: createTokenDto.networkConfigs || {},
+      metadata: {
+        ...createTokenDto.metadata,
+        networks: createTokenDto.metadata?.networks || ['mainnet'],
+        priceFeeds: createTokenDto.metadata?.priceFeeds || {}
+      }
     };
 
     const token = this.tokenRepository.create(tokenData);

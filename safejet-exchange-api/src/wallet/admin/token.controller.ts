@@ -29,28 +29,36 @@ export class AdminTokenController {
     ) {}
 
     @Get('tokens')
-    async getAllTokens(@Query() query: PaginationQueryDto): Promise<{data: Token[], total: number}> {
-        try {
-            const page = query.page || 1;
-            const limit = query.limit || 10;
-
-            const [tokens, total] = await this.tokenRepository.findAndCount({
-                order: {
-                    blockchain: 'ASC',
-                    symbol: 'ASC'
-                },
-                skip: (page - 1) * limit,
-                take: limit
-            });
-
-            return {
-                data: tokens,
-                total
-            };
-        } catch (error) {
-            console.error('Error in getAllTokens:', error);
-            throw error;
+    async getAllTokens(
+        @Query('page') page: number = 1,
+        @Query('limit') limit: number = 10,
+        @Query('search') search?: string
+    ) {
+        const skip = (page - 1) * limit;
+        
+        let query = this.tokenRepository.createQueryBuilder('token');
+        
+        if (search) {
+            query = query.where(
+                'LOWER(token.symbol) LIKE LOWER(:search) OR ' +
+                'LOWER(token.name) LIKE LOWER(:search) OR ' +
+                'LOWER(token.blockchain) LIKE LOWER(:search) OR ' +
+                'LOWER(token.contractAddress) LIKE LOWER(:search)',
+                { search: `%${search}%` }
+            );
         }
+
+        const [tokens, total] = await Promise.all([
+            query.skip(skip).take(limit).getMany(),
+            query.getCount()
+        ]);
+
+        return {
+            data: tokens,
+            total,
+            page,
+            limit
+        };
     }
 
     @Post('tokens')

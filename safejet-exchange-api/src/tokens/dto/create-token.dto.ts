@@ -44,4 +44,22 @@ export class CreateTokenDto {
       };
     };
   };
+
+  @IsObject()
+  @IsOptional()
+  networkConfigs?: {
+    [version: string]: {
+      [network: string]: {
+        network: string;
+        version: string;
+        isActive: boolean;
+        blockchain: string;
+        arrivalTime: string;
+        requiredFields: {
+          tag: boolean;
+          memo: boolean;
+        }
+      }
+    }
+  };
 } 
