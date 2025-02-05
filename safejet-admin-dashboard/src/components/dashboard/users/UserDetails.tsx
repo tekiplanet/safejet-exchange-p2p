@@ -14,8 +14,11 @@ import {
     FormControlLabel,
     Divider,
     Alert,
+    Autocomplete,
+    TextField,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import moment from 'moment-timezone';
 
 interface KYCData {
     identityDetails?: {
@@ -114,6 +117,8 @@ interface User {
     forcePasswordReset?: boolean;
     p2pTraderSettings?: P2PTraderSettings;
 }
+
+const timeZones = moment.tz.names(); // Gets all timezone names
 
 export default function UserDetails() {
     const router = useRouter();
@@ -590,17 +595,31 @@ export default function UserDetails() {
                             />
 
                             <FormControl fullWidth>
-                                <InputLabel>Timezone</InputLabel>
-                                <Select
+                                <Autocomplete
                                     value={user.p2pTraderSettings?.timezone || 'Africa/Lagos'}
-                                    onChange={(e) => updateP2PSettings({ timezone: e.target.value })}
-                                    label="Timezone"
+                                    onChange={(_, newValue) => {
+                                        if (newValue) {
+                                            updateP2PSettings({ timezone: newValue });
+                                        }
+                                    }}
+                                    options={timeZones}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Timezone"
+                                            disabled={saving || !user.p2pTraderSettings}
+                                        />
+                                    )}
+                                    renderOption={(props, option) => (
+                                        <MenuItem {...props}>
+                                            {option.replace('_', ' ')} ({moment.tz(option).format('Z')})
+                                        </MenuItem>
+                                    )}
+                                    getOptionLabel={(option) => `${option.replace('_', ' ')} (${moment.tz(option).format('Z')})`}
                                     disabled={saving || !user.p2pTraderSettings}
-                                >
-                                    <MenuItem value="Africa/Lagos">Africa/Lagos</MenuItem>
-                                    <MenuItem value="UTC">UTC</MenuItem>
-                                    {/* Add more timezones as needed */}
-                                </Select>
+                                    disableClearable
+                                    fullWidth
+                                />
                             </FormControl>
 
                             <Typography variant="caption" color="textSecondary">
