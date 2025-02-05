@@ -15,6 +15,12 @@ import {
     TextField,
     TablePagination,
     InputAdornment,
+    FormControlLabel,
+    Switch,
+    Select,
+    MenuItem,
+    FormControl,
+    InputLabel,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Search as SearchIcon } from '@mui/icons-material';
 
@@ -46,6 +52,9 @@ const formatCrypto = (value: string) => {
     }).format(parseFloat(value));
 };
 
+// Add sort options type
+type SortOption = 'symbol' | 'spotValue' | 'fundingValue';
+
 export function UserWalletBalances() {
     const router = useRouter();
     const { id } = router.query;
@@ -57,6 +66,9 @@ export function UserWalletBalances() {
     const [search, setSearch] = useState('');
     const [total, setTotal] = useState(0);
     const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout>();
+    const [hideZeroBalances, setHideZeroBalances] = useState(false);
+    const [sortBy, setSortBy] = useState<SortOption>('symbol');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -113,7 +125,7 @@ export function UserWalletBalances() {
         
         try {
             const response = await fetchWithRetry(
-                `/admin/wallet-balances/${id}?page=${page + 1}&limit=${rowsPerPage}&search=${search}`,
+                `/admin/wallet-balances/${id}?page=${page + 1}&limit=${rowsPerPage}&search=${search}&hideZero=${hideZeroBalances}&sortBy=${sortBy}&sortOrder=${sortOrder}`,
                 { method: 'GET' }
             );
             const { data, pagination } = await response.json();
@@ -147,7 +159,7 @@ export function UserWalletBalances() {
                 fetchBalances();
             }, 500));
         }
-    }, [id, page, rowsPerPage, search]);
+    }, [id, page, rowsPerPage, search, hideZeroBalances, sortBy, sortOrder]);
 
     const handleChangePage = (_: unknown, newPage: number) => {
         setPage(newPage);
@@ -193,20 +205,55 @@ export function UserWalletBalances() {
             </div>
 
             <Paper className="p-6">
-                <div className="mb-4">
-                    <TextField
-                        fullWidth
-                        variant="outlined"
-                        placeholder="Search by token symbol..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon />
-                                </InputAdornment>
-                            ),
-                        }}
+                <div className="flex flex-col space-y-4 mb-4">
+                    {/* Search and Filters Row */}
+                    <div className="flex items-center space-x-4">
+                        <TextField
+                            className="flex-grow"
+                            variant="outlined"
+                            placeholder="Search by token symbol..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                        
+                        <FormControl variant="outlined" style={{ minWidth: 200 }}>
+                            <InputLabel>Sort By</InputLabel>
+                            <Select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                                label="Sort By"
+                            >
+                                <MenuItem value="symbol">Symbol</MenuItem>
+                                <MenuItem value="spotValue">Spot Value</MenuItem>
+                                <MenuItem value="fundingValue">Funding Value</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <Button
+                            variant="outlined"
+                            onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                            startIcon={sortOrder === 'asc' ? '↑' : '↓'}
+                        >
+                            {sortOrder.toUpperCase()}
+                        </Button>
+                    </div>
+
+                    {/* Toggle Zero Balances */}
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={hideZeroBalances}
+                                onChange={(e) => setHideZeroBalances(e.target.checked)}
+                            />
+                        }
+                        label="Hide Zero Balances"
                     />
                 </div>
 

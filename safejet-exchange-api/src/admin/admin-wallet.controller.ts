@@ -63,6 +63,9 @@ export class AdminWalletController {
         @Query('page') page = 1,
         @Query('limit') limit = 10,
         @Query('search') search?: string,
+        @Query('hideZero') hideZero?: string,
+        @Query('sortBy') sortBy: 'symbol' | 'spotValue' | 'fundingValue' = 'symbol',
+        @Query('sortOrder') sortOrder: 'asc' | 'desc' = 'desc',
     ) {
         // First get ALL balances for the user
         const balances = await this.walletBalanceRepository.find({
@@ -116,12 +119,35 @@ export class AdminWalletController {
             ...balance
         }));
 
+        // Apply hide zero balances filter
+        if (hideZero === 'true') {
+            balanceArray = balanceArray.filter(balance => 
+                parseFloat(balance.spot) > 0 || parseFloat(balance.funding) > 0
+            );
+        }
+
         // Apply search if provided
         if (search) {
             balanceArray = balanceArray.filter(balance => 
                 balance.symbol.toLowerCase().includes(search.toLowerCase())
             );
         }
+
+        // Apply sorting
+        balanceArray.sort((a, b) => {
+            let comparison = 0;
+            switch (sortBy) {
+                case 'spotValue':
+                    comparison = a.spotUsdValue - b.spotUsdValue;
+                    break;
+                case 'fundingValue':
+                    comparison = a.fundingUsdValue - b.fundingUsdValue;
+                    break;
+                default: // 'symbol'
+                    comparison = a.symbol.localeCompare(b.symbol);
+            }
+            return sortOrder === 'asc' ? comparison : -comparison;
+        });
 
         // Get total count after search
         const total = balanceArray.length;
