@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards, Logger, Query, Post } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Logger, Query, Post, Body, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
@@ -6,6 +6,7 @@ import { AdminGuard } from '../auth/admin.guard';
 import { Token } from '../wallet/entities/token.entity';
 import { In } from 'typeorm';
 import { Wallet } from '../wallet/entities/wallet.entity';
+import { Decimal } from 'decimal.js';
 
 @Controller('admin/wallet-balances')
 @UseGuards(AdminGuard)
@@ -310,5 +311,48 @@ export class AdminWalletController {
         }>>);
 
         return groupedWallets;
+    }
+
+    @Post(':userId/adjust-balance')
+    async adjustUserBalance(
+        @Param('userId') userId: string,
+        @Body() adjustmentDto: {
+            baseSymbol: string;
+            type: 'spot' | 'funding';
+            action: 'add' | 'deduct';
+            amount: string;
+        }
+    ) {
+        this.logger.debug(`Adjusting balance for user ${userId}:`, adjustmentDto);
+
+        const balance = await this.walletBalanceRepository.findOne({
+            where: {
+                userId,
+                baseSymbol: adjustmentDto.baseSymbol,
+                type: adjustmentDto.type
+            }
+        });
+
+        if (!balance) {
+            throw new NotFoundException(`Balance not found for ${adjustmentDto.baseSymbol}`);
+        }
+
+        const currentBalance = new Decimal(balance.balance);
+        const adjustAmount = new Decimal(adjustmentDto.amount);
+
+        if (adjustmentDto.action === 'deduct' && currentBalance.lessThan(adjustAmount)) {
+            throw new BadRequestException('Insufficient balance for deduction');
+        }
+
+        balance.balance = adjustmentDto.action === 'add' 
+            ? currentBalance.plus(adjustAmount).toString()
+            : currentBalance.minus(adjustAmount).toString();
+
+        await this.walletBalanceRepository.save(balance);
+
+        return {
+            message: `Successfully ${adjustmentDto.action}ed ${adjustmentDto.amount} ${adjustmentDto.baseSymbol} to ${adjustmentDto.type} balance`,
+            newBalance: balance.balance
+        };
     }
 } 

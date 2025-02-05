@@ -36,7 +36,7 @@ import {
     AccordionSummary,
     AccordionDetails,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Search as SearchIcon, SyncAlt as SyncIcon, AccountBalanceWallet as WalletIcon, ExpandMore as ExpandMoreIcon, ContentCopy as CopyIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Search as SearchIcon, SyncAlt as SyncIcon, AccountBalanceWallet as WalletIcon, ExpandMore as ExpandMoreIcon, ContentCopy as CopyIcon, AddCircleOutline } from '@mui/icons-material';
 
 interface WalletBalance {
     symbol: string;
@@ -106,6 +106,14 @@ export function UserWalletBalances() {
         type: 'success' | 'error';
         text: string;
     } | null>(null);
+    const [adjustBalanceOpen, setAdjustBalanceOpen] = useState(false);
+    const [adjustBalanceData, setAdjustBalanceData] = useState({
+        baseSymbol: '',
+        type: 'spot' as 'spot' | 'funding',
+        action: 'add' as 'add' | 'deduct',
+        amount: ''
+    });
+    const [adjustingBalance, setAdjustingBalance] = useState(false);
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -271,6 +279,38 @@ export function UserWalletBalances() {
         setTimeout(() => setCopyMessage(null), 2000);
     };
 
+    const handleAdjustBalance = async () => {
+        if (!id || !adjustBalanceData.baseSymbol || !adjustBalanceData.amount) return;
+        
+        setAdjustingBalance(true);
+        try {
+            const response = await fetchWithRetry(
+                `/admin/wallet-balances/${id}/adjust-balance`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify(adjustBalanceData)
+                }
+            );
+
+            const data = await response.json();
+            setSyncMessage({
+                type: 'success',
+                text: data.message
+            });
+            setAdjustBalanceOpen(false);
+            // Refresh balances
+            fetchBalances();
+        } catch (err) {
+            const error = err as Error;
+            setSyncMessage({
+                type: 'error',
+                text: error?.message || 'Failed to adjust balance'
+            });
+        } finally {
+            setAdjustingBalance(false);
+        }
+    };
+
     useEffect(() => {
         if (id) {
             if (searchTimeout) {
@@ -434,6 +474,7 @@ export function UserWalletBalances() {
                                 <TableCell align="right">Spot Value (USD)</TableCell>
                                 <TableCell align="right">Funding Balance</TableCell>
                                 <TableCell align="right">Funding Value (USD)</TableCell>
+                                <TableCell align="center">Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -453,6 +494,23 @@ export function UserWalletBalances() {
                                     </TableCell>
                                     <TableCell align="right">
                                         {formatUSD(balance.funding.usdValue)}
+                                    </TableCell>
+                                    <TableCell align="center">
+                                        <Button
+                                            size="small"
+                                            variant="outlined"
+                                            onClick={() => {
+                                                setAdjustBalanceData(prev => ({
+                                                    ...prev,
+                                                    baseSymbol: balance.symbol,
+                                                    amount: ''  // Reset amount
+                                                }));
+                                                setAdjustBalanceOpen(true);
+                                            }}
+                                            startIcon={<AddCircleOutline />}
+                                        >
+                                            Adjust
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -555,6 +613,81 @@ export function UserWalletBalances() {
                         setCopyMessage(null);
                     }}>
                         Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog
+                open={adjustBalanceOpen}
+                onClose={() => !adjustingBalance && setAdjustBalanceOpen(false)}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>Adjust Token Balance</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+                        <Typography variant="subtitle1">
+                            Token: {adjustBalanceData.baseSymbol}
+                        </Typography>
+
+                        <FormControl fullWidth>
+                            <InputLabel>Balance Type</InputLabel>
+                            <Select
+                                value={adjustBalanceData.type}
+                                onChange={(e) => setAdjustBalanceData(prev => ({
+                                    ...prev,
+                                    type: e.target.value as 'spot' | 'funding'
+                                }))}
+                                label="Balance Type"
+                            >
+                                <MenuItem value="spot">Spot</MenuItem>
+                                <MenuItem value="funding">Funding</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <FormControl fullWidth>
+                            <InputLabel>Action</InputLabel>
+                            <Select
+                                value={adjustBalanceData.action}
+                                onChange={(e) => setAdjustBalanceData(prev => ({
+                                    ...prev,
+                                    action: e.target.value as 'add' | 'deduct'
+                                }))}
+                                label="Action"
+                            >
+                                <MenuItem value="add">Add</MenuItem>
+                                <MenuItem value="deduct">Deduct</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <TextField
+                            label="Amount"
+                            type="number"
+                            value={adjustBalanceData.amount}
+                            onChange={(e) => setAdjustBalanceData(prev => ({
+                                ...prev,
+                                amount: e.target.value
+                            }))}
+                            fullWidth
+                            InputProps={{
+                                inputProps: { min: 0, step: "any" }
+                            }}
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button 
+                        onClick={() => setAdjustBalanceOpen(false)} 
+                        disabled={adjustingBalance}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleAdjustBalance}
+                        variant="contained"
+                        disabled={adjustingBalance || !adjustBalanceData.baseSymbol || !adjustBalanceData.amount}
+                    >
+                        {adjustingBalance ? 'Adjusting...' : 'Adjust Balance'}
                     </Button>
                 </DialogActions>
             </Dialog>
