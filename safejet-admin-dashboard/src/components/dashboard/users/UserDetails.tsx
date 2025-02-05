@@ -108,6 +108,7 @@ export default function UserDetails() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState('');
     const [saving, setSaving] = useState(false);
+    const [availableCurrencies, setAvailableCurrencies] = useState<string[]>([]);
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -183,9 +184,21 @@ export default function UserDetails() {
         }
     };
 
+    const fetchCurrencies = async () => {
+        try {
+            const response = await fetchWithRetry('/exchange-rates', { method: 'GET' });
+            const data = await response.json();
+            const currencies = data.map((rate: { currency: string }) => rate.currency);
+            setAvailableCurrencies(currencies);
+        } catch (error) {
+            console.error('Error fetching currencies:', error);
+        }
+    };
+
     useEffect(() => {
         if (id) {
             fetchUser();
+            fetchCurrencies();
         }
     }, [id]);
 
@@ -405,14 +418,16 @@ export default function UserDetails() {
                             <FormControl fullWidth>
                                 <InputLabel>Currency</InputLabel>
                                 <Select
-                                    value={user.currency || 'USD'}
-                                    onChange={(e) => handleUpdateUser({ currency: e.target.value as string })}
+                                    value={user.currency?.toLowerCase() || 'usd'}
+                                    onChange={(e) => handleUpdateUser({ currency: e.target.value.toUpperCase() })}
                                     label="Currency"
                                     disabled={saving}
                                 >
-                                    <MenuItem value="USD">USD</MenuItem>
-                                    <MenuItem value="EUR">EUR</MenuItem>
-                                    <MenuItem value="GBP">GBP</MenuItem>
+                                    {availableCurrencies.map((currency) => (
+                                        <MenuItem key={currency} value={currency.toLowerCase()}>
+                                            {currency.toUpperCase()}
+                                        </MenuItem>
+                                    ))}
                                 </Select>
                             </FormControl>
                         </div>
