@@ -12,6 +12,7 @@ import { KYCLevel } from './entities/kyc-level.entity';
 import { TwilioModule } from '../twilio/twilio.module';
 import { P2PSettingsModule } from '../p2p-settings/p2p-settings.module';
 import { WalletModule } from '../wallet/wallet.module';
+import { AdminUserController } from './admin/user.controller';
 
 @Module({
   imports: [
@@ -28,7 +29,10 @@ import { WalletModule } from '../wallet/wallet.module';
     P2PSettingsModule,
     forwardRef(() => WalletModule),
   ],
-  controllers: [AuthController],
+  controllers: [
+    AuthController,
+    AdminUserController,
+  ],
   providers: [AuthService, JwtStrategy, LoginTrackerService],
   exports: [AuthService],
 })

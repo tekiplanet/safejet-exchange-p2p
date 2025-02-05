@@ -48,6 +48,8 @@ export class AdminTokenController {
             );
         }
 
+        query = query.orderBy('token.symbol', 'ASC');
+
         const [tokens, total] = await Promise.all([
             query.skip(skip).take(limit).getMany(),
             query.getCount()
