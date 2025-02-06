@@ -16,6 +16,8 @@ import { AdminWalletController } from './admin-wallet.controller';
 import { Token } from '../wallet/entities/token.entity';
 import { Wallet } from '../wallet/entities/wallet.entity';
 import { AdminWalletManagementController } from './admin-wallet-management.controller';
+import { Deposit } from '../wallet/entities/deposit.entity';
+import { AdminDepositManagementController } from './admin-deposit-management.controller';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { AdminWalletManagementController } from './admin-wallet-management.contr
       WalletBalance,
       Token,
       Wallet,
+      Deposit,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -43,6 +46,7 @@ import { AdminWalletManagementController } from './admin-wallet-management.contr
     AdminP2PTraderSettingsController,
     AdminWalletController,
     AdminWalletManagementController,
+    AdminDepositManagementController,
   ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
