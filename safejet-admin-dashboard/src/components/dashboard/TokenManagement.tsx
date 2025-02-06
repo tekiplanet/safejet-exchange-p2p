@@ -23,7 +23,8 @@ import {
     FormControlLabel,
     Tooltip,
     Checkbox,
-    ListItemText
+    ListItemText,
+    Avatar
 } from '@mui/material';
 import { Edit as EditIcon, Add as AddIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
 import { TOKEN_CONFIG, NetworkVersion, Network, Blockchain, PriceFeedProvider } from '../../config/tokens';
@@ -459,7 +460,33 @@ export default function TokenManagement() {
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {tokens.map((token) => (
                                     <tr key={token.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{token.symbol}</td>
+                                        <TableCell>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                <Avatar 
+                                                    src={token.metadata?.icon} 
+                                                    alt={token.symbol}
+                                                    sx={{ 
+                                                        width: 28,
+                                                        height: 28,
+                                                        backgroundColor: 'transparent',
+                                                        border: '1px solid #e0e0e0',
+                                                        padding: '2px'
+                                                    }}
+                                                >
+                                                    {token.symbol.charAt(0)}
+                                                </Avatar>
+                                                <Typography 
+                                                    variant="body2" 
+                                                    sx={{ 
+                                                        fontWeight: 500,
+                                                        color: 'text.primary',
+                                                        fontSize: '0.875rem'
+                                                    }}
+                                                >
+                                                    {token.symbol}
+                                                </Typography>
+                                            </Box>
+                                        </TableCell>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{token.name}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{token.blockchain}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{token.contractAddress || 'Native'}</td>

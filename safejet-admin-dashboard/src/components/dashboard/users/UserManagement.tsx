@@ -152,8 +152,13 @@ export default function UserManagement() {
 
     const handleExportCSV = async () => {
         try {
+            const queryParams = new URLSearchParams();
+            if (searchQuery) queryParams.append('search', searchQuery);
+            if (kycLevelFilter !== '') queryParams.append('kycLevel', kycLevelFilter.toString());
+            if (verifiedFilter) queryParams.append('verified', verifiedFilter);
+
             const response = await fetchWithRetry(
-                '/admin/users/export/csv',
+                `/admin/users/export/csv?${queryParams.toString()}`,
                 { method: 'GET' },
                 3
             );
@@ -187,7 +192,7 @@ export default function UserManagement() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="min-w-[200px]"
                         />
-                        <FormControl size="small" className="min-w-[150px]">
+                        <FormControl size="small" sx={{ minWidth: '200px' }}>
                             <InputLabel>KYC Level</InputLabel>
                             <Select
                                 value={kycLevelFilter}
@@ -201,7 +206,7 @@ export default function UserManagement() {
                                 <MenuItem value={3}>Level 3</MenuItem>
                             </Select>
                         </FormControl>
-                        <FormControl size="small" className="min-w-[150px]">
+                        <FormControl size="small" sx={{ minWidth: '200px' }}>
                             <InputLabel>Verified Status</InputLabel>
                             <Select
                                 value={verifiedFilter}
@@ -328,7 +333,7 @@ export default function UserManagement() {
                         </p>
                     </div>
                     <div className="flex gap-2 items-center">
-                        <FormControl size="small" style={{ width: 100 }}>
+                        <FormControl size="small" sx={{ minWidth: '120px' }}>
                             <Select
                                 value={pageSize}
                                 onChange={(e) => setPageSize(Number(e.target.value))}

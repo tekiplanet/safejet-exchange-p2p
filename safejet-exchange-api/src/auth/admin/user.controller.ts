@@ -1,10 +1,12 @@
-import { Controller, Get, Put, Query, Param, Body, UseGuards, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Put, Query, Param, Body, UseGuards, NotFoundException, BadRequestException, Res, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { KYCLevel } from '../entities/kyc-level.entity';
 import { AdminGuard } from '../../auth/admin.guard';
 import { IsOptional, IsString, IsNumber, IsBoolean } from 'class-validator';
+import { Response } from 'express';
+import { Parser } from 'json2csv';
 
 class UpdateUserDto {
   @IsOptional()
@@ -195,12 +197,71 @@ export class AdminUserController {
   }
 
   @Get('export/csv')
-  async exportUsers() {
-    const users = await this.userRepository.find({
-      relations: ['kycLevelDetails']
-    });
+  async exportUsers(
+    @Res() res: Response,
+    @Query('search') search?: string,
+    @Query('kycLevel') kycLevel?: number,
+    @Query('verified') verified?: 'email' | 'phone' | 'both'
+  ) {
+    const queryBuilder = this.userRepository.createQueryBuilder('user')
+      .leftJoinAndSelect('user.kycLevelDetails', 'kycLevelDetails');
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(user.email LIKE :search OR user.firstName LIKE :search OR user.lastName LIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    if (kycLevel) {
+      queryBuilder.andWhere('kycLevelDetails.level = :kycLevel', { kycLevel });
+    }
+
+    if (verified) {
+      switch (verified) {
+        case 'email':
+          queryBuilder.andWhere('user.emailVerified = true');
+          break;
+        case 'phone':
+          queryBuilder.andWhere('user.phoneVerified = true');
+          break;
+        case 'both':
+          queryBuilder.andWhere('user.emailVerified = true AND user.phoneVerified = true');
+          break;
+      }
+    }
+
+    const users = await queryBuilder.getMany();
     
-    // Implement CSV export logic
-    // Return CSV file
+    const fields = [
+      'id',
+      'email',
+      'phone',
+      'fullName',
+      'emailVerified',
+      'phoneVerified',
+      'kycLevel',
+      'countryName',
+      'countryCode',
+      'createdAt',
+      'lastLoginAt',
+      'isActive',
+      'kycLevelDetails.title'
+    ];
+
+    const opts = { fields };
+    
+    try {
+      const parser = new Parser(opts);
+      const csv = parser.parse(users);
+      
+      res.header('Content-Type', 'text/csv');
+      res.header('Content-Disposition', 'attachment; filename=users.csv');
+      
+      return res.send(csv);
+    } catch (err) {
+      console.error('Error generating CSV:', err);
+      throw new InternalServerErrorException('Failed to generate CSV');
+    }
   }
 } 
