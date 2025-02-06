@@ -35,6 +35,7 @@ import {
     Accordion,
     AccordionSummary,
     AccordionDetails,
+    Avatar,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Search as SearchIcon, SyncAlt as SyncIcon, AccountBalanceWallet as WalletIcon, ExpandMore as ExpandMoreIcon, ContentCopy as CopyIcon, AddCircleOutline } from '@mui/icons-material';
 
@@ -47,6 +48,10 @@ interface WalletBalance {
     funding: {
         balance: string;
         usdValue: number;
+    };
+    metadata?: {
+        icon: string;
+        // ... other metadata fields
     };
 }
 
@@ -114,6 +119,7 @@ export function UserWalletBalances() {
         amount: ''
     });
     const [adjustingBalance, setAdjustingBalance] = useState(false);
+    const [userName, setUserName] = useState('');
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -183,7 +189,8 @@ export function UserWalletBalances() {
                 funding: {
                     balance: balance.funding,
                     usdValue: balance.fundingUsdValue || 0
-                }
+                },
+                metadata: balance.metadata || {}
             })));
             setTotal(pagination.total);
             setError('');
@@ -311,6 +318,20 @@ export function UserWalletBalances() {
         }
     };
 
+    const fetchUserDetails = async () => {
+        if (!id) return;
+        try {
+            const response = await fetchWithRetry(
+                `/admin/users/${id}`,
+                { method: 'GET' }
+            );
+            const user = await response.json();
+            setUserName(user.fullName || 'User');
+        } catch (error) {
+            console.error('Error fetching user details:', error);
+        }
+    };
+
     useEffect(() => {
         if (id) {
             if (searchTimeout) {
@@ -321,6 +342,12 @@ export function UserWalletBalances() {
             }, 500));
         }
     }, [id, page, rowsPerPage, search, hideZeroBalances, sortBy, sortOrder]);
+
+    useEffect(() => {
+        if (id) {
+            fetchUserDetails();
+        }
+    }, [id]);
 
     const handleChangePage = (_: unknown, newPage: number) => {
         setPage(newPage);
@@ -354,7 +381,7 @@ export function UserWalletBalances() {
                         >
                             Back
                         </Button>
-                        <Typography variant="h5">User Wallet Balances</Typography>
+                        <Typography variant="h5">{userName}'s Wallet Balances</Typography>
                     </div>
                 </div>
 
@@ -480,8 +507,32 @@ export function UserWalletBalances() {
                         <TableBody>
                             {balances.map((balance) => (
                                 <TableRow key={balance.symbol}>
-                                    <TableCell component="th" scope="row">
-                                        {balance.symbol}
+                                    <TableCell>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                            <Avatar 
+                                                src={balance.metadata?.icon}
+                                                alt={balance.symbol}
+                                                sx={{ 
+                                                    width: 28,
+                                                    height: 28,
+                                                    backgroundColor: 'transparent',
+                                                    border: '1px solid #e0e0e0',
+                                                    padding: '2px'
+                                                }}
+                                            >
+                                                {balance.symbol.charAt(0)}
+                                            </Avatar>
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    fontWeight: 500,
+                                                    color: 'text.primary',
+                                                    fontSize: '0.875rem'
+                                                }}
+                                            >
+                                                {balance.symbol}
+                                            </Typography>
+                                        </Box>
                                     </TableCell>
                                     <TableCell align="right">
                                         {formatCrypto(balance.spot.balance)}

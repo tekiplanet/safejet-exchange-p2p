@@ -80,7 +80,8 @@ export class AdminWalletController {
         // Get token prices
         const tokenSymbols = [...new Set(balances.map(b => b.baseSymbol))];
         const tokens = await this.tokenRepository.find({
-            where: { baseSymbol: In(tokenSymbols) }
+            where: { baseSymbol: In(tokenSymbols) },
+            select: ['baseSymbol', 'currentPrice', 'metadata']
         });
 
         const tokenPrices = tokens.reduce((acc, token) => {
@@ -162,11 +163,13 @@ export class AdminWalletController {
 
         // Convert back to object format
         const paginatedData = paginatedBalances.reduce((acc, balance) => {
+            const token = tokens.find(t => t.baseSymbol === balance.symbol);
             acc[balance.symbol] = {
                 spot: balance.spot,
                 funding: balance.funding,
                 spotUsdValue: balance.spotUsdValue,
-                fundingUsdValue: balance.fundingUsdValue
+                fundingUsdValue: balance.fundingUsdValue,
+                metadata: token?.metadata || {}
             };
             return acc;
         }, {} as Record<string, any>);
