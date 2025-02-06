@@ -320,6 +320,8 @@ export function DepositManagement() {
         }
     };
 
+    const getUserDetailsUrl = (userId: string) => `/dashboard/users/details?id=${userId}`;
+
     return (
         <div className="space-y-6">
             {/* Header Section */}
@@ -331,7 +333,7 @@ export function DepositManagement() {
                     </div>
                     <div className="flex flex-wrap gap-4">
                         <TextField
-                            placeholder="Search deposits..."
+                            placeholder="Search by TX hash, User ID, or Transaction ID"
                             size="small"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -427,11 +429,17 @@ export function DepositManagement() {
                                             </TableCell>
                                             <TableCell>
                                                 <Tooltip title={`ID: ${deposit.userId}`}>
-                                                    <span>
+                                                    <a 
+                                                        href={getUserDetailsUrl(deposit.userId)}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
                                                         {userDetails[deposit.userId]?.fullName || 
                                                          userDetails[deposit.userId]?.email || 
                                                          deposit.userId}
-                                                    </span>
+                                                    </a>
                                                 </Tooltip>
                                             </TableCell>
                                             <TableCell>
@@ -537,9 +545,16 @@ export function DepositManagement() {
                                         User
                                     </Typography>
                                     <Typography>
-                                        {userDetails[selectedDeposit.userId]?.fullName || 
-                                         userDetails[selectedDeposit.userId]?.email || 
-                                         selectedDeposit.userId}
+                                        <a 
+                                            href={getUserDetailsUrl(selectedDeposit.userId)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                        >
+                                            {userDetails[selectedDeposit.userId]?.fullName || 
+                                             userDetails[selectedDeposit.userId]?.email || 
+                                             selectedDeposit.userId}
+                                        </a>
                                         <span className="text-xs text-gray-500 ml-2">
                                             (ID: {selectedDeposit.userId})
                                         </span>

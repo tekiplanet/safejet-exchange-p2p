@@ -31,10 +31,10 @@ export class AdminDepositManagementController {
 
         // Apply search if provided
         if (search) {
-            query.where([
-                { txHash: Like(`%${search}%`) },
-                { userId: Like(`%${search}%`) },
-            ]);
+            query.where(
+                'deposit.txHash ILIKE :search OR CAST(deposit.id AS TEXT) ILIKE :search OR CAST(deposit.userId AS TEXT) ILIKE :search',
+                { search: `%${search}%` }
+            );
         }
 
         // Apply status filter
