@@ -120,6 +120,8 @@ export function UserWalletBalances() {
     });
     const [adjustingBalance, setAdjustingBalance] = useState(false);
     const [userName, setUserName] = useState('');
+    const [missingWallets, setMissingWallets] = useState<Array<{blockchain: string; network: string}>>([]);
+    const [creatingWallet, setCreatingWallet] = useState(false);
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -332,6 +334,50 @@ export function UserWalletBalances() {
         }
     };
 
+    const scanWallets = async () => {
+        try {
+            const response = await fetchWithRetry(
+                `/admin/wallet-management/${id}/scan-wallets`,
+                { method: 'GET' }
+            );
+            const data = await response.json();
+            setMissingWallets(data.missing);
+        } catch (error) {
+            console.error('Error scanning wallets:', error);
+            setSyncMessage({
+                type: 'error',
+                text: 'Failed to scan wallets'
+            });
+        }
+    };
+
+    const handleCreateWallet = async (blockchain: string, network: string) => {
+        setCreatingWallet(true);
+        try {
+            await fetchWithRetry(
+                `/admin/wallet-management/${id}/create-wallet`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ blockchain, network })
+                }
+            );
+            // Refresh scan
+            await scanWallets();
+            setSyncMessage({
+                type: 'success',
+                text: `Successfully created ${blockchain} ${network} wallet`
+            });
+        } catch (error) {
+            console.error('Error creating wallet:', error);
+            setSyncMessage({
+                type: 'error',
+                text: 'Failed to create wallet'
+            });
+        } finally {
+            setCreatingWallet(false);
+        }
+    };
+
     useEffect(() => {
         if (id) {
             if (searchTimeout) {
@@ -346,6 +392,12 @@ export function UserWalletBalances() {
     useEffect(() => {
         if (id) {
             fetchUserDetails();
+        }
+    }, [id]);
+
+    useEffect(() => {
+        if (id) {
+            scanWallets();
         }
     }, [id]);
 
@@ -381,7 +433,16 @@ export function UserWalletBalances() {
                         >
                             Back
                         </Button>
-                        <Typography variant="h5">{userName}'s Wallet Balances</Typography>
+                        <Typography 
+                            variant="h5" 
+                            sx={{ 
+                                color: 'text.primary',  // Make text color more prominent
+                                fontWeight: 500,        // Make it slightly bolder
+                                fontSize: '1.5rem'      // Ensure good size
+                            }}
+                        >
+                            {userName}'s Wallet Balances
+                        </Typography>
                     </div>
                 </div>
 
@@ -491,6 +552,30 @@ export function UserWalletBalances() {
                         label="Hide Zero Balances"
                     />
                 </div>
+
+                {missingWallets.length > 0 && (
+                    <Alert 
+                        severity="warning"
+                        sx={{ mb: 2 }}
+                        action={
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                                {missingWallets.map(({ blockchain, network }) => (
+                                    <Button
+                                        key={`${blockchain}-${network}`}
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => handleCreateWallet(blockchain, network)}
+                                        disabled={creatingWallet}
+                                    >
+                                        Create {blockchain} {network}
+                                    </Button>
+                                ))}
+                            </Box>
+                        }
+                    >
+                        Missing wallets detected: {missingWallets.map(w => `${w.blockchain} ${w.network}`).join(', ')}
+                    </Alert>
+                )}
 
                 <TableContainer>
                     <Table>

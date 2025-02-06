@@ -15,6 +15,7 @@ import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
 import { AdminWalletController } from './admin-wallet.controller';
 import { Token } from '../wallet/entities/token.entity';
 import { Wallet } from '../wallet/entities/wallet.entity';
+import { AdminWalletManagementController } from './admin-wallet-management.controller';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { Wallet } from '../wallet/entities/wallet.entity';
     AdminDepositController,
     AdminP2PTraderSettingsController,
     AdminWalletController,
+    AdminWalletManagementController,
   ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
