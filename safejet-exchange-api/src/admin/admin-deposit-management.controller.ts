@@ -6,6 +6,7 @@ import { Deposit } from '../wallet/entities/deposit.entity';
 import { Token } from '../wallet/entities/token.entity';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
 import { Decimal } from 'decimal.js';
+import { User } from '../auth/entities/user.entity';
 
 @Controller('admin/deposits')
 @UseGuards(AdminGuard)
@@ -17,6 +18,8 @@ export class AdminDepositManagementController {
         private tokenRepository: Repository<Token>,
         @InjectRepository(WalletBalance)
         private walletBalanceRepository: Repository<WalletBalance>,
+        @InjectRepository(User)
+        private userRepository: Repository<User>,
     ) {}
 
     @Get()
@@ -157,5 +160,58 @@ export class AdminDepositManagementController {
         });
 
         return { message: 'Deposit processed successfully', deposit };
+    }
+
+    @Post('tokens/:id/sync-wallets')
+    async syncTokenWallets(@Param('id') tokenId: string) {
+        // Get the token
+        const token = await this.tokenRepository.findOne({
+            where: { id: tokenId }
+        });
+
+        if (!token) {
+            throw new NotFoundException('Token not found');
+        }
+
+        // Get all users
+        const users = await this.userRepository.find();
+        const totalUsers = users.length;
+
+        // Get existing wallet balances for this token
+        const existingBalances = await this.walletBalanceRepository.find({
+            where: {
+                baseSymbol: token.baseSymbol || token.symbol,
+                type: 'funding'
+            }
+        });
+
+        // Find users who don't have a balance for this token
+        const usersWithoutBalance = users.filter(user => 
+            !existingBalances.some(balance => balance.userId === user.id)
+        );
+
+        // Create wallet balances for users who don't have one
+        const newBalances = usersWithoutBalance.map(user => 
+            this.walletBalanceRepository.create({
+                userId: user.id,
+                baseSymbol: token.baseSymbol || token.symbol,
+                type: 'funding',
+                balance: '0'
+            })
+        );
+
+        if (newBalances.length > 0) {
+            await this.walletBalanceRepository.save(newBalances);
+        }
+
+        return {
+            message: `Sync complete for ${token.symbol}:`,
+            details: {
+                totalUsers,
+                existingBalances: existingBalances.length,
+                newBalancesCreated: newBalances.length,
+                allUsersHaveBalance: newBalances.length === 0
+            }
+        };
     }
 } 

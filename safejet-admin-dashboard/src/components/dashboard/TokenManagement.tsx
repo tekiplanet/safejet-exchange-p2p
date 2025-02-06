@@ -26,8 +26,9 @@ import {
     ListItemText,
     Avatar
 } from '@mui/material';
-import { Edit as EditIcon, Add as AddIcon, Visibility as VisibilityIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Add as AddIcon, Visibility as VisibilityIcon, Sync as SyncIcon } from '@mui/icons-material';
 import { TOKEN_CONFIG, NetworkVersion, Network, Blockchain, PriceFeedProvider } from '../../config/tokens';
+import { LoadingButton } from '@mui/lab';
 
 
 interface Token {
@@ -95,6 +96,7 @@ export default function TokenManagement() {
     const [pageSize, setPageSize] = useState(10);
     const [viewNetworkConfig, setViewNetworkConfig] = useState<Token | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [syncingToken, setSyncingToken] = useState<string | null>(null);
     const router = useRouter();
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
@@ -355,6 +357,34 @@ export default function TokenManagement() {
         }
     };
 
+    const handleSyncToken = async (tokenId: string, symbol: string) => {
+        setSyncingToken(tokenId);
+        try {
+            const response = await fetchWithRetry(
+                `/admin/deposits/tokens/${tokenId}/sync-wallets`,
+                { method: 'POST' }
+            );
+            const result = await response.json();
+            
+            // Create a detailed status message
+            const details = result.details;
+            const statusMessage = `
+                ${symbol} sync complete:
+                ${details.newBalancesCreated} new wallets created,
+                ${details.existingBalances} users already had wallets,
+                ${details.totalUsers} total users
+                ${details.allUsersHaveBalance ? '(All users now have wallets)' : ''}
+            `.trim();
+            
+            setStatus(statusMessage);
+        } catch (error) {
+            console.error('Error syncing token wallets:', error);
+            setStatus(`Error syncing wallets for ${symbol}`);
+        } finally {
+            setSyncingToken(null);
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header Section */}
@@ -508,6 +538,18 @@ export default function TokenManagement() {
                                                 <IconButton onClick={() => setViewNetworkConfig(token)}>
                                                     <VisibilityIcon />
                                                 </IconButton>
+                                                <Tooltip title="Sync Wallet Balances">
+                                                    <LoadingButton
+                                                        size="small"
+                                                        loading={syncingToken === token.id}
+                                                        onClick={() => handleSyncToken(token.id, token.symbol)}
+                                                        startIcon={<SyncIcon />}
+                                                        loadingPosition="start"
+                                                        variant="outlined"
+                                                    >
+                                                        Sync
+                                                    </LoadingButton>
+                                                </Tooltip>
                                             </div>
                                         </td>
                                     </tr>
@@ -672,12 +714,7 @@ export default function TokenManagement() {
                                         const currentMetadata = editToken?.metadata || {
                                             icon: '',
                                             networks: ['mainnet'],
-                                            priceFeeds: {
-                                                mainnet: {
-                                                    provider: TOKEN_CONFIG.priceFeedProviders[0].value,
-                                                    interval: TOKEN_CONFIG.defaults.interval
-                                                }
-                                            }
+                                            priceFeeds: {}
                                         };
 
                                         setEditToken({

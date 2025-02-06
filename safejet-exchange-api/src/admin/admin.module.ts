@@ -18,6 +18,7 @@ import { Wallet } from '../wallet/entities/wallet.entity';
 import { AdminWalletManagementController } from './admin-wallet-management.controller';
 import { Deposit } from '../wallet/entities/deposit.entity';
 import { AdminDepositManagementController } from './admin-deposit-management.controller';
+import { User } from '../auth/entities/user.entity';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AdminDepositManagementController } from './admin-deposit-management.con
       Token,
       Wallet,
       Deposit,
+      User
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
