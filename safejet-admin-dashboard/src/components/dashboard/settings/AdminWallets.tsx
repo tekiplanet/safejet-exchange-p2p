@@ -13,8 +13,11 @@ import {
     Alert,
     Button,
     CircularProgress,
+    IconButton,
+    Snackbar,
+    Alert as MuiAlert,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, ContentCopy as ContentCopyIcon } from '@mui/icons-material';
 
 interface AdminWallet {
     id: string;
@@ -34,6 +37,15 @@ export function AdminWallets() {
     const [missingWallets, setMissingWallets] = useState<Array<{blockchain: string; network: string}>>([]);
     const [creatingWallet, setCreatingWallet] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [snackbar, setSnackbar] = useState<{
+        open: boolean;
+        message: string;
+        severity: 'success' | 'error';
+    }>({
+        open: false,
+        message: '',
+        severity: 'success'
+    });
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -132,6 +144,49 @@ export function AdminWallets() {
         }
     };
 
+    const copyToClipboard = async (text: string) => {
+        try {
+            // Check if clipboard API is available
+            if (!navigator?.clipboard) {
+                // Fallback to older execCommand method
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    setSnackbar({
+                        open: true,
+                        message: 'Address copied to clipboard',
+                        severity: 'success'
+                    });
+                } catch (err) {
+                    setSnackbar({
+                        open: true,
+                        message: 'Failed to copy address',
+                        severity: 'error'
+                    });
+                }
+                document.body.removeChild(textArea);
+                return;
+            }
+
+            // Use modern clipboard API
+            await navigator.clipboard.writeText(text);
+            setSnackbar({
+                open: true,
+                message: 'Address copied to clipboard',
+                severity: 'success'
+            });
+        } catch (err) {
+            setSnackbar({
+                open: true,
+                message: 'Failed to copy address',
+                severity: 'error'
+            });
+        }
+    };
+
     useEffect(() => {
         fetchWallets();
         scanMissingWallets();
@@ -217,7 +272,24 @@ export function AdminWallets() {
                                 <TableRow key={wallet.id}>
                                     <TableCell>{wallet.blockchain}</TableCell>
                                     <TableCell>{wallet.network}</TableCell>
-                                    <TableCell>{wallet.address}</TableCell>
+                                    <TableCell>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ 
+                                                maxWidth: '200px', 
+                                                overflow: 'hidden', 
+                                                textOverflow: 'ellipsis' 
+                                            }}>
+                                                {wallet.address}
+                                            </span>
+                                            <IconButton 
+                                                size="small"
+                                                onClick={() => copyToClipboard(wallet.address)}
+                                                aria-label="copy address"
+                                            >
+                                                <ContentCopyIcon fontSize="small" />
+                                            </IconButton>
+                                        </div>
+                                    </TableCell>
                                     <TableCell>{wallet.type}</TableCell>
                                     <TableCell>
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -237,6 +309,21 @@ export function AdminWallets() {
                     </Table>
                 </TableContainer>
             </Paper>
+
+            <Snackbar 
+                open={snackbar.open}
+                autoHideDuration={3000}
+                onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            >
+                <MuiAlert 
+                    elevation={6} 
+                    variant="filled" 
+                    severity={snackbar.severity}
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+                >
+                    {snackbar.message}
+                </MuiAlert>
+            </Snackbar>
         </div>
     );
 } 
