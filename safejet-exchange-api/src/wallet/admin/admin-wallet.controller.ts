@@ -4,6 +4,7 @@ import { AdminWallet } from '../entities/admin-wallet.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { KeyManagementService } from '../key-management.service';
+import { AdminWalletService } from '../services/admin-wallet.service';
 
 @Controller('admin/wallets')
 @UseGuards(AdminGuard)
@@ -11,12 +12,23 @@ export class AdminWalletController {
     constructor(
         @InjectRepository(AdminWallet)
         private adminWalletRepository: Repository<AdminWallet>,
-        private keyManagementService: KeyManagementService
+        private keyManagementService: KeyManagementService,
+        private adminWalletService: AdminWalletService
     ) {}
 
     @Get()
     async getAdminWallets() {
-        return this.adminWalletRepository.find();
+        return this.adminWalletRepository.find({
+            order: {
+                blockchain: 'ASC',
+                network: 'ASC'
+            }
+        });
+    }
+
+    @Get('scan')
+    async scanMissingWallets() {
+        return this.adminWalletService.scanMissingWallets();
     }
 
     @Post()
@@ -27,19 +39,10 @@ export class AdminWalletController {
             type: 'hot' | 'cold';
         }
     ) {
-        // Generate wallet using existing key management service
-        const { address, keyId } = await this.keyManagementService.generateWallet(
-            'admin',
+        return this.adminWalletService.createAdminWallet(
             data.blockchain,
-            data.network
+            data.network,
+            data.type
         );
-
-        const adminWallet = this.adminWalletRepository.create({
-            ...data,
-            address,
-            keyId,
-        });
-
-        return this.adminWalletRepository.save(adminWallet);
     }
 } 

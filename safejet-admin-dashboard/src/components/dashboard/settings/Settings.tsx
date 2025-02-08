@@ -1,4 +1,4 @@
-import { Box, Typography, Paper, Grid, Card, CardContent, CardActionArea, IconButton } from '@mui/material';
+import { Box, Typography, Paper, Grid } from '@mui/material';
 import { useRouter } from 'next/router';
 import { 
     AccountBalanceWallet as WalletIcon,
@@ -35,12 +35,10 @@ export function Settings() {
                 {settingsCategories.map((category) => (
                     <Paper 
                         key={category.title}
-                        className="hover:shadow-lg transition-shadow duration-200"
+                        className="hover:shadow-lg transition-shadow duration-200 cursor-pointer"
+                        onClick={() => router.push(category.href)}
                     >
-                        <CardActionArea 
-                            onClick={() => router.push(category.href)}
-                            className="p-6"
-                        >
+                        <div className="p-6">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-4">
                                     <div className="p-2 bg-indigo-50 rounded-lg">
@@ -55,11 +53,9 @@ export function Settings() {
                                         </Typography>
                                     </div>
                                 </div>
-                                <IconButton size="small">
-                                    <ArrowForwardIcon />
-                                </IconButton>
+                                <ArrowForwardIcon />
                             </div>
-                        </CardActionArea>
+                        </div>
                     </Paper>
                 ))}
             </div>
