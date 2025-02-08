@@ -7,6 +7,7 @@ import { Token } from '../wallet/entities/token.entity';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
 import { Decimal } from 'decimal.js';
 import { User } from '../auth/entities/user.entity';
+import { Wallet } from '../wallet/entities/wallet.entity';
 
 @Controller('admin/deposits')
 @UseGuards(AdminGuard)
@@ -20,6 +21,8 @@ export class AdminDepositManagementController {
         private walletBalanceRepository: Repository<WalletBalance>,
         @InjectRepository(User)
         private userRepository: Repository<User>,
+        @InjectRepository(Wallet)
+        private walletRepository: Repository<Wallet>,
     ) {}
 
     @Get()
@@ -164,7 +167,7 @@ export class AdminDepositManagementController {
 
     @Post('tokens/:id/sync-wallets')
     async syncTokenWallets(@Param('id') tokenId: string) {
-        // Get the token
+        // Get the token and its variants with same baseSymbol
         const token = await this.tokenRepository.findOne({
             where: { id: tokenId }
         });
@@ -173,44 +176,177 @@ export class AdminDepositManagementController {
             throw new NotFoundException('Token not found');
         }
 
-        // Get all users
-        const users = await this.userRepository.find();
-        const totalUsers = users.length;
-
-        // Get existing wallet balances for this token
-        const existingBalances = await this.walletBalanceRepository.find({
-            where: {
-                baseSymbol: token.baseSymbol || token.symbol,
-                type: 'funding'
-            }
+        // Get all tokens with same baseSymbol
+        const tokenVariants = await this.tokenRepository.find({
+            where: { baseSymbol: token.baseSymbol || token.symbol }
         });
 
-        // Find users who don't have a balance for this token
-        const usersWithoutBalance = users.filter(user => 
-            !existingBalances.some(balance => balance.userId === user.id)
-        );
+        // Get all users and their wallets
+        const users = await this.userRepository.find();
+        const totalUsers = users.length;
+        const walletTypes = ['funding', 'spot'] as const;
+        const results = { funding: { existing: 0, created: 0 }, spot: { existing: 0, created: 0 } };
 
-        // Create wallet balances for users who don't have one
-        const newBalances = usersWithoutBalance.map(user => 
-            this.walletBalanceRepository.create({
-                userId: user.id,
-                baseSymbol: token.baseSymbol || token.symbol,
-                type: 'funding',
-                balance: '0'
-            })
-        );
+        // Process each wallet type
+        for (const type of walletTypes) {
+            // Get existing wallet balances for this token and type
+            const existingBalances = await this.walletBalanceRepository.find({
+                where: {
+                    baseSymbol: token.baseSymbol || token.symbol,
+                    type
+                }
+            });
 
-        if (newBalances.length > 0) {
-            await this.walletBalanceRepository.save(newBalances);
+            results[type].existing = existingBalances.length;
+
+            // Find users who don't have a balance for this token and type
+            const usersWithoutBalance = users.filter(user => 
+                !existingBalances.some(balance => balance.userId === user.id)
+            );
+
+            // Create wallet balances for users who don't have one
+            const newBalances = [];
+            
+            for (const user of usersWithoutBalance) {
+                // Get user's wallets
+                const userWallets = await this.walletRepository.find({
+                    where: { userId: user.id }
+                });
+
+                // Build networks metadata
+                const networks = {};
+                
+                // Build metadata for each token variant
+                for (const tokenVariant of tokenVariants) {
+                    // Find matching wallets for this token's blockchain
+                    const matchingWallets = userWallets.filter(w => 
+                        w.blockchain === tokenVariant.blockchain
+                    );
+
+                    for (const wallet of matchingWallets) {
+                        const networkKey = `${tokenVariant.blockchain}_${wallet.network}`;
+                        networks[networkKey] = {
+                            walletId: wallet.id,
+                            tokenId: tokenVariant.id,
+                            networkVersion: tokenVariant.networkVersion,
+                            contractAddress: tokenVariant.contractAddress,
+                            network: wallet.network
+                        };
+                    }
+                }
+
+                // Only create if we have network metadata
+                if (Object.keys(networks).length > 0) {
+                    const balance = this.walletBalanceRepository.create({
+                        userId: user.id,
+                        baseSymbol: token.baseSymbol || token.symbol,
+                        type,
+                        balance: '0',
+                        metadata: { networks }
+                    });
+                    newBalances.push(balance);
+                }
+            }
+
+            if (newBalances.length > 0) {
+                await this.walletBalanceRepository.save(newBalances);
+            }
+
+            results[type].created = newBalances.length;
         }
 
         return {
             message: `Sync complete for ${token.symbol}:`,
             details: {
                 totalUsers,
-                existingBalances: existingBalances.length,
-                newBalancesCreated: newBalances.length,
-                allUsersHaveBalance: newBalances.length === 0
+                funding: {
+                    existingBalances: results.funding.existing,
+                    newBalancesCreated: results.funding.created,
+                    allUsersHaveBalance: results.funding.created === 0
+                },
+                spot: {
+                    existingBalances: results.spot.existing,
+                    newBalancesCreated: results.spot.created,
+                    allUsersHaveBalance: results.spot.created === 0
+                }
+            }
+        };
+    }
+
+    @Post('tokens/:id/sync-networks')
+    async syncTokenNetworks(@Param('id') tokenId: string) {
+        // Get the token and its variants with same baseSymbol
+        const token = await this.tokenRepository.findOne({
+            where: { id: tokenId }
+        });
+
+        if (!token) {
+            throw new NotFoundException('Token not found');
+        }
+
+        // Get all tokens with same baseSymbol
+        const tokenVariants = await this.tokenRepository.find({
+            where: { baseSymbol: token.baseSymbol || token.symbol }
+        });
+
+        const walletTypes = ['funding', 'spot'] as const;
+        const results = { funding: { updated: 0 }, spot: { updated: 0 } };
+
+        // Process each wallet type
+        for (const type of walletTypes) {
+            // Get all existing wallet balances for this token and type
+            const existingBalances = await this.walletBalanceRepository.find({
+                where: {
+                    baseSymbol: token.baseSymbol || token.symbol,
+                    type
+                }
+            });
+
+            // Update each balance's network metadata
+            for (const balance of existingBalances) {
+                // Get user's wallets
+                const userWallets = await this.walletRepository.find({
+                    where: { userId: balance.userId }
+                });
+
+                // Build fresh networks metadata
+                const networks = {};
+                
+                // Build metadata for each token variant
+                for (const tokenVariant of tokenVariants) {
+                    // Find matching wallets for this token's blockchain
+                    const matchingWallets = userWallets.filter(w => 
+                        w.blockchain === tokenVariant.blockchain
+                    );
+
+                    for (const wallet of matchingWallets) {
+                        const networkKey = `${tokenVariant.blockchain}_${wallet.network}`;
+                        networks[networkKey] = {
+                            walletId: wallet.id,
+                            tokenId: tokenVariant.id,
+                            networkVersion: tokenVariant.networkVersion,
+                            contractAddress: tokenVariant.contractAddress,
+                            network: wallet.network
+                        };
+                    }
+                }
+
+                // Update the balance metadata
+                balance.metadata = { networks };
+                await this.walletBalanceRepository.save(balance);
+                results[type].updated++;
+            }
+        }
+
+        return {
+            message: `Network sync complete for ${token.symbol}:`,
+            details: {
+                funding: {
+                    balancesUpdated: results.funding.updated
+                },
+                spot: {
+                    balancesUpdated: results.spot.updated
+                }
             }
         };
     }

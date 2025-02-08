@@ -97,6 +97,7 @@ export default function TokenManagement() {
     const [viewNetworkConfig, setViewNetworkConfig] = useState<Token | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [syncingToken, setSyncingToken] = useState<string | null>(null);
+    const [syncingNetworks, setSyncingNetworks] = useState<string | null>(null);
     const router = useRouter();
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
@@ -370,10 +371,10 @@ export default function TokenManagement() {
             const details = result.details;
             const statusMessage = `
                 ${symbol} sync complete:
-                ${details.newBalancesCreated} new wallets created,
-                ${details.existingBalances} users already had wallets,
-                ${details.totalUsers} total users
-                ${details.allUsersHaveBalance ? '(All users now have wallets)' : ''}
+                Funding wallets: ${details.funding.newBalancesCreated} created, ${details.funding.existingBalances} existing
+                Spot wallets: ${details.spot.newBalancesCreated} created, ${details.spot.existingBalances} existing
+                Total users: ${details.totalUsers}
+                ${details.funding.allUsersHaveBalance && details.spot.allUsersHaveBalance ? '(All users now have both wallet types)' : ''}
             `.trim();
             
             setStatus(statusMessage);
@@ -382,6 +383,32 @@ export default function TokenManagement() {
             setStatus(`Error syncing wallets for ${symbol}`);
         } finally {
             setSyncingToken(null);
+        }
+    };
+
+    const handleSyncNetworks = async (tokenId: string, symbol: string) => {
+        setSyncingNetworks(tokenId);
+        try {
+            const response = await fetchWithRetry(
+                `/admin/deposits/tokens/${tokenId}/sync-networks`,
+                { method: 'POST' }
+            );
+            const result = await response.json();
+            
+            // Create a detailed status message
+            const details = result.details;
+            const statusMessage = `
+                ${symbol} network sync complete:
+                Updated ${details.funding.balancesUpdated} funding wallets
+                Updated ${details.spot.balancesUpdated} spot wallets
+            `.trim();
+            
+            setStatus(statusMessage);
+        } catch (error) {
+            console.error('Error syncing token networks:', error);
+            setStatus(`Error syncing networks for ${symbol}`);
+        } finally {
+            setSyncingNetworks(null);
         }
     };
 
@@ -547,7 +574,20 @@ export default function TokenManagement() {
                                                         loadingPosition="start"
                                                         variant="outlined"
                                                     >
-                                                        Sync
+                                                        Sync Balances
+                                                    </LoadingButton>
+                                                </Tooltip>
+                                                <Tooltip title="Sync Network Metadata">
+                                                    <LoadingButton
+                                                        size="small"
+                                                        loading={syncingNetworks === token.id}
+                                                        onClick={() => handleSyncNetworks(token.id, token.symbol)}
+                                                        startIcon={<SyncIcon />}
+                                                        loadingPosition="start"
+                                                        variant="outlined"
+                                                        color="info"
+                                                    >
+                                                        Sync Networks
                                                     </LoadingButton>
                                                 </Tooltip>
                                             </div>

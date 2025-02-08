@@ -15,7 +15,7 @@ import { WebSocketProvider, JsonRpcProvider } from '@ethersproject/providers';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Decimal } from 'decimal.js';
-import { In, Not, IsNull, Like } from 'typeorm';
+import { In, Not, IsNull, ILike } from 'typeorm';
 import * as bitcoin from 'bitcoinjs-lib';
 const TronWeb = require('tronweb');
 type TronWebType = typeof TronWeb;
@@ -555,27 +555,16 @@ export class DepositTrackingService implements OnModuleInit {
                     this.logToFile(`Processing transaction: ${tx.hash}`);
                     this.logToFile(`Transaction to: ${tx.to?.toLowerCase()}`);
                     
-                    if (tx.to && walletAddresses.has(tx.to.toLowerCase())) {
-                        this.logToFile(`Found deposit transaction to our wallet: ${tx.hash}`);
-                        this.logToFile(`Transaction details: ${JSON.stringify({
-                            hash: tx.hash,
-                            to: tx.to,
-                            from: tx.from,
-                            value: tx.value.toString(),
-                            data: tx.data
-                        }, null, 2)}`);
-                        
-                        await this.processEvmTransaction(chain, network, tx);
-                    }
+                    // Remove the wallet address check here - let processEvmTransaction handle it
+                    await this.processEvmTransaction(chain, network, tx);
+                    
                 } catch (error) {
                     this.logToFile(`Error processing transaction ${tx.hash}: ${error.message}`);
-                    this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
                     continue;
                 }
             }
         }
 
-        // Add this line to update confirmations after processing all transactions
         await this.updateEvmConfirmations(chain, network, blockNumber);
 
     } catch (error) {
@@ -635,15 +624,54 @@ export class DepositTrackingService implements OnModuleInit {
 
   private async processEvmTransaction(chain: string, network: string, tx: providers.TransactionResponse) {
     try {
-        this.logToFile(`Starting processEvmTransaction for ${tx.hash}`);
+        this.logToFile(`[START] Processing EVM transaction ${tx.hash}`);
         
-        // Get transaction receipt to get gas used
-        const receipt = await tx.wait();
-        const gasUsed = receipt.gasUsed;
-        const gasPrice = tx.gasPrice;
-        const fee = gasUsed.mul(gasPrice);
-        const feeInEth = utils.formatEther(fee);  // Convert wei to ETH
-        this.logToFile(`Transaction fee: ${feeInEth} ETH`);
+        // Validate transaction hash format
+        if (!tx.hash || tx.hash.length !== 66 || !tx.hash.startsWith('0x')) {
+            this.logToFile(`[ERROR] Invalid transaction hash format: ${tx.hash}`);
+            return;
+        }
+
+        // Get transaction receipt with retry logic
+        let receipt;
+        try {
+            receipt = await tx.wait();
+        } catch (error) {
+            // Log the specific error
+            this.logToFile(`[ERROR] Failed to get receipt for tx ${tx.hash}: ${error.message}`);
+            
+            // Try to get receipt directly from provider
+            const provider = this.providers.get(`${chain}_${network}`);
+            if (!provider) {
+                this.logToFile(`[ERROR] No provider found for ${chain}_${network}`);
+                return;
+            }
+
+            try {
+                receipt = await provider.getTransactionReceipt(tx.hash);
+                if (!receipt) {
+                    this.logToFile(`[SKIP] No receipt found for transaction ${tx.hash}`);
+                    return;
+                }
+            } catch (retryError) {
+                this.logToFile(`[ERROR] Failed to get receipt on retry: ${retryError.message}`);
+                return;
+            }
+        }
+
+        // Add debug logs for receipt
+        this.logToFile(`[DEBUG] Transaction ${tx.hash} receipt:`);
+        this.logToFile(`[DEBUG] Receipt status: ${receipt.status}`);
+        this.logToFile(`[DEBUG] Receipt logs count: ${receipt.logs.length}`);
+        
+        // Check if transaction was successful
+        if (receipt.status === 0) {
+            this.logToFile(`[SKIP] Transaction ${tx.hash} failed on-chain`);
+            return;
+        }
+
+        // Rest of the existing code remains exactly the same...
+        this.logToFile(`[RECEIPT] Got receipt for ${tx.hash}`);
 
         // Get all user wallets for this chain/network
         const chainKey = this.CHAIN_KEYS[chain] || chain;
@@ -653,63 +681,173 @@ export class DepositTrackingService implements OnModuleInit {
                 network: network,
             },
         });
-        this.logToFile(`Found ${wallets.length} wallets`);
 
         // Create a map of addresses to wallet IDs for quick lookup
         const walletMap = new Map(wallets.map(w => [w.address.toLowerCase(), w]));
+        this.logToFile(`[WALLETS] Found ${wallets.length} wallets to check`);
         
-        // Check if transaction is to one of our wallets
-        const toAddress = tx.to?.toLowerCase();
-        if (!toAddress || !walletMap.has(toAddress)) {
-            this.logToFile(`Transaction ${tx.hash} not to our wallet`);
-            return;
-        }
-
-        const wallet = walletMap.get(toAddress);
-        this.logToFile(`Found wallet: ${JSON.stringify(wallet)}`);
-        
-        // Get token for this transaction
+        // Get token for this transaction first
+        this.logToFile(`[TOKEN] Getting token for transaction ${tx.hash}`);
         const token = await this.getTokenForTransaction(chain, tx);
-        this.logToFile(`Found token: ${JSON.stringify(token)}`);
+        this.logToFile(`[TOKEN] Token result: ${JSON.stringify(token)}`);
+        
         if (!token) {
-            this.logToFile(`No token found for transaction ${tx.hash}`);
+            this.logToFile(`[SKIP] No token found for transaction ${tx.hash}`);
             return;
         }
 
-        // Get amount based on token type
+        // Add debug log for token contract address
+        if (token.contractAddress) {
+            this.logToFile(`[DEBUG] Token contract address: ${token.contractAddress.toLowerCase()}`);
+        }
+
+        // For native token transfers, check tx.to
+        if (token.networkVersion === 'NATIVE') {
+            const toAddress = tx.to?.toLowerCase();
+            if (!toAddress || !walletMap.has(toAddress)) {
+                this.logToFile(`[SKIP] Native transaction ${tx.hash} not to our wallets`);
+                return;
+            }
+            this.logToFile(`[WALLET] Found wallet for native transfer to ${toAddress}`);
+
+            // Check if deposit exists
+            const existingDeposit = await this.depositRepository.findOne({
+                where: {
+                    txHash: tx.hash,
+                    blockchain: chainKey,
+                    network: network
+                }
+            });
+
+            if (existingDeposit) {
+                this.logToFile(`[SKIP] Deposit already exists for transaction ${tx.hash}`);
+                return;
+            }
+
+            // Create deposit for native transfer
+            const wallet = walletMap.get(toAddress);
+            const deposit = this.depositRepository.create({
+                userId: wallet.userId,
+                walletId: wallet.id,
+                tokenId: token.id,
+                txHash: tx.hash,
+                amount: utils.formatEther(tx.value),
+                blockchain: chainKey,
+                network: network,
+                networkVersion: token.networkVersion,
+                blockNumber: receipt.blockNumber,
+                confirmations: 0,
+                status: 'pending',
+                metadata: {
+                    from: tx.from,
+                    blockHash: receipt.blockHash,
+                    fee: utils.formatEther(tx.gasPrice.mul(receipt.gasUsed))
+                }
+            });
+
+            await this.depositRepository.save(deposit);
+            this.logToFile(`[DEPOSIT] Created native deposit record: ${JSON.stringify(deposit)}`);
+            return;
+        }
+
+        // Get amount and check recipient for token transfers
+        this.logToFile(`[AMOUNT] Getting amount for transaction ${tx.hash}`);
         const amount = await this.getTransactionAmount(tx, token);
-        this.logToFile(`Calculated amount: ${amount}`);
+        this.logToFile(`[AMOUNT] Amount result: ${amount}`);
+        
         if (!amount) {
-            this.logToFile(`No amount calculated for transaction ${tx.hash}`);
+            this.logToFile(`[SKIP] No amount found for transaction ${tx.hash}`);
             return;
         }
 
-        // Create deposit record
-        const deposit = await this.depositRepository.save({
+        // Add debug logs before Transfer event search
+        this.logToFile(`[DEBUG] Searching for Transfer event in ${receipt.logs.length} logs`);
+
+        // For token transfers, check the Transfer event's "to" address
+        const transferEvent = receipt.logs
+            .find(log => {
+                try {
+                    // Add debug log for each log being checked
+                    this.logToFile(`[DEBUG] Checking log: address=${log.address.toLowerCase()}`);
+                    if (token.contractAddress && log.address.toLowerCase() !== token.contractAddress.toLowerCase()) {
+                        this.logToFile(`[DEBUG] Log address doesn't match token contract`);
+                        return false;
+                    }
+
+                    const contract = new Contract(token.contractAddress, ERC20_ABI, this.providers.get(`${chain}_${network}`));
+                    const parsedLog = contract.interface.parseLog(log);
+                    this.logToFile(`[DEBUG] Parsed log event name: ${parsedLog?.name}`);
+                    return parsedLog?.name === 'Transfer';
+                } catch (error) {
+                    this.logToFile(`[DEBUG] Error parsing log: ${error.message}`);
+                    return false;
+                }
+            });
+
+        if (!transferEvent) {
+            this.logToFile(`[SKIP] No Transfer event found in transaction ${tx.hash}`);
+            return;
+        }
+
+        // Rest of the existing code remains exactly the same...
+        const contract = new Contract(token.contractAddress, ERC20_ABI, this.providers.get(`${chain}_${network}`));
+        const parsedTransfer = contract.interface.parseLog(transferEvent);
+        const transferTo = parsedTransfer.args.to.toLowerCase();
+
+        this.logToFile(`[DEBUG] Transfer event found:`);
+        this.logToFile(`  - To: ${transferTo}`);
+        this.logToFile(`  - Amount: ${parsedTransfer.args.value.toString()}`);
+
+        if (!walletMap.has(transferTo)) {
+            this.logToFile(`[SKIP] Token transfer ${tx.hash} not to our wallets (to: ${transferTo})`);
+            return;
+        }
+
+        // Continue with existing code...
+
+        // After verifying the transfer event and recipient wallet...
+        const wallet = walletMap.get(transferTo);
+        
+        // Check if deposit already exists
+        const existingDeposit = await this.depositRepository.findOne({
+            where: {
+                txHash: tx.hash,
+                blockchain: chainKey,
+                network: network
+            }
+        });
+
+        if (existingDeposit) {
+            this.logToFile(`[SKIP] Deposit already exists for transaction ${tx.hash}`);
+            return;
+        }
+
+        // Create deposit record only if it doesn't exist
+        const deposit = this.depositRepository.create({
             userId: wallet.userId,
             walletId: wallet.id,
             tokenId: token.id,
             txHash: tx.hash,
             amount: amount,
-            blockchain: chainKey,  // Use chainKey instead of chain to match 'ethereum'
+            blockchain: chainKey,
             network: network,
             networkVersion: token.networkVersion,
-            blockNumber: tx.blockNumber,
+            blockNumber: receipt.blockNumber,
+            confirmations: 0,
             status: 'pending',
             metadata: {
                 from: tx.from,
+                blockHash: receipt.blockHash,
                 contractAddress: token.contractAddress,
-                blockHash: tx.blockHash,
-                fee: feeInEth
-            },
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            confirmations: 0
+                fee: utils.formatEther(tx.gasPrice.mul(receipt.gasUsed))
+            }
         });
-        this.logToFile(`Created deposit: ${JSON.stringify(deposit)}`);
+
+        await this.depositRepository.save(deposit);
+        this.logToFile(`[DEPOSIT] Created deposit record: ${JSON.stringify(deposit)}`);
 
     } catch (error) {
-        this.logToFile(`Error in processEvmTransaction: ${error.message}`);
+        this.logToFile(`[ERROR] Error in processEvmTransaction: ${error.message}`);
         this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
     }
 }
@@ -742,15 +880,25 @@ export class DepositTrackingService implements OnModuleInit {
         this.logToFile(`- Data: ${tx.data}`);
         this.logToFile(`- Value: ${tx.value.toString()}`);
 
+        // Log the query parameters
+        this.logToFile(`Searching for token with params: blockchain=${chainKey}, contractAddress=${tx.to.toLowerCase()}, isActive=true`);
+
+        // Try to find token by contract address
         const token = await this.tokenRepository.findOne({
             where: {
                 blockchain: chainKey,
-                contractAddress: tx.to.toLowerCase(),
+                contractAddress: ILike(tx.to.toLowerCase()),  // Use ILike for case-insensitive comparison
                 isActive: true
             }
         });
-        this.logToFile(`Found token contract: ${JSON.stringify(token)}`);
-        return token;
+
+        if (token) {
+            this.logToFile(`Found token by contract address: ${JSON.stringify(token)}`);
+            return token;
+        }
+
+        this.logToFile(`No token found for contract address ${tx.to}`);
+        return null;
 
     } catch (error) {
         this.logToFile(`Error getting token for tx ${tx.hash}: ${error.message}`);
@@ -1170,6 +1318,8 @@ export class DepositTrackingService implements OnModuleInit {
 
   private async processTronBlock(network: string, block: any) {
     try {
+      this.logToFile(`[TRON] Processing block ${block.block_header.raw_data.number} for network ${network}`);
+
       // Get all TRON wallets
       const wallets = await this.walletRepository.find({
         where: {
@@ -1178,54 +1328,133 @@ export class DepositTrackingService implements OnModuleInit {
         },
       });
 
+      this.logToFile(`[TRON] Found ${wallets.length} wallets for network ${network}`);
       const walletAddresses = new Set(wallets.map(w => w.address));
+      this.logToFile(`[TRON] Wallet addresses: ${Array.from(walletAddresses).join(', ')}`);
+
       const provider = this.providers.get(`trx_${network}`) as TronWebInstance;
 
       // Process each transaction
+      this.logToFile(`[TRON] Processing ${block.transactions?.length || 0} transactions`);
       for (const tx of block.transactions || []) {
-        if (tx.raw_data?.contract?.[0]?.type === 'TransferContract' || 
-            tx.raw_data?.contract?.[0]?.type === 'TransferAssetContract') {
-          
-          const contract = tx.raw_data.contract[0];
-          const parameter = contract.parameter.value;
-          const toAddress = provider.address.fromHex(parameter.to_address);
+        try {
+          if (tx.raw_data?.contract?.[0]?.type === 'TransferContract' || 
+              tx.raw_data?.contract?.[0]?.type === 'TransferAssetContract' ||
+              tx.raw_data?.contract?.[0]?.type === 'TriggerSmartContract') {  // Add this type
+            
+            const contract = tx.raw_data.contract[0];
+            this.logToFile(`[TRON] Processing ${contract.type} transaction ${tx.txID}`);
+            
+            let toAddress;
+            let amount;
+            let contractAddress;
+            let parameter = contract.parameter.value;  // Move this up
 
-          if (walletAddresses.has(toAddress)) {
-            const wallet = wallets.find(w => w.address === toAddress);
-            const token = await this.getTronToken(contract.type, parameter.asset_name);
+            if (contract.type === 'TriggerSmartContract') {
+                // Handle TRC20 transfer
+                contractAddress = parameter.contract_address;
+                
+                // Decode the data to get 'to' address and amount
+                // The data format for TRC20 transfer is: transfer(address,uint256)
+                const data = parameter.data;
+                if (data.startsWith('a9059cbb')) { // This is the method ID for 'transfer(address,uint256)'
+                    const to = '41' + data.substr(32, 40); // Extract recipient address
+                    toAddress = provider.address.fromHex(to);
+                    amount = parseInt(data.substr(72), 16); // Extract amount
+                    
+                    this.logToFile(`[TRON] TRC20 Transfer Details:
+                        Contract Address: ${contractAddress}
+                        To Address: ${toAddress}
+                        Amount (raw): ${amount}
+                    `);
+                }
+            } else {
+                // Existing code for native/TRC10 transfers
+                toAddress = provider.address.fromHex(parameter.to_address);
+                amount = parameter.amount;
+            }
 
-            if (token) {
-              await this.depositRepository.save({
-                userId: wallet.userId,
-                walletId: wallet.id,
-                tokenId: token.id,
-                txHash: tx.txID,
-                amount: (parameter.amount / Math.pow(10, token.decimals)).toString(),
-                blockchain: 'trx',
-                network,
-                networkVersion: token.networkVersion,
-                blockNumber: block.block_header.raw_data.number,
-                status: 'pending',
-                metadata: {
-                  from: provider.address.fromHex(parameter.owner_address),
-                  contractAddress: token.contractAddress,
-                  blockHash: block.blockID,
-                },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                confirmations: 0
+            this.logToFile(`[TRON] Transaction to address: ${toAddress}`);
+
+            if (walletAddresses.has(toAddress)) {
+              this.logToFile(`[TRON] Found matching wallet for address ${toAddress}`);
+              const wallet = wallets.find(w => w.address === toAddress);
+              
+              // Check if deposit already exists
+              const existingDeposit = await this.depositRepository.findOne({
+                where: {
+                  txHash: tx.txID,
+                  blockchain: 'trx',
+                  network
+                }
               });
+
+              if (existingDeposit) {
+                this.logToFile(`[TRON] Deposit already exists for transaction ${tx.txID}`);
+                continue;
+              }
+
+              const token = await this.getTronToken(contract.type, parameter.asset_name, contractAddress, network);
+              this.logToFile(`[TRON] Token lookup params: type=${contract.type}, contractAddress=${contractAddress}`);
+              this.logToFile(`[TRON] Token found: ${JSON.stringify(token)}`);
+
+              if (token) {
+                  // Convert amount based on token decimals
+                  const normalizedAmount = (amount / Math.pow(10, token.decimals)).toString();
+                  this.logToFile(`[TRON] Creating deposit for amount ${normalizedAmount} ${token.symbol}`);
+
+                  // Get transaction info to get the fee
+                  const txInfo = await provider.trx.getTransactionInfo(tx.txID);
+                  const fee = txInfo?.fee ? (txInfo.fee / 1e6).toString() : '0';
+                  this.logToFile(`[TRON] Transaction fee: ${fee} TRX`);
+
+                  const deposit = await this.depositRepository.save({
+                    userId: wallet.userId,
+                    walletId: wallet.id,
+                    tokenId: token.id,
+                    txHash: tx.txID,
+                    amount: normalizedAmount,
+                    blockchain: 'trx',
+                    network,
+                    networkVersion: token.networkVersion,
+                    blockNumber: block.block_header.raw_data.number,
+                    status: 'pending',
+                    metadata: {
+                      from: provider.address.fromHex(parameter.owner_address),
+                      contractAddress: token.contractAddress,
+                      blockHash: block.blockID,
+                      fee: fee  // Add transaction fee to metadata
+                    },
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    confirmations: 0
+                  });
+
+                  this.logToFile(`[TRON] Created deposit record: ${JSON.stringify(deposit)}`);
+                } else {
+                  this.logToFile(`[TRON] No token found for transaction ${tx.txID}`);
+                }
             }
           }
+        } catch (error) {
+          this.logToFile(`[TRON] Error processing transaction ${tx.txID}: ${error.message}`);
+          continue;
         }
       }
+
+      // Add this: Update confirmations after processing the block
+      await this.updateTronConfirmations(network, block.block_header.raw_data.number);
+
     } catch (error) {
+      this.logToFile(`[TRON] Error processing block: ${error.message}`);
       this.logger.error(`Error processing TRON block: ${error.message}`);
     }
   }
 
   private async updateTronConfirmations(network: string, currentBlock: number) {
     try {
+      this.logToFile(`[updateTronConfirmations] Starting for TRX ${network}, current block ${currentBlock}`);
+
       const deposits = await this.depositRepository.find({
         where: {
           blockchain: 'trx',
@@ -1235,25 +1464,45 @@ export class DepositTrackingService implements OnModuleInit {
         },
       });
 
+      this.logToFile(`[updateTronConfirmations] Found ${deposits.length} deposits to update`);
+
       for (const deposit of deposits) {
+        this.logToFile(`[updateTronConfirmations] Processing deposit: ${JSON.stringify({
+          id: deposit.id,
+          blockNumber: deposit.blockNumber,
+          status: deposit.status,
+          currentBlock: currentBlock
+        })}`);
+
         const confirmations = currentBlock - deposit.blockNumber;
         const requiredConfirmations = this.CONFIRMATION_BLOCKS.trx[network];
+
+        this.logToFile(`[updateTronConfirmations] Deposit ${deposit.id}: currentBlock ${currentBlock}, depositBlock ${deposit.blockNumber}, confirmations ${confirmations}, required ${requiredConfirmations}`);
 
         await this.depositRepository.update(deposit.id, {
           confirmations,
           status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
         });
 
+        this.logToFile(`[updateTronConfirmations] Updated deposit ${deposit.id} with confirmations ${confirmations} and status ${confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'}`);
+
         if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
           await this.updateWalletBalance(deposit);
+          this.logToFile(`[updateTronConfirmations] Updated wallet balance for deposit ${deposit.id}`);
         }
       }
     } catch (error) {
+      this.logToFile(`[updateTronConfirmations] Error: ${error.message}`);
       this.logger.error(`Error updating TRON confirmations: ${error.message}`);
     }
   }
 
-  private async getTronToken(contractType: string, assetName?: string): Promise<Token | null> {
+  private async getTronToken(
+    contractType: string, 
+    assetName?: string, 
+    contractAddress?: string, 
+    network?: string
+  ): Promise<Token | null> {
     if (contractType === 'TransferContract') {
       return this.tokenRepository.findOne({
         where: {
@@ -1268,8 +1517,25 @@ export class DepositTrackingService implements OnModuleInit {
       return this.tokenRepository.findOne({
         where: {
           blockchain: 'trx',
-          networkVersion: 'TRC20',
+          networkVersion: 'TRC10',
           symbol: assetName,
+          isActive: true
+        }
+      });
+    }
+
+    if (contractType === 'TriggerSmartContract' && contractAddress && network) {
+      const provider = this.providers.get(`trx_${network}`) as TronWebInstance;
+      
+      // Convert hex address to base58
+      const base58Address = provider.address.fromHex(contractAddress);
+      this.logToFile(`[getTronToken] Converting contract address from hex ${contractAddress} to base58 ${base58Address}`);
+
+      return this.tokenRepository.findOne({
+        where: {
+          blockchain: 'trx',
+          networkVersion: 'TRC20',
+          contractAddress: base58Address,
           isActive: true
         }
       });
@@ -1343,6 +1609,20 @@ export class DepositTrackingService implements OnModuleInit {
                 if (address && walletMap.has(address)) {
                     this.logToFile(`🎯 Found matching deposit to wallet ${walletMap.get(address).address} in tx ${tx.txid}`);
                     
+                    // Check if deposit already exists
+                    const existingDeposit = await this.depositRepository.findOne({
+                        where: {
+                            txHash: tx.txid,
+                            blockchain: chain,
+                            network: network
+                        }
+                    });
+
+                    if (existingDeposit) {
+                        this.logToFile(`[SKIP] Bitcoin deposit already exists for transaction ${tx.txid}`);
+                        continue;
+                    }
+
                     const token = await this.tokenRepository.findOne({
                         where: {
                             symbol: 'BTC',
