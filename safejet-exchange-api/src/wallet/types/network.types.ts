@@ -5,8 +5,12 @@ export interface NetworkConfig {
   blockchain: string;
   arrivalTime: string;
   requiredFields: {
-    memo: boolean;
     tag: boolean;
+    memo: boolean;
+  };
+  fee: {
+    type: 'percentage' | 'usd' | 'token';
+    value: string;
   };
 }
 
@@ -18,5 +22,9 @@ export interface NetworkResponse {
   requiredFields: {
     memo: boolean;
     tag: boolean;
+  };
+  fee: {
+    type: 'percentage' | 'usd' | 'token';
+    value: string;
   };
 } 

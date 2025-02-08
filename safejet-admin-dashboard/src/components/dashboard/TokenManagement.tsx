@@ -30,6 +30,24 @@ import { Edit as EditIcon, Add as AddIcon, Visibility as VisibilityIcon, Sync as
 import { TOKEN_CONFIG, NetworkVersion, Network, Blockchain, PriceFeedProvider } from '../../config/tokens';
 import { LoadingButton } from '@mui/lab';
 
+// Keep the FeeType type for the Select component
+type FeeType = 'percentage' | 'usd' | 'token';
+
+interface NetworkConfig {
+    network: Network;
+    version: NetworkVersion;
+    isActive: boolean;
+    blockchain: Blockchain;
+    arrivalTime: string;
+    requiredFields: {
+        tag: boolean;
+        memo: boolean;
+    };
+    fee: {  // Make fee required, not optional
+        type: FeeType;
+        value: string;  // Make value required
+    };
+}
 
 interface Token {
     id: string;
@@ -55,17 +73,7 @@ interface Token {
     };
     networkConfigs: {
         [version: string]: {
-            [network: string]: {
-                network: Network;
-                version: NetworkVersion;
-                isActive: boolean;
-                blockchain: Blockchain;
-                arrivalTime: string;
-                requiredFields: {
-                    tag: boolean;
-                    memo: boolean;
-                }
-            }
+            [network: string]: NetworkConfig;
         }
     };
 }
@@ -301,6 +309,10 @@ export default function TokenManagement() {
                             requiredFields: {
                                 tag: existingConfig?.requiredFields?.tag ?? (blockchain === 'xrp'),
                                 memo: existingConfig?.requiredFields?.memo ?? false
+                            },
+                            fee: existingConfig?.fee || {  // Add default fee configuration
+                                type: 'percentage',
+                                value: '0'
                             }
                         }
                     ];
@@ -477,7 +489,7 @@ export default function TokenManagement() {
                             <div className="flex-shrink-0">
                                 {status.toLowerCase().includes('error') ? (
                                     <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                                     </svg>
                                 ) : (
                                     <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -807,8 +819,9 @@ export default function TokenManagement() {
                                             
                                             networks.forEach(network => {
                                                 if (!updatedConfigs[version]?.[network]) {
-                                                    const networkConfig = {
-                                                        [network]: {
+                                                    updatedConfigs[version] = {
+                                                        ...(updatedConfigs[version] || {}),
+                                                        [network]: {  // Fix: Directly assign the network config
                                                             network: network as Network,
                                                             version: version,
                                                             isActive: true,
@@ -819,13 +832,12 @@ export default function TokenManagement() {
                                                             requiredFields: {
                                                                 tag: editToken?.blockchain === 'xrp',
                                                                 memo: false
+                                                            },
+                                                            fee: {
+                                                                type: 'percentage',
+                                                                value: '0'
                                                             }
                                                         }
-                                                    };
-
-                                                    updatedConfigs[version] = {
-                                                        ...(updatedConfigs[version] || {}),
-                                                        ...networkConfig
                                                     };
                                                 }
                                             });
@@ -1066,6 +1078,75 @@ export default function TokenManagement() {
                                     ))}
                                 </Box>
                             )}
+                        </Box>
+
+                        <Box sx={{ mt: 3, mb: 2 }}>
+                            <Typography variant="subtitle1" gutterBottom>
+                                Fee Configuration
+                            </Typography>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormControl fullWidth margin="normal">
+                                    <InputLabel>Fee Type</InputLabel>
+                                    <Select
+                                        value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[editToken?.metadata?.networks[0] || '']?.fee?.type || 'percentage'}
+                                        onChange={(e) => {
+                                            const currentConfigs = editToken?.networkConfigs || {};
+                                            const currentVersion = editToken?.networkVersion || '';
+                                            
+                                            setEditToken({
+                                                ...editToken,
+                                                networkConfigs: {
+                                                    ...currentConfigs,
+                                                    [currentVersion]: {
+                                                        ...currentConfigs[currentVersion],
+                                                        [editToken?.metadata?.networks[0] || '']: {
+                                                            ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || ''],
+                                                            fee: {
+                                                                ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || '']?.fee,
+                                                                type: e.target.value as FeeType
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                        }}
+                                        label="Fee Type"
+                                    >
+                                        <MenuItem value="percentage">Percentage</MenuItem>
+                                        <MenuItem value="usd">USD</MenuItem>
+                                        <MenuItem value="token">Token</MenuItem>
+                                    </Select>
+                                </FormControl>
+
+                                <TextField
+                                    fullWidth
+                                    label="Fee Value"
+                                    value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[editToken?.metadata?.networks[0] || '']?.fee?.value || ''}
+                                    onChange={(e) => {
+                                        const currentConfigs = editToken?.networkConfigs || {};
+                                        const currentVersion = editToken?.networkVersion || '';
+                                        
+                                        setEditToken({
+                                            ...editToken,
+                                            networkConfigs: {
+                                                ...currentConfigs,
+                                                [currentVersion]: {
+                                                    ...currentConfigs[currentVersion],
+                                                    [editToken?.metadata?.networks[0] || '']: {
+                                                        ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || ''],
+                                                        fee: {
+                                                            ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || '']?.fee,
+                                                            value: e.target.value
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    }}
+                                    margin="normal"
+                                />
+                            </div>
                         </Box>
 
                         <Box sx={{ mt: 3, mb: 2 }}>

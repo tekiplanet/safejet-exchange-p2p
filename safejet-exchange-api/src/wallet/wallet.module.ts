@@ -18,6 +18,10 @@ import { ExchangeModule } from '../exchange/exchange.module';
 import { AdminDepositController } from './admin/deposit.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { AdminTokenController } from './admin/token.controller';
+import { EmailModule } from '../email/email.module';
+import { User } from '../auth/entities/user.entity';
+import { AdminWallet } from './entities/admin-wallet.entity';
+import { AdminWalletController } from './admin/admin-wallet.controller';
 
 @Module({
   imports: [
@@ -27,7 +31,9 @@ import { AdminTokenController } from './admin/token.controller';
       Token,
       WalletBalance,
       Deposit,
-      SystemSettings
+      SystemSettings,
+      User,
+      AdminWallet
     ]),
     EventEmitterModule.forRoot(),
     ConfigModule,
@@ -40,6 +46,7 @@ import { AdminTokenController } from './admin/token.controller';
     }),
     forwardRef(() => AuthModule),
     ExchangeModule,
+    EmailModule
   ],
   providers: [
     WalletService, 
@@ -50,7 +57,8 @@ import { AdminTokenController } from './admin/token.controller';
   controllers: [
     WalletController,
     AdminDepositController,
-    AdminTokenController
+    AdminTokenController,
+    AdminWalletController
   ],
   exports: [WalletService, DepositTrackingService],
 })

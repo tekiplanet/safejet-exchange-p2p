@@ -561,7 +561,7 @@ export class DepositTrackingService implements OnModuleInit {
                     this.logToFile(`Transaction to: ${tx.to?.toLowerCase()}`);
                     
                     // Remove the wallet address check here - let processEvmTransaction handle it
-                    await this.processEvmTransaction(chain, network, tx);
+                        await this.processEvmTransaction(chain, network, tx);
                     
                 } catch (error) {
                     this.logToFile(`Error processing transaction ${tx.hash}: ${error.message}`);
@@ -604,6 +604,7 @@ export class DepositTrackingService implements OnModuleInit {
                 currentBlock: currentBlock
             })}`);
 
+            const oldStatus = deposit.status;
             const confirmations = currentBlock - deposit.blockNumber;
             const requiredConfirmations = this.CONFIRMATION_BLOCKS[chain][network];
 
@@ -616,7 +617,32 @@ export class DepositTrackingService implements OnModuleInit {
 
             this.logToFile(`[updateEvmConfirmations] Updated deposit ${deposit.id} with confirmations ${confirmations} and status ${confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'}`);
 
-            if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+            if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
+                const wallet = await this.walletRepository.findOne({
+                    where: { id: deposit.walletId }
+                });
+                
+                if (wallet) {
+                    const user = await this.userRepository.findOne({
+                        where: { id: wallet.userId }
+                    });
+
+                    // Get token details for the correct symbol
+                    const token = await this.tokenRepository.findOne({
+                        where: { id: deposit.tokenId }
+                    });
+
+                    if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+                        await this.emailService.sendDepositConfirmedEmail(
+                            user.email,
+                            user.fullName,
+                            this.formatAmount(deposit.amount),
+                            token?.symbol || chain.toUpperCase()
+                        );
+                        this.logToFile(`[updateEvmConfirmations] Sent confirmation email for deposit ${deposit.id} with token ${token?.symbol}`);
+                    }
+                }
+
                 await this.updateWalletBalance(deposit);
                 this.logToFile(`[updateEvmConfirmations] Updated wallet balance for deposit ${deposit.id}`);
             }
@@ -731,12 +757,13 @@ export class DepositTrackingService implements OnModuleInit {
 
             // Create deposit for native transfer
             const wallet = walletMap.get(toAddress);
+            const nativeAmount = utils.formatEther(tx.value);
             const deposit = this.depositRepository.create({
                 userId: wallet.userId,
                 walletId: wallet.id,
                 tokenId: token.id,
                 txHash: tx.hash,
-                amount: utils.formatEther(tx.value),
+                amount: nativeAmount,
                 blockchain: chainKey,
                 network: network,
                 networkVersion: token.networkVersion,
@@ -752,6 +779,20 @@ export class DepositTrackingService implements OnModuleInit {
 
             await this.depositRepository.save(deposit);
             this.logToFile(`[DEPOSIT] Created native deposit record: ${JSON.stringify(deposit)}`);
+
+            const user = await this.userRepository.findOne({
+                where: { id: wallet.userId }
+            });
+
+            if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+                await this.emailService.sendDepositCreatedEmail(
+                    user.email,
+                    user.fullName,
+                    nativeAmount,
+                    token.symbol || chain.toUpperCase()  // Use token symbol
+                );
+            }
+
             return;
         }
 
@@ -851,6 +892,19 @@ export class DepositTrackingService implements OnModuleInit {
         await this.depositRepository.save(deposit);
         this.logToFile(`[DEPOSIT] Created deposit record: ${JSON.stringify(deposit)}`);
 
+        const user = await this.userRepository.findOne({
+          where: { id: wallet.userId }
+        });
+
+        if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+          await this.emailService.sendDepositCreatedEmail(
+            user.email,
+            user.fullName,
+            amount,
+            token.symbol || chain.toUpperCase()  // Use token symbol
+          );
+        }
+
     } catch (error) {
         this.logToFile(`[ERROR] Error in processEvmTransaction: ${error.message}`);
         this.logger.error(`Error processing transaction ${tx.hash}: ${error.message}`);
@@ -899,7 +953,7 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (token) {
             this.logToFile(`Found token by contract address: ${JSON.stringify(token)}`);
-            return token;
+        return token;
         }
 
         this.logToFile(`No token found for contract address ${tx.to}`);
@@ -1343,11 +1397,11 @@ export class DepositTrackingService implements OnModuleInit {
       this.logToFile(`[TRON] Processing ${block.transactions?.length || 0} transactions`);
       for (const tx of block.transactions || []) {
         try {
-          if (tx.raw_data?.contract?.[0]?.type === 'TransferContract' || 
+        if (tx.raw_data?.contract?.[0]?.type === 'TransferContract' || 
               tx.raw_data?.contract?.[0]?.type === 'TransferAssetContract' ||
               tx.raw_data?.contract?.[0]?.type === 'TriggerSmartContract') {  // Add this type
-            
-            const contract = tx.raw_data.contract[0];
+          
+          const contract = tx.raw_data.contract[0];
             this.logToFile(`[TRON] Processing ${contract.type} transaction ${tx.txID}`);
             
             let toAddress;
@@ -1381,9 +1435,9 @@ export class DepositTrackingService implements OnModuleInit {
 
             this.logToFile(`[TRON] Transaction to address: ${toAddress}`);
 
-            if (walletAddresses.has(toAddress)) {
+          if (walletAddresses.has(toAddress)) {
               this.logToFile(`[TRON] Found matching wallet for address ${toAddress}`);
-              const wallet = wallets.find(w => w.address === toAddress);
+            const wallet = wallets.find(w => w.address === toAddress);
               
               // Check if deposit already exists
               const existingDeposit = await this.depositRepository.findOne({
@@ -1403,7 +1457,7 @@ export class DepositTrackingService implements OnModuleInit {
               this.logToFile(`[TRON] Token lookup params: type=${contract.type}, contractAddress=${contractAddress}`);
               this.logToFile(`[TRON] Token found: ${JSON.stringify(token)}`);
 
-              if (token) {
+            if (token) {
                   // Convert amount based on token decimals
                   const normalizedAmount = (amount / Math.pow(10, token.decimals)).toString();
                   this.logToFile(`[TRON] Creating deposit for amount ${normalizedAmount} ${token.symbol}`);
@@ -1414,37 +1468,52 @@ export class DepositTrackingService implements OnModuleInit {
                   this.logToFile(`[TRON] Transaction fee: ${fee} TRX`);
 
                   const deposit = await this.depositRepository.save({
-                    userId: wallet.userId,
-                    walletId: wallet.id,
-                    tokenId: token.id,
-                    txHash: tx.txID,
+                userId: wallet.userId,
+                walletId: wallet.id,
+                tokenId: token.id,
+                txHash: tx.txID,
                     amount: normalizedAmount,
-                    blockchain: 'trx',
-                    network,
-                    networkVersion: token.networkVersion,
-                    blockNumber: block.block_header.raw_data.number,
-                    status: 'pending',
-                    metadata: {
-                      from: provider.address.fromHex(parameter.owner_address),
-                      contractAddress: token.contractAddress,
-                      blockHash: block.blockID,
+                blockchain: 'trx',
+                network,
+                networkVersion: token.networkVersion,
+                blockNumber: block.block_header.raw_data.number,
+                status: 'pending',
+                metadata: {
+                  from: provider.address.fromHex(parameter.owner_address),
+                  contractAddress: token.contractAddress,
+                  blockHash: block.blockID,
                       fee: fee  // Add transaction fee to metadata
-                    },
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                    confirmations: 0
-                  });
+                },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                confirmations: 0
+              });
 
                   this.logToFile(`[TRON] Created deposit record: ${JSON.stringify(deposit)}`);
+
+                  // Add email notification
+                  const user = await this.userRepository.findOne({
+                    where: { id: wallet.userId }
+                  });
+
+                  if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+                    await this.emailService.sendDepositCreatedEmail(
+                      user.email,
+                      user.fullName,
+                      normalizedAmount,
+                      token.symbol || 'TRX'  // We already have the token from getTronToken()
+                    );
+                    this.logToFile(`[TRON] Sent deposit creation email for ${deposit.id} with token ${token.symbol}`);
+                  }
                 } else {
                   this.logToFile(`[TRON] No token found for transaction ${tx.txID}`);
-                }
             }
           }
+        }
         } catch (error) {
           this.logToFile(`[TRON] Error processing transaction ${tx.txID}: ${error.message}`);
           continue;
-        }
+      }
       }
 
       // Add this: Update confirmations after processing the block
@@ -1458,47 +1527,55 @@ export class DepositTrackingService implements OnModuleInit {
 
   private async updateTronConfirmations(network: string, currentBlock: number) {
     try {
-      this.logToFile(`[updateTronConfirmations] Starting for TRX ${network}, current block ${currentBlock}`);
-
       const deposits = await this.depositRepository.find({
         where: {
           blockchain: 'trx',
-          network,
+          network: network,
           status: In(['pending', 'confirming']),
           blockNumber: Not(IsNull()),
         },
       });
 
-      this.logToFile(`[updateTronConfirmations] Found ${deposits.length} deposits to update`);
-
       for (const deposit of deposits) {
-        this.logToFile(`[updateTronConfirmations] Processing deposit: ${JSON.stringify({
-          id: deposit.id,
-          blockNumber: deposit.blockNumber,
-          status: deposit.status,
-          currentBlock: currentBlock
-        })}`);
-
+        const oldStatus = deposit.status;
         const confirmations = currentBlock - deposit.blockNumber;
         const requiredConfirmations = this.CONFIRMATION_BLOCKS.trx[network];
-
-        this.logToFile(`[updateTronConfirmations] Deposit ${deposit.id}: currentBlock ${currentBlock}, depositBlock ${deposit.blockNumber}, confirmations ${confirmations}, required ${requiredConfirmations}`);
 
         await this.depositRepository.update(deposit.id, {
           confirmations,
           status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
         });
 
-        this.logToFile(`[updateTronConfirmations] Updated deposit ${deposit.id} with confirmations ${confirmations} and status ${confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'}`);
+        if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
+          const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+          });
+          
+          if (wallet) {
+            const user = await this.userRepository.findOne({
+              where: { id: wallet.userId }
+            });
 
-        if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+            // Get token details for the correct symbol
+            const token = await this.tokenRepository.findOne({
+              where: { id: deposit.tokenId }
+            });
+
+            if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+              await this.emailService.sendDepositConfirmedEmail(
+                user.email,
+                user.fullName,
+                this.formatAmount(deposit.amount),
+                token?.symbol || 'TRX'
+              );
+            }
+          }
+
           await this.updateWalletBalance(deposit);
-          this.logToFile(`[updateTronConfirmations] Updated wallet balance for deposit ${deposit.id}`);
         }
       }
     } catch (error) {
-      this.logToFile(`[updateTronConfirmations] Error: ${error.message}`);
-      this.logger.error(`Error updating TRON confirmations: ${error.message}`);
+      this.logger.error(`Error updating Tron confirmations: ${error.message}`);
     }
   }
 
@@ -1627,7 +1704,7 @@ export class DepositTrackingService implements OnModuleInit {
                         this.logToFile(`[SKIP] Bitcoin deposit already exists for transaction ${tx.txid}`);
                         continue;
                     }
-
+                    
                     const token = await this.tokenRepository.findOne({
                         where: {
                             symbol: 'BTC',
@@ -1701,6 +1778,20 @@ export class DepositTrackingService implements OnModuleInit {
                             }
                         });
                         this.logToFile(`✅ Created deposit record ${deposit.id} for tx ${tx.txid} using version ${supportedVersion}`);
+
+                        // Move email notification here where we have access to address and amount
+                        const user = await this.userRepository.findOne({
+                            where: { id: walletMap.get(address).userId }
+                        });
+
+                        if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+                            await this.emailService.sendDepositCreatedEmail(
+                                user.email,
+                                user.fullName,
+                                output.value.toString(),
+                                'BTC'
+                            );
+                        }
                     } catch (error) {
                         this.logToFile(`❌ Error creating deposit: ${error.message}`);
                         throw error;
@@ -1817,32 +1908,32 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
   private async processXrpLedger(chain: string, network: string, ledgerIndex: number) {
     try {
-      const provider = this.providers.get(`xrp_${network}`) as Client;
-      
+        const provider = this.providers.get(`xrp_${network}`) as Client;
+        
       this.logToFile(`[XRP] Processing ledger ${ledgerIndex} for network ${network}`);
       
-      const ledgerResponse = await provider.request({
-        command: 'ledger',
-        ledger_index: ledgerIndex,
-        transactions: true,
-        expand: true
-      });
-      
-      if (!ledgerResponse.result.ledger) {
+        const ledgerResponse = await provider.request({
+            command: 'ledger',
+            ledger_index: ledgerIndex,
+            transactions: true,
+            expand: true
+        });
+        
+        if (!ledgerResponse.result.ledger) {
         this.logToFile(`[XRP] Ledger ${ledgerIndex} not found`);
-        throw new Error('ledgerNotFound');
-      }
-      
-      const transactions = ledgerResponse.result.ledger.transactions || [];
+            throw new Error('ledgerNotFound');
+        }
+        
+        const transactions = ledgerResponse.result.ledger.transactions || [];
       this.logToFile(`[XRP] Found ${transactions.length} transactions in ledger ${ledgerIndex}`);
 
-      for (const tx of transactions) {
+        for (const tx of transactions) {
         // Log the full transaction first to understand its structure
         this.logToFile(`[XRP] Raw transaction: ${JSON.stringify(tx)}`);
-        await this.processXrpTransaction(chain, network, tx);
-      }
+            await this.processXrpTransaction(chain, network, tx);
+        }
 
-      await this.updateXrpConfirmations(network, ledgerIndex);
+        await this.updateXrpConfirmations(network, ledgerIndex);
       this.logToFile(`[XRP] Completed processing ledger ${ledgerIndex}`);
     } catch (error) {
       this.logToFile(`[XRP] Error processing ledger ${ledgerIndex}: ${error.message}`);
@@ -1897,31 +1988,31 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         return;
       }
 
-      const tokenId = await this.getXrpTokenId();
+        const tokenId = await this.getXrpTokenId();
       this.logToFile(`[XRP] Creating deposit for transaction ${txHash} with amount ${amount}`);
 
       const deposit = await this.depositRepository.save({
-        userId: wallet.userId.toString(),
-        walletId: wallet.id.toString(),
-        tokenId: tokenId.toString(),
+          userId: wallet.userId.toString(),
+          walletId: wallet.id.toString(),
+          tokenId: tokenId.toString(),
         txHash: txHash,
         amount: amount,  // Now in XRP instead of drops
-        blockchain: chain,
-        network: network,
-        networkVersion: 'NATIVE',
-        blockNumber: tx.ledger_index,
-        status: 'pending',
-        metadata: {
+          blockchain: chain,
+          network: network,
+          networkVersion: 'NATIVE',
+          blockNumber: tx.ledger_index,
+          status: 'pending',
+          metadata: {
           fee: (Number(txJson.Fee) / 1_000_000).toString(),  // Convert fee to XRP too
           from: txJson.Account,
-          blockHash: tx.ledger_hash,
+            blockHash: tx.ledger_hash,
           contractAddress: null,
           timestamp: tx.close_time_iso
-        },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        confirmations: 0
-      });
+          },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          confirmations: 0
+        });
 
       // Get user info for email
       const user = await this.userRepository.findOne({
@@ -1931,7 +2022,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
       if (user && user.email) {
         await this.emailService.sendDepositCreatedEmail(
           user.email,
-          user.name || 'Valued Customer',
+          user.fullName || 'Valued Customer',
           amount,
           'XRP'
         );
@@ -2730,32 +2821,45 @@ private async getBitcoinTransaction(provider: any, txid: string) {
   // Add this method alongside other confirmation update methods
   private async updateBitcoinConfirmations(network: string, currentBlock: number) {
     try {
-        // Add logging to debug
-        this.logToFile(`Updating Bitcoin confirmations for network ${network}, current block ${currentBlock}`);
-
         const deposits = await this.depositRepository.find({
             where: {
-                blockchain: 'btc',  // Changed from 'bitcoin' to 'btc'
+          blockchain: 'btc',
                 network: network,
                 status: In(['pending', 'confirming']),
                 blockNumber: Not(IsNull()),
             },
         });
 
-        this.logToFile(`Found ${deposits.length} deposits to update`);
-
         for (const deposit of deposits) {
+        const oldStatus = deposit.status;
             const confirmations = currentBlock - deposit.blockNumber;
             const requiredConfirmations = this.CONFIRMATION_BLOCKS.btc[network];
-
-            this.logToFile(`Deposit ${deposit.id}: blockNumber ${deposit.blockNumber}, confirmations ${confirmations}, required ${requiredConfirmations}`);
 
             await this.depositRepository.update(deposit.id, {
                 confirmations,
                 status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
             });
 
-            if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+        if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
+          const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+          });
+          
+          if (wallet) {
+            const user = await this.userRepository.findOne({
+              where: { id: wallet.userId }
+            });
+
+            if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+              await this.emailService.sendDepositConfirmedEmail(
+                user.email,
+                user.fullName,
+                this.formatAmount(deposit.amount),
+                'BTC'
+              );
+            }
+          }
+
                 await this.updateWalletBalance(deposit);
                 this.logToFile(`Updated wallet balance for deposit ${deposit.id}`);
             }
@@ -2768,28 +2872,26 @@ private async getBitcoinTransaction(provider: any, txid: string) {
   // Add XRP Confirmation Update
   private async updateXrpConfirmations(network: string, currentBlock: number) {
     try {
-      const deposits = await this.depositRepository.find({
-        where: {
-          blockchain: 'xrp',
-          network: network,
-          status: In(['pending', 'confirming']),
-          blockNumber: Not(IsNull()),
-        },
-      });
-
-      for (const deposit of deposits) {
-        const confirmations = currentBlock - deposit.blockNumber;
-        const requiredConfirmations = this.CONFIRMATION_BLOCKS.xrp[network];
-
-        const oldStatus = deposit.status;
-        await this.depositRepository.update(deposit.id, {
-          confirmations,
-          status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
+        const deposits = await this.depositRepository.find({
+            where: {
+                blockchain: 'xrp',
+                network: network,
+                status: In(['pending', 'confirming']),
+                blockNumber: Not(IsNull()),
+            },
         });
 
-        // Send confirmation email only when status changes to confirmed
+        for (const deposit of deposits) {
+        const oldStatus = deposit.status;
+            const confirmations = currentBlock - deposit.blockNumber;
+            const requiredConfirmations = this.CONFIRMATION_BLOCKS.xrp[network];
+
+            await this.depositRepository.update(deposit.id, {
+                confirmations,
+                status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
+            });
+
         if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
-          // Get user info for email
           const wallet = await this.walletRepository.findOne({
             where: { id: deposit.walletId }
           });
@@ -2799,21 +2901,26 @@ private async getBitcoinTransaction(provider: any, txid: string) {
               where: { id: wallet.userId }
             });
 
-            if (user && user.email) {
+            if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
               await this.emailService.sendDepositConfirmedEmail(
                 user.email,
-                user.name || 'Valued Customer',
-                deposit.amount,
+                user.fullName,
+                this.formatAmount(deposit.amount),
                 'XRP'
               );
             }
           }
 
-          await this.updateWalletBalance(deposit);
+                await this.updateWalletBalance(deposit);
+            }
         }
-      }
     } catch (error) {
-      this.logger.error(`Error updating XRP confirmations: ${error.message}`);
+        this.logger.error(`Error updating XRP confirmations: ${error.message}`);
     }
+}
+
+  private formatAmount(amount: string): string {
+    // Remove trailing zeros after decimal point and unnecessary decimal point
+    return amount.replace(/\.?0+$/, '');
   }
 }
