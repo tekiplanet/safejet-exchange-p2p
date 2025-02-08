@@ -1,6 +1,9 @@
-import { Box, Typography, Paper, Grid, Card, CardContent, CardActionArea } from '@mui/material';
+import { Box, Typography, Paper, Grid, Card, CardContent, CardActionArea, IconButton } from '@mui/material';
 import { useRouter } from 'next/router';
-import { Settings as SettingsIcon } from '@mui/icons-material';
+import { 
+    AccountBalanceWallet as WalletIcon,
+    ArrowForward as ArrowForwardIcon 
+} from '@mui/icons-material';
 
 export function Settings() {
     const router = useRouter();
@@ -9,7 +12,7 @@ export function Settings() {
         {
             title: 'Admin Wallets',
             description: 'Manage admin wallets for different blockchains and networks',
-            icon: <SettingsIcon sx={{ fontSize: 40 }} />,
+            icon: <WalletIcon />,
             href: '/dashboard/settings/admin-wallets'
         },
         // More categories will be added later
@@ -17,36 +20,49 @@ export function Settings() {
 
     return (
         <div className="space-y-6">
-            <Paper className="p-6">
-                <Typography variant="h5" className="mb-6">
-                    System Settings
-                </Typography>
-                
-                <Grid container spacing={3}>
-                    {settingsCategories.map((category) => (
-                        <Grid item xs={12} sm={6} md={4} key={category.title}>
-                            <Card>
-                                <CardActionArea 
-                                    onClick={() => router.push(category.href)}
-                                    sx={{ height: '100%' }}
-                                >
-                                    <CardContent className="text-center p-6">
-                                        <Box className="mb-4">
-                                            {category.icon}
-                                        </Box>
-                                        <Typography variant="h6" gutterBottom>
+            {/* Header Section */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-2 mb-4 md:mb-0">
+                        <h2 className="text-lg font-medium text-gray-900">System Settings</h2>
+                        <p className="text-sm text-gray-500">Manage your exchange system settings</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Settings Categories */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {settingsCategories.map((category) => (
+                    <Paper 
+                        key={category.title}
+                        className="hover:shadow-lg transition-shadow duration-200"
+                    >
+                        <CardActionArea 
+                            onClick={() => router.push(category.href)}
+                            className="p-6"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                    <div className="p-2 bg-indigo-50 rounded-lg">
+                                        {category.icon}
+                                    </div>
+                                    <div>
+                                        <Typography variant="h6" className="font-medium">
                                             {category.title}
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
                                             {category.description}
                                         </Typography>
-                                    </CardContent>
-                                </CardActionArea>
-                            </Card>
-                        </Grid>
-                    ))}
-                </Grid>
-            </Paper>
+                                    </div>
+                                </div>
+                                <IconButton size="small">
+                                    <ArrowForwardIcon />
+                                </IconButton>
+                            </div>
+                        </CardActionArea>
+                    </Paper>
+                ))}
+            </div>
         </div>
     );
 } 
