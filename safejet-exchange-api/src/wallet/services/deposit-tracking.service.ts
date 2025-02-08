@@ -24,6 +24,8 @@ import { Client } from 'xrpl';
 type XrplClient = Client;
 import * as fs from 'fs';
 import * as path from 'path';
+import { EmailService } from '../../email/email.service';
+import { User } from '../../auth/entities/user.entity';  // Fixed import path
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -188,6 +190,9 @@ export class DepositTrackingService implements OnModuleInit {
     private configService: ConfigService,
     @InjectRepository(SystemSettings)
     private systemSettingsRepository: Repository<SystemSettings>,
+    private readonly emailService: EmailService,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {
     // Create logs directory if it doesn't exist
     const logsDir = path.join(process.cwd(), 'logs');
@@ -1918,6 +1923,20 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         confirmations: 0
       });
 
+      // Get user info for email
+      const user = await this.userRepository.findOne({
+        where: { id: wallet.userId }
+      });
+
+      if (user && user.email) {
+        await this.emailService.sendDepositCreatedEmail(
+          user.email,
+          user.name || 'Valued Customer',
+          amount,
+          'XRP'
+        );
+      }
+
       this.logToFile(`[XRP] Created deposit record: ${JSON.stringify(deposit)}`);
     } catch (error) {
       this.logToFile(`[XRP] Error processing transaction ${tx.hash}: ${error.message}`);
@@ -2762,13 +2781,34 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         const confirmations = currentBlock - deposit.blockNumber;
         const requiredConfirmations = this.CONFIRMATION_BLOCKS.xrp[network];
 
+        const oldStatus = deposit.status;
         await this.depositRepository.update(deposit.id, {
           confirmations,
           status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
         });
 
-        // Update wallet balance when required confirmations are reached
-        if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+        // Send confirmation email only when status changes to confirmed
+        if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
+          // Get user info for email
+          const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+          });
+          
+          if (wallet) {
+            const user = await this.userRepository.findOne({
+              where: { id: wallet.userId }
+            });
+
+            if (user && user.email) {
+              await this.emailService.sendDepositConfirmedEmail(
+                user.email,
+                user.name || 'Valued Customer',
+                deposit.amount,
+                'XRP'
+              );
+            }
+          }
+
           await this.updateWalletBalance(deposit);
         }
       }

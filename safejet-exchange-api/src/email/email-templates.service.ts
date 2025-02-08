@@ -455,4 +455,50 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  depositCreatedEmail(userName: string, amount: string, currency: string, isDark = true) {
+    const content = `
+      <h1>New Deposit Received 📥</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A new deposit has been detected in your wallet:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${amount} ${currency}</h3>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>The deposit is currently pending confirmation. We'll notify you once it's confirmed and credited to your balance.</p>
+      </div>
+
+      <p>Need assistance? Contact our support team:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  depositConfirmedEmail(userName: string, amount: string, currency: string, isDark = true) {
+    const content = `
+      <h1>Deposit Confirmed ✅</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>Your deposit has been confirmed and credited to your balance:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${amount} ${currency}</h3>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>You can now use these funds for trading or other services on SafeJet Exchange.</p>
+      </div>
+
+      <p>Happy trading!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }

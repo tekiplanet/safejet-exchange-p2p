@@ -251,4 +251,30 @@ export class EmailService {
       console.error('Payment method deleted email error:', error);
     }
   }
+
+  async sendDepositCreatedEmail(email: string, userName: string, amount: string, currency: string): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'New Deposit Received - SafeJet Exchange',
+        html: this.emailTemplatesService.depositCreatedEmail(userName, amount, currency),
+      });
+    } catch (error) {
+      console.error('Deposit created email error:', error);
+    }
+  }
+
+  async sendDepositConfirmedEmail(email: string, userName: string, amount: string, currency: string): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: 'Deposit Confirmed - SafeJet Exchange',
+        html: this.emailTemplatesService.depositConfirmedEmail(userName, amount, currency),
+      });
+    } catch (error) {
+      console.error('Deposit confirmed email error:', error);
+    }
+  }
 }
