@@ -22,6 +22,7 @@ import { EmailModule } from '../email/email.module';
 import { User } from '../auth/entities/user.entity';
 import { AdminWallet } from './entities/admin-wallet.entity';
 import { AdminWalletController } from './admin/admin-wallet.controller';
+import { AdminWalletService } from './services/admin-wallet.service';
 
 @Module({
   imports: [
@@ -52,7 +53,8 @@ import { AdminWalletController } from './admin/admin-wallet.controller';
     WalletService, 
     KeyManagementService,
     DepositTrackingService,
-    WalletListener
+    WalletListener,
+    AdminWalletService
   ],
   controllers: [
     WalletController,
@@ -60,7 +62,7 @@ import { AdminWalletController } from './admin/admin-wallet.controller';
     AdminTokenController,
     AdminWalletController
   ],
-  exports: [WalletService, DepositTrackingService],
+  exports: [WalletService, DepositTrackingService, AdminWalletService],
 })
 export class WalletModule {
   constructor() {
