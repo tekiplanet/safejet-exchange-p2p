@@ -34,7 +34,12 @@ export class KeyManagementService {
     });
   }
 
-  async generateWallet(userId: string, blockchain: string, network: string = 'mainnet'): Promise<{ address: string; keyId: string }> {
+  async generateWallet(
+    userId: string,
+    blockchain: string,
+    network: string,
+    userType: 'user' | 'admin' = 'user'
+  ): Promise<{ address: string; keyId: string }> {
     let wallet;
     let privateKey;
     let address;
@@ -137,6 +142,7 @@ export class KeyManagementService {
       // Save encrypted key with network information
       const walletKey = await this.walletKeyRepository.save({
         userId,
+        userType,
         encryptedPrivateKey: encryptedKey,
         encryptionVersion: 1,
         keyType: 'hot',

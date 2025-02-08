@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
+import { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AdminWallet } from '../entities/admin-wallet.entity';
@@ -9,7 +11,8 @@ export class AdminWalletService {
     constructor(
         @InjectRepository(AdminWallet)
         private adminWalletRepository: Repository<AdminWallet>,
-        private keyManagementService: KeyManagementService
+        private keyManagementService: KeyManagementService,
+        @Inject(REQUEST) private request: Request
     ) {}
 
     async getAdminWallet(blockchain: string, network: string): Promise<AdminWallet> {
@@ -54,15 +57,48 @@ export class AdminWalletService {
     }
 
     async createAdminWallet(blockchain: string, network: string, type: 'hot' | 'cold' = 'hot') {
+        // First check if wallet exists in admin_wallets table
         const existing = await this.getAdminWallet(blockchain, network);
         if (existing) {
             throw new Error(`Admin wallet already exists for ${blockchain} ${network}`);
         }
 
+        if (!this.request.admin?.sub) {
+            throw new Error('Admin ID not found in request');
+        }
+
+        const adminId = this.request.admin.sub;
+
+        // For EVM chains, check if we already have a wallet for another EVM chain
+        if (['ethereum', 'bsc'].includes(blockchain.toLowerCase())) {
+            const existingEvmWallet = await this.adminWalletRepository.findOne({
+                where: [
+                    { blockchain: 'ethereum', isActive: true },
+                    { blockchain: 'bsc', isActive: true }
+                ]
+            });
+
+            if (existingEvmWallet) {
+                // Reuse the existing key but create new wallet entry
+                const wallet = this.adminWalletRepository.create({
+                    blockchain,
+                    network,
+                    address: existingEvmWallet.address, // Same address for all EVM chains
+                    keyId: existingEvmWallet.keyId,     // Reuse the same key
+                    type,
+                    isActive: true
+                });
+
+                return this.adminWalletRepository.save(wallet);
+            }
+        }
+
+        // If no existing EVM wallet or non-EVM chain, generate new wallet
         const { address, keyId } = await this.keyManagementService.generateWallet(
-            'admin',
+            adminId,
             blockchain,
-            network
+            network,
+            'admin'
         );
 
         const wallet = this.adminWalletRepository.create({

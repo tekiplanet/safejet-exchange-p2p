@@ -8,6 +8,9 @@ export class WalletKey {
   @Column()
   userId: string;
 
+  @Column({ default: 'user' })
+  userType: string;
+
   @Column()
   encryptedPrivateKey: string;
 
