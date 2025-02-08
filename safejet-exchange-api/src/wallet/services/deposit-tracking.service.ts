@@ -1749,13 +1749,13 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
       // If we're caught up, just wait
       if (lastProcessedBlock >= currentLedger) {
-        this.logger.debug(`XRP ${network}: Caught up at ledger ${currentLedger}, waiting for new ledgers...`);
+        this.logToFile(`[XRP] ${network}: Caught up at ledger ${currentLedger}, waiting for new ledgers...`);
         await new Promise(resolve => setTimeout(resolve, this.PROCESSING_DELAYS.xrp.blockDelay));
         return;
       }
 
       // Process blocks sequentially
-      this.logger.debug(`XRP ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
+      this.logToFile(`[XRP] ${network}: Processing from ledger ${lastProcessedBlock + 1} to ${currentLedger}`);
       
       for (let ledgerIndex = lastProcessedBlock + 1; ledgerIndex <= currentLedger; ledgerIndex++) {
         if (!this.chainMonitoringStatus['xrp']?.[network]) break;
@@ -1763,6 +1763,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         try {
           // Ensure connection
           if (!provider.isConnected()) {
+            this.logToFile(`[XRP] ${network}: Reconnecting to provider...`);
             await provider.connect();
           }
 
@@ -1770,41 +1771,38 @@ private async getBitcoinTransaction(provider: any, txid: string) {
           await this.updateLastProcessedBlock('xrp', network, ledgerIndex);
           lastProcessedBlock = ledgerIndex;
           
-          this.logger.debug(`XRP ${network}: Processed ledger ${ledgerIndex}`);
+          this.logToFile(`[XRP] ${network}: Processed ledger ${ledgerIndex}`);
         } catch (error) {
           if (error.message.includes('ledgerNotFound')) {
-            this.logger.warn(`XRP ${network}: Ledger ${ledgerIndex} not found, skipping`);
+            this.logToFile(`[XRP] ${network}: Ledger ${ledgerIndex} not found, skipping`);
             continue;
           }
 
-          // Handle connection issues
           if (error.message.includes('websocket was closed') || error.message.includes('NotConnectedError')) {
-            this.logger.warn(`XRP ${network}: Connection lost, attempting to reconnect...`);
+            this.logToFile(`[XRP] ${network}: Connection lost, attempting to reconnect...`);
             try {
               await provider.connect();
               ledgerIndex--; // Retry the same ledger after reconnecting
               continue;
             } catch (reconnectError) {
-              this.logger.error(`Failed to reconnect XRP ${network}:`, reconnectError);
+              this.logToFile(`[XRP] ${network}: Failed to reconnect: ${reconnectError.message}`);
               
-              // Try fallback provider
               const fallbackProvider = await this.createProviderWithFallback('xrp', network) as Client;
               if (fallbackProvider) {
-                // Update provider in the map and local variable
+                this.logToFile(`[XRP] ${network}: Switching to fallback provider`);
                 this.providers.set(`xrp_${network}`, fallbackProvider);
                 provider = fallbackProvider;
-                ledgerIndex--; // Retry with fallback
+                ledgerIndex--;
                 continue;
               }
               break;
             }
           }
 
-          this.logger.error(`Error processing XRP ledger ${ledgerIndex}:`, error);
+          this.logToFile(`[XRP] ${network}: Error processing ledger ${ledgerIndex}: ${error.message}`);
           continue;
         }
 
-        // Add small delay between ledgers
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     } finally {
@@ -1814,78 +1812,116 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
   private async processXrpLedger(chain: string, network: string, ledgerIndex: number) {
     try {
-        const provider = this.providers.get(`xrp_${network}`) as Client;
-        
-        // Get ledger with transactions
-        const ledgerResponse = await provider.request({
-            command: 'ledger',
-            ledger_index: ledgerIndex,
-            transactions: true,
-            expand: true
-        });
-        
-        if (!ledgerResponse.result.ledger) {
-            throw new Error('ledgerNotFound');
-        }
-        
-        const transactions = ledgerResponse.result.ledger.transactions || [];
-        this.logger.log(`XRP ${network}: Processing ledger ${ledgerIndex} with ${transactions.length} transactions`);
+      const provider = this.providers.get(`xrp_${network}`) as Client;
+      
+      this.logToFile(`[XRP] Processing ledger ${ledgerIndex} for network ${network}`);
+      
+      const ledgerResponse = await provider.request({
+        command: 'ledger',
+        ledger_index: ledgerIndex,
+        transactions: true,
+        expand: true
+      });
+      
+      if (!ledgerResponse.result.ledger) {
+        this.logToFile(`[XRP] Ledger ${ledgerIndex} not found`);
+        throw new Error('ledgerNotFound');
+      }
+      
+      const transactions = ledgerResponse.result.ledger.transactions || [];
+      this.logToFile(`[XRP] Found ${transactions.length} transactions in ledger ${ledgerIndex}`);
 
-        for (const tx of transactions) {
-            await this.processXrpTransaction(chain, network, tx);
-        }
+      for (const tx of transactions) {
+        // Log the full transaction first to understand its structure
+        this.logToFile(`[XRP] Raw transaction: ${JSON.stringify(tx)}`);
+        await this.processXrpTransaction(chain, network, tx);
+      }
 
-        // Add this line to update confirmations
-        await this.updateXrpConfirmations(network, ledgerIndex);
-
-        this.logger.log(`XRP ${network}: Completed ledger ${ledgerIndex}`);
+      await this.updateXrpConfirmations(network, ledgerIndex);
+      this.logToFile(`[XRP] Completed processing ledger ${ledgerIndex}`);
     } catch (error) {
-        this.logger.error(`Error processing XRP ledger ${ledgerIndex}: ${error.message}`);
-        throw error; // Re-throw the error to be handled by checkXrpBlocks
+      this.logToFile(`[XRP] Error processing ledger ${ledgerIndex}: ${error.message}`);
+      throw error;
     }
   }
 
   private async processXrpTransaction(chain: string, network: string, tx: any) {
     try {
-      if (tx.TransactionType !== 'Payment') return;
+      const txJson = tx.tx_json;
+      if (!txJson) {
+        this.logToFile(`[XRP] No tx_json found in transaction`);
+        return;
+      }
 
-      const wallets = await this.walletRepository.find({
+      const txType = txJson.TransactionType;
+      const txHash = tx.hash;
+      const destination = txJson.Destination;
+      const rawAmount = tx.meta?.delivered_amount || txJson.Amount || txJson.DeliverMax;
+      // Convert from drops to XRP (1 XRP = 1,000,000 drops)
+      const amount = (Number(rawAmount) / 1_000_000).toString();
+
+      if (txType !== 'Payment') {
+        this.logToFile(`[XRP] Skipping non-payment transaction ${txHash} of type ${txType}`);
+        return;
+      }
+
+      const wallet = await this.walletRepository.findOne({
         where: {
           blockchain: chain,
           network: network,
-        },
+          address: destination
+        }
       });
 
-      const walletAddresses = new Set(wallets.map(w => w.address));
-
-      if (walletAddresses.has(tx.Destination)) {
-        const wallet = wallets.find(w => w.address === tx.Destination);
-        if (!wallet) return;
-
-        const tokenId = await this.getXrpTokenId();
-
-        await this.depositRepository.save({
-          userId: wallet.userId.toString(),
-          walletId: wallet.id.toString(),
-          tokenId: tokenId.toString(),
-          txHash: tx.hash,
-          amount: tx.Amount,
-          blockchain: chain,
-          network: network,
-          networkVersion: 'NATIVE',
-          blockNumber: tx.ledger_index,
-          status: 'pending',
-          metadata: {
-            from: tx.Account,
-            blockHash: tx.ledger_hash,
-          },
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          confirmations: 0
-        });
+      if (!wallet) {
+        this.logToFile(`[XRP] No matching wallet found for destination ${destination}`);
+        return;
       }
+
+      // Check for existing deposit
+      const existingDeposit = await this.depositRepository.findOne({
+        where: {
+          txHash: txHash,
+          blockchain: chain,
+          network: network
+        }
+      });
+
+      if (existingDeposit) {
+        this.logToFile(`[XRP] Deposit already exists for transaction ${txHash}`);
+        return;
+      }
+
+      const tokenId = await this.getXrpTokenId();
+      this.logToFile(`[XRP] Creating deposit for transaction ${txHash} with amount ${amount}`);
+
+      const deposit = await this.depositRepository.save({
+        userId: wallet.userId.toString(),
+        walletId: wallet.id.toString(),
+        tokenId: tokenId.toString(),
+        txHash: txHash,
+        amount: amount,  // Now in XRP instead of drops
+        blockchain: chain,
+        network: network,
+        networkVersion: 'NATIVE',
+        blockNumber: tx.ledger_index,
+        status: 'pending',
+        metadata: {
+          fee: (Number(txJson.Fee) / 1_000_000).toString(),  // Convert fee to XRP too
+          from: txJson.Account,
+          blockHash: tx.ledger_hash,
+          contractAddress: null,
+          timestamp: tx.close_time_iso
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        confirmations: 0
+      });
+
+      this.logToFile(`[XRP] Created deposit record: ${JSON.stringify(deposit)}`);
     } catch (error) {
-      this.logger.error(`Error processing XRP transaction: ${error.message}`);
+      this.logToFile(`[XRP] Error processing transaction ${tx.hash}: ${error.message}`);
+      this.logToFile(`[XRP] Error stack: ${error.stack}`);
     }
   }
 
@@ -2713,31 +2749,31 @@ private async getBitcoinTransaction(provider: any, txid: string) {
   // Add XRP Confirmation Update
   private async updateXrpConfirmations(network: string, currentBlock: number) {
     try {
-        const deposits = await this.depositRepository.find({
-            where: {
-                blockchain: 'xrp',
-                network: network,
-                status: In(['pending', 'confirming']),
-                blockNumber: Not(IsNull()),
-            },
+      const deposits = await this.depositRepository.find({
+        where: {
+          blockchain: 'xrp',
+          network: network,
+          status: In(['pending', 'confirming']),
+          blockNumber: Not(IsNull()),
+        },
+      });
+
+      for (const deposit of deposits) {
+        const confirmations = currentBlock - deposit.blockNumber;
+        const requiredConfirmations = this.CONFIRMATION_BLOCKS.xrp[network];
+
+        await this.depositRepository.update(deposit.id, {
+          confirmations,
+          status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
         });
 
-        for (const deposit of deposits) {
-            const confirmations = currentBlock - deposit.blockNumber;
-            const requiredConfirmations = this.CONFIRMATION_BLOCKS.xrp[network];
-
-            await this.depositRepository.update(deposit.id, {
-                confirmations,
-                status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
-            });
-
-            // Update wallet balance when required confirmations are reached
-            if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
-                await this.updateWalletBalance(deposit);
-            }
+        // Update wallet balance when required confirmations are reached
+        if (confirmations >= requiredConfirmations && deposit.status !== 'confirmed') {
+          await this.updateWalletBalance(deposit);
         }
+      }
     } catch (error) {
-        this.logger.error(`Error updating XRP confirmations: ${error.message}`);
+      this.logger.error(`Error updating XRP confirmations: ${error.message}`);
     }
-}
+  }
 }
