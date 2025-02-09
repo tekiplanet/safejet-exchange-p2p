@@ -10,6 +10,7 @@ import {
   providers,
   Contract,
   utils,
+  Wallet as ethersWallet,
 } from 'ethers';
 import { WebSocketProvider, JsonRpcProvider } from '@ethersproject/providers';
 import { Logger } from '@nestjs/common';
@@ -26,6 +27,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EmailService } from '../../email/email.service';
 import { User } from '../../auth/entities/user.entity';  // Fixed import path
+import { AdminWallet } from '../entities/admin-wallet.entity';
+import { WalletKey } from '../entities/wallet-key.entity';
+import { KeyManagementService } from '../key-management.service';
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -193,6 +197,11 @@ export class DepositTrackingService implements OnModuleInit {
     private readonly emailService: EmailService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(AdminWallet)
+    private adminWalletRepository: Repository<AdminWallet>,
+    @InjectRepository(WalletKey)
+    private walletKeyRepository: Repository<WalletKey>,
+    private keyManagementService: KeyManagementService,
   ) {
     // Create logs directory if it doesn't exist
     const logsDir = path.join(process.cwd(), 'logs');
@@ -578,6 +587,96 @@ export class DepositTrackingService implements OnModuleInit {
     }
 }
 
+  // Add these new private methods first
+  private async sweepEvmDeposit(deposit: Deposit, currentConfirmations: number): Promise<boolean> {
+    try {
+        const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+        });
+
+        if (!wallet) {
+            this.logToFile(`[sweepEvmDeposit] Wallet not found for deposit ${deposit.id}`);
+            return false;
+        }
+
+        const adminWallet = await this.adminWalletRepository.findOne({
+            where: {
+                blockchain: deposit.blockchain,
+                network: deposit.network,
+                isActive: true,
+                type: 'hot'
+            }
+        });
+
+        if (!adminWallet) {
+            this.logToFile(`[sweepEvmDeposit] No active admin wallet found for ${deposit.blockchain} ${deposit.network}`);
+            return false;
+        }
+
+        // Get wallet's private key
+        const walletKey = await this.walletKeyRepository.findOne({
+            where: { id: wallet.keyId }
+        });
+
+        if (!walletKey) {
+            this.logToFile(`[sweepEvmDeposit] Wallet key not found for wallet ${wallet.id}`);
+            return false;
+        }
+
+        const privateKey = await this.keyManagementService.decryptPrivateKey(
+            walletKey.encryptedPrivateKey,
+            walletKey.userId
+        );
+
+        // Create provider based on blockchain and network
+        const provider = this.getEvmProvider(deposit.blockchain, deposit.network);
+        const signer = new ethersWallet(privateKey, provider);  // Renamed to signer
+
+        // If it's a token transfer
+        if (deposit.tokenId) {
+            // Implement token sweep
+            return await this.sweepEvmToken(
+                deposit,
+                signer,  // Changed from privateKey
+                adminWallet.address,
+                provider
+            );
+        } else {
+            // Implement native coin sweep
+            return await this.sweepEvmNative(
+                deposit,
+                signer,  // Changed from privateKey
+                adminWallet.address,
+                provider
+            );
+        }
+    } catch (error) {
+        this.logToFile(`[sweepEvmDeposit] Error: ${error.message}`);
+        return false;
+    }
+}
+
+  private async sweepEvmToken(
+    deposit: Deposit,
+    signer: ethersWallet,
+    adminAddress: string,
+    provider: providers.Provider
+  ): Promise<boolean> {
+    // Implementation coming soon
+    return false;
+  }
+
+  private async sweepEvmNative(
+    deposit: Deposit,
+    signer: ethersWallet,
+    adminAddress: string,
+    provider: providers.Provider
+  ): Promise<boolean> {
+    // Implementation coming soon
+    return false;
+  }
+
+  // Then modify the existing updateEvmConfirmations method
   private async updateEvmConfirmations(chain: string, network: string, currentBlock: number) {
     try {
         this.logToFile(`[updateEvmConfirmations] Starting for ${chain} ${network}, current block ${currentBlock}`);
@@ -645,6 +744,9 @@ export class DepositTrackingService implements OnModuleInit {
 
                 await this.updateWalletBalance(deposit);
                 this.logToFile(`[updateEvmConfirmations] Updated wallet balance for deposit ${deposit.id}`);
+
+                // Add sweeping logic here
+                await this.sweepEvmDeposit(deposit, confirmations);
             }
         }
     } catch (error) {
@@ -2922,5 +3024,16 @@ private async getBitcoinTransaction(provider: any, txid: string) {
   private formatAmount(amount: string): string {
     // Remove trailing zeros after decimal point and unnecessary decimal point
     return amount.replace(/\.?0+$/, '');
+  }
+
+  private getEvmProvider(blockchain: string, network: string): providers.Provider {
+    const key = `${blockchain}_${network}`;
+    const provider = this.providers.get(key) as providers.Provider;
+    
+    if (!provider) {
+        throw new Error(`No provider found for ${blockchain} ${network}`);
+    }
+
+    return provider;
   }
 }
