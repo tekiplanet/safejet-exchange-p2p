@@ -17,7 +17,7 @@ import {
     Snackbar,
     Alert as MuiAlert,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, ContentCopy as ContentCopyIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, ContentCopy as ContentCopyIcon, AccountBalanceWallet as WalletIcon } from '@mui/icons-material';
 
 interface GasTankWallet {
     id: string;
@@ -28,6 +28,10 @@ interface GasTankWallet {
     type: 'gas_tank';
     isActive: boolean;
     createdAt: string;
+    balance?: {
+        balance: string;
+        symbol: string;
+    };
 }
 
 export function GasTankWallets() {
@@ -47,6 +51,7 @@ export function GasTankWallets() {
         message: '',
         severity: 'success'
     });
+    const [loadingBalances, setLoadingBalances] = useState<{ [key: string]: boolean }>({});
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -102,11 +107,11 @@ export function GasTankWallets() {
         try {
             const response = await fetchWithRetry('/admin/gas-tank-wallets', { method: 'GET' });
             const data = await response.json();
-            setWallets(data);
-            setError('');
+            return data;
         } catch (err) {
             setError('Failed to load gas tank wallets');
             console.error('Error fetching wallets:', err);
+            return [];
         } finally {
             setLoading(false);
         }
@@ -145,9 +150,20 @@ export function GasTankWallets() {
         }
     };
 
-    const copyToClipboard = async (text: string) => {
+    const copyToClipboard = (text: string) => {
         try {
-            await navigator.clipboard.writeText(text);
+            // Create a temporary input element
+            const tempInput = document.createElement('input');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            
+            // Select and copy the text
+            tempInput.select();
+            document.execCommand('copy');
+            
+            // Remove the temporary element
+            document.body.removeChild(tempInput);
+
             setSnackbar({
                 open: true,
                 message: 'Address copied to clipboard',
@@ -162,8 +178,49 @@ export function GasTankWallets() {
         }
     };
 
+    const fetchWalletBalance = async (walletId: string) => {
+        setLoadingBalances(prev => ({ ...prev, [walletId]: true }));
+        try {
+            const response = await fetchWithRetry(`/admin/gas-tank-wallets/${walletId}/balance`, { 
+                method: 'GET' 
+            });
+            const balanceData = await response.json();
+            
+            setWallets(currentWallets => 
+                currentWallets.map(wallet => 
+                    wallet.id === walletId 
+                        ? { ...wallet, balance: balanceData }
+                        : wallet
+                )
+            );
+
+            setSnackbar({
+                open: true,
+                message: 'Balance fetched successfully',
+                severity: 'success'
+            });
+        } catch (err) {
+            console.error('Error fetching balance:', err);
+            setSnackbar({
+                open: true,
+                message: 'Failed to fetch balance',
+                severity: 'error'
+            });
+        } finally {
+            setLoadingBalances(prev => ({ ...prev, [walletId]: false }));
+        }
+    };
+
     useEffect(() => {
-        fetchWallets();
+        fetchWallets().then(data => {
+            // Sort wallets alphabetically by blockchain and then by network
+            const sortedWallets = data.sort((a: GasTankWallet, b: GasTankWallet) => {
+                const blockchainCompare = a.blockchain.localeCompare(b.blockchain);
+                if (blockchainCompare !== 0) return blockchainCompare;
+                return a.network.localeCompare(b.network);
+            });
+            setWallets(sortedWallets);
+        });
         scanMissingWallets();
     }, []);
 
@@ -239,6 +296,7 @@ export function GasTankWallets() {
                                 <TableCell>Address</TableCell>
                                 <TableCell>Type</TableCell>
                                 <TableCell>Status</TableCell>
+                                <TableCell>Balance</TableCell>
                                 <TableCell>Created At</TableCell>
                             </TableRow>
                         </TableHead>
@@ -274,6 +332,29 @@ export function GasTankWallets() {
                                         }`}>
                                             {wallet.isActive ? 'Active' : 'Inactive'}
                                         </span>
+                                    </TableCell>
+                                    <TableCell>
+                                        {wallet.balance ? (
+                                            <div className="flex items-center gap-2">
+                                                <span>{`${wallet.balance.balance} ${wallet.balance.symbol}`}</span>
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={() => fetchWalletBalance(wallet.id)}
+                                                    disabled={loadingBalances[wallet.id]}
+                                                >
+                                                    <WalletIcon fontSize="small" />
+                                                </IconButton>
+                                            </div>
+                                        ) : (
+                                            <Button
+                                                size="small"
+                                                startIcon={loadingBalances[wallet.id] ? <CircularProgress size={20} /> : <WalletIcon />}
+                                                onClick={() => fetchWalletBalance(wallet.id)}
+                                                disabled={loadingBalances[wallet.id]}
+                                            >
+                                                View Balance
+                                            </Button>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         {new Date(wallet.createdAt).toLocaleDateString()}

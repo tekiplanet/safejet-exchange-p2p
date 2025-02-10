@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Param } from '@nestjs/common';
 import { AdminGuard } from '../../auth/admin.guard';  // Correct path, matching other admin controllers
 import { GasTankWalletService } from '../services/gas-tank-wallet.service';
 
@@ -22,5 +22,10 @@ export class GasTankWalletController {
     @Post()
     async create(@Body() createWalletDto: { blockchain: string; network: string; type: string }) {
         return this.gasTankWalletService.create(createWalletDto);
+    }
+
+    @Get(':id/balance')
+    async getWalletBalance(@Param('id') id: string) {
+        return this.gasTankWalletService.getWalletBalance(id);
     }
 } 
