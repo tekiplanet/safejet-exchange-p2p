@@ -2,6 +2,7 @@ import { Box, Typography, Paper, Grid } from '@mui/material';
 import { useRouter } from 'next/router';
 import { 
     AccountBalanceWallet as WalletIcon,
+    LocalGasStation as GasStationIcon,
     ArrowForward as ArrowForwardIcon 
 } from '@mui/icons-material';
 
@@ -14,6 +15,12 @@ export function Settings() {
             description: 'Manage admin wallets for different blockchains and networks',
             icon: <WalletIcon />,
             href: '/dashboard/settings/admin-wallets'
+        },
+        {
+            title: 'Gas Tank Wallets',
+            description: 'Manage gas tank wallets for token sweep operations',
+            icon: <GasStationIcon />,
+            href: '/dashboard/settings/gas-tank-wallets'
         },
         // More categories will be added later
     ];

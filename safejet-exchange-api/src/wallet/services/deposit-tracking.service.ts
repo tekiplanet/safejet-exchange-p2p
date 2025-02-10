@@ -30,6 +30,7 @@ import { User } from '../../auth/entities/user.entity';  // Fixed import path
 import { AdminWallet } from '../entities/admin-wallet.entity';
 import { WalletKey } from '../entities/wallet-key.entity';
 import { KeyManagementService } from '../key-management.service';
+import { SweepTransaction } from '../entities/sweep-transaction.entity';
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -75,11 +76,11 @@ export class DepositTrackingService implements OnModuleInit {
   private readonly CONFIRMATION_BLOCKS = {
     eth: {
       mainnet: 12,
-      testnet: 5
+      testnet: 1
     },
     bsc: {
       mainnet: 15,
-      testnet: 6
+      testnet: 2
     },
     btc: {
       mainnet: 3,
@@ -182,6 +183,14 @@ export class DepositTrackingService implements OnModuleInit {
   private bitcoinIntervals: { [key: string]: NodeJS.Timeout | null } = {};
   private logStream: fs.WriteStream;
 
+  // Add ERC20 ABI as a class property
+  private readonly ERC20_ABI = [
+    "function balanceOf(address owner) view returns (uint256)",
+    "function transfer(address to, uint256 value) returns (bool)",
+    "function decimals() view returns (uint8)",
+    "event Transfer(address indexed from, address indexed to, uint256 value)"
+  ];
+
   constructor(
     @InjectRepository(Deposit)
     private depositRepository: Repository<Deposit>,
@@ -202,6 +211,8 @@ export class DepositTrackingService implements OnModuleInit {
     @InjectRepository(WalletKey)
     private walletKeyRepository: Repository<WalletKey>,
     private keyManagementService: KeyManagementService,
+    @InjectRepository(SweepTransaction)
+    private sweepTransactionRepository: Repository<SweepTransaction>,
   ) {
     // Create logs directory if it doesn't exist
     const logsDir = path.join(process.cwd(), 'logs');
@@ -590,6 +601,19 @@ export class DepositTrackingService implements OnModuleInit {
   // Add these new private methods first
   private async sweepEvmDeposit(deposit: Deposit, currentConfirmations: number): Promise<boolean> {
     try {
+        this.logToFile(`[sweepEvmDeposit] Starting sweep for deposit ${deposit.id}, hash: ${deposit.txHash}`);
+        this.logToFile(`[sweepEvmDeposit] Deposit blockchain: ${deposit.blockchain}, network: ${deposit.network}`);
+
+        // Check if already swept
+        const existingSweep = await this.sweepTransactionRepository.findOne({
+            where: { depositId: deposit.id }
+        });
+
+        if (existingSweep) {
+            this.logToFile(`[sweepEvmDeposit] Deposit ${deposit.id} already swept in transaction ${existingSweep.txHash}`);
+            return false;
+        }
+
         const wallet = await this.walletRepository.findOne({
             where: { id: deposit.walletId }
         });
@@ -603,8 +627,7 @@ export class DepositTrackingService implements OnModuleInit {
             where: {
                 blockchain: deposit.blockchain,
                 network: deposit.network,
-                isActive: true,
-                type: 'hot'
+                isActive: true
             }
         });
 
@@ -613,7 +636,25 @@ export class DepositTrackingService implements OnModuleInit {
             return false;
         }
 
-        // Get wallet's private key
+        this.logToFile(`[sweepEvmDeposit] Found admin wallet ${adminWallet.address} for deposit ${deposit.id}`);
+
+        // Create sweep transaction record
+        const sweepTx = await this.sweepTransactionRepository.save({
+            depositId: deposit.id,
+            fromWalletId: wallet.id,
+            toAdminWalletId: adminWallet.id,
+            amount: deposit.amount,
+            status: 'pending',
+            txHash: 'pending', // Add placeholder
+            metadata: {
+                blockchain: deposit.blockchain,
+                network: deposit.network,
+                tokenId: deposit.tokenId
+            } as Record<string, any>
+        });
+
+        this.logToFile(`[sweepEvmDeposit] Created sweep transaction record ${sweepTx.id}`);
+
         const walletKey = await this.walletKeyRepository.findOne({
             where: { id: wallet.keyId }
         });
@@ -628,27 +669,70 @@ export class DepositTrackingService implements OnModuleInit {
             walletKey.userId
         );
 
-        // Create provider based on blockchain and network
-        const provider = this.getEvmProvider(deposit.blockchain, deposit.network);
-        const signer = new ethersWallet(privateKey, provider);  // Renamed to signer
+        if (!privateKey) {
+            this.logToFile(`[sweepEvmDeposit] Failed to decrypt private key for wallet ${wallet.id}`);
+            return false;
+        }
 
-        // If it's a token transfer
-        if (deposit.tokenId) {
-            // Implement token sweep
-            return await this.sweepEvmToken(
-                deposit,
-                signer,  // Changed from privateKey
-                adminWallet.address,
-                provider
-            );
-        } else {
-            // Implement native coin sweep
-            return await this.sweepEvmNative(
-                deposit,
-                signer,  // Changed from privateKey
-                adminWallet.address,
-                provider
-            );
+        this.logToFile(`[sweepEvmDeposit] Successfully decrypted private key`);
+        
+        try {
+            this.logToFile(`[sweepEvmDeposit] Attempting to get provider for ${deposit.blockchain} ${deposit.network}`);
+            const provider = this.getEvmProvider(deposit.blockchain, deposit.network);
+            this.logToFile(`[sweepEvmDeposit] Successfully got provider`);
+            
+            const signer = new ethersWallet(privateKey, provider);
+            this.logToFile(`[sweepEvmDeposit] Created signer for address ${signer.address}`);
+
+            let success = false;
+            try {
+                let sweepResult;
+                if (deposit.tokenId) {
+                    // Get token details first
+                    const token = await this.tokenRepository.findOne({
+                        where: { id: deposit.tokenId }
+                    });
+                    
+                    this.logToFile(`[sweepEvmDeposit] Token details for ${deposit.tokenId}: ${JSON.stringify(token)}`);
+                    
+                    if (token?.contractAddress) {
+                        sweepResult = await this.sweepEvmToken(deposit, signer, adminWallet.address, provider);
+                    } else {
+                        // If no contract address, treat as native token
+                        this.logToFile(`[sweepEvmDeposit] No contract address found for token ${deposit.tokenId}, treating as native token`);
+                        sweepResult = await this.sweepEvmNative(deposit, signer, adminWallet.address, provider);
+                    }
+                } else {
+                    sweepResult = await this.sweepEvmNative(deposit, signer, adminWallet.address, provider);
+                }
+
+                if (sweepResult.success) {
+                    await this.sweepTransactionRepository.update(sweepTx.id, {
+                        status: 'completed',
+                        txHash: sweepResult.txHash
+                    });
+                    success = true;
+                } else {
+                    await this.sweepTransactionRepository.update(sweepTx.id, {
+                        status: 'failed'
+                    });
+                }
+            } catch (error) {
+                await this.sweepTransactionRepository.update(sweepTx.id, {
+                    status: 'failed',
+                    metadata: {
+                        ...sweepTx.metadata,
+                        error: error.message
+                    } as Record<string, any>
+                });
+                success = false;
+            }
+
+            this.logToFile(`[sweepEvmDeposit] Sweep ${success ? 'successful' : 'failed'} for deposit ${deposit.id}`);
+            return success;
+        } catch (error) {
+            this.logToFile(`[sweepEvmDeposit] Error during provider/signer setup: ${error.message}`);
+            throw error;
         }
     } catch (error) {
         this.logToFile(`[sweepEvmDeposit] Error: ${error.message}`);
@@ -661,20 +745,111 @@ export class DepositTrackingService implements OnModuleInit {
     signer: ethersWallet,
     adminAddress: string,
     provider: providers.Provider
-  ): Promise<boolean> {
-    // Implementation coming soon
-    return false;
-  }
+  ): Promise<{success: boolean, txHash?: string}> {
+    try {
+        this.logToFile(`[sweepEvmToken] Starting token sweep for deposit ${deposit.id}`);
+
+        const token = await this.tokenRepository.findOne({
+            where: { id: deposit.tokenId }
+        });
+
+        if (!token?.contractAddress) {
+            this.logToFile(`[sweepEvmToken] Token contract address not found for deposit ${deposit.id}`);
+            return {success: false};
+        }
+
+        this.logToFile(`[sweepEvmToken] Using contract at ${token.contractAddress}`);
+        
+        // Create contract instance with the correct ABI
+        const contract = new Contract(token.contractAddress, this.ERC20_ABI, signer);
+        
+        // Get token balance
+        const balance = await contract.balanceOf(signer.address);
+        this.logToFile(`[sweepEvmToken] Token balance: ${balance.toString()}`);
+
+        if (balance.isZero()) {
+            this.logToFile(`[sweepEvmToken] No token balance to sweep`);
+            return {success: false};
+        }
+
+        // Get gas price
+        const gasPrice = await provider.getGasPrice();
+        this.logToFile(`[sweepEvmToken] Gas price: ${gasPrice.toString()}`);
+
+        // Estimate gas with the actual parameters
+        const gasEstimate = await contract.estimateGas.transfer(adminAddress, balance);
+        this.logToFile(`[sweepEvmToken] Estimated gas: ${gasEstimate.toString()}`);
+
+        // Add 20% buffer to gas limit
+        const gasLimit = gasEstimate.mul(12).div(10);
+        
+        this.logToFile(`[sweepEvmToken] Sending ${balance.toString()} tokens to ${adminAddress}`);
+        
+        // Send the transaction
+        const tx = await contract.transfer(adminAddress, balance, {
+            gasLimit,
+            gasPrice
+        });
+
+        this.logToFile(`[sweepEvmToken] Transaction sent: ${tx.hash}`);
+        const receipt = await tx.wait();
+        this.logToFile(`[sweepEvmToken] Transaction confirmed: ${tx.hash}`);
+
+        return {success: true, txHash: tx.hash};
+    } catch (error) {
+        this.logToFile(`[sweepEvmToken] Error: ${error.message}`);
+        this.logToFile(`[sweepEvmToken] Error details: ${JSON.stringify(error)}`);
+        return {success: false};
+    }
+}
 
   private async sweepEvmNative(
     deposit: Deposit,
     signer: ethersWallet,
     adminAddress: string,
     provider: providers.Provider
-  ): Promise<boolean> {
-    // Implementation coming soon
-    return false;
-  }
+  ): Promise<{success: boolean, txHash?: string}> {
+    try {
+        this.logToFile(`[sweepEvmNative] Starting sweep for deposit ${deposit.id}`);
+        
+        const balance = await provider.getBalance(signer.address);
+        this.logToFile(`[sweepEvmNative] Current balance: ${balance.toString()}`);
+        
+        const gasPrice = await provider.getGasPrice();
+        this.logToFile(`[sweepEvmNative] Current gas price: ${gasPrice.toString()}`);
+        
+        const gasLimit = 21000;
+        const gasCost = gasPrice.mul(gasLimit);
+        this.logToFile(`[sweepEvmNative] Estimated gas cost: ${gasCost.toString()}`);
+        
+        const amountToSend = balance.sub(gasCost);
+        this.logToFile(`[sweepEvmNative] Amount to send: ${amountToSend.toString()}`);
+
+        if (amountToSend.lte(0)) {
+            this.logToFile(`[sweepEvmNative] Insufficient balance for gas in ${signer.address}. Balance: ${balance}, Gas Cost: ${gasCost}`);
+            return {success: false};
+        }
+
+        this.logToFile(`[sweepEvmNative] Attempting to send transaction to ${adminAddress}`);
+        const tx = await signer.sendTransaction({
+            to: adminAddress,
+            value: amountToSend,
+            gasLimit: gasLimit,
+            gasPrice: gasPrice
+        });
+
+        this.logToFile(`[sweepEvmNative] Transaction sent: ${tx.hash}`);
+        const receipt = await tx.wait();
+        this.logToFile(`[sweepEvmNative] Transaction confirmed: ${tx.hash}`);
+
+        return {success: true, txHash: tx.hash};
+    } catch (error) {
+        this.logToFile(`[sweepEvmNative] Error: ${error.message}`);
+        this.logToFile(`[sweepEvmNative] Error details: ${JSON.stringify(error)}`);
+        return {success: false};
+    }
+}
+
 
   // Then modify the existing updateEvmConfirmations method
   private async updateEvmConfirmations(chain: string, network: string, currentBlock: number) {
@@ -693,7 +868,12 @@ export class DepositTrackingService implements OnModuleInit {
             },
         });
 
-        this.logToFile(`[updateEvmConfirmations] Found ${deposits.length} deposits to update`);
+        this.logToFile(`[updateEvmConfirmations] Found ${deposits.length} deposits to process: ${JSON.stringify(deposits.map(d => ({
+            id: d.id,
+            status: d.status,
+            amount: d.amount,
+            blockNumber: d.blockNumber
+        })))}`);
         
         for (const deposit of deposits) {
             this.logToFile(`[updateEvmConfirmations] Processing deposit: ${JSON.stringify({
@@ -717,6 +897,8 @@ export class DepositTrackingService implements OnModuleInit {
             this.logToFile(`[updateEvmConfirmations] Updated deposit ${deposit.id} with confirmations ${confirmations} and status ${confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'}`);
 
             if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
+                this.logToFile(`[updateEvmConfirmations] Deposit ${deposit.id} just confirmed, initiating sweep`);
+                
                 const wallet = await this.walletRepository.findOne({
                     where: { id: deposit.walletId }
                 });
@@ -745,8 +927,13 @@ export class DepositTrackingService implements OnModuleInit {
                 await this.updateWalletBalance(deposit);
                 this.logToFile(`[updateEvmConfirmations] Updated wallet balance for deposit ${deposit.id}`);
 
-                // Add sweeping logic here
-                await this.sweepEvmDeposit(deposit, confirmations);
+                try {
+                    this.logToFile(`[updateEvmConfirmations] Starting sweep for deposit ${deposit.id}`);
+                    await this.sweepEvmDeposit(deposit, confirmations);
+                    this.logToFile(`[updateEvmConfirmations] Sweep completed for deposit ${deposit.id}`);
+                } catch (error) {
+                    this.logToFile(`[updateEvmConfirmations] Sweep failed for deposit ${deposit.id}: ${error.message}`);
+                }
             }
         }
     } catch (error) {
@@ -3027,13 +3214,27 @@ private async getBitcoinTransaction(provider: any, txid: string) {
   }
 
   private getEvmProvider(blockchain: string, network: string): providers.Provider {
-    const key = `${blockchain}_${network}`;
-    const provider = this.providers.get(key) as providers.Provider;
+    this.logToFile(`[getEvmProvider] Called with blockchain: ${blockchain}, network: ${network}`);
     
+    // Map all EVM blockchain names to provider key format
+    const evmMappings: Record<string, string> = {
+        'ethereum': 'eth',
+        'binance-smart-chain': 'bsc',
+        'binance': 'bsc'
+    };
+    
+    const chainKey = evmMappings[blockchain] || blockchain;
+    const key = `${chainKey}_${network}`;
+    
+    this.logToFile(`[getEvmProvider] Looking up provider with key: ${key} (mapped from ${blockchain})`);
+    
+    const provider = this.providers.get(key) as providers.Provider;
     if (!provider) {
+        this.logToFile(`[getEvmProvider] Available provider keys: ${Array.from(this.providers.keys()).join(', ')}`);
         throw new Error(`No provider found for ${blockchain} ${network}`);
     }
-
+    
+    this.logToFile(`[getEvmProvider] Successfully found provider for ${key}`);
     return provider;
-  }
+}
 }

@@ -23,6 +23,10 @@ import { User } from '../auth/entities/user.entity';
 import { AdminWallet } from './entities/admin-wallet.entity';
 import { AdminWalletController } from './admin/admin-wallet.controller';
 import { AdminWalletService } from './services/admin-wallet.service';
+import { SweepTransaction } from './entities/sweep-transaction.entity';
+import { GasTankWallet } from './entities/gas-tank-wallet.entity';
+import { GasTankWalletController } from './admin/gas-tank-wallet.controller';
+import { GasTankWalletService } from './services/gas-tank-wallet.service';
 
 @Module({
   imports: [
@@ -34,7 +38,9 @@ import { AdminWalletService } from './services/admin-wallet.service';
       Deposit,
       SystemSettings,
       User,
-      AdminWallet
+      AdminWallet,
+      SweepTransaction,
+      GasTankWallet
     ]),
     EventEmitterModule.forRoot(),
     ConfigModule,
@@ -54,15 +60,17 @@ import { AdminWalletService } from './services/admin-wallet.service';
     KeyManagementService,
     DepositTrackingService,
     WalletListener,
-    AdminWalletService
+    AdminWalletService,
+    GasTankWalletService
   ],
   controllers: [
     WalletController,
     AdminDepositController,
     AdminTokenController,
-    AdminWalletController
+    AdminWalletController,
+    GasTankWalletController
   ],
-  exports: [WalletService, DepositTrackingService, AdminWalletService],
+  exports: [WalletService, DepositTrackingService, AdminWalletService, GasTankWalletService],
 })
 export class WalletModule {
   constructor() {
