@@ -11,6 +11,7 @@ import {
   Contract,
   utils,
   Wallet as ethersWallet,
+  ethers // Add this
 } from 'ethers';
 import { WebSocketProvider, JsonRpcProvider } from '@ethersproject/providers';
 import { Logger } from '@nestjs/common';
@@ -31,6 +32,7 @@ import { AdminWallet } from '../entities/admin-wallet.entity';
 import { WalletKey } from '../entities/wallet-key.entity';
 import { KeyManagementService } from '../key-management.service';
 import { SweepTransaction } from '../entities/sweep-transaction.entity';
+import { GasTankWallet } from '../entities/gas-tank-wallet.entity';
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -187,9 +189,18 @@ export class DepositTrackingService implements OnModuleInit {
   private readonly ERC20_ABI = [
     "function balanceOf(address owner) view returns (uint256)",
     "function transfer(address to, uint256 value) returns (bool)",
+    "function approve(address spender, uint256 value) returns (bool)",
+    "function transferFrom(address from, address to, uint256 value) returns (bool)",
     "function decimals() view returns (uint8)",
-    "event Transfer(address indexed from, address indexed to, uint256 value)"
+    "event Transfer(address indexed from, address indexed to, uint256 value)",
+    "event Approval(address indexed owner, address indexed spender, uint256 value)"
   ];
+
+  // Add to class properties
+  private readonly MINIMUM_NATIVE_BALANCE = {
+      ethereum: this.configService.get('ETH_MINIMUM_BALANCE', '0.005'),  // 0.005 ETH
+      bsc: this.configService.get('BNB_MINIMUM_BALANCE', '0.01'),      // 0.01 BNB
+  };
 
   constructor(
     @InjectRepository(Deposit)
@@ -213,6 +224,8 @@ export class DepositTrackingService implements OnModuleInit {
     private keyManagementService: KeyManagementService,
     @InjectRepository(SweepTransaction)
     private sweepTransactionRepository: Repository<SweepTransaction>,
+    @InjectRepository(GasTankWallet)
+    private gasTankWalletRepository: Repository<GasTankWallet>,
   ) {
     // Create logs directory if it doesn't exist
     const logsDir = path.join(process.cwd(), 'logs');
@@ -599,7 +612,7 @@ export class DepositTrackingService implements OnModuleInit {
 }
 
   // Add these new private methods first
-  private async sweepEvmDeposit(deposit: Deposit, currentConfirmations: number): Promise<boolean> {
+  private async sweepEvmDeposit(deposit: Deposit, confirmations: number): Promise<{success: boolean, txHash?: string}> {
     try {
         this.logToFile(`[sweepEvmDeposit] Starting sweep for deposit ${deposit.id}, hash: ${deposit.txHash}`);
         this.logToFile(`[sweepEvmDeposit] Deposit blockchain: ${deposit.blockchain}, network: ${deposit.network}`);
@@ -611,7 +624,7 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (existingSweep) {
             this.logToFile(`[sweepEvmDeposit] Deposit ${deposit.id} already swept in transaction ${existingSweep.txHash}`);
-            return false;
+            return { success: true };
         }
 
         const wallet = await this.walletRepository.findOne({
@@ -620,7 +633,7 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!wallet) {
             this.logToFile(`[sweepEvmDeposit] Wallet not found for deposit ${deposit.id}`);
-            return false;
+            return { success: false };
         }
 
         const adminWallet = await this.adminWalletRepository.findOne({
@@ -633,7 +646,7 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!adminWallet) {
             this.logToFile(`[sweepEvmDeposit] No active admin wallet found for ${deposit.blockchain} ${deposit.network}`);
-            return false;
+            return { success: false };
         }
 
         this.logToFile(`[sweepEvmDeposit] Found admin wallet ${adminWallet.address} for deposit ${deposit.id}`);
@@ -661,7 +674,7 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!walletKey) {
             this.logToFile(`[sweepEvmDeposit] Wallet key not found for wallet ${wallet.id}`);
-            return false;
+            return { success: false };
         }
 
         const privateKey = await this.keyManagementService.decryptPrivateKey(
@@ -671,7 +684,7 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!privateKey) {
             this.logToFile(`[sweepEvmDeposit] Failed to decrypt private key for wallet ${wallet.id}`);
-            return false;
+            return { success: false };
         }
 
         this.logToFile(`[sweepEvmDeposit] Successfully decrypted private key`);
@@ -685,8 +698,14 @@ export class DepositTrackingService implements OnModuleInit {
             this.logToFile(`[sweepEvmDeposit] Created signer for address ${signer.address}`);
 
             let success = false;
+            let sweepResult: { 
+                success: boolean; 
+                txHash?: string; 
+                skipped?: boolean;
+                errorMessage?: string;  // Added errorMessage to type
+            };  // Declare the type
+
             try {
-                let sweepResult;
                 if (deposit.tokenId) {
                     // Get token details first
                     const token = await this.tokenRepository.findOne({
@@ -707,14 +726,33 @@ export class DepositTrackingService implements OnModuleInit {
                 }
 
                 if (sweepResult.success) {
-                    await this.sweepTransactionRepository.update(sweepTx.id, {
-                        status: 'completed',
-                        txHash: sweepResult.txHash
-                    });
+                    if (sweepResult.skipped) {
+                        let symbol: string;
+                        if (deposit.tokenId) {
+                            const token = await this.tokenRepository.findOne({
+                                where: { id: deposit.tokenId }
+                            });
+                            symbol = token?.symbol || 'UNKNOWN';
+                        } else {
+                            symbol = deposit.blockchain === 'ethereum' ? 'ETH' : 'BNB';
+                        }
+
+                        await this.sweepTransactionRepository.update(sweepTx.id, {
+                            status: 'skipped',
+                            message: `Kept minimum balance of ${this.MINIMUM_NATIVE_BALANCE[deposit.blockchain]} ${symbol} for gas`  // Changed from notes to message
+                        });
+                    } else {
+                        await this.sweepTransactionRepository.update(sweepTx.id, {
+                            status: 'completed',
+                            txHash: sweepResult.txHash,
+                            message: 'Successfully swept funds to admin wallet'
+                        });
+                    }
                     success = true;
                 } else {
                     await this.sweepTransactionRepository.update(sweepTx.id, {
-                        status: 'failed'
+                        status: 'failed',
+                        message: sweepResult.errorMessage || 'Unknown error occurred'
                     });
                 }
             } catch (error) {
@@ -729,14 +767,14 @@ export class DepositTrackingService implements OnModuleInit {
             }
 
             this.logToFile(`[sweepEvmDeposit] Sweep ${success ? 'successful' : 'failed'} for deposit ${deposit.id}`);
-            return success;
+            return { success, txHash: sweepResult.txHash };
         } catch (error) {
             this.logToFile(`[sweepEvmDeposit] Error during provider/signer setup: ${error.message}`);
             throw error;
         }
     } catch (error) {
         this.logToFile(`[sweepEvmDeposit] Error: ${error.message}`);
-        return false;
+        return { success: false };
     }
 }
 
@@ -745,7 +783,7 @@ export class DepositTrackingService implements OnModuleInit {
     signer: ethersWallet,
     adminAddress: string,
     provider: providers.Provider
-  ): Promise<{success: boolean, txHash?: string}> {
+  ): Promise<{success: boolean, txHash?: string, errorMessage?: string}> {  // Added errorMessage
     try {
         this.logToFile(`[sweepEvmToken] Starting token sweep for deposit ${deposit.id}`);
 
@@ -760,32 +798,43 @@ export class DepositTrackingService implements OnModuleInit {
 
         this.logToFile(`[sweepEvmToken] Using contract at ${token.contractAddress}`);
         
-        // Create contract instance with the correct ABI
+        // Create contract instance with the deposit wallet signer
         const contract = new Contract(token.contractAddress, this.ERC20_ABI, signer);
         
         // Get token balance
         const balance = await contract.balanceOf(signer.address);
-        this.logToFile(`[sweepEvmToken] Token balance: ${balance.toString()}`);
+        const decimals = await contract.decimals();
+        this.logToFile(`[sweepEvmToken] Token balance: ${balance.toString()}, decimals: ${decimals}`);
 
         if (balance.isZero()) {
             this.logToFile(`[sweepEvmToken] No token balance to sweep`);
             return {success: false};
         }
 
+        // Format balance with proper decimals
+        const formattedBalance = ethers.utils.formatUnits(balance, decimals);
+        this.logToFile(`[sweepEvmToken] Formatted balance: ${formattedBalance}`);
+
+        // Update sweep transaction with formatted balance
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            { amount: formattedBalance }
+        );
+
         // Get gas price
         const gasPrice = await provider.getGasPrice();
         this.logToFile(`[sweepEvmToken] Gas price: ${gasPrice.toString()}`);
 
-        // Estimate gas with the actual parameters
+        // Estimate gas for the transfer
         const gasEstimate = await contract.estimateGas.transfer(adminAddress, balance);
         this.logToFile(`[sweepEvmToken] Estimated gas: ${gasEstimate.toString()}`);
 
         // Add 20% buffer to gas limit
         const gasLimit = gasEstimate.mul(12).div(10);
-        
-        this.logToFile(`[sweepEvmToken] Sending ${balance.toString()} tokens to ${adminAddress}`);
-        
-        // Send the transaction
+
+        this.logToFile(`[sweepEvmToken] Sending ${formattedBalance} tokens to ${adminAddress}`);
+
+        // Simple transfer from deposit wallet to admin wallet
         const tx = await contract.transfer(adminAddress, balance, {
             gasLimit,
             gasPrice
@@ -799,7 +848,7 @@ export class DepositTrackingService implements OnModuleInit {
     } catch (error) {
         this.logToFile(`[sweepEvmToken] Error: ${error.message}`);
         this.logToFile(`[sweepEvmToken] Error details: ${JSON.stringify(error)}`);
-        return {success: false};
+        return {success: false, errorMessage: error.message};  // Return error message
     }
 }
 
@@ -808,45 +857,60 @@ export class DepositTrackingService implements OnModuleInit {
     signer: ethersWallet,
     adminAddress: string,
     provider: providers.Provider
-  ): Promise<{success: boolean, txHash?: string}> {
+  ): Promise<{success: boolean, txHash?: string, skipped?: boolean, errorMessage?: string}> {  // Added skipped flag and errorMessage
     try {
-        this.logToFile(`[sweepEvmNative] Starting sweep for deposit ${deposit.id}`);
-        
-        const balance = await provider.getBalance(signer.address);
-        this.logToFile(`[sweepEvmNative] Current balance: ${balance.toString()}`);
-        
-        const gasPrice = await provider.getGasPrice();
-        this.logToFile(`[sweepEvmNative] Current gas price: ${gasPrice.toString()}`);
-        
-        const gasLimit = 21000;
-        const gasCost = gasPrice.mul(gasLimit);
-        this.logToFile(`[sweepEvmNative] Estimated gas cost: ${gasCost.toString()}`);
-        
-        const amountToSend = balance.sub(gasCost);
-        this.logToFile(`[sweepEvmNative] Amount to send: ${amountToSend.toString()}`);
+        this.logToFile(`[sweepEvmNative] Starting native token sweep for deposit ${deposit.id}`);
 
-        if (amountToSend.lte(0)) {
-            this.logToFile(`[sweepEvmNative] Insufficient balance for gas in ${signer.address}. Balance: ${balance}, Gas Cost: ${gasCost}`);
-            return {success: false};
+        const balance = await provider.getBalance(signer.address);
+        this.logToFile(`[sweepEvmNative] Wallet balance: ${ethers.utils.formatEther(balance)}`);
+
+        const minBalance = ethers.utils.parseEther(
+            this.MINIMUM_NATIVE_BALANCE[deposit.blockchain] || '0.01'
+        );
+        
+        if (balance.lte(minBalance)) {
+            this.logToFile(`[sweepEvmNative] Balance ${ethers.utils.formatEther(balance)} is less than or equal to minimum ${ethers.utils.formatEther(minBalance)}. Skipping sweep.`);
+            return { success: true, skipped: true };  // Changed to success: true with skipped flag
         }
 
-        this.logToFile(`[sweepEvmNative] Attempting to send transaction to ${adminAddress}`);
+        // Calculate amount to sweep (balance - minimum)
+        const amountToSweep = balance.sub(minBalance);
+        this.logToFile(`[sweepEvmNative] Sweeping ${ethers.utils.formatEther(amountToSweep)}, leaving ${ethers.utils.formatEther(minBalance)}`);
+
+        // Update sweep transaction with actual amount before transfer
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            { amount: ethers.utils.formatEther(amountToSweep) }
+        );
+
+        // Get gas price
+        const gasPrice = await provider.getGasPrice();
+        const gasLimit = 21000; // Standard ETH transfer
+        const gasCost = gasPrice.mul(gasLimit);
+
+        // Make sure we're not leaving less than minimum after gas
+        if (amountToSweep.sub(gasCost).lte(0)) {
+            this.logToFile(`[sweepEvmNative] Amount after gas would be too low. Skipping sweep.`);
+            return { success: false };
+        }
+
+        // Send transaction
         const tx = await signer.sendTransaction({
             to: adminAddress,
-            value: amountToSend,
-            gasLimit: gasLimit,
-            gasPrice: gasPrice
+            value: amountToSweep,
+            gasPrice,
+            gasLimit
         });
 
         this.logToFile(`[sweepEvmNative] Transaction sent: ${tx.hash}`);
         const receipt = await tx.wait();
         this.logToFile(`[sweepEvmNative] Transaction confirmed: ${tx.hash}`);
 
-        return {success: true, txHash: tx.hash};
+        return { success: true, txHash: tx.hash };
     } catch (error) {
         this.logToFile(`[sweepEvmNative] Error: ${error.message}`);
         this.logToFile(`[sweepEvmNative] Error details: ${JSON.stringify(error)}`);
-        return {success: false};
+        return { success: false, errorMessage: error.message };
     }
 }
 

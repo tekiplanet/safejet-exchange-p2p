@@ -15,16 +15,23 @@ export class SweepTransaction {
     toAdminWalletId: string;
 
     @Column()
-    txHash: string;
-
-    @Column()
     amount: string;
 
-    @Column()
-    status: 'pending' | 'completed' | 'failed';
+    @Column({
+        type: 'enum',
+        enum: ['pending', 'completed', 'failed', 'skipped'],
+        default: 'pending'
+    })
+    status: 'pending' | 'completed' | 'failed' | 'skipped';
+
+    @Column({ nullable: true })
+    txHash?: string;
+
+    @Column({ type: 'text', nullable: true })
+    message?: string;
 
     @Column({ type: 'jsonb', nullable: true })
-    metadata: Record<string, any>;
+    metadata?: Record<string, any>;
 
     @CreateDateColumn()
     createdAt: Date;
