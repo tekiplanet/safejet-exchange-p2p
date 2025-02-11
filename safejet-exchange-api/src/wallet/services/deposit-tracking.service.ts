@@ -33,6 +33,10 @@ import { WalletKey } from '../entities/wallet-key.entity';
 import { KeyManagementService } from '../key-management.service';
 import { SweepTransaction } from '../entities/sweep-transaction.entity';
 import { GasTankWallet } from '../entities/gas-tank-wallet.entity';
+import * as ecc from 'tiny-secp256k1';
+import { ECPairFactory } from 'ecpair';
+const ECPair = ECPairFactory(ecc);
+import axios from 'axios';
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -201,6 +205,15 @@ export class DepositTrackingService implements OnModuleInit {
       ethereum: this.configService.get('ETH_MINIMUM_BALANCE', '0.005'),  // 0.005 ETH
       bsc: this.configService.get('BNB_MINIMUM_BALANCE', '0.01'),      // 0.01 BNB
   };
+
+  // Add this with other readonly constants
+  private readonly DB_CHAIN_NAMES = {
+      btc: 'bitcoin',
+      eth: 'ethereum',
+      bsc: 'bsc',
+      trx: 'trx',
+      xrp: 'xrp'
+  } as const;
 
   constructor(
     @InjectRepository(Deposit)
@@ -638,7 +651,7 @@ export class DepositTrackingService implements OnModuleInit {
 
         const adminWallet = await this.adminWalletRepository.findOne({
             where: {
-                blockchain: deposit.blockchain,
+                blockchain: this.DB_CHAIN_NAMES[deposit.blockchain],
                 network: deposit.network,
                 isActive: true
             }
@@ -3215,7 +3228,16 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
                 await this.updateWalletBalance(deposit);
                 this.logToFile(`Updated wallet balance for deposit ${deposit.id}`);
+
+            // Add sweep attempt here
+            try {
+                this.logToFile(`[updateBitcoinConfirmations] Starting sweep for deposit ${deposit.id}`);
+                await this.sweepBtcDeposit(deposit, confirmations);
+                this.logToFile(`[updateBitcoinConfirmations] Sweep completed for deposit ${deposit.id}`);
+            } catch (error) {
+                this.logToFile(`[updateBitcoinConfirmations] Sweep failed for deposit ${deposit.id}: ${error.message}`);
             }
+        }
         }
     } catch (error) {
         this.logger.error(`Error updating Bitcoin confirmations: ${error.message}`);
@@ -3300,5 +3322,435 @@ private async getBitcoinTransaction(provider: any, txid: string) {
     
     this.logToFile(`[getEvmProvider] Successfully found provider for ${key}`);
     return provider;
+}
+
+  private async sweepBtcDeposit(deposit: Deposit, confirmations: number): Promise<{success: boolean, txHash?: string}> {
+    try {
+        this.logToFile(`[sweepBtcDeposit] Starting sweep for deposit ${deposit.id}, hash: ${deposit.txHash}`);
+
+        // Check if already swept
+        const existingSweep = await this.sweepTransactionRepository.findOne({
+            where: { depositId: deposit.id }
+        });
+
+        if (existingSweep) {
+            this.logToFile(`[sweepBtcDeposit] Deposit ${deposit.id} already swept in transaction ${existingSweep.txHash}`);
+            return { success: true };
+        }
+
+        const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+        });
+
+        if (!wallet) {
+            this.logToFile(`[sweepBtcDeposit] Wallet not found for deposit ${deposit.id}`);
+            return { success: false };
+        }
+
+        const adminWallet = await this.adminWalletRepository.findOne({
+            where: {
+                blockchain: 'bitcoin',  // Changed from deposit.blockchain to 'bitcoin'
+                network: deposit.network,
+                isActive: true
+            }
+        });
+
+        if (!adminWallet) {
+            this.logToFile(`[sweepBtcDeposit] No active admin wallet found for ${deposit.blockchain} ${deposit.network}`);
+            return { success: false };
+        }
+
+        // Create sweep transaction record (following EVM pattern)
+        const sweepTx = await this.sweepTransactionRepository.save({
+            depositId: deposit.id,
+            fromWalletId: wallet.id,
+            toAdminWalletId: adminWallet.id,
+            amount: deposit.amount,
+            status: 'pending',
+            txHash: 'pending',
+            metadata: {
+                blockchain: deposit.blockchain,
+                network: deposit.network,
+                tokenId: deposit.tokenId
+            } as Record<string, any>
+        });
+
+        // ... continue with BTC sweep implementation ...
+
+        const walletKey = await this.walletKeyRepository.findOne({
+            where: { id: wallet.keyId }
+        });
+
+        if (!walletKey) {
+            this.logToFile(`[sweepBtcDeposit] Wallet key not found for wallet ${wallet.id}`);
+            return { success: false };
+        }
+
+        const privateKey = await this.keyManagementService.decryptPrivateKey(
+            walletKey.encryptedPrivateKey,
+            walletKey.userId
+        );
+
+        if (!privateKey) {
+            this.logToFile(`[sweepBtcDeposit] Failed to decrypt private key for wallet ${wallet.id}`);
+            return { success: false };
+        }
+
+        this.logToFile(`[sweepBtcDeposit] Successfully decrypted private key`);
+
+        try {
+            let success = false;
+            let sweepResult: { 
+                success: boolean; 
+                txHash?: string;
+                errorMessage?: string;
+            };
+
+            sweepResult = await this.sweepBtcNative(deposit, privateKey, adminWallet.address);
+
+            if (sweepResult.success) {
+                await this.sweepTransactionRepository.update(sweepTx.id, {
+                    status: 'completed',
+                    txHash: sweepResult.txHash,
+                    message: 'Successfully swept funds to admin wallet'
+                });
+                success = true;
+            } else {
+                this.logToFile(`[sweepBtcDeposit] Sweep failed with error: ${sweepResult.errorMessage}`);
+                await this.sweepTransactionRepository.update(sweepTx.id, {
+                    status: 'failed',
+                    message: sweepResult.errorMessage || 'Unknown error occurred'
+                });
+            }
+
+            this.logToFile(`[sweepBtcDeposit] Sweep ${success ? 'successful' : 'failed'} for deposit ${deposit.id}`);
+            return { success, txHash: sweepResult.txHash };
+        } catch (error) {
+            this.logToFile(`[sweepBtcDeposit] Error during sweep: ${error.message}`);
+            throw error;
+        }
+    } catch (error) {
+        this.logToFile(`[sweepBtcDeposit] Error: ${error.message}`);
+        return { success: false };
+    }
+}
+
+  private async sweepBtcNative(
+    deposit: Deposit,
+    privateKey: string,
+    adminAddress: string,
+    feeOption?: 'same' | 'higher'
+  ): Promise<{ success: boolean; txHash?: string; errorMessage?: string }> {
+    try {
+        // First check for existing unconfirmed sweep
+        const existingSweep = await this.sweepTransactionRepository.findOne({
+            where: {
+                depositId: deposit.id,
+                status: In(['pending', 'failed'])  // Check both statuses
+            },
+            order: {
+                createdAt: 'DESC'  // Get the most recent attempt
+            }
+        });
+
+        if (existingSweep) {
+            this.logToFile(`[sweepBtcNative] Found existing ${existingSweep.status} sweep ${existingSweep.txHash}, attempting with higher fee`);
+            
+            try {
+                // Get original transaction details from mempool.space
+                const txResponse = await axios.get(
+                    `https://mempool.space${deposit.network === 'testnet' ? '/testnet' : ''}/api/tx/${existingSweep.txHash}`
+                );
+                
+                const originalTx = txResponse.data;
+                const originalFeeRate = originalTx.fee / originalTx.vsize; // sat/vB
+                
+                // Get current recommended fees
+                const feeResponse = await axios.get(
+                    `https://mempool.space${deposit.network === 'testnet' ? '/testnet' : ''}/api/v1/fees/recommended`
+                );
+                
+                // Use the higher of: (current fastest fee) or (original fee * 1.5)
+                const newFeeRate = Math.max(
+                    feeResponse.data.fastestFee,
+                    Math.ceil(originalFeeRate * 1.5) // 50% higher than original
+                );
+                
+                this.logToFile(`[sweepBtcNative] Original fee rate: ${originalFeeRate} sat/vB, New fee rate: ${newFeeRate} sat/vB`);
+            } catch (error) {
+                this.logToFile(`[sweepBtcNative] Error getting original transaction details: ${error.message}`);
+            }
+        }
+
+        this.logToFile(`[sweepBtcNative] Starting native BTC sweep for deposit ${deposit.id}`);
+
+        const network = deposit.network === 'mainnet' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
+        
+        const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+        });
+
+        if (!wallet) {
+            return { success: false, errorMessage: 'Wallet not found' };
+        }
+
+        const keyPair = ECPair.fromPrivateKey(
+            Buffer.from(privateKey, 'hex'),
+            { network }
+        );
+
+        // Get Bitcoin RPC provider
+        const provider = this.providers.get(`btc_${deposit.network}`) as BitcoinProvider;  // Changed from 'bitcoin' to 'btc'
+        if (!provider) {
+            throw new Error('Bitcoin provider not found');
+        }
+
+        // Get UTXOs using mempool.space API with fallback to BlockCypher
+        let utxos;
+        try {
+            const mempoolUrl = `https://mempool.space${deposit.network === 'testnet' ? '/testnet' : ''}/api/address/${wallet.address}/utxo`;
+            this.logToFile(`[sweepBtcNative] Fetching UTXOs from mempool.space: ${mempoolUrl}`);
+            
+            const response = await axios.get(mempoolUrl);
+            utxos = response.data;
+            this.logToFile(`[sweepBtcNative] Found ${utxos.length} UTXOs from mempool.space`);
+        } catch (mempoolError) {
+            this.logToFile(`[sweepBtcNative] Mempool.space error: ${mempoolError.message}, trying BlockCypher`);
+            // Fallback to BlockCypher
+            const network = deposit.network === 'mainnet' ? 'main' : 'test3';
+            const blockcypherUrl = `https://api.blockcypher.com/v1/btc/${network}/addrs/${wallet.address}?unspentOnly=true`;
+            this.logToFile(`[sweepBtcNative] Fetching UTXOs from BlockCypher: ${blockcypherUrl}`);
+            
+            const response = await axios.get(blockcypherUrl);
+            utxos = response.data.txrefs || [];
+            this.logToFile(`[sweepBtcNative] Found ${utxos.length} UTXOs from BlockCypher`);
+        }
+
+        if (!utxos.length) {
+            this.logToFile(`[sweepBtcNative] No UTXOs found for address ${wallet.address}`);
+            return { success: false, errorMessage: 'No UTXOs found' };
+        }
+
+        // Create Bitcoin transaction
+        const psbt = new bitcoin.Psbt({ network });
+        
+        // Add inputs from UTXOs
+        for (const utxo of utxos) {
+            const isSegwit = wallet.address.startsWith('bc1') || wallet.address.startsWith('tb1');
+            
+            if (isSegwit) {
+                psbt.addInput({
+                    hash: utxo.txid,
+                    index: utxo.vout,
+                    sequence: 0xfffffffd, // Enable RBF
+                    witnessUtxo: {
+                        script: bitcoin.address.toOutputScript(wallet.address, network),
+                        value: utxo.value
+                    }
+                });
+            } else {
+                psbt.addInput({
+                    hash: utxo.txid,
+                    index: utxo.vout,
+                    sequence: 0xfffffffd, // Enable RBF
+                    nonWitnessUtxo: await this.getTransactionHex(utxo.txid, deposit.network)
+                });
+            }
+        }
+
+        // Get recommended fee rate
+        try {
+            const feeResponse = await axios.get(
+                `https://mempool.space/${deposit.network === 'testnet' ? 'testnet/' : ''}/api/v1/fees/recommended`
+            );
+            
+            // Adjust fee rate based on option
+            let feeRate;
+            if (feeOption === 'higher') {
+                feeRate = feeResponse.data.fastestFee; // Use highest fee rate
+                this.logToFile(`[sweepBtcNative] Using higher fee rate: ${feeRate} sat/vB`);
+            } else {
+                feeRate = feeResponse.data.halfHourFee; // Use normal fee rate
+                this.logToFile(`[sweepBtcNative] Using normal fee rate: ${feeRate} sat/vB`);
+            }
+
+            // Estimate size: ~180 bytes per input + ~34 bytes per output + ~10 bytes overhead
+            const estimatedSize = (utxos.length * 180) + 34 + 10;
+            const fee = feeRate * estimatedSize;
+            this.logToFile(`[sweepBtcNative] Estimated size: ${estimatedSize}, total fee: ${fee}`);
+            
+            // Calculate total input amount and amount to send
+            const totalAmount = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
+            const amountToSend = totalAmount - fee;
+            
+            if (amountToSend <= 0) {
+                throw new Error(`Amount after fee (${amountToSend}) would be negative or zero`);
+            }
+
+            // Add output
+            psbt.addOutput({
+                address: adminAddress,
+                value: amountToSend
+            });
+        } catch (feeError) {
+            this.logToFile(`[sweepBtcNative] Error calculating fee: ${feeError.message}`);
+            throw feeError;
+        }
+
+        // ... continue with signing and broadcasting ...
+
+        // Sign all inputs
+        for (let i = 0; i < utxos.length; i++) {
+            psbt.signInput(i, keyPair);
+        }
+
+        // Finalize and get raw transaction
+        psbt.finalizeAllInputs();
+        const rawTx = psbt.extractTransaction().toHex();
+
+        // Broadcast transaction
+        try {
+            // Try mempool.space first
+            const response = await axios.post(
+                `https://mempool.space/${deposit.network === 'testnet' ? 'testnet/' : ''}/api/tx`,
+                rawTx
+            );
+            return { success: true, txHash: response.data };
+        } catch (mempoolError) {
+            // Fallback to BlockCypher
+            try {
+                const network = deposit.network === 'mainnet' ? 'main' : 'test3';
+                const response = await axios.post(
+                    `https://api.blockcypher.com/v1/btc/${network}/txs/push`,
+                    { tx: rawTx }
+                );
+                return { success: true, txHash: response.data.hash };
+            } catch (error) {
+                return { success: false, errorMessage: `Failed to broadcast transaction: ${error.message}` };
+            }
+        }
+    } catch (error) {
+        this.logToFile(`[sweepBtcNative] Error: ${error.message}`);
+        return { success: false, errorMessage: error.message };
+    }
+}
+
+  // Add helper method to get transaction hex
+  private async getTransactionHex(txid: string, network: string): Promise<Buffer> {
+    const response = await axios.get(
+        `https://mempool.space/${network === 'testnet' ? 'testnet/' : ''}/api/tx/${txid}/hex`
+    );
+    return Buffer.from(response.data, 'hex');
+  }
+
+  private async getBtcBalance(walletId: string, network: string): Promise<string> {
+    try {
+        const wallet = await this.walletRepository.findOne({
+            where: { id: walletId }
+        });
+
+        if (!wallet) {
+            throw new Error('Wallet not found');
+        }
+
+        const provider = this.providers.get(`bitcoin_${network}`) as BitcoinProvider;
+        if (!provider) {
+            throw new Error('Bitcoin provider not found');
+        }
+
+        // Use mempool.space API to get balance
+        const response = await axios.get(
+            `https://mempool.space/${network === 'testnet' ? 'testnet/' : ''}api/address/${wallet.address}`
+        );
+
+        const chainStats = response.data.chain_stats || { funded_txo_sum: 0, spent_txo_sum: 0 };
+        const balance = (chainStats.funded_txo_sum - chainStats.spent_txo_sum) / 100000000; // Convert sats to BTC
+
+        return balance.toString();
+    } catch (error) {
+        this.logToFile(`[getBtcBalance] Error: ${error.message}`);
+        throw error;
+    }
+}
+
+  private async bitcoinRPC(method: string, params: any[], provider: BitcoinProvider): Promise<any> {
+    try {
+        const response = await axios.post(provider.url, {
+            jsonrpc: '2.0',
+            id: 'sweep-service',
+            method,
+            params
+        }, {
+            auth: {
+                username: provider.auth.username,
+                password: provider.auth.password
+            }
+        });
+
+        if (response.data.error) {
+            throw new Error(`Bitcoin RPC error: ${response.data.error.message}`);
+        }
+
+        return response.data.result;
+    } catch (error) {
+        this.logToFile(`[bitcoinRPC] Error calling ${method}: ${error.message}`);
+        throw error;
+    }
+}
+
+  // Add this new method at the end of the class, before the last closing brace
+  async retrySweep(
+    sweepTx: SweepTransaction,
+    deposit: Deposit,
+    feeOption: 'same' | 'higher'
+  ): Promise<{ success: boolean; txHash?: string; errorMessage?: string }> {
+    try {
+        this.logToFile(`[retrySweep] Starting retry for sweep ${sweepTx.id} with ${feeOption} fee`);
+
+        // Get admin wallet
+        const adminWallet = await this.adminWalletRepository.findOne({
+            where: { blockchain: deposit.blockchain }
+        });
+
+        if (!adminWallet) {
+            throw new Error('Admin wallet not found for blockchain');
+        }
+
+        // Get wallet and its key
+        const wallet = await this.walletRepository.findOne({
+            where: { id: sweepTx.fromWalletId }
+        });
+
+        if (!wallet) {
+            throw new Error('Wallet not found');
+        }
+
+        const walletKey = await this.walletKeyRepository.findOne({
+            where: { id: wallet.keyId }
+        });
+
+        if (!walletKey) {
+            throw new Error('Wallet key not found');
+        }
+
+        const privateKey = await this.keyManagementService.decryptPrivateKey(
+            walletKey.encryptedPrivateKey,
+            deposit.userId
+        );
+        this.logToFile(`[retrySweep] Successfully decrypted private key`);
+
+        // Call appropriate sweep method based on blockchain
+        let result;
+        if (deposit.blockchain === 'btc') {
+            result = await this.sweepBtcNative(deposit, privateKey, adminWallet.address, feeOption);
+        } else {
+            throw new Error(`Unsupported blockchain for retry: ${deposit.blockchain}`);
+        }
+
+        return result;
+    } catch (error) {
+        this.logToFile(`[retrySweep] Error: ${error.message}`);
+        return { success: false, errorMessage: error.message };
+    }
 }
 }

@@ -19,6 +19,8 @@ import { AdminWalletManagementController } from './admin-wallet-management.contr
 import { Deposit } from '../wallet/entities/deposit.entity';
 import { AdminDepositManagementController } from './admin-deposit-management.controller';
 import { User } from '../auth/entities/user.entity';
+import { SweepTransaction } from '../wallet/entities/sweep-transaction.entity';
+import { AdminSweepTransactionsController } from './admin-sweep-transactions.controller';
 
 @Module({
   imports: [
@@ -30,7 +32,8 @@ import { User } from '../auth/entities/user.entity';
       Token,
       Wallet,
       Deposit,
-      User
+      User,
+      SweepTransaction,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -49,6 +52,7 @@ import { User } from '../auth/entities/user.entity';
     AdminWalletController,
     AdminWalletManagementController,
     AdminDepositManagementController,
+    AdminSweepTransactionsController,
   ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
