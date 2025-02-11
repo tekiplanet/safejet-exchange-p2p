@@ -803,7 +803,8 @@ export class DepositTrackingService implements OnModuleInit {
     deposit: Deposit,
     signer: ethersWallet,
     adminAddress: string,
-    provider: providers.Provider
+    provider: providers.Provider,
+    feeOption: 'same' | 'higher' = 'same'  // Add with default value
   ): Promise<{success: boolean, txHash?: string, errorMessage?: string}> {  // Added errorMessage
     try {
         this.logToFile(`[sweepEvmToken] Starting token sweep for deposit ${deposit.id}`);
@@ -842,9 +843,12 @@ export class DepositTrackingService implements OnModuleInit {
             { amount: formattedBalance }
         );
 
-        // Get gas price
-        const gasPrice = await provider.getGasPrice();
-        this.logToFile(`[sweepEvmToken] Gas price: ${gasPrice.toString()}`);
+        // Get gas price with fee option
+        let gasPrice = await provider.getGasPrice();
+        if (feeOption === 'higher') {
+            gasPrice = gasPrice.mul(120).div(100); // 20% higher
+            this.logToFile(`[sweepEvmToken] Using higher gas price: ${gasPrice.toString()}`);
+        }
 
         // Estimate gas for the transfer
         const gasEstimate = await contract.estimateGas.transfer(adminAddress, balance);
@@ -877,7 +881,8 @@ export class DepositTrackingService implements OnModuleInit {
     deposit: Deposit,
     signer: ethersWallet,
     adminAddress: string,
-    provider: providers.Provider
+    provider: providers.Provider,
+    feeOption: 'same' | 'higher' = 'same'  // Add with default value
   ): Promise<{success: boolean, txHash?: string, skipped?: boolean, errorMessage?: string}> {  // Added skipped flag and errorMessage
     try {
         this.logToFile(`[sweepEvmNative] Starting native token sweep for deposit ${deposit.id}`);
@@ -904,8 +909,13 @@ export class DepositTrackingService implements OnModuleInit {
             { amount: ethers.utils.formatEther(amountToSweep) }
         );
 
-        // Get gas price
-        const gasPrice = await provider.getGasPrice();
+        // Get gas price with fee option
+        let gasPrice = await provider.getGasPrice();
+        if (feeOption === 'higher') {
+            gasPrice = gasPrice.mul(120).div(100); // 20% higher
+            this.logToFile(`[sweepEvmNative] Using higher gas price: ${gasPrice.toString()}`);
+        }
+
         const gasLimit = 21000; // Standard ETH transfer
         const gasCost = gasPrice.mul(gasLimit);
 
