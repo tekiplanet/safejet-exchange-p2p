@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SweepTransaction } from '../wallet/entities/sweep-transaction.entity';
 import { Deposit } from '../wallet/entities/deposit.entity';
-import { DepositTrackingService } from '../wallet/services/deposit-tracking.service';
+import { DepositTrackingService, SweepResult } from '../wallet/services/deposit-tracking.service';
 
 @Controller('admin/sweep-transactions')
 @UseGuards(AdminGuard)
@@ -66,7 +66,7 @@ export class AdminSweepTransactionsController {
     async retry(
         @Param('id') id: string,
         @Body() body: { feeOption: 'same' | 'higher' }
-    ) {
+    ): Promise<SweepResult> {
         const sweepTx = await this.sweepTransactionRepository.findOne({
             where: { id }
         });
@@ -95,6 +95,14 @@ export class AdminSweepTransactionsController {
 
         // Call deposit tracking service to retry sweep
         const result = await this.depositTrackingService.retrySweep(sweepTx, deposit, body.feeOption);
+
+        // Update status based on result
+        if (!result.success) {
+            await this.sweepTransactionRepository.update(id, {
+                status: result.status || 'failed',
+                message: result.errorMessage || 'Retry failed'
+            });
+        }
 
         return result;
     }

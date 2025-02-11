@@ -75,6 +75,14 @@ export const SUPPORTED_CHAINS = {
   xrp: true
 };
 
+// Add this interface near the top of the file with other interfaces
+export interface SweepResult {
+    success: boolean;
+    txHash?: string;
+    errorMessage?: string;
+    status?: 'skipped' | 'failed' | 'pending' | 'completed';
+}
+
 @Injectable()
 export class DepositTrackingService implements OnModuleInit {
   private readonly logger = new Logger(DepositTrackingService.name);
@@ -3439,102 +3447,213 @@ private async getBitcoinTransaction(provider: any, txid: string) {
     deposit: Deposit,
     privateKey: string,
     adminAddress: string,
-    feeOption?: 'same' | 'higher'
-  ): Promise<{ success: boolean; txHash?: string; errorMessage?: string }> {
+    feeOption: 'same' | 'higher' = 'same'  // Add default value
+  ): Promise<SweepResult> {
     try {
-        // First check for existing unconfirmed sweep
-        const existingSweep = await this.sweepTransactionRepository.findOne({
-            where: {
-                depositId: deposit.id,
-                status: In(['pending', 'failed'])  // Check both statuses
-            },
-            order: {
-                createdAt: 'DESC'  // Get the most recent attempt
-            }
-        });
-
-        if (existingSweep) {
-            this.logToFile(`[sweepBtcNative] Found existing ${existingSweep.status} sweep ${existingSweep.txHash}, attempting with higher fee`);
-            
-            try {
-                // Get original transaction details from mempool.space
-                const txResponse = await axios.get(
-                    `https://mempool.space${deposit.network === 'testnet' ? '/testnet' : ''}/api/tx/${existingSweep.txHash}`
-                );
-                
-                const originalTx = txResponse.data;
-                const originalFeeRate = originalTx.fee / originalTx.vsize; // sat/vB
-                
-                // Get current recommended fees
-                const feeResponse = await axios.get(
-                    `https://mempool.space${deposit.network === 'testnet' ? '/testnet' : ''}/api/v1/fees/recommended`
-                );
-                
-                // Use the higher of: (current fastest fee) or (original fee * 1.5)
-                const newFeeRate = Math.max(
-                    feeResponse.data.fastestFee,
-                    Math.ceil(originalFeeRate * 1.5) // 50% higher than original
-                );
-                
-                this.logToFile(`[sweepBtcNative] Original fee rate: ${originalFeeRate} sat/vB, New fee rate: ${newFeeRate} sat/vB`);
-            } catch (error) {
-                this.logToFile(`[sweepBtcNative] Error getting original transaction details: ${error.message}`);
-            }
-        }
-
-        this.logToFile(`[sweepBtcNative] Starting native BTC sweep for deposit ${deposit.id}`);
-
         const network = deposit.network === 'mainnet' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
+        const networkPath = deposit.network === 'testnet' ? '/testnet' : '';
         
+        // Get wallet
         const wallet = await this.walletRepository.findOne({
             where: { id: deposit.walletId }
         });
-
         if (!wallet) {
             return { success: false, errorMessage: 'Wallet not found' };
         }
 
-        const keyPair = ECPair.fromPrivateKey(
-            Buffer.from(privateKey, 'hex'),
-            { network }
-        );
+        this.logToFile(`[sweepBtcNative] Starting sweep from ${wallet.address} to ${adminAddress}`);
 
-        // Get Bitcoin RPC provider
-        const provider = this.providers.get(`btc_${deposit.network}`) as BitcoinProvider;  // Changed from 'bitcoin' to 'btc'
-        if (!provider) {
-            throw new Error('Bitcoin provider not found');
+        // 1. Check for pending transactions first
+        try {
+            const pendingTxs = await axios.get(
+                `https://mempool.space${networkPath}/api/address/${wallet.address}/txs/mempool`
+            );
+            
+            if (pendingTxs.data.length > 0) {
+                const pendingTx = pendingTxs.data[0];
+                this.logToFile(`[sweepBtcNative] Found pending transaction: ${pendingTx.txid}`);
+                return {
+                    success: false,
+                    errorMessage: `Address has pending transaction: ${pendingTx.txid}. Wait for confirmation.`
+                };
+            }
+        } catch (error) {
+            this.logToFile(`[sweepBtcNative] Error checking pending transactions: ${error.message}`);
         }
 
-        // Get UTXOs using mempool.space API with fallback to BlockCypher
+        // 2. Get confirmed UTXOs
         let utxos;
         try {
-            const mempoolUrl = `https://mempool.space${deposit.network === 'testnet' ? '/testnet' : ''}/api/address/${wallet.address}/utxo`;
+            // 1. Try mempool.space first
+            const mempoolUrl = `https://mempool.space${networkPath}/api/address/${wallet.address}/utxo`;
             this.logToFile(`[sweepBtcNative] Fetching UTXOs from mempool.space: ${mempoolUrl}`);
             
-            const response = await axios.get(mempoolUrl);
-            utxos = response.data;
-            this.logToFile(`[sweepBtcNative] Found ${utxos.length} UTXOs from mempool.space`);
-        } catch (mempoolError) {
-            this.logToFile(`[sweepBtcNative] Mempool.space error: ${mempoolError.message}, trying BlockCypher`);
-            // Fallback to BlockCypher
-            const network = deposit.network === 'mainnet' ? 'main' : 'test3';
-            const blockcypherUrl = `https://api.blockcypher.com/v1/btc/${network}/addrs/${wallet.address}?unspentOnly=true`;
-            this.logToFile(`[sweepBtcNative] Fetching UTXOs from BlockCypher: ${blockcypherUrl}`);
-            
-            const response = await axios.get(blockcypherUrl);
-            utxos = response.data.txrefs || [];
-            this.logToFile(`[sweepBtcNative] Found ${utxos.length} UTXOs from BlockCypher`);
+            try {
+                const response = await axios.get(mempoolUrl);
+                utxos = response.data;
+                this.logToFile(`[sweepBtcNative] Found ${utxos.length} UTXOs from mempool.space`);
+            } catch (mempoolError) {
+                this.logToFile(`[sweepBtcNative] Mempool.space error: ${mempoolError.message}`);
+            }
+
+            // 2. If no UTXOs found, try mempool.space address API
+            if (!utxos || utxos.length === 0) {
+                try {
+                    const addressUrl = `https://mempool.space${networkPath}/api/address/${wallet.address}`;
+                    this.logToFile(`[sweepBtcNative] Trying mempool.space address API: ${addressUrl}`);
+                    
+                    const addressResponse = await axios.get(addressUrl);
+                    this.logToFile(`[sweepBtcNative] Address stats: ${JSON.stringify(addressResponse.data.chain_stats)}`);
+
+                    if (addressResponse.data.chain_stats.funded_txo_count > addressResponse.data.chain_stats.spent_txo_count) {
+                        try {
+                            const txsUrl = `https://mempool.space${networkPath}/api/address/${wallet.address}/txs`;
+                            this.logToFile(`[sweepBtcNative] Fetching transactions from: ${txsUrl}`);
+                            
+                            const txsResponse = await axios.get(txsUrl);
+                            this.logToFile(`[sweepBtcNative] Found ${txsResponse.data.length} transactions`);
+
+                            // Track which outputs we've seen spent
+                            const spentOutputs = new Set();
+                            this.logToFile(`[sweepBtcNative] Analyzing transactions for spent outputs...`);
+
+                            // First collect all spent outputs
+                            for (const tx of txsResponse.data) {
+                                for (const input of tx.vin) {
+                                    if (input.prevout.scriptpubkey_address === wallet.address) {
+                                        const spentId = `${input.txid}:${input.vout}`;
+                                        spentOutputs.add(spentId);
+                                        this.logToFile(`[sweepBtcNative] Found spent output: ${spentId}`);
+                                    }
+                                }
+                            }
+
+                            // Then find unspent outputs
+                            this.logToFile(`[sweepBtcNative] Looking for unspent outputs...`);
+                            for (const tx of txsResponse.data) {
+                                for (let vout = 0; vout < tx.vout.length; vout++) {
+                                    const output = tx.vout[vout];
+                                    const outputId = `${tx.txid}:${vout}`;
+                                    
+                                    if (output.scriptpubkey_address === wallet.address) {
+                                        this.logToFile(`[sweepBtcNative] Checking output ${outputId} (${output.value} sats)`);
+                                        if (!spentOutputs.has(outputId)) {
+                                            this.logToFile(`[sweepBtcNative] Found unspent UTXO: ${outputId} (${output.value} sats)`);
+                                            utxos = [{
+                                                txid: tx.txid,
+                                                vout: vout,
+                                                value: output.value,
+                                                status: { confirmed: tx.status.confirmed }
+                                            }];
+                                            break;
+                                        } else {
+                                            this.logToFile(`[sweepBtcNative] Output ${outputId} is already spent`);
+                                        }
+                                    }
+                                }
+                                if (utxos && utxos.length > 0) break;
+                            }
+                        } catch (txError) {
+                            this.logToFile(`[sweepBtcNative] Error fetching transactions: ${txError.message}`);
+                            if (txError.response) {
+                                this.logToFile(`[sweepBtcNative] Transaction API error details: ${JSON.stringify(txError.response.data)}`);
+                            }
+                        }
+                    } else {
+                        this.logToFile(`[sweepBtcNative] No unspent outputs according to chain stats`);
+                    }
+                } catch (addressError) {
+                    this.logToFile(`[sweepBtcNative] Error fetching address info: ${addressError.message}`);
+                    if (addressError.response) {
+                        this.logToFile(`[sweepBtcNative] Address API error details: ${JSON.stringify(addressError.response.data)}`);
+                    }
+                }
+            }
+
+            // Verify UTXOs are spendable
+            if (utxos && utxos.length > 0) {
+                const verifiedUtxos = [];
+                for (const utxo of utxos) {
+                    const txResponse = await axios.get(
+                        `https://mempool.space${networkPath}/api/tx/${utxo.txid}`
+                    );
+                    
+                    if (txResponse.data.status.confirmed) {
+                        this.logToFile(`[sweepBtcNative] Verified UTXO ${utxo.txid}:${utxo.vout} is spendable (${utxo.value} sats)`);
+                        verifiedUtxos.push(utxo);
+                    } else {
+                        this.logToFile(`[sweepBtcNative] Warning: UTXO ${utxo.txid}:${utxo.vout} not yet confirmed`);
+                    }
+                }
+                utxos = verifiedUtxos;
+            }
+
+            if (!utxos || utxos.length === 0) {
+                return { 
+                    success: false, 
+                    status: 'skipped',
+                    errorMessage: 'No UTXOs available to sweep - balance may be zero' 
+                };
+            }
+
+            const totalAmount = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
+            this.logToFile(`[sweepBtcNative] Total spendable amount: ${totalAmount} sats from ${utxos.length} UTXOs`);
+
+        } catch (error) {
+            this.logToFile(`[sweepBtcNative] Error fetching/verifying UTXOs: ${error.message}`);
+            return { 
+                success: false, 
+                errorMessage: 'Failed to fetch or verify UTXOs' 
+            };
         }
 
-        if (!utxos.length) {
-            this.logToFile(`[sweepBtcNative] No UTXOs found for address ${wallet.address}`);
-            return { success: false, errorMessage: 'No UTXOs found' };
-        }
+        // 3. Calculate total amount and fees
+        const totalAmount = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
+        this.logToFile(`[sweepBtcNative] Total amount to sweep: ${totalAmount} sats`);
 
-        // Create Bitcoin transaction
-        const psbt = new bitcoin.Psbt({ network });
+        // Get recommended fee rates
+        const feeResponse = await axios.get(
+            `https://mempool.space${networkPath}/api/v1/fees/recommended`
+        );
+
+        // Calculate size and fee
+        const estimatedSize = (utxos.length * 180) + 34 + 10;
+        const maxAllowedFee = Math.floor(totalAmount * 0.1); // Max 10% fee
         
-        // Add inputs from UTXOs
+        let feeRate = feeOption === 'higher' ? 
+            feeResponse.data.fastestFee : 
+            feeResponse.data.hourFee;
+        
+        let fee = feeRate * estimatedSize;
+
+        // Adjust fee if too high
+        if (fee > maxAllowedFee) {
+            feeRate = Math.floor(maxAllowedFee / estimatedSize);
+            fee = feeRate * estimatedSize;
+            
+            if (feeRate < 1) {
+                return {
+                    success: false,
+                    errorMessage: `Amount too small to sweep. Have: ${totalAmount} sats, Need minimum: ${estimatedSize} sats for fees`
+                };
+            }
+        }
+
+        const amountToSend = totalAmount - fee;
+        if (amountToSend <= 0) {
+            return {
+                success: false,
+                errorMessage: `Amount after fees would be zero or negative. Amount: ${totalAmount}, Fee: ${fee}`
+            };
+        }
+
+        this.logToFile(`[sweepBtcNative] Fee rate: ${feeRate} sat/vB, Total fee: ${fee}, Amount to send: ${amountToSend}`);
+
+        // 4. Create and sign transaction
+        const psbt = new bitcoin.Psbt({ network });
+        const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, 'hex'), { network });
+
+        // Add inputs
         for (const utxo of utxos) {
             const isSegwit = wallet.address.startsWith('bc1') || wallet.address.startsWith('tb1');
             
@@ -3542,95 +3661,59 @@ private async getBitcoinTransaction(provider: any, txid: string) {
                 psbt.addInput({
                     hash: utxo.txid,
                     index: utxo.vout,
-                    sequence: 0xfffffffd, // Enable RBF
                     witnessUtxo: {
                         script: bitcoin.address.toOutputScript(wallet.address, network),
                         value: utxo.value
                     }
                 });
             } else {
+                const txHex = await this.getTransactionHex(utxo.txid, deposit.network);
                 psbt.addInput({
                     hash: utxo.txid,
                     index: utxo.vout,
-                    sequence: 0xfffffffd, // Enable RBF
-                    nonWitnessUtxo: await this.getTransactionHex(utxo.txid, deposit.network)
+                    nonWitnessUtxo: txHex
                 });
             }
         }
 
-        // Get recommended fee rate
-        try {
-            const feeResponse = await axios.get(
-                `https://mempool.space/${deposit.network === 'testnet' ? 'testnet/' : ''}/api/v1/fees/recommended`
-            );
-            
-            // Adjust fee rate based on option
-            let feeRate;
-            if (feeOption === 'higher') {
-                feeRate = feeResponse.data.fastestFee; // Use highest fee rate
-                this.logToFile(`[sweepBtcNative] Using higher fee rate: ${feeRate} sat/vB`);
-            } else {
-                feeRate = feeResponse.data.halfHourFee; // Use normal fee rate
-                this.logToFile(`[sweepBtcNative] Using normal fee rate: ${feeRate} sat/vB`);
-            }
-
-            // Estimate size: ~180 bytes per input + ~34 bytes per output + ~10 bytes overhead
-            const estimatedSize = (utxos.length * 180) + 34 + 10;
-            const fee = feeRate * estimatedSize;
-            this.logToFile(`[sweepBtcNative] Estimated size: ${estimatedSize}, total fee: ${fee}`);
-            
-            // Calculate total input amount and amount to send
-            const totalAmount = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
-            const amountToSend = totalAmount - fee;
-            
-            if (amountToSend <= 0) {
-                throw new Error(`Amount after fee (${amountToSend}) would be negative or zero`);
-            }
-
-            // Add output
-            psbt.addOutput({
-                address: adminAddress,
-                value: amountToSend
-            });
-        } catch (feeError) {
-            this.logToFile(`[sweepBtcNative] Error calculating fee: ${feeError.message}`);
-            throw feeError;
-        }
-
-        // ... continue with signing and broadcasting ...
+        // Add output
+        psbt.addOutput({
+            address: adminAddress,
+            value: amountToSend
+        });
 
         // Sign all inputs
         for (let i = 0; i < utxos.length; i++) {
             psbt.signInput(i, keyPair);
         }
 
-        // Finalize and get raw transaction
+        // Finalize and broadcast
         psbt.finalizeAllInputs();
         const rawTx = psbt.extractTransaction().toHex();
 
-        // Broadcast transaction
         try {
-            // Try mempool.space first
+            this.logToFile(`[sweepBtcNative] Attempting to broadcast transaction: ${rawTx}`);
             const response = await axios.post(
-                `https://mempool.space/${deposit.network === 'testnet' ? 'testnet/' : ''}/api/tx`,
-                rawTx
+                `https://mempool.space${networkPath}/api/tx`,
+                rawTx,
+                {
+                    headers: {
+                        'Content-Type': 'text/plain'
+                    }
+                }
             );
+            
+            this.logToFile(`[sweepBtcNative] Successfully broadcast transaction: ${response.data}`);
             return { success: true, txHash: response.data };
-        } catch (mempoolError) {
-            // Fallback to BlockCypher
-            try {
-                const network = deposit.network === 'mainnet' ? 'main' : 'test3';
-                const response = await axios.post(
-                    `https://api.blockcypher.com/v1/btc/${network}/txs/push`,
-                    { tx: rawTx }
-                );
-                return { success: true, txHash: response.data.hash };
-            } catch (error) {
-                return { success: false, errorMessage: `Failed to broadcast transaction: ${error.message}` };
+        } catch (error) {
+            this.logToFile(`[sweepBtcNative] Broadcast error: ${error.message}`);
+            if (error.response) {
+                this.logToFile(`[sweepBtcNative] Response error details: ${JSON.stringify(error.response.data)}`);
             }
+            return { success: false, errorMessage: `Failed to broadcast: ${error.response?.data || error.message}` };
         }
     } catch (error) {
-        this.logToFile(`[sweepBtcNative] Error: ${error.message}`);
+        this.logToFile(`[sweepBtcNative] Unexpected error: ${error.message}`);
         return { success: false, errorMessage: error.message };
     }
 }
@@ -3703,17 +3786,31 @@ private async getBitcoinTransaction(provider: any, txid: string) {
     sweepTx: SweepTransaction,
     deposit: Deposit,
     feeOption: 'same' | 'higher'
-  ): Promise<{ success: boolean; txHash?: string; errorMessage?: string }> {
+  ): Promise<SweepResult> {
     try {
         this.logToFile(`[retrySweep] Starting retry for sweep ${sweepTx.id} with ${feeOption} fee`);
 
+        // Map blockchain names
+        const blockchainMappings = {
+            'btc': 'bitcoin',
+            'eth': 'ethereum',
+            'bnb': 'bsc',
+            'trx': 'tron',
+            // Add other chain mappings as needed
+        };
+
+        const blockchainName = blockchainMappings[deposit.blockchain] || deposit.blockchain;
+
         // Get admin wallet
         const adminWallet = await this.adminWalletRepository.findOne({
-            where: { blockchain: deposit.blockchain }
+            where: { 
+                blockchain: blockchainName,
+                network: deposit.network
+            }
         });
 
         if (!adminWallet) {
-            throw new Error('Admin wallet not found for blockchain');
+            throw new Error(`Admin wallet not found for ${blockchainName} ${deposit.network}`);
         }
 
         // Get wallet and its key
@@ -3737,14 +3834,24 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             walletKey.encryptedPrivateKey,
             deposit.userId
         );
-        this.logToFile(`[retrySweep] Successfully decrypted private key`);
 
         // Call appropriate sweep method based on blockchain
         let result;
-        if (deposit.blockchain === 'btc') {
-            result = await this.sweepBtcNative(deposit, privateKey, adminWallet.address, feeOption);
-        } else {
-            throw new Error(`Unsupported blockchain for retry: ${deposit.blockchain}`);
+        switch (deposit.blockchain) {
+            case 'btc':
+                result = await this.sweepBtcNative(deposit, privateKey, adminWallet.address, feeOption);
+                if (result.status === 'skipped') {
+                    this.logToFile(`[retrySweep] Sweep skipped: ${result.errorMessage}`);
+                }
+                break;
+            case 'eth':
+            case 'bnb':
+                const provider = this.getEvmProvider(deposit.blockchain, deposit.network);
+                const signer = new ethersWallet(privateKey, provider);
+                result = await this.sweepEvmNative(deposit, signer, adminWallet.address, provider);
+                break;
+            default:
+                throw new Error(`Unsupported blockchain for retry: ${deposit.blockchain}`);
         }
 
         return result;
