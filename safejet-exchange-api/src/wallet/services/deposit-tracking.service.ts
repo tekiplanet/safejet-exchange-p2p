@@ -212,7 +212,8 @@ export class DepositTrackingService implements OnModuleInit {
   private readonly MINIMUM_NATIVE_BALANCE = {
       ethereum: this.configService.get('ETH_MINIMUM_BALANCE', '0.005'),  // 0.005 ETH
       bsc: this.configService.get('BNB_MINIMUM_BALANCE', '0.01'),      // 0.01 BNB
-      trx: this.configService.get('TRX_MINIMUM_BALANCE', '10'),        // 10 TRX
+      trx: this.configService.get('TRX_MINIMUM_BALANCE', '50'),        // 10 TRX
+      xrp: this.configService.get('XRP_MINIMUM_BALANCE', '20'),        // 20 XRP
   };
 
   // Add this with other readonly constants
@@ -3420,7 +3421,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         });
 
         for (const deposit of deposits) {
-        const oldStatus = deposit.status;
+            const oldStatus = deposit.status;
             const confirmations = currentBlock - deposit.blockNumber;
             const requiredConfirmations = this.CONFIRMATION_BLOCKS.xrp[network];
 
@@ -3429,27 +3430,36 @@ private async getBitcoinTransaction(provider: any, txid: string) {
                 status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
             });
 
-        if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
-          const wallet = await this.walletRepository.findOne({
-            where: { id: deposit.walletId }
-          });
-          
-          if (wallet) {
-            const user = await this.userRepository.findOne({
-              where: { id: wallet.userId }
-            });
+            if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
+                const wallet = await this.walletRepository.findOne({
+                    where: { id: deposit.walletId }
+                });
+                
+                if (wallet) {
+                    const user = await this.userRepository.findOne({
+                        where: { id: wallet.userId }
+                    });
 
-            if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
-              await this.emailService.sendDepositConfirmedEmail(
-                user.email,
-                user.fullName,
-                this.formatAmount(deposit.amount),
-                'XRP'
-              );
-            }
-          }
+                    if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+                        await this.emailService.sendDepositConfirmedEmail(
+                            user.email,
+                            user.fullName,
+                            this.formatAmount(deposit.amount),
+                            'XRP'
+                        );
+                    }
 
-                await this.updateWalletBalance(deposit);
+                    await this.updateWalletBalance(deposit);
+
+                    // Add sweep functionality
+                    try {
+                        this.logToFile(`[updateXrpConfirmations] Starting sweep for deposit ${deposit.id}`);
+                        await this.sweepXrpDeposit(deposit, confirmations);
+                        this.logToFile(`[updateXrpConfirmations] Sweep completed for deposit ${deposit.id}`);
+                    } catch (error) {
+                        this.logToFile(`[updateXrpConfirmations] Sweep failed for deposit ${deposit.id}: ${error.message}`);
+                    }
+                }
             }
         }
     } catch (error) {
@@ -3530,7 +3540,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             toAdminWalletId: adminWallet.id,
             amount: deposit.amount,
             status: 'pending',
-            txHash: 'pending',
+            txHash: 'pending', // Add this line
             metadata: {
                 blockchain: deposit.blockchain,
                 network: deposit.network,
@@ -4024,6 +4034,13 @@ private async getBitcoinTransaction(provider: any, txid: string) {
                     result = await this.sweepTronNative(deposit, privateKey, adminWallet.address, tronWeb, feeOption);
                 }
                 break;                
+            case 'xrp':
+                const xrpClient = this.providers.get(`xrp_${deposit.network}`);
+                if (!xrpClient) {
+                    throw new Error('XRP provider not found');
+                }
+                result = await this.sweepXrpNative(deposit, privateKey, adminWallet.address, xrpClient, feeOption);
+                break;
             default:
                 throw new Error(`Unsupported blockchain for retry: ${deposit.blockchain}`);
         }
@@ -4441,6 +4458,193 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
         return { 
             success: false, 
+            errorMessage: error.message,
+            status: 'failed'
+        };
+    }
+}
+
+  private async sweepXrpNative(
+    deposit: Deposit,
+    privateKey: string,
+    adminAddress: string,
+    xrpClient: any,
+    feeOption: 'same' | 'higher' = 'same'
+  ): Promise<{success: boolean, txHash?: string, skipped?: boolean, errorMessage?: string, status?: 'skipped' | 'failed' | 'pending' | 'completed'}> {
+    try {
+        this.logToFile(`[sweepXrpNative] Starting native XRP sweep for deposit ${deposit.id}`);
+
+        // Get wallet from database like other sweep functions
+        const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+        });
+
+        if (!wallet) {
+            throw new Error('Wallet not found');
+        }
+
+        // Get account info and balance
+        const accountInfo = await xrpClient.request({
+            command: 'account_info',
+            account: wallet.address
+        });
+        
+        const balance = accountInfo.result.account_data.Balance;
+        this.logToFile(`[sweepXrpNative] Wallet balance: ${balance} XRP`);
+
+        // Check minimum balance
+        const minBalance = this.MINIMUM_NATIVE_BALANCE['xrp'] || '20';
+        if (parseFloat(balance) <= parseFloat(minBalance)) {
+            this.logToFile(`[sweepXrpNative] Balance too low to sweep`);
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'skipped',
+                    message: 'Balance too low to sweep'
+                }
+            );
+            return {
+                success: false,
+                errorMessage: 'Balance too low to sweep',
+                status: 'skipped'
+            };
+        }
+
+        const amountToSweep = parseFloat(balance) - parseFloat(minBalance);
+
+        // Prepare transaction
+        const prepared = await xrpClient.autofill({
+            TransactionType: "Payment",
+            Account: wallet.address,
+            Amount: amountToSweep.toString(),
+            Destination: adminAddress
+        });
+
+        // Sign and submit
+        const signed = xrpClient.signTransaction(prepared, privateKey); // Changed from sign to signTransaction
+        const tx = await xrpClient.submitAndWait(signed.tx_blob);
+
+        this.logToFile(`[sweepXrpNative] Transaction sent: ${tx.hash}`);
+
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'completed',
+                txHash: tx.hash,
+                message: 'Successfully swept funds to admin wallet'
+            }
+        );
+
+        return {
+            success: true,
+            txHash: tx.hash,
+            status: 'completed'
+        };
+
+    } catch (error) {
+        this.logToFile(`[sweepXrpNative] Error: ${error.message}`);
+        
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'failed',
+                message: error.message
+            }
+        );
+
+        return { 
+            success: false, 
+            errorMessage: error.message,
+            status: 'failed'
+        };
+    }
+}
+
+  private async sweepXrpDeposit(
+    deposit: Deposit,
+    confirmations: number
+): Promise<{success: boolean, txHash?: string, errorMessage?: string, status?: 'skipped' | 'failed' | 'pending' | 'completed'}> {
+    try {
+        this.logToFile(`[sweepXrpDeposit] Starting sweep for deposit ${deposit.id}, hash: ${deposit.txHash}`);
+
+        // Check if already swept
+        const existingSweep = await this.sweepTransactionRepository.findOne({
+            where: { depositId: deposit.id }
+        });
+
+        if (existingSweep) {
+            this.logToFile(`[sweepXrpDeposit] Deposit ${deposit.id} already swept in transaction ${existingSweep.txHash}`);
+            return { 
+                success: true, 
+                txHash: existingSweep.txHash,
+                status: 'completed'
+            };
+        }
+
+        // Get wallet and admin wallet
+        const [wallet, adminWallet] = await Promise.all([
+            this.walletRepository.findOne({ where: { id: deposit.walletId } }),
+            this.adminWalletRepository.findOne({
+                where: {
+                    blockchain: this.DB_CHAIN_NAMES[deposit.blockchain],
+                    network: deposit.network,
+                    isActive: true
+                }
+            })
+        ]);
+
+        if (!wallet || !adminWallet) {
+            throw new Error(!wallet ? 'Wallet not found' : 'Admin wallet not found');
+        }
+
+        // Get private key
+        const walletKey = await this.walletKeyRepository.findOne({
+            where: { id: wallet.keyId }
+        });
+
+        if (!walletKey) {
+            throw new Error('Wallet key not found');
+        }
+
+        const privateKey = await this.keyManagementService.decryptPrivateKey(
+            walletKey.encryptedPrivateKey,
+            deposit.userId
+        );
+
+        // Get XRP client
+        const xrpClient = this.providers.get(`xrp_${deposit.network}`);
+        if (!xrpClient) {
+            throw new Error('XRP provider not found');
+        }
+
+        // Create sweep transaction record
+        const sweepTx = await this.sweepTransactionRepository.save({
+            depositId: deposit.id,
+            fromWalletId: wallet.id,
+            toAdminWalletId: adminWallet.id,
+            amount: deposit.amount,
+            status: 'pending',
+            txHash: 'pending', // Add this line
+            metadata: {
+                blockchain: deposit.blockchain,
+                network: deposit.network
+            }
+        });
+
+        // Execute the sweep
+        const result = await this.sweepXrpNative(
+            deposit,
+            privateKey,
+            adminWallet.address,
+            xrpClient
+        );
+
+        return result;
+
+    } catch (error) {
+        this.logToFile(`[sweepXrpDeposit] Error: ${error.message}`);
+        return {
+            success: false,
             errorMessage: error.message,
             status: 'failed'
         };
