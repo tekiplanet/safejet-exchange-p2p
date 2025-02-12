@@ -4508,6 +4508,14 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
         if (parseFloat(balance) <= minBalanceDrops) {
             this.logToFile(`[sweepXrpNative] Balance too low to sweep. Balance: ${balance} drops, Min: ${minBalanceDrops} drops`);
+            // Update sweep record for skipped
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'skipped',
+                    message: 'Balance too low to sweep'
+                }
+            );
             return {
                 success: false,
                 errorMessage: 'Balance too low to sweep',
@@ -4584,6 +4592,14 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
         } catch (error) {
             this.logToFile(`[sweepXrpNative] Error: ${error.message}`);
+            // Update sweep record for failure
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'failed',
+                    message: error.message
+                }
+            );
             return { 
                 success: false, 
                 errorMessage: error.message,
@@ -4593,6 +4609,14 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
     } catch (error) {
         this.logToFile(`[sweepXrpNative] Error: ${error.message}`);
+        // Update sweep record for failure
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'failed',
+                message: error.message
+            }
+        );
         return { 
             success: false, 
             errorMessage: error.message,
