@@ -4277,15 +4277,32 @@ private async getBitcoinTransaction(provider: any, txid: string) {
   private async waitForTronTransaction(txId: string, tronWeb: TronWebInstance, maxAttempts = 20): Promise<boolean> {
     for (let i = 0; i < maxAttempts; i++) {
         try {
-            const tx = await tronWeb.trx.getTransaction(txId);
+            this.logToFile(`[waitForTronTransaction] Attempt ${i + 1} for tx ${txId}`);
+            
+            // Get both transaction and its info
+            const [tx, txInfo] = await Promise.all([
+                tronWeb.trx.getTransaction(txId),
+                tronWeb.trx.getTransactionInfo(txId)
+            ]);
+
+            this.logToFile(`[waitForTronTransaction] TX Status: ${JSON.stringify({
+                contractRet: tx?.ret?.[0]?.contractRet,
+                hasInfo: !!txInfo,
+                infoStatus: txInfo?.receipt?.result
+            })}`);
+
             if (tx?.ret?.[0]?.contractRet === 'SUCCESS') {
                 return true;
             }
         } catch (error) {
-            this.logToFile(`[waitForTronTransaction] Attempt ${i + 1}: ${error.message}`);
+            this.logToFile(`[waitForTronTransaction] Attempt ${i + 1} error: ${error.message}`);
         }
+        
+        this.logToFile(`[waitForTronTransaction] Waiting 3s before next attempt...`);
         await new Promise(resolve => setTimeout(resolve, 3000));
     }
+
+    this.logToFile(`[waitForTronTransaction] Timed out after ${maxAttempts} attempts`);
     return false;
 }
 
@@ -4305,6 +4322,26 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         tronWeb.setPrivateKey(privateKey);
         const fromAddress = tronWeb.address.fromPrivateKey(privateKey);
 
+        // Check TRX balance first for fees
+        const trxBalance = await tronWeb.trx.getBalance(fromAddress);
+        const minTrxForFees = tronWeb.toSun(process.env.TRX_MIN_FEE_BALANCE || '40');
+        
+        if (trxBalance < minTrxForFees) {
+            this.logToFile(`[sweepTronToken] Not enough TRX for fees. Balance: ${trxBalance} SUN`);
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'skipped',
+                    message: 'Not enough TRX for fees'
+                }
+            );
+            return {
+                success: false,
+                errorMessage: 'Not enough TRX for fees',
+                status: 'skipped'
+            };
+        }
+
         // Get contract instance
         const contract = await tronWeb.contract().at(contractAddress);
         if (!contract) {
@@ -4315,7 +4352,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         const balance = await contract.balanceOf(fromAddress).call();
         this.logToFile(`[sweepTronToken] Token balance: ${balance.toString()}`);
 
-        if (balance.isZero?.() || balance <= 0) {
+        if (!balance || balance.toString() === '0') {
             this.logToFile(`[sweepTronToken] No token balance to sweep`);
             await this.sweepTransactionRepository.update(
                 { depositId: deposit.id },
@@ -4331,35 +4368,15 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             };
         }
 
-        // Estimate transaction fee for TRC20 transfer
-        const parameter = [{
-            type: 'address',
-            value: adminAddress
-        }, {
-            type: 'uint256',
-            value: balance.toString()
-        }];
-        const txParams = await tronWeb.transactionBuilder.triggerSmartContract(
-            contractAddress,
-            'transfer(address,uint256)',
-            { feeLimit: 1000000000 },
-            parameter,
-            fromAddress
-        );
-        let estimatedFee = await tronWeb.trx.estimateEnergy(txParams.transaction);
-        this.logToFile(`[sweepTronToken] Estimated fee: ${estimatedFee}`);
-
-        if (feeOption === 'higher') {
-            estimatedFee = Math.floor(estimatedFee * 1.2); // 20% higher
-            this.logToFile(`[sweepTronToken] Using higher fee: ${estimatedFee}`);
-        }
-
+        // Use fee limit from env
+        const feeLimit = tronWeb.toSun(process.env.TRX_TOKEN_FEE_LIMIT || '40');
+        
         // Send token transfer transaction
         const tx = await contract.transfer(
             adminAddress,
             balance.toString()
         ).send({
-            feeLimit: estimatedFee,
+            feeLimit: feeLimit,
             callValue: 0
         });
 
@@ -4369,13 +4386,32 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
         this.logToFile(`[sweepTronToken] Transaction sent: ${tx}`);
 
+        // Update status to pending after sending
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'pending',
+                txHash: tx,
+                message: 'Transaction sent, waiting for confirmation'
+            }
+        );
+
         // Wait for confirmation
         const confirmed = await this.waitForTronTransaction(tx, tronWeb);
         if (!confirmed) {
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'failed',
+                    message: 'Transaction not confirmed within timeout'
+                }
+            );
             throw new Error('Transaction not confirmed within timeout');
         }
 
         this.logToFile(`[sweepTronToken] Transaction confirmed: ${tx}`);
+        
+        // Update final success status
         await this.sweepTransactionRepository.update(
             { depositId: deposit.id },
             {
@@ -4384,6 +4420,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
                 message: 'Successfully swept funds to admin wallet'
             }
         );
+
         return { 
             success: true, 
             txHash: tx,
@@ -4392,6 +4429,8 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
     } catch (error) {
         this.logToFile(`[sweepTronToken] Error: ${error.message}`);
+        
+        // Update failure status
         await this.sweepTransactionRepository.update(
             { depositId: deposit.id },
             {
@@ -4399,6 +4438,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
                 message: error.message
             }
         );
+
         return { 
             success: false, 
             errorMessage: error.message,
