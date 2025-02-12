@@ -92,8 +92,13 @@ class WalletService {
       
       final balances = response.data['balances'] as List<dynamic>;
       balances.forEach((balance) {
-        final token = balance['token'] as Map<String, dynamic>;
-        final networks = balance['networks'] as List<dynamic>;
+        final token = balance['token'] as Map<String, dynamic>?;
+        if (token == null) {
+          print('Warning: Token data missing for balance: $balance');
+          return;
+        }
+        
+        final networks = balance['networks'] as List<dynamic>?;
         
         print('\n=== Token Balance ===');
         print('Symbol: ${token['symbol']}');
@@ -103,8 +108,10 @@ class WalletService {
         if (networks != null) {
           print('\nNetwork Breakdown:');
           networks.forEach((network) {
-            print('  ${network['blockchain']} (${network['networkVersion']}): '
-                '${_formatBalance(network['balance'].toString(), token['decimals'])}');
+            if (network is Map<String, dynamic>) {
+              print('  ${network['blockchain']} (${network['networkVersion']}): '
+                  '${_formatBalance(network['balance'].toString(), token['decimals'] ?? 18)}');
+            }
           });
         }
       });

@@ -150,29 +150,42 @@ class _WalletsTabState extends State<WalletsTab> {
       final data = await _walletService.getBalances(
         type: type,
         currency: _showInUSD ? 'USD' : _userCurrency,
-        // Only get first page for refresh, keep existing page for preserveState
         page: preserveState ? _currentPage : 1,
         limit: _pageSize,
       );
 
-      // Add debug logging for price change data
-      print('\n=== Price Change Debug ===');
-      print('Raw total: ${data['total']}');
-      print('Raw change24h: ${data['change24h']}');
-      print('Raw changePercent24h: ${data['changePercent24h']}');
-      print('Current currency rate: $_userCurrencyRate');
-      print('Show in USD: $_showInUSD');
+      // Add null check for data
+      if (data == null) {
+        throw Exception('Failed to load balance data');
+      }
+
+      // Debug logging
+      print('Received balance data: $data');
 
       if (!mounted) return;
 
       if (_selectedFilter == 'All') {
         final Map<String, Map<String, dynamic>> combinedBalances = {};
         
-        for (final balance in List<Map<String, dynamic>>.from(data['balances'] ?? [])) {
-          final token = balance['token'] as Map<String, dynamic>;
-          final symbol = token['symbol'] as String;
-          // print('Processing token: $symbol');
-          
+        // Add null check for balances array
+        final balancesArray = data['balances'] ?? [];
+        if (balancesArray is! List) {
+          throw Exception('Invalid balances data format');
+        }
+
+        for (final balance in List<Map<String, dynamic>>.from(balancesArray)) {
+          final token = balance['token'] as Map<String, dynamic>?;
+          if (token == null) {
+            print('Warning: Token data missing for balance: $balance');
+            continue;
+          }
+
+          final symbol = token['symbol'] as String?;
+          if (symbol == null) {
+            print('Warning: Symbol missing for token: $token');
+            continue;
+          }
+
           // Safely parse balance and USD value
           final currentBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;
           final currentUsdValue = double.tryParse(balance['usdValue']?.toString() ?? '0') ?? 0.0;
@@ -252,15 +265,17 @@ class _WalletsTabState extends State<WalletsTab> {
           _isInitialLoad = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error in _loadBalances: $e');
+      print('Stack trace: $stackTrace');
+      
       if (!mounted) return;
       
       setState(() {
         _isLoading = false;
         _isPriceLoading = false;
         _hasError = true;
-        _errorMessage = 'Failed to load balances';
+        _errorMessage = 'Failed to load balances: ${e.toString()}';
       });
     }
   }

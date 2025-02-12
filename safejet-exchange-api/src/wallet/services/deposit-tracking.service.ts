@@ -4474,7 +4474,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
     try {
         this.logToFile(`[sweepXrpNative] Starting native XRP sweep for deposit ${deposit.id}`);
 
-        // Get wallet from database like other sweep functions
+        // Get wallet from database
         const wallet = await this.walletRepository.findOne({
             where: { id: deposit.walletId }
         });
@@ -4483,26 +4483,21 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             throw new Error('Wallet not found');
         }
 
-        // Get account info and balance
+        // 1. Get account info and balance
         const accountInfo = await xrpClient.request({
             command: 'account_info',
-            account: wallet.address
+            account: wallet.address,  // Direct field, not in params array
+            strict: true
         });
         
         const balance = accountInfo.result.account_data.Balance;
-        this.logToFile(`[sweepXrpNative] Wallet balance: ${balance} XRP`);
+        const sequence = accountInfo.result.account_data.Sequence;
+        this.logToFile(`[sweepXrpNative] Wallet balance: ${balance} XRP, sequence: ${sequence}`);
 
         // Check minimum balance
         const minBalance = this.MINIMUM_NATIVE_BALANCE['xrp'] || '20';
         if (parseFloat(balance) <= parseFloat(minBalance)) {
             this.logToFile(`[sweepXrpNative] Balance too low to sweep`);
-            await this.sweepTransactionRepository.update(
-                { depositId: deposit.id },
-                {
-                    status: 'skipped',
-                    message: 'Balance too low to sweep'
-                }
-            );
             return {
                 success: false,
                 errorMessage: 'Balance too low to sweep',
@@ -4512,46 +4507,39 @@ private async getBitcoinTransaction(provider: any, txid: string) {
 
         const amountToSweep = parseFloat(balance) - parseFloat(minBalance);
 
-        // Prepare transaction
-        const prepared = await xrpClient.autofill({
-            TransactionType: "Payment",
-            Account: wallet.address,
-            Amount: amountToSweep.toString(),
-            Destination: adminAddress
+        // 2. Submit payment transaction
+        const submitResponse = await xrpClient.request({
+            command: 'submit',
+            params: [{
+                txjson: {
+                    TransactionType: "Payment",
+                    Account: wallet.address,
+                    Destination: adminAddress,
+                    Amount: amountToSweep.toString(),
+                    Sequence: sequence,
+                    Fee: "12"  // Standard fee
+                },
+                secret: privateKey
+            }]
         });
 
-        // Sign and submit
-        const signed = xrpClient.signTransaction(prepared, privateKey); // Changed from sign to signTransaction
-        const tx = await xrpClient.submitAndWait(signed.tx_blob);
+        this.logToFile(`[sweepXrpNative] Submit response: ${JSON.stringify(submitResponse.result)}`);
 
-        this.logToFile(`[sweepXrpNative] Transaction sent: ${tx.hash}`);
+        if (submitResponse.result.engine_result !== 'tesSUCCESS') {
+            throw new Error(`Transaction failed: ${submitResponse.result.engine_result_message}`);
+        }
 
-        await this.sweepTransactionRepository.update(
-            { depositId: deposit.id },
-            {
-                status: 'completed',
-                txHash: tx.hash,
-                message: 'Successfully swept funds to admin wallet'
-            }
-        );
+        const txHash = submitResponse.result.tx_json.hash;
+        this.logToFile(`[sweepXrpNative] Transaction successful: ${txHash}`);
 
         return {
             success: true,
-            txHash: tx.hash,
+            txHash: txHash,
             status: 'completed'
         };
 
     } catch (error) {
         this.logToFile(`[sweepXrpNative] Error: ${error.message}`);
-        
-        await this.sweepTransactionRepository.update(
-            { depositId: deposit.id },
-            {
-                status: 'failed',
-                message: error.message
-            }
-        );
-
         return { 
             success: false, 
             errorMessage: error.message,
