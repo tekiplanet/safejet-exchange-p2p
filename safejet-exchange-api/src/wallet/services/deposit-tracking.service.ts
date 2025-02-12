@@ -212,6 +212,7 @@ export class DepositTrackingService implements OnModuleInit {
   private readonly MINIMUM_NATIVE_BALANCE = {
       ethereum: this.configService.get('ETH_MINIMUM_BALANCE', '0.005'),  // 0.005 ETH
       bsc: this.configService.get('BNB_MINIMUM_BALANCE', '0.01'),      // 0.01 BNB
+      trx: this.configService.get('TRX_MINIMUM_BALANCE', '10'),        // 10 TRX
   };
 
   // Add this with other readonly constants
@@ -633,7 +634,10 @@ export class DepositTrackingService implements OnModuleInit {
 }
 
   // Add these new private methods first
-  private async sweepEvmDeposit(deposit: Deposit, confirmations: number): Promise<{success: boolean, txHash?: string}> {
+  private async sweepEvmDeposit(
+    deposit: Deposit, 
+    confirmations: number
+): Promise<{success: boolean, txHash?: string, errorMessage?: string, status?: 'skipped' | 'failed' | 'pending' | 'completed'}> {
     try {
         this.logToFile(`[sweepEvmDeposit] Starting sweep for deposit ${deposit.id}, hash: ${deposit.txHash}`);
         this.logToFile(`[sweepEvmDeposit] Deposit blockchain: ${deposit.blockchain}, network: ${deposit.network}`);
@@ -645,7 +649,11 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (existingSweep) {
             this.logToFile(`[sweepEvmDeposit] Deposit ${deposit.id} already swept in transaction ${existingSweep.txHash}`);
-            return { success: true };
+            return { 
+                success: true, 
+                txHash: existingSweep.txHash,
+                status: 'completed'
+            };
         }
 
         const wallet = await this.walletRepository.findOne({
@@ -654,7 +662,11 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!wallet) {
             this.logToFile(`[sweepEvmDeposit] Wallet not found for deposit ${deposit.id}`);
-            return { success: false };
+            return { 
+                success: false, 
+                errorMessage: 'Wallet not found',
+                status: 'failed'
+            };
         }
 
         const adminWallet = await this.adminWalletRepository.findOne({
@@ -667,7 +679,11 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!adminWallet) {
             this.logToFile(`[sweepEvmDeposit] No active admin wallet found for ${deposit.blockchain} ${deposit.network}`);
-            return { success: false };
+            return { 
+                success: false, 
+                errorMessage: 'Admin wallet not found',
+                status: 'failed'
+            };
         }
 
         this.logToFile(`[sweepEvmDeposit] Found admin wallet ${adminWallet.address} for deposit ${deposit.id}`);
@@ -695,7 +711,11 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!walletKey) {
             this.logToFile(`[sweepEvmDeposit] Wallet key not found for wallet ${wallet.id}`);
-            return { success: false };
+            return { 
+                success: false, 
+                errorMessage: 'Wallet key not found',
+                status: 'failed'
+            };
         }
 
         const privateKey = await this.keyManagementService.decryptPrivateKey(
@@ -705,7 +725,11 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!privateKey) {
             this.logToFile(`[sweepEvmDeposit] Failed to decrypt private key for wallet ${wallet.id}`);
-            return { success: false };
+            return { 
+                success: false, 
+                errorMessage: 'Failed to decrypt private key',
+                status: 'failed'
+            };
         }
 
         this.logToFile(`[sweepEvmDeposit] Successfully decrypted private key`);
@@ -788,14 +812,23 @@ export class DepositTrackingService implements OnModuleInit {
             }
 
             this.logToFile(`[sweepEvmDeposit] Sweep ${success ? 'successful' : 'failed'} for deposit ${deposit.id}`);
-            return { success, txHash: sweepResult.txHash };
+            return { 
+                success: success, 
+                txHash: sweepResult.txHash,
+                status: success ? 'completed' : 'failed',
+                errorMessage: !success ? (sweepResult.errorMessage || 'Unknown error') : undefined
+            };
         } catch (error) {
             this.logToFile(`[sweepEvmDeposit] Error during provider/signer setup: ${error.message}`);
             throw error;
         }
     } catch (error) {
         this.logToFile(`[sweepEvmDeposit] Error: ${error.message}`);
-        return { success: false };
+        return { 
+            success: false, 
+            errorMessage: error.message,
+            status: 'failed'
+        };
     }
 }
 
@@ -804,8 +837,8 @@ export class DepositTrackingService implements OnModuleInit {
     signer: ethersWallet,
     adminAddress: string,
     provider: providers.Provider,
-    feeOption: 'same' | 'higher' = 'same'  // Add with default value
-  ): Promise<{success: boolean, txHash?: string, errorMessage?: string}> {  // Added errorMessage
+    feeOption: 'same' | 'higher' = 'same'
+): Promise<{success: boolean, txHash?: string, errorMessage?: string, status?: 'skipped' | 'failed' | 'pending' | 'completed'}> {
     try {
         this.logToFile(`[sweepEvmToken] Starting token sweep for deposit ${deposit.id}`);
 
@@ -815,7 +848,18 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (!token?.contractAddress) {
             this.logToFile(`[sweepEvmToken] Token contract address not found for deposit ${deposit.id}`);
-            return {success: false};
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'failed',
+                    message: 'Token contract address not found'
+                }
+            );
+            return {
+                success: false, 
+                errorMessage: 'Token contract address not found',
+                status: 'failed'
+            };
         }
 
         this.logToFile(`[sweepEvmToken] Using contract at ${token.contractAddress}`);
@@ -830,7 +874,18 @@ export class DepositTrackingService implements OnModuleInit {
 
         if (balance.isZero()) {
             this.logToFile(`[sweepEvmToken] No token balance to sweep`);
-            return {success: false};
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'skipped',
+                    message: 'No balance to sweep'
+                }
+            );
+            return {
+                success: false,
+                errorMessage: 'No balance to sweep',
+                status: 'skipped'
+            };
         }
 
         // Format balance with proper decimals
@@ -869,11 +924,34 @@ export class DepositTrackingService implements OnModuleInit {
         const receipt = await tx.wait();
         this.logToFile(`[sweepEvmToken] Transaction confirmed: ${tx.hash}`);
 
-        return {success: true, txHash: tx.hash};
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'completed',
+                txHash: tx.hash,
+                message: 'Successfully swept funds to admin wallet'
+            }
+        );
+        return {
+            success: true,
+            txHash: tx.hash,
+            status: 'completed'
+        };
     } catch (error) {
         this.logToFile(`[sweepEvmToken] Error: ${error.message}`);
         this.logToFile(`[sweepEvmToken] Error details: ${JSON.stringify(error)}`);
-        return {success: false, errorMessage: error.message};  // Return error message
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'failed',
+                message: error.message
+            }
+        );
+        return {
+            success: false,
+            errorMessage: error.message,
+            status: 'failed'
+        };
     }
 }
 
@@ -883,7 +961,7 @@ export class DepositTrackingService implements OnModuleInit {
     adminAddress: string,
     provider: providers.Provider,
     feeOption: 'same' | 'higher' = 'same'  // Add with default value
-  ): Promise<{success: boolean, txHash?: string, skipped?: boolean, errorMessage?: string}> {  // Added skipped flag and errorMessage
+  ): Promise<{success: boolean, txHash?: string, skipped?: boolean, errorMessage?: string, status?: 'skipped' | 'failed' | 'pending' | 'completed'}> {  // Only adding status to type
     try {
         this.logToFile(`[sweepEvmNative] Starting native token sweep for deposit ${deposit.id}`);
 
@@ -896,7 +974,22 @@ export class DepositTrackingService implements OnModuleInit {
         
         if (balance.lte(minBalance)) {
             this.logToFile(`[sweepEvmNative] Balance ${ethers.utils.formatEther(balance)} is less than or equal to minimum ${ethers.utils.formatEther(minBalance)}. Skipping sweep.`);
-            return { success: true, skipped: true };  // Changed to success: true with skipped flag
+            
+            // Update sweep transaction status for skip
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'skipped',
+                    message: `Balance too low to sweep`
+                }
+            );
+            
+            return { 
+                success: true, 
+                skipped: true,
+                status: 'skipped',
+                errorMessage: `Balance too low to sweep`
+            };
         }
 
         // Calculate amount to sweep (balance - minimum)
@@ -922,7 +1015,11 @@ export class DepositTrackingService implements OnModuleInit {
         // Make sure we're not leaving less than minimum after gas
         if (amountToSweep.sub(gasCost).lte(0)) {
             this.logToFile(`[sweepEvmNative] Amount after gas would be too low. Skipping sweep.`);
-            return { success: false };
+            return { 
+                success: false, 
+                errorMessage: 'Amount after gas would be too low',
+                status: 'skipped'
+            };
         }
 
         // Send transaction
@@ -937,11 +1034,40 @@ export class DepositTrackingService implements OnModuleInit {
         const receipt = await tx.wait();
         this.logToFile(`[sweepEvmNative] Transaction confirmed: ${tx.hash}`);
 
-        return { success: true, txHash: tx.hash };
+        // Update sweep transaction status for success
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'completed',
+                txHash: tx.hash,
+                message: 'Successfully swept funds to admin wallet'
+            }
+        );
+
+        return { 
+            success: true, 
+            txHash: tx.hash,
+            status: 'completed'
+        };
+
     } catch (error) {
         this.logToFile(`[sweepEvmNative] Error: ${error.message}`);
         this.logToFile(`[sweepEvmNative] Error details: ${JSON.stringify(error)}`);
-        return { success: false, errorMessage: error.message };
+
+        // Update sweep transaction status for failure
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'failed',
+                message: error.message
+            }
+        );
+
+        return { 
+            success: false, 
+            errorMessage: error.message,
+            status: 'failed'
+        };
     }
 }
 
@@ -1911,57 +2037,76 @@ export class DepositTrackingService implements OnModuleInit {
 
   private async updateTronConfirmations(network: string, currentBlock: number) {
     try {
-      const deposits = await this.depositRepository.find({
-        where: {
-          blockchain: 'trx',
-          network: network,
-          status: In(['pending', 'confirming']),
-          blockNumber: Not(IsNull()),
-        },
-      });
+        this.logToFile(`[updateTronConfirmations] Starting for network ${network}, current block ${currentBlock}`);
 
-      for (const deposit of deposits) {
-        const oldStatus = deposit.status;
-        const confirmations = currentBlock - deposit.blockNumber;
-        const requiredConfirmations = this.CONFIRMATION_BLOCKS.trx[network];
-
-        await this.depositRepository.update(deposit.id, {
-          confirmations,
-          status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
+        const deposits = await this.depositRepository.find({
+            where: {
+                blockchain: 'trx',
+                network: network,
+                status: In(['pending', 'confirming']),
+                blockNumber: Not(IsNull()),
+            },
         });
 
-        if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
-          const wallet = await this.walletRepository.findOne({
-            where: { id: deposit.walletId }
-          });
-          
-          if (wallet) {
-            const user = await this.userRepository.findOne({
-              where: { id: wallet.userId }
+        this.logToFile(`[updateTronConfirmations] Found ${deposits.length} deposits to process`);
+
+        for (const deposit of deposits) {
+            const oldStatus = deposit.status;
+            const confirmations = currentBlock - deposit.blockNumber;
+            const requiredConfirmations = this.CONFIRMATION_BLOCKS.trx[network];
+
+            this.logToFile(`[updateTronConfirmations] Processing deposit ${deposit.id}: confirmations=${confirmations}, required=${requiredConfirmations}`);
+
+            await this.depositRepository.update(deposit.id, {
+                confirmations,
+                status: confirmations >= requiredConfirmations ? 'confirmed' : 'confirming'
             });
 
-            // Get token details for the correct symbol
-            const token = await this.tokenRepository.findOne({
-              where: { id: deposit.tokenId }
-            });
+            if (oldStatus !== 'confirmed' && confirmations >= requiredConfirmations) {
+                this.logToFile(`[updateTronConfirmations] Deposit ${deposit.id} just confirmed, initiating process`);
+                
+                const wallet = await this.walletRepository.findOne({
+                    where: { id: deposit.walletId }
+                });
+                
+                if (wallet) {
+                    const user = await this.userRepository.findOne({
+                        where: { id: wallet.userId }
+                    });
 
-            if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
-              await this.emailService.sendDepositConfirmedEmail(
-                user.email,
-                user.fullName,
-                this.formatAmount(deposit.amount),
-                token?.symbol || 'TRX'
-              );
+                    const token = await this.tokenRepository.findOne({
+                        where: { id: deposit.tokenId }
+                    });
+
+                    if (user?.email && user.notificationSettings?.Wallet?.Deposits) {
+                        await this.emailService.sendDepositConfirmedEmail(
+                            user.email,
+                            user.fullName,
+                            this.formatAmount(deposit.amount),
+                            token?.symbol || 'TRX'
+                        );
+                        this.logToFile(`[updateTronConfirmations] Sent confirmation email for deposit ${deposit.id}`);
+                    }
+                }
+
+                await this.updateWalletBalance(deposit);
+                this.logToFile(`[updateTronConfirmations] Updated wallet balance for deposit ${deposit.id}`);
+
+                // Add sweep functionality
+                try {
+                    this.logToFile(`[updateTronConfirmations] Starting sweep for deposit ${deposit.id}`);
+                    await this.sweepTronDeposit(deposit, confirmations);
+                    this.logToFile(`[updateTronConfirmations] Sweep completed for deposit ${deposit.id}`);
+                } catch (error) {
+                    this.logToFile(`[updateTronConfirmations] Sweep failed for deposit ${deposit.id}: ${error.message}`);
+                }
             }
-          }
-
-          await this.updateWalletBalance(deposit);
         }
-      }
     } catch (error) {
-      this.logger.error(`Error updating Tron confirmations: ${error.message}`);
+        this.logToFile(`[updateTronConfirmations] Error: ${error.message}`);
+        this.logger.error(`Error updating Tron confirmations: ${error.message}`);
     }
-  }
+}
 
   private async getTronToken(
     contractType: string, 
@@ -3805,8 +3950,8 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             'btc': 'bitcoin',
             'eth': 'ethereum',
             'bnb': 'bsc',
-            'trx': 'tron',
-            // Add other chain mappings as needed
+            'bsc': 'bsc',  // Add this line to handle 'bsc' directly
+            'trx': 'trx',
         };
 
         const blockchainName = blockchainMappings[deposit.blockchain] || deposit.blockchain;
@@ -3855,11 +4000,30 @@ private async getBitcoinTransaction(provider: any, txid: string) {
                 }
                 break;
             case 'eth':
-            case 'bnb':
+            case 'bsc':
                 const provider = this.getEvmProvider(deposit.blockchain, deposit.network);
                 const signer = new ethersWallet(privateKey, provider);
                 result = await this.sweepEvmNative(deposit, signer, adminWallet.address, provider);
                 break;
+            // Add to the switch statement in retrySweep
+            case 'trx':
+                const tronWeb = this.providers.get(`trx_${deposit.network}`) as TronWebInstance;
+                if (!tronWeb) {
+                    throw new Error('Tron provider not found');
+                }
+                if (deposit.tokenId) {
+                    const token = await this.tokenRepository.findOne({
+                        where: { id: deposit.tokenId }
+                    });
+                    if (token?.contractAddress) {
+                        result = await this.sweepTronToken(deposit, privateKey, adminWallet.address, tronWeb, token.contractAddress, feeOption);
+                    } else {
+                        result = await this.sweepTronNative(deposit, privateKey, adminWallet.address, tronWeb, feeOption);
+                    }
+                } else {
+                    result = await this.sweepTronNative(deposit, privateKey, adminWallet.address, tronWeb, feeOption);
+                }
+                break;                
             default:
                 throw new Error(`Unsupported blockchain for retry: ${deposit.blockchain}`);
         }
@@ -3868,6 +4032,378 @@ private async getBitcoinTransaction(provider: any, txid: string) {
     } catch (error) {
         this.logToFile(`[retrySweep] Error: ${error.message}`);
         return { success: false, errorMessage: error.message };
+    }
+}
+
+  private async sweepTronDeposit(deposit: Deposit, confirmations: number): Promise<{success: boolean, txHash?: string}> {
+    try {
+        this.logToFile(`[sweepTronDeposit] Starting sweep for deposit ${deposit.id}, hash: ${deposit.txHash}`);
+        this.logToFile(`[sweepTronDeposit] Deposit blockchain: ${deposit.blockchain}, network: ${deposit.network}`);
+
+        // Check if already swept
+        const existingSweep = await this.sweepTransactionRepository.findOne({
+            where: { depositId: deposit.id }
+        });
+
+        if (existingSweep) {
+            this.logToFile(`[sweepTronDeposit] Deposit ${deposit.id} already swept in transaction ${existingSweep.txHash}`);
+            return { success: true };
+        }
+
+        const wallet = await this.walletRepository.findOne({
+            where: { id: deposit.walletId }
+        });
+
+        if (!wallet) {
+            this.logToFile(`[sweepTronDeposit] Wallet not found for deposit ${deposit.id}`);
+            return { success: false };
+        }
+
+        const adminWallet = await this.adminWalletRepository.findOne({
+            where: {
+                blockchain: 'trx',
+                network: deposit.network,
+                isActive: true
+            }
+        });
+
+        if (!adminWallet) {
+            this.logToFile(`[sweepTronDeposit] No active admin wallet found for TRX ${deposit.network}`);
+            return { success: false };
+        }
+
+        // Create sweep transaction record
+        const sweepTx = await this.sweepTransactionRepository.save({
+            depositId: deposit.id,
+            fromWalletId: wallet.id,
+            toAdminWalletId: adminWallet.id,
+            amount: deposit.amount,
+            status: 'pending',
+            txHash: 'pending',
+            metadata: {
+                blockchain: deposit.blockchain,
+                network: deposit.network,
+                tokenId: deposit.tokenId
+            } as Record<string, any>
+        });
+
+        const walletKey = await this.walletKeyRepository.findOne({
+            where: { id: wallet.keyId }
+        });
+
+        if (!walletKey) {
+            this.logToFile(`[sweepTronDeposit] Wallet key not found for wallet ${wallet.id}`);
+            return { success: false };
+        }
+
+        const privateKey = await this.keyManagementService.decryptPrivateKey(
+            walletKey.encryptedPrivateKey,
+            walletKey.userId
+        );
+
+        if (!privateKey) {
+            this.logToFile(`[sweepTronDeposit] Failed to decrypt private key for wallet ${wallet.id}`);
+            return { success: false };
+        }
+
+        try {
+            const tronWeb = this.providers.get(`trx_${deposit.network}`) as TronWebInstance;
+            if (!tronWeb) {
+                throw new Error('Tron provider not found');
+            }
+
+            let sweepResult;
+            if (deposit.tokenId) {
+                const token = await this.tokenRepository.findOne({
+                    where: { id: deposit.tokenId }
+                });
+                
+                if (token?.contractAddress) {
+                    sweepResult = await this.sweepTronToken(
+                        deposit,
+                        privateKey,
+                        adminWallet.address,
+                        tronWeb,
+                        token.contractAddress
+                    );
+                } else {
+                    sweepResult = await this.sweepTronNative(
+                        deposit,
+                        privateKey,
+                        adminWallet.address,
+                        tronWeb
+                    );
+                }
+            } else {
+                sweepResult = await this.sweepTronNative(
+                    deposit,
+                    privateKey,
+                    adminWallet.address,
+                    tronWeb
+                );
+            }
+
+            if (sweepResult.success) {
+                await this.sweepTransactionRepository.update(sweepTx.id, {
+                    status: 'completed',
+                    txHash: sweepResult.txHash,
+                    message: 'Successfully swept funds to admin wallet'
+                });
+            } else {
+                await this.sweepTransactionRepository.update(sweepTx.id, {
+                    status: 'failed',
+                    message: sweepResult.errorMessage || 'Unknown error occurred'
+                });
+            }
+
+            return sweepResult;
+        } catch (error) {
+            this.logToFile(`[sweepTronDeposit] Error during sweep: ${error.message}`);
+            await this.sweepTransactionRepository.update(sweepTx.id, {
+                status: 'failed',
+                message: error.message
+            });
+            return { success: false };
+        }
+    } catch (error) {
+        this.logToFile(`[sweepTronDeposit] Error: ${error.message}`);
+        return { success: false };
+    }
+}
+
+  private async sweepTronNative(
+    deposit: Deposit,
+    privateKey: string,
+    adminAddress: string,
+    tronWeb: TronWebInstance,
+    feeOption: 'same' | 'higher' = 'same'
+  ): Promise<{success: boolean, txHash?: string, skipped?: boolean, errorMessage?: string, status?: 'skipped' | 'failed' | 'pending' | 'completed'}> {
+    try {
+        this.logToFile(`[sweepTronNative] Starting native TRX sweep for deposit ${deposit.id}`);
+
+        // Set private key for transaction signing
+        tronWeb.setPrivateKey(privateKey);
+        const fromAddress = tronWeb.address.fromPrivateKey(privateKey);
+        
+        // Get account balance
+        const balance = await tronWeb.trx.getBalance(fromAddress);
+        this.logToFile(`[sweepTronNative] Wallet balance: ${balance} SUN`);
+
+        // Convert minimum balance from TRX to SUN (1 TRX = 1,000,000 SUN)
+        const minBalance = tronWeb.toSun(this.MINIMUM_NATIVE_BALANCE['trx'] || '10');
+        
+        if (balance <= minBalance) {
+            this.logToFile(`[sweepTronNative] Balance ${balance} is less than or equal to minimum ${minBalance}. Skipping sweep.`);
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'skipped',
+                    message: `Balance too low to sweep`
+                }
+            );
+            return { 
+                success: true, 
+                skipped: true,
+                status: 'skipped',
+                errorMessage: `Balance too low to sweep`
+            };
+        }
+
+        // Calculate amount to sweep (balance - minimum)
+        const amountToSweep = balance - minBalance;
+        this.logToFile(`[sweepTronNative] Sweeping ${amountToSweep} SUN, leaving ${minBalance} SUN`);
+
+        // Create and send transaction following TRON's flow
+        const unsignedTx = await tronWeb.transactionBuilder.sendTrx(
+            adminAddress,
+            amountToSweep,
+            fromAddress
+        );
+
+        const signedTx = await tronWeb.trx.sign(unsignedTx);
+        const tx = await tronWeb.trx.sendRawTransaction(signedTx);
+
+        if (!tx.result || !tx.transaction?.txID) {
+            throw new Error('Transaction failed: ' + JSON.stringify(tx));
+        }
+
+        this.logToFile(`[sweepTronNative] Transaction sent: ${tx.transaction.txID}`);
+
+        // Wait for transaction confirmation
+        const confirmed = await this.waitForTronTransaction(tx.transaction.txID, tronWeb);
+        if (!confirmed) {
+            throw new Error('Transaction not confirmed within timeout');
+        }
+
+        this.logToFile(`[sweepTronNative] Transaction confirmed: ${tx.transaction.txID}`);
+
+        // Update sweep transaction status for success
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'completed',
+                txHash: tx.transaction.txID,
+                message: 'Successfully swept funds to admin wallet'
+            }
+        );
+
+        return { 
+            success: true, 
+            txHash: tx.transaction.txID,
+            status: 'completed'
+        };
+
+    } catch (error) {
+        this.logToFile(`[sweepTronNative] Error: ${error.message}`);
+        this.logToFile(`[sweepTronNative] Error details: ${JSON.stringify(error)}`);
+
+        // Update sweep transaction status for failure
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'failed',
+                message: error.message
+            }
+        );
+
+        return { 
+            success: false, 
+            errorMessage: error.message,
+            status: 'failed'
+        };
+    }
+}
+
+  private async waitForTronTransaction(txId: string, tronWeb: TronWebInstance, maxAttempts = 20): Promise<boolean> {
+    for (let i = 0; i < maxAttempts; i++) {
+        try {
+            const tx = await tronWeb.trx.getTransaction(txId);
+            if (tx?.ret?.[0]?.contractRet === 'SUCCESS') {
+                return true;
+            }
+        } catch (error) {
+            this.logToFile(`[waitForTronTransaction] Attempt ${i + 1}: ${error.message}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+    return false;
+}
+
+  private async sweepTronToken(
+    deposit: Deposit,
+    privateKey: string,
+    adminAddress: string,
+    tronWeb: TronWebInstance,
+    contractAddress: string,
+    feeOption: 'same' | 'higher' = 'same'
+  ): Promise<{success: boolean, txHash?: string, errorMessage?: string, status?: 'skipped' | 'failed' | 'pending' | 'completed'}> {
+    try {
+        this.logToFile(`[sweepTronToken] Starting token sweep for deposit ${deposit.id}`);
+        this.logToFile(`[sweepTronToken] Contract address: ${contractAddress}`);
+
+        // Set private key for transaction signing
+        tronWeb.setPrivateKey(privateKey);
+        const fromAddress = tronWeb.address.fromPrivateKey(privateKey);
+
+        // Get contract instance
+        const contract = await tronWeb.contract().at(contractAddress);
+        if (!contract) {
+            throw new Error('Failed to get contract instance');
+        }
+
+        // Get token balance
+        const balance = await contract.balanceOf(fromAddress).call();
+        this.logToFile(`[sweepTronToken] Token balance: ${balance.toString()}`);
+
+        if (balance.isZero?.() || balance <= 0) {
+            this.logToFile(`[sweepTronToken] No token balance to sweep`);
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'skipped',
+                    message: 'No balance to sweep'
+                }
+            );
+            return { 
+                success: false, 
+                errorMessage: 'No balance to sweep',
+                status: 'skipped'
+            };
+        }
+
+        // Estimate transaction fee for TRC20 transfer
+        const parameter = [{
+            type: 'address',
+            value: adminAddress
+        }, {
+            type: 'uint256',
+            value: balance.toString()
+        }];
+        const txParams = await tronWeb.transactionBuilder.triggerSmartContract(
+            contractAddress,
+            'transfer(address,uint256)',
+            { feeLimit: 1000000000 },
+            parameter,
+            fromAddress
+        );
+        let estimatedFee = await tronWeb.trx.estimateEnergy(txParams.transaction);
+        this.logToFile(`[sweepTronToken] Estimated fee: ${estimatedFee}`);
+
+        if (feeOption === 'higher') {
+            estimatedFee = Math.floor(estimatedFee * 1.2); // 20% higher
+            this.logToFile(`[sweepTronToken] Using higher fee: ${estimatedFee}`);
+        }
+
+        // Send token transfer transaction
+        const tx = await contract.transfer(
+            adminAddress,
+            balance.toString()
+        ).send({
+            feeLimit: estimatedFee,
+            callValue: 0
+        });
+
+        if (!tx) {
+            throw new Error('Transaction failed');
+        }
+
+        this.logToFile(`[sweepTronToken] Transaction sent: ${tx}`);
+
+        // Wait for confirmation
+        const confirmed = await this.waitForTronTransaction(tx, tronWeb);
+        if (!confirmed) {
+            throw new Error('Transaction not confirmed within timeout');
+        }
+
+        this.logToFile(`[sweepTronToken] Transaction confirmed: ${tx}`);
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'completed',
+                txHash: tx,
+                message: 'Successfully swept funds to admin wallet'
+            }
+        );
+        return { 
+            success: true, 
+            txHash: tx,
+            status: 'completed'
+        };
+
+    } catch (error) {
+        this.logToFile(`[sweepTronToken] Error: ${error.message}`);
+        await this.sweepTransactionRepository.update(
+            { depositId: deposit.id },
+            {
+                status: 'failed',
+                message: error.message
+            }
+        );
+        return { 
+            success: false, 
+            errorMessage: error.message,
+            status: 'failed'
+        };
     }
 }
 }
