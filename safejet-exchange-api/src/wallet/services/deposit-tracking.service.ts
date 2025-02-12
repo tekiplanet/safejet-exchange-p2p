@@ -37,6 +37,7 @@ import * as ecc from 'tiny-secp256k1';
 import { ECPairFactory } from 'ecpair';
 const ECPair = ECPairFactory(ecc);
 import axios from 'axios';
+const { deriveKeypair, deriveAddress } = require('ripple-keypairs');
 
 // ERC20 ABI for token transfers
 const ERC20_ABI = [
@@ -3886,7 +3887,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
   // Add helper method to get transaction hex
   private async getTransactionHex(txid: string, network: string): Promise<Buffer> {
     const response = await axios.get(
-        `https://mempool.space/${network === 'testnet' ? 'testnet/' : ''}/api/tx/${txid}/hex`
+        `https://mempool.space/${network === 'testnet' ? 'testnet/' : ''}api/tx/${txid}/hex`
     );
     return Buffer.from(response.data, 'hex');
   }
@@ -4490,14 +4491,23 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             strict: true
         });
         
+        this.logToFile(`[sweepXrpNative] Account info response: ${JSON.stringify(accountInfo)}`);
+        
+        if (accountInfo.error) {
+            throw new Error(`Account info error: ${accountInfo.error_message || JSON.stringify(accountInfo)}`);
+        }
+
         const balance = accountInfo.result.account_data.Balance;
         const sequence = accountInfo.result.account_data.Sequence;
         this.logToFile(`[sweepXrpNative] Wallet balance: ${balance} XRP, sequence: ${sequence}`);
 
-        // Check minimum balance
-        const minBalance = this.MINIMUM_NATIVE_BALANCE['xrp'] || '20';
-        if (parseFloat(balance) <= parseFloat(minBalance)) {
-            this.logToFile(`[sweepXrpNative] Balance too low to sweep`);
+        // Check minimum balance and calculate amount to sweep
+        const DROPS_PER_XRP = 1000000;
+        const minBalanceDrops = parseFloat(this.MINIMUM_NATIVE_BALANCE['xrp'] || '20') * DROPS_PER_XRP;
+        const feeDrops = 12;  // Standard XRP transaction fee
+
+        if (parseFloat(balance) <= minBalanceDrops) {
+            this.logToFile(`[sweepXrpNative] Balance too low to sweep. Balance: ${balance} drops, Min: ${minBalanceDrops} drops`);
             return {
                 success: false,
                 errorMessage: 'Balance too low to sweep',
@@ -4505,38 +4515,81 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             };
         }
 
-        const amountToSweep = parseFloat(balance) - parseFloat(minBalance);
+        // Calculate amount to sweep (balance - minBalance - fee)
+        const amountToSweep = parseFloat(balance) - minBalanceDrops - feeDrops;
+        this.logToFile(`[sweepXrpNative] Sweeping ${amountToSweep} drops, leaving ${minBalanceDrops} drops for reserve and ${feeDrops} drops for fee`);
 
-        // 2. Submit payment transaction
-        const submitResponse = await xrpClient.request({
-            command: 'submit',
-            params: [{
-                txjson: {
-                    TransactionType: "Payment",
-                    Account: wallet.address,
-                    Destination: adminAddress,
-                    Amount: amountToSweep.toString(),
-                    Sequence: sequence,
-                    Fee: "12"  // Standard fee
-                },
-                secret: privateKey
-            }]
-        });
+        const payment = {
+            TransactionType: "Payment",
+            Account: wallet.address,
+            Destination: adminAddress,
+            Amount: amountToSweep.toString(),
+            Sequence: sequence,
+            Fee: feeDrops.toString()
+        };
 
-        this.logToFile(`[sweepXrpNative] Submit response: ${JSON.stringify(submitResponse.result)}`);
-
-        if (submitResponse.result.engine_result !== 'tesSUCCESS') {
-            throw new Error(`Transaction failed: ${submitResponse.result.engine_result_message}`);
+        // 2. Create and sign transaction locally
+        if (!privateKey) {
+            throw new Error('Private key is undefined or null');
         }
 
-        const txHash = submitResponse.result.tx_json.hash;
-        this.logToFile(`[sweepXrpNative] Transaction successful: ${txHash}`);
+        this.logToFile(`[sweepXrpNative] Private key type: ${typeof privateKey}`);
+        this.logToFile(`[sweepXrpNative] Private key length: ${privateKey.length}`);
+        this.logToFile(`[sweepXrpNative] Private key format check - hex: ${!!privateKey.match(/^[0-9A-Fa-f]+$/i)}`);
 
-        return {
-            success: true,
-            txHash: txHash,
-            status: 'completed'
-        };
+        const xrpl = require('xrpl');
+        
+        try {
+            // Create wallet using the XRPL library
+            this.logToFile(`[sweepXrpNative] Creating wallet with seed`);
+            const xrplWallet = xrpl.Wallet.fromSeed(privateKey);  // Now this should work since we're passing a proper seed
+            this.logToFile(`[sweepXrpNative] Created wallet with address: ${xrplWallet.address}`);
+
+            if (xrplWallet.address !== wallet.address) {
+                throw new Error('Created wallet address does not match database address');
+            }
+
+            const signed = xrplWallet.sign(payment);
+
+            // 3. Submit signed transaction
+            const submitResponse = await xrpClient.request({
+                command: 'submit',
+                tx_blob: signed.tx_blob
+            });
+
+            this.logToFile(`[sweepXrpNative] Submit response: ${JSON.stringify(submitResponse.result)}`);
+
+            if (submitResponse.result.engine_result !== 'tesSUCCESS') {
+                throw new Error(`Transaction failed: ${submitResponse.result.engine_result_message}`);
+            }
+
+            const txHash = submitResponse.result.tx_json.hash;
+            this.logToFile(`[sweepXrpNative] Transaction successful: ${txHash}`);
+
+            // Update sweep transaction record
+            await this.sweepTransactionRepository.update(
+                { depositId: deposit.id },
+                {
+                    status: 'completed',
+                    txHash: txHash,
+                    message: 'Successfully swept funds to admin wallet'
+                }
+            );
+
+            return {
+                success: true,
+                txHash: txHash,
+                status: 'completed'
+            };
+
+        } catch (error) {
+            this.logToFile(`[sweepXrpNative] Error: ${error.message}`);
+            return { 
+                success: false, 
+                errorMessage: error.message,
+                status: 'failed'
+            };
+        }
 
     } catch (error) {
         this.logToFile(`[sweepXrpNative] Error: ${error.message}`);

@@ -11,6 +11,8 @@ const TronWeb = require('tronweb');
 import * as crypto from 'crypto';
 import { WalletKey } from './entities/wallet-key.entity';
 import { BLOCKCHAIN_CONFIGS } from './blockchain.config';
+import * as path from 'path';
+import * as fs from 'fs';
 
 const ECPair = ECPairFactory(ecc);
 
@@ -77,17 +79,31 @@ export class KeyManagementService {
 
         case 'xrp':
           if (network === 'testnet') {
-            // Connect to testnet for address generation
             const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
             await client.connect();
             const fundResult = await client.fundWallet();
             await client.disconnect();
             
-            privateKey = fundResult.wallet.privateKey;
+            this.logToFile(`[XRP Wallet Creation] Testnet wallet details: ${JSON.stringify({
+              seedType: typeof fundResult.wallet.seed,
+              seedLength: fundResult.wallet.seed.length,
+              seedStart: fundResult.wallet.seed.substring(0, 10),
+              address: fundResult.wallet.address
+            })}`);
+            
+            privateKey = fundResult.wallet.seed;
             address = fundResult.wallet.address;
           } else {
             const xrpWallet = xrpl.Wallet.generate();
-            privateKey = xrpWallet.privateKey;
+            
+            this.logToFile(`[XRP Wallet Creation] Mainnet wallet details: ${JSON.stringify({
+              seedType: typeof xrpWallet.seed,
+              seedLength: xrpWallet.seed.length,
+              seedStart: xrpWallet.seed.substring(0, 10),
+              address: xrpWallet.address
+            })}`);
+            
+            privateKey = xrpWallet.seed;
             address = xrpWallet.address;
           }
           break;
@@ -204,5 +220,17 @@ export class KeyManagementService {
     decrypted += decipher.final('utf8');
 
     return decrypted;
+  }
+
+  private logToFile(message: string) {
+    const timestamp = new Date().toISOString();
+    const logsDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir);
+    }
+    fs.appendFileSync(
+      path.join(logsDir, `deposit-tracking-${new Date().toISOString().split('T')[0]}.log`),
+      `[${timestamp}] ${message}\n`
+    );
   }
 } 
