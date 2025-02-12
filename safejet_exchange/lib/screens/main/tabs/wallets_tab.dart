@@ -220,9 +220,9 @@ class _WalletsTabState extends State<WalletsTab> {
           _change24h = _showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
           _changePercent24h = double.tryParse(data['changePercent24h']?.toString() ?? '0') ?? 0.0;
           
-          // Update token prices with safe parsing
+          // Update token prices with safe parsing and null check
           _tokenPrices = Map<String, double>.fromEntries(
-            _balances.map((b) => MapEntry(
+            _balances.where((b) => b['token'] != null).map((b) => MapEntry(
               b['token']['symbol'] as String,
               double.tryParse(b['price']?.toString() ?? '0') ?? 0.0,
             )),
@@ -252,9 +252,9 @@ class _WalletsTabState extends State<WalletsTab> {
           _change24h = _showInUSD ? _usdChange24h : _usdChange24h * _userCurrencyRate;
           _changePercent24h = double.tryParse(data['changePercent24h']?.toString() ?? '0') ?? 0.0;
           
-          // Update token prices with safe parsing
+          // Update token prices with safe parsing and null check
           _tokenPrices = Map<String, double>.fromEntries(
-            _balances.map((b) => MapEntry(
+            _balances.where((b) => b['token'] != null).map((b) => MapEntry(
               b['token']['symbol'] as String,
               double.tryParse(b['price']?.toString() ?? '0') ?? 0.0,
             )),
@@ -853,7 +853,7 @@ class _WalletsTabState extends State<WalletsTab> {
                       child: const CircularProgressIndicator(),
                     );
                   } else if (!_hasMoreData) {
-                    return const SizedBox(); // Hide when no more data
+                    return const SizedBox();
                   }
                   return const SizedBox();
                 }
@@ -861,14 +861,19 @@ class _WalletsTabState extends State<WalletsTab> {
                 if (index >= filteredBalances.length) return null;
 
                 final balance = filteredBalances[index];
-                final token = balance['token'] as Map<String, dynamic>;
+                // Add null check for token
+                final token = balance['token'] as Map<String, dynamic>?;
+                if (token == null) {
+                  return const SizedBox(); // Skip rendering this item
+                }
+
                 final amount = double.tryParse(balance['balance']?.toString() ?? '0') ?? 0.0;
-                final symbol = token['symbol'] as String;
+                final symbol = token['symbol'] as String? ?? '';
                 final price = _tokenPrices[symbol] ?? 0.0;
                 final isLoading = balance['priceLoading'] ?? false;
                 
-                // Get the change percent from the token data
-                final tokenChangePercent24h = double.tryParse(balance['token']['changePercent24h']?.toString() ?? '0') ?? 0.0;
+                // Get the change percent from the token data with null safety
+                final tokenChangePercent24h = double.tryParse(token['changePercent24h']?.toString() ?? '0') ?? 0.0;
 
                 return GestureDetector(
                   onTap: () {
