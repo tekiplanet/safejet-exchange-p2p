@@ -38,7 +38,7 @@ class Network {
   final String blockchain;
   final String version;
   final String network;
-  final String arrivalTime;
+  final String? arrivalTime;
   final bool isActive;
   final bool requiresMemo;
   final bool requiresTag;
@@ -48,7 +48,7 @@ class Network {
     required this.blockchain,
     required this.version,
     required this.network,
-    required this.arrivalTime,
+    this.arrivalTime,
     this.isActive = true,
     this.requiresMemo = false,
     this.requiresTag = false,
@@ -56,11 +56,11 @@ class Network {
 
   factory Network.fromJson(Map<String, dynamic> json) {
     return Network(
-      name: json['blockchain'] ?? '',
+      name: json['name'] ?? '',
       blockchain: json['blockchain'] ?? '',
       version: json['version'] ?? '',
-      network: json['network'] ?? 'mainnet',
-      arrivalTime: json['arrivalTime'] ?? '10-30 minutes',
+      network: json['network'] ?? '',
+      arrivalTime: json['arrivalTime'],
       requiresMemo: json['requiredFields']?['memo'] ?? false,
       requiresTag: json['requiredFields']?['tag'] ?? false,
     );

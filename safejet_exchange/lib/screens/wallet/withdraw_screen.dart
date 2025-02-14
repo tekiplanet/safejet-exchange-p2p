@@ -43,8 +43,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   final _addressController = TextEditingController();
   final _amountController = TextEditingController();
   
-  late Map<String, dynamic> _selectedAsset;
-  late Network _selectedNetwork;
+  late Coin? _selectedCoin;
+  late Network? _selectedNetwork;
   
   bool _isLoading = false;
   bool _isFiat = false;
@@ -88,16 +88,20 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (_amountController.text.isEmpty) return '';
     final amount = double.tryParse(_amountController.text) ?? 0;
     return _isFiat 
-        ? '≈ ${_convertAmount(_amountController.text, false).toStringAsFixed(8)} ${_selectedAsset['token']['symbol']}'
+        ? '≈ ${_convertAmount(_amountController.text, false).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
         : '≈ ${_convertAmount(_amountController.text, true).toStringAsFixed(2)} ${_showInUSD ? 'USD' : _userCurrency}';
   }
 
   @override
   void initState() {
     super.initState();
-    _selectedAsset = widget.asset;
-    _initializeNetwork();
+    _selectedCoin = null;
+    _selectedNetwork = null;
     _amountController.addListener(_onAmountChanged);
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleCoinSelection();
+    });
   }
 
   @override
@@ -107,17 +111,26 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     super.dispose();
   }
 
-  void _initializeNetwork() {
-    final token = _selectedAsset['token'] as Map<String, dynamic>;
+  void _initializeCoin() {
+    final token = widget.asset['token'] as Map<String, dynamic>;
     final metadata = token['metadata'] as Map<String, dynamic>;
 
-    _selectedNetwork = Network(
-      name: metadata['networks']?.first ?? 'mainnet',
-      blockchain: token['blockchain'],
-      version: token['networkVersion'],
-      arrivalTime: '10-30 minutes',
-      network: metadata['networks']?.first ?? 'mainnet',
+    _selectedCoin = Coin(
+      id: token['id'],
+      symbol: token['symbol'],
+      name: token['name'],
+      networks: [
+        Network(
+          name: metadata['networks']?.first ?? 'mainnet',
+          blockchain: token['blockchain'],
+          version: token['networkVersion'],
+          arrivalTime: '10-30 minutes',
+          network: metadata['networks']?.first ?? 'mainnet',
+        )
+      ],
+      iconUrl: metadata['icon'],
     );
+    _selectedNetwork = _selectedCoin?.networks[0];
 
     // Set initial warning message
     _updateWarningMessage();
@@ -125,14 +138,19 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   void _updateWarningMessage() {
     setState(() {
-      _warningMessage = 'Send ${_selectedAsset['token']['symbol']} only through '
-          '${_selectedNetwork.version} on ${_selectedNetwork.blockchain}. '
+      if (_selectedCoin == null || _selectedNetwork == null) {
+        _warningMessage = null;  // Clear warning when no coin selected
+        return;
+      }
+      
+      _warningMessage = 'Send ${_selectedCoin!.symbol} only through '
+          '${_selectedNetwork!.version} on ${_selectedNetwork!.blockchain}. '
           'Using other networks may result in permanent loss.';
     });
   }
 
   Future<void> _onAmountChanged() async {
-    if (_amountController.text.isEmpty) {
+    if (_amountController.text.isEmpty || _selectedCoin == null || _selectedNetwork == null) {
       setState(() {
         _feeDetails = null;
         _receiveAmount = null;
@@ -145,10 +163,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
     try {
       final feeDetails = await _walletService.calculateWithdrawalFee(
-        tokenId: _selectedAsset['token']['id'],
+        tokenId: _selectedCoin!.id,
         amount: amount,
-        networkVersion: _selectedNetwork.version,
-        network: _selectedNetwork.network,
+        networkVersion: _selectedNetwork!.version,
+        network: _selectedNetwork!.network,
       );
 
       setState(() {
@@ -168,7 +186,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return false;
     }
 
-    switch (_selectedNetwork.name) {
+    switch (_selectedNetwork?.name) {
       case 'Bitcoin Network (BTC)':
         if (!address.startsWith('bc1') && !address.startsWith('1') && !address.startsWith('3')) {
           setState(() => _addressError = 'Invalid Bitcoin address');
@@ -259,10 +277,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
           children: [
             Text('Please confirm your withdrawal details:'),
             const SizedBox(height: 16),
-            _buildConfirmationRow('Amount:', '${_amountController.text} ${_selectedAsset['token']['symbol']}'),
-            _buildConfirmationRow('Network Fee:', '0.0001 ${_selectedAsset['token']['symbol']}'),
-            _buildConfirmationRow('You will receive:', '${(double.parse(_amountController.text) - 0.0001).toStringAsFixed(4)} ${_selectedAsset['token']['symbol']}'),
-            _buildConfirmationRow('Network:', _selectedNetwork.name),
+            _buildConfirmationRow('Amount:', '${_amountController.text} ${_selectedCoin?.symbol}'),
+            _buildConfirmationRow('Network Fee:', '0.0001 ${_selectedCoin?.symbol}'),
+            _buildConfirmationRow('You will receive:', '${(double.parse(_amountController.text) - 0.0001).toStringAsFixed(4)} ${_selectedCoin?.symbol}'),
+            _buildConfirmationRow('Network:', _selectedNetwork?.name ?? 'Not selected'),
             _buildConfirmationRow('Address:', _addressController.text),
             const SizedBox(height: 16),
             Text(
@@ -311,14 +329,34 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   Future<void> _saveAddress(String address) async {
+    if (_selectedCoin == null || _selectedNetwork == null) return;
+    
     await GetIt.I<AddressService>().addRecentAddress(
       RecentAddress(
         address: address,
-        coin: _selectedAsset['token']['symbol'],
-        network: _selectedNetwork.name,
+        coin: _selectedCoin!.symbol,
+        network: _selectedNetwork!.name,
         lastUsed: DateTime.now(),
       ),
     );
+  }
+
+  Future<void> _handleCoinSelection() async {
+    final result = await Navigator.push<Coin>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const CoinSelectionModal(),
+        fullscreenDialog: true,
+      ),
+    );
+    
+    if (result != null) {
+      setState(() {
+        _selectedCoin = result;
+        _selectedNetwork = result.networks[0];
+        _updateWarningMessage();
+      });
+    }
   }
 
   @override
@@ -371,103 +409,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                         ),
                         const SizedBox(height: 8),
                         GestureDetector(
-                          onTap: () async {
-                            final result = await Navigator.push<Coin>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const CoinSelectionModal(),
-                              ),
-                            );
-                            if (result != null) {
-                              setState(() {
-                                _selectedAsset = result.toJson();
-                                _initializeNetwork();
-                              });
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isDark 
-                                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                                  : SafeJetColors.lightCardBackground,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isDark
-                                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                    : SafeJetColors.lightCardBorder,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                // Token Icon
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    image: _selectedAsset['token']['metadata']?['icon'] != null
-                                        ? DecorationImage(
-                                            image: NetworkImage(_selectedAsset['token']['metadata']['icon']),
-                                            fit: BoxFit.cover,
-                                          )
-                                        : null,
-                                  ),
-                                  child: _selectedAsset['token']['metadata']?['icon'] == null
-                                      ? Center(
-                                          child: Text(
-                                            _selectedAsset['token']['symbol'][0],
-                                            style: theme.textTheme.titleLarge?.copyWith(
-                                              color: isDark ? Colors.white : Colors.black,
-                                            ),
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                                const SizedBox(width: 12),
-                                // Token Name and Symbol
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _selectedAsset['token']['name'],
-                                        style: theme.textTheme.titleMedium?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Text(
-                                        _selectedAsset['token']['symbol'],
-                                        style: TextStyle(
-                                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                // Network Count
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isDark 
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.05),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${_selectedAsset['token']['networks']?.length ?? 1} network${(_selectedAsset['token']['networks']?.length ?? 1) > 1 ? 's' : ''}',
-                                    style: TextStyle(
-                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          onTap: _handleCoinSelection,
+                          child: _buildCoinSelection(theme, isDark),
                         ),
                       ],
                     ),
@@ -546,8 +489,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     isScrollControlled: true,
                                     backgroundColor: Colors.transparent,
                                     builder: (context) => AddressBookModal(
-                                      selectedCoin: _selectedAsset['token']['symbol'],
-                                      selectedNetwork: _selectedNetwork.name,
+                                      selectedCoin: _selectedCoin?.symbol ?? '',
+                                      selectedNetwork: _selectedNetwork?.name ?? '',
                                       addressService: GetIt.I<AddressService>(),
                                     ),
                                   );
@@ -580,248 +523,131 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   const SizedBox(height: 24),
 
                   // Amount Input
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 300),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Amount',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                ChoiceChip(
-                                  label: Text(
-                                    _selectedAsset['token']['symbol'],
-                                    style: TextStyle(
-                                      color: !_isFiat ? Colors.black : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                      fontWeight: !_isFiat ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                  ),
-                                  selected: !_isFiat,
-                                  selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                                  backgroundColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    side: BorderSide(
-                                      color: !_isFiat 
-                                          ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
-                                          : Colors.transparent,
-                                    ),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  onSelected: (selected) {
-                                    if (selected) {
-                                      setState(() {
-                                        _isFiat = false;
-                                        if (_amountController.text.isNotEmpty) {
-                                          _amountController.text = _convertAmount(_amountController.text, false).toStringAsFixed(8);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                ChoiceChip(
-                                  label: Text(
-                                    'USD',
-                                    style: TextStyle(
-                                      color: _isFiat && _selectedFiat == 'USD' 
-                                          ? Colors.black 
-                                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                      fontWeight: _isFiat && _selectedFiat == 'USD' ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                  ),
-                                  selected: _isFiat && _selectedFiat == 'USD',
-                                  selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                                  backgroundColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    side: BorderSide(
-                                      color: _isFiat && _selectedFiat == 'USD'
-                                          ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
-                                          : Colors.transparent,
-                                    ),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  onSelected: (selected) {
-                                    if (selected) {
-                                      setState(() {
-                                        _isFiat = true;
-                                        _selectedFiat = 'USD';
-                                        if (_amountController.text.isNotEmpty) {
-                                          _amountController.text = _convertAmount(_amountController.text, true).toStringAsFixed(2);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                                const SizedBox(width: 8),
-                                ChoiceChip(
-                                  label: Text(
-                                    'NGN',
-                                    style: TextStyle(
-                                      color: _isFiat && _selectedFiat == 'NGN' 
-                                          ? Colors.black 
-                                          : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                      fontWeight: _isFiat && _selectedFiat == 'NGN' ? FontWeight.bold : FontWeight.normal,
-                                    ),
-                                  ),
-                                  selected: _isFiat && _selectedFiat == 'NGN',
-                                  selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                                  backgroundColor: Colors.transparent,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    side: BorderSide(
-                                      color: _isFiat && _selectedFiat == 'NGN'
-                                          ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
-                                          : Colors.transparent,
-                                    ),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  onSelected: (selected) {
-                                    if (selected) {
-                                      setState(() {
-                                        _isFiat = true;
-                                        _selectedFiat = 'NGN';
-                                        if (_amountController.text.isNotEmpty) {
-                                          _amountController.text = _convertAmount(_amountController.text, true).toStringAsFixed(2);
-                                        }
-                                      });
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isDark 
-                                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                                : SafeJetColors.lightCardBackground,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isDark
-                                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                  : SafeJetColors.lightCardBorder,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  if (_selectedCoin != null)
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 300),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
+                              Text(
+                                'Amount',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               Row(
                                 children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _amountController,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 20,
+                                  ChoiceChip(
+                                    label: Text(
+                                      _selectedCoin?.symbol ?? '',
+                                      style: TextStyle(
+                                        color: !_isFiat ? Colors.black : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                        fontWeight: !_isFiat ? FontWeight.bold : FontWeight.normal,
                                       ),
-                                      decoration: InputDecoration(
-                                        hintText: '0.00',
-                                        border: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                        hintStyle: TextStyle(
-                                          color: isDark ? Colors.grey[600] : Colors.grey[400],
-                                        ),
-                                        prefixText: _isFiat ? (_selectedFiat == 'USD' ? '\$ ' : '₦ ') : '',
-                                      ),
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _validateAmount(value);
-                                        });
-                                      },
                                     ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _maxAmount = true;
-                                        _amountController.text = _isFiat 
-                                            ? _convertAmount('0.2384', true).toStringAsFixed(2)
-                                            : '0.2384';
-                                      });
+                                    selected: !_isFiat,
+                                    selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
+                                    backgroundColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: BorderSide(
+                                        color: !_isFiat 
+                                            ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _isFiat = false;
+                                          if (_amountController.text.isNotEmpty) {
+                                            _amountController.text = _convertAmount(_amountController.text, false).toStringAsFixed(8);
+                                          }
+                                        });
+                                      }
                                     },
-                                    child: const Text('MAX'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ChoiceChip(
+                                    label: Text(
+                                      'USD',
+                                      style: TextStyle(
+                                        color: _isFiat && _selectedFiat == 'USD' 
+                                            ? Colors.black 
+                                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                        fontWeight: _isFiat && _selectedFiat == 'USD' ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                    selected: _isFiat && _selectedFiat == 'USD',
+                                    selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
+                                    backgroundColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: BorderSide(
+                                        color: _isFiat && _selectedFiat == 'USD'
+                                            ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _isFiat = true;
+                                          _selectedFiat = 'USD';
+                                          if (_amountController.text.isNotEmpty) {
+                                            _amountController.text = _convertAmount(_amountController.text, true).toStringAsFixed(2);
+                                          }
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  const SizedBox(width: 8),
+                                  ChoiceChip(
+                                    label: Text(
+                                      'NGN',
+                                      style: TextStyle(
+                                        color: _isFiat && _selectedFiat == 'NGN' 
+                                            ? Colors.black 
+                                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                                        fontWeight: _isFiat && _selectedFiat == 'NGN' ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                    selected: _isFiat && _selectedFiat == 'NGN',
+                                    selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
+                                    backgroundColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: BorderSide(
+                                        color: _isFiat && _selectedFiat == 'NGN'
+                                            ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _isFiat = true;
+                                          _selectedFiat = 'NGN';
+                                          if (_amountController.text.isNotEmpty) {
+                                            _amountController.text = _convertAmount(_amountController.text, true).toStringAsFixed(2);
+                                          }
+                                        });
+                                      }
+                                    },
                                   ),
                                 ],
                               ),
-                              if (_amountController.text.isNotEmpty && _amountError == null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    _getFormattedAmount(),
-                                    style: TextStyle(
-                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                    ),
-                                  ),
-                                ),
-                              if (_amountError != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    _amountError!,
-                                    style: TextStyle(
-                                      color: SafeJetColors.error,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Network Selection
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 200),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Network',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () async {
-                            await showModalBottomSheet<void>(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (context) => NetworkSelectionModal(
-                                networks: _selectedAsset['token']['networks'],
-                                selectedNetwork: _selectedNetwork,
-                                onNetworkSelected: (network) {
-                                  setState(() {
-                                    _selectedNetwork = network;
-                                  });
-                                  Navigator.pop(context);
-                                },
-                              ),
-                            );
-                          },
-                          child: Container(
+                          const SizedBox(height: 8),
+                          Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: isDark 
@@ -834,153 +660,281 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     : SafeJetColors.lightCardBorder,
                               ),
                             ),
-                            child: Row(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        _selectedNetwork.name,
-                                        style: theme.textTheme.titleSmall?.copyWith(
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _amountController,
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        style: theme.textTheme.bodyMedium?.copyWith(
                                           fontWeight: FontWeight.bold,
+                                          fontSize: 20,
                                         ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Average arrival time: ${_selectedNetwork.arrivalTime}',
-                                        style: TextStyle(
-                                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                        decoration: InputDecoration(
+                                          hintText: '0.00',
+                                          border: InputBorder.none,
+                                          isDense: true,
+                                          contentPadding: EdgeInsets.zero,
+                                          hintStyle: TextStyle(
+                                            color: isDark ? Colors.grey[600] : Colors.grey[400],
+                                          ),
+                                          prefixText: _isFiat ? (_selectedFiat == 'USD' ? '\$ ' : '₦ ') : '',
                                         ),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _validateAmount(value);
+                                          });
+                                        },
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _maxAmount = true;
+                                          _amountController.text = _isFiat 
+                                              ? _convertAmount('0.2384', true).toStringAsFixed(2)
+                                              : '0.2384';
+                                        });
+                                      },
+                                      child: const Text('MAX'),
+                                    ),
+                                  ],
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: SafeJetColors.success.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    'Active',
-                                    style: TextStyle(
-                                      color: SafeJetColors.success,
-                                      fontWeight: FontWeight.bold,
+                                if (_amountController.text.isNotEmpty && _amountError == null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      _getFormattedAmount(),
+                                      style: TextStyle(
+                                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                      ),
                                     ),
                                   ),
-                                ),
+                                if (_amountError != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      _amountError!,
+                                      style: TextStyle(
+                                        color: SafeJetColors.error,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Fee Info
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 400),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark 
-                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                            : SafeJetColors.lightCardBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isDark
-                              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                              : SafeJetColors.lightCardBorder,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Network Fee',
-                                style: TextStyle(
-                                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                ),
-                              ),
-                              Text(
-                                '0.0001 ${_selectedAsset['token']['symbol']}',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'You will receive',
-                                style: TextStyle(
-                                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                ),
-                              ),
-                              Text(
-                                '${_receiveAmount?.toStringAsFixed(4) ?? '0.0000'} ${_selectedAsset['token']['symbol']}',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
                           ),
                         ],
                       ),
                     ),
-                  ),
 
                   const SizedBox(height: 24),
 
-                  // Warning Message
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 600),
-                    delay: const Duration(milliseconds: 500),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isDark 
-                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                            : SafeJetColors.lightCardBackground,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isDark
-                              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                              : SafeJetColors.lightCardBorder,
-                        ),
-                      ),
+                  // Network Selection
+                  if (_selectedCoin != null)
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 200),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Warning',
+                            'Network',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            _warningMessage!,
-                            style: TextStyle(
-                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                          GestureDetector(
+                            onTap: () async {
+                              await showModalBottomSheet<void>(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (context) => NetworkSelectionModal(
+                                  networks: _selectedCoin?.networks ?? [],
+                                  selectedNetwork: _selectedNetwork ?? Network(
+                                    name: 'mainnet',
+                                    blockchain: 'unknown',
+                                    version: '1.0',
+                                    arrivalTime: '10-30 minutes',
+                                    network: 'mainnet',
+                                  ),
+                                  onNetworkSelected: (network) {
+                                    setState(() {
+                                      _selectedNetwork = network;
+                                      _updateWarningMessage();
+                                    });
+                                    Navigator.pop(context);
+                                  },
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                    : SafeJetColors.lightCardBackground,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isDark
+                                      ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                      : SafeJetColors.lightCardBorder,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _selectedNetwork?.name ?? 'Select a network',
+                                          style: theme.textTheme.titleSmall?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Average arrival time: ${_selectedNetwork?.arrivalTime}',
+                                          style: TextStyle(
+                                            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: SafeJetColors.success.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Active',
+                                      style: TextStyle(
+                                        color: SafeJetColors.success,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Fee Info
+                  if (_selectedCoin != null)
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 400),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDark 
+                              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                              : SafeJetColors.lightCardBackground,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark
+                                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                : SafeJetColors.lightCardBorder,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Network Fee',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  '0.0001 ${_selectedCoin?.symbol}',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'You will receive',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  '${_receiveAmount?.toStringAsFixed(4) ?? '0.0000'} ${_selectedCoin?.symbol}',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // Warning Message
+                  if (_warningMessage != null)
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 600),
+                      delay: const Duration(milliseconds: 500),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDark 
+                              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                              : SafeJetColors.lightCardBackground,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDark
+                                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                : SafeJetColors.lightCardBorder,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Warning',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _warningMessage!,
+                              style: TextStyle(
+                                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
                   const SizedBox(height: 24),
 
@@ -1080,6 +1034,131 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCoinSelection(ThemeData theme, bool isDark) {
+    if (_selectedCoin == null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark 
+              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+              : SafeJetColors.lightCardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                : SafeJetColors.lightCardBorder,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isDark 
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.black.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                Icons.currency_exchange,
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Select a coin',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark 
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              : SafeJetColors.lightCardBorder,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              image: _selectedCoin?.iconUrl != null
+                  ? DecorationImage(
+                      image: NetworkImage(_selectedCoin!.iconUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            child: _selectedCoin?.iconUrl == null
+                ? Center(
+                    child: Text(
+                      _selectedCoin!.symbol[0],
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selectedCoin!.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  _selectedCoin!.symbol,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 4,
+            ),
+            decoration: BoxDecoration(
+              color: isDark 
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.black.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '${_selectedCoin!.networks.length} network${_selectedCoin!.networks.length > 1 ? 's' : ''}',
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

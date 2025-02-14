@@ -54,7 +54,6 @@ class NetworkSelectionModal extends StatelessWidget {
               return InkWell(
                 onTap: () {
                   onNetworkSelected(network);
-                  Navigator.pop(context);
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(

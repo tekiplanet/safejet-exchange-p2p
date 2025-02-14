@@ -58,6 +58,8 @@ class _WalletsTabState extends State<WalletsTab> {
   double _usdBalance = 0.0;
   double _usdChange24h = 0.0;
 
+  Map<String, dynamic>? _selectedAsset;
+
   List<Map<String, dynamic>> _sortBalances(List<Map<String, dynamic>> balances) {
     // Create a copy of the list to sort
     final sortedBalances = List<Map<String, dynamic>>.from(balances);
@@ -658,7 +660,7 @@ class _WalletsTabState extends State<WalletsTab> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => WithdrawScreen(
-                                        asset: _balances.isEmpty ? {'token': {'symbol': 'BTC', 'name': 'Bitcoin'}} : _balances.first,
+                                        asset: _balances.first,
                                         showInUSD: _showInUSD,
                                         userCurrencyRate: _userCurrencyRate,
                                         userCurrency: _userCurrency,
