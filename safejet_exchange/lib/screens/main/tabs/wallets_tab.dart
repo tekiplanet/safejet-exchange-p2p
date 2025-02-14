@@ -656,7 +656,14 @@ class _WalletsTabState extends State<WalletsTab> {
                                   color: isDark ? Colors.white : SafeJetColors.lightText,
                                   onTap: () => Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (context) => const WithdrawScreen()),
+                                    MaterialPageRoute(
+                                      builder: (context) => WithdrawScreen(
+                                        asset: _balances.isEmpty ? {'token': {'symbol': 'BTC', 'name': 'Bitcoin'}} : _balances.first,
+                                        showInUSD: _showInUSD,
+                                        userCurrencyRate: _userCurrencyRate,
+                                        userCurrency: _userCurrency,
+                                      ),
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),

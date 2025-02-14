@@ -12,6 +12,25 @@ class Coin {
     required this.networks,
     this.iconUrl,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'symbol': symbol,
+      'name': name,
+      'iconUrl': iconUrl,
+      'networks': networks.map((n) => n.toJson()).toList(),
+      'token': {
+        'id': id,
+        'symbol': symbol,
+        'name': name,
+        'metadata': {
+          'icon': iconUrl,
+          'networks': networks.map((n) => n.network).toList(),
+        },
+      },
+    };
+  }
 }
 
 class Network {
@@ -45,6 +64,19 @@ class Network {
       requiresMemo: json['requiredFields']?['memo'] ?? false,
       requiresTag: json['requiredFields']?['tag'] ?? false,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'blockchain': blockchain,
+      'version': version,
+      'network': network,
+      'arrivalTime': arrivalTime,
+      'isActive': isActive,
+      'requiresMemo': requiresMemo,
+      'requiresTag': requiresTag,
+    };
   }
 }
 

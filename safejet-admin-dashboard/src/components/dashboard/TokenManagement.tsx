@@ -228,22 +228,32 @@ export default function TokenManagement() {
             
             const networkConfigs = {
                 [version]: Object.fromEntries(
-                    selectedNetworks.map(network => [
-                        network,
-                        editToken.networkConfigs?.[version]?.[network] || {
+                    selectedNetworks.map(network => {
+                        const currentConfig = editToken.networkConfigs?.[version]?.[network];
+                        return [
                             network,
-                            version,
-                            isActive: true,
-                            blockchain: editToken.blockchain,
-                            arrivalTime: version === 'NATIVE' 
-                                ? TOKEN_CONFIG.defaults.arrivalTimes.NATIVE 
-                                : TOKEN_CONFIG.defaults.arrivalTimes.default,
-                            requiredFields: {
-                                tag: editToken.blockchain === 'xrp',
-                                memo: false
+                            {
+                                ...currentConfig,
+                                network,
+                                version,
+                                isActive: currentConfig?.isActive ?? true,
+                                blockchain: editToken.blockchain,
+                                arrivalTime: currentConfig?.arrivalTime || (
+                                    version === 'NATIVE' 
+                                        ? TOKEN_CONFIG.defaults.arrivalTimes.NATIVE 
+                                        : TOKEN_CONFIG.defaults.arrivalTimes.default
+                                ),
+                                requiredFields: {
+                                    tag: currentConfig?.requiredFields?.tag ?? (editToken.blockchain === 'xrp'),
+                                    memo: currentConfig?.requiredFields?.memo ?? false
+                                },
+                                fee: {
+                                    type: currentConfig?.fee?.type || 'percentage',
+                                    value: currentConfig?.fee?.value || '0'
+                                }
                             }
-                        }
-                    ])
+                        ];
+                    })
                 )
             };
 

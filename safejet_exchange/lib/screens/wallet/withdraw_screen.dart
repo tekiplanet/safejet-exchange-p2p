@@ -18,25 +18,50 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get_it/get_it.dart';
 import '../../services/service_locator.dart';
+import '../../services/wallet_service.dart';
 
 class WithdrawScreen extends StatefulWidget {
-  const WithdrawScreen({super.key});
+  final Map<String, dynamic> asset;
+  final bool showInUSD;
+  final double userCurrencyRate;
+  final String userCurrency;
+
+  const WithdrawScreen({
+    super.key,
+    required this.asset,
+    required this.showInUSD,
+    required this.userCurrencyRate,
+    required this.userCurrency,
+  });
 
   @override
   State<WithdrawScreen> createState() => _WithdrawScreenState();
 }
 
 class _WithdrawScreenState extends State<WithdrawScreen> {
-  late Coin _selectedCoin;
-  late Network _selectedNetwork;
+  final _walletService = GetIt.I<WalletService>();
   final _addressController = TextEditingController();
   final _amountController = TextEditingController();
+  
+  late Map<String, dynamic> _selectedAsset;
+  late Network _selectedNetwork;
+  
+  bool _isLoading = false;
+  bool _isFiat = false;
   bool _maxAmount = false;
+  
   String? _addressError;
   String? _amountError;
-  bool _isFiat = false;
-  String _selectedFiat = 'USD';
+  String? _warningMessage;
   
+  Map<String, dynamic>? _feeDetails;
+  double? _receiveAmount;
+
+  String _selectedFiat = 'USD'; // Default to USD
+  bool get _showInUSD => widget.showInUSD;
+  String get _userCurrency => widget.userCurrency;
+  double get _userCurrencyRate => widget.userCurrencyRate;
+
   final Map<String, Map<String, double>> _conversionRates = {
     'BTC': {
       'USD': 43000.0,
@@ -52,13 +77,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (amount.isEmpty) return 0;
     final parsedAmount = double.tryParse(amount) ?? 0;
     
-    final rates = _conversionRates[_selectedCoin.symbol];
-    if (rates == null) return 0;
-    
     if (toFiat) {
-      return parsedAmount * (rates[_selectedFiat] ?? 0);
+      return parsedAmount * (_showInUSD ? 1 : _userCurrencyRate);
     } else {
-      return parsedAmount / (rates[_selectedFiat] ?? 1);
+      return parsedAmount / (_showInUSD ? 1 : _userCurrencyRate);
     }
   }
 
@@ -66,15 +88,16 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (_amountController.text.isEmpty) return '';
     final amount = double.tryParse(_amountController.text) ?? 0;
     return _isFiat 
-        ? '≈ ${_convertAmount(_amountController.text, false).toStringAsFixed(8)} ${_selectedCoin.symbol}'
-        : '≈ ${_convertAmount(_amountController.text, true).toStringAsFixed(2)} $_selectedFiat';
+        ? '≈ ${_convertAmount(_amountController.text, false).toStringAsFixed(8)} ${_selectedAsset['token']['symbol']}'
+        : '≈ ${_convertAmount(_amountController.text, true).toStringAsFixed(2)} ${_showInUSD ? 'USD' : _userCurrency}';
   }
 
   @override
   void initState() {
     super.initState();
-    _selectedCoin = coins[0];
-    _selectedNetwork = _selectedCoin.networks[0];
+    _selectedAsset = widget.asset;
+    _initializeNetwork();
+    _amountController.addListener(_onAmountChanged);
   }
 
   @override
@@ -82,6 +105,60 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     _addressController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  void _initializeNetwork() {
+    final token = _selectedAsset['token'] as Map<String, dynamic>;
+    final metadata = token['metadata'] as Map<String, dynamic>;
+
+    _selectedNetwork = Network(
+      name: metadata['networks']?.first ?? 'mainnet',
+      blockchain: token['blockchain'],
+      version: token['networkVersion'],
+      arrivalTime: '10-30 minutes',
+      network: metadata['networks']?.first ?? 'mainnet',
+    );
+
+    // Set initial warning message
+    _updateWarningMessage();
+  }
+
+  void _updateWarningMessage() {
+    setState(() {
+      _warningMessage = 'Send ${_selectedAsset['token']['symbol']} only through '
+          '${_selectedNetwork.version} on ${_selectedNetwork.blockchain}. '
+          'Using other networks may result in permanent loss.';
+    });
+  }
+
+  Future<void> _onAmountChanged() async {
+    if (_amountController.text.isEmpty) {
+      setState(() {
+        _feeDetails = null;
+        _receiveAmount = null;
+      });
+      return;
+    }
+
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null) return;
+
+    try {
+      final feeDetails = await _walletService.calculateWithdrawalFee(
+        tokenId: _selectedAsset['token']['id'],
+        amount: amount,
+        networkVersion: _selectedNetwork.version,
+        network: _selectedNetwork.network,
+      );
+
+      setState(() {
+        _feeDetails = feeDetails;
+        _receiveAmount = feeDetails['receiveAmount'];
+      });
+    } catch (e) {
+      print('Error calculating fee: $e');
+      // Don't show error to user yet, will show during validation
+    }
   }
 
   // Add validation methods
@@ -182,9 +259,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
           children: [
             Text('Please confirm your withdrawal details:'),
             const SizedBox(height: 16),
-            _buildConfirmationRow('Amount:', '${_amountController.text} ${_selectedCoin.symbol}'),
-            _buildConfirmationRow('Network Fee:', '0.0001 ${_selectedCoin.symbol}'),
-            _buildConfirmationRow('You will receive:', '${(double.parse(_amountController.text) - 0.0001).toStringAsFixed(4)} ${_selectedCoin.symbol}'),
+            _buildConfirmationRow('Amount:', '${_amountController.text} ${_selectedAsset['token']['symbol']}'),
+            _buildConfirmationRow('Network Fee:', '0.0001 ${_selectedAsset['token']['symbol']}'),
+            _buildConfirmationRow('You will receive:', '${(double.parse(_amountController.text) - 0.0001).toStringAsFixed(4)} ${_selectedAsset['token']['symbol']}'),
             _buildConfirmationRow('Network:', _selectedNetwork.name),
             _buildConfirmationRow('Address:', _addressController.text),
             const SizedBox(height: 16),
@@ -234,10 +311,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   Future<void> _saveAddress(String address) async {
-    await getIt<AddressService>().addRecentAddress(
+    await GetIt.I<AddressService>().addRecentAddress(
       RecentAddress(
         address: address,
-        coin: _selectedCoin.symbol,
+        coin: _selectedAsset['token']['symbol'],
         network: _selectedNetwork.name,
         lastUsed: DateTime.now(),
       ),
@@ -283,76 +360,116 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   // Coin Selection
                   FadeInDown(
                     duration: const Duration(milliseconds: 600),
-                    child: GestureDetector(
-                      onTap: () async {
-                        final result = await showModalBottomSheet<Coin>(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => const CoinSelectionModal(),
-                        );
-                        if (result != null) {
-                          setState(() {
-                            _selectedCoin = result;
-                            _selectedNetwork = result.networks[0];
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDark 
-                              ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                              : SafeJetColors.lightCardBackground,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDark
-                                ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                : SafeJetColors.lightCardBorder,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Coin',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: SafeJetColors.secondaryHighlight,
-                                borderRadius: BorderRadius.circular(12),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            final result = await Navigator.push<Coin>(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const CoinSelectionModal(),
                               ),
-                              child: const Icon(
-                                Icons.currency_bitcoin,
-                                color: Colors.black,
-                                size: 24,
+                            );
+                            if (result != null) {
+                              setState(() {
+                                _selectedAsset = result.toJson();
+                                _initializeNetwork();
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark 
+                                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                  : SafeJetColors.lightCardBackground,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark
+                                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                    : SafeJetColors.lightCardBorder,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _selectedCoin.name,
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                            child: Row(
+                              children: [
+                                // Token Icon
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    image: _selectedAsset['token']['metadata']?['icon'] != null
+                                        ? DecorationImage(
+                                            image: NetworkImage(_selectedAsset['token']['metadata']['icon']),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
                                   ),
-                                  Text(
-                                    _selectedCoin.symbol,
+                                  child: _selectedAsset['token']['metadata']?['icon'] == null
+                                      ? Center(
+                                          child: Text(
+                                            _selectedAsset['token']['symbol'][0],
+                                            style: theme.textTheme.titleLarge?.copyWith(
+                                              color: isDark ? Colors.white : Colors.black,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 12),
+                                // Token Name and Symbol
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _selectedAsset['token']['name'],
+                                        style: theme.textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      Text(
+                                        _selectedAsset['token']['symbol'],
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Network Count
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isDark 
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.black.withOpacity(0.05),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${_selectedAsset['token']['networks']?.length ?? 1} network${(_selectedAsset['token']['networks']?.length ?? 1) > 1 ? 's' : ''}',
                                     style: TextStyle(
                                       color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                      fontSize: 12,
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
 
@@ -429,9 +546,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     isScrollControlled: true,
                                     backgroundColor: Colors.transparent,
                                     builder: (context) => AddressBookModal(
-                                      selectedCoin: _selectedCoin.symbol,
+                                      selectedCoin: _selectedAsset['token']['symbol'],
                                       selectedNetwork: _selectedNetwork.name,
-                                      addressService: getIt<AddressService>(),
+                                      addressService: GetIt.I<AddressService>(),
                                     ),
                                   );
 
@@ -482,7 +599,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               children: [
                                 ChoiceChip(
                                   label: Text(
-                                    _selectedCoin.symbol,
+                                    _selectedAsset['token']['symbol'],
                                     style: TextStyle(
                                       color: !_isFiat ? Colors.black : (isDark ? Colors.grey[400] : Colors.grey[600]),
                                       fontWeight: !_isFiat ? FontWeight.bold : FontWeight.normal,
@@ -693,7 +810,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (context) => NetworkSelectionModal(
-                                networks: _selectedCoin.networks,
+                                networks: _selectedAsset['token']['networks'],
                                 selectedNetwork: _selectedNetwork,
                                 onNetworkSelected: (network) {
                                   setState(() {
@@ -795,7 +912,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                 ),
                               ),
                               Text(
-                                '0.0001 BTC',
+                                '0.0001 ${_selectedAsset['token']['symbol']}',
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -813,7 +930,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                 ),
                               ),
                               Text(
-                                '0.2383 BTC',
+                                '${_receiveAmount?.toStringAsFixed(4) ?? '0.0000'} ${_selectedAsset['token']['symbol']}',
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -827,10 +944,50 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Withdraw Button
+                  // Warning Message
                   FadeInDown(
                     duration: const Duration(milliseconds: 600),
                     delay: const Duration(milliseconds: 500),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isDark 
+                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                            : SafeJetColors.lightCardBackground,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark
+                              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                              : SafeJetColors.lightCardBorder,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Warning',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _warningMessage!,
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Withdraw Button
+                  FadeInDown(
+                    duration: const Duration(milliseconds: 600),
+                    delay: const Duration(milliseconds: 600),
                     child: SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(

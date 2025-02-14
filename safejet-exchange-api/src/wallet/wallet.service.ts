@@ -15,6 +15,9 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { delay } from '../utils/helpers';
 import { chunk } from 'lodash';
 import { NetworkConfig, NetworkResponse } from './types/network.types';
+import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
+import { Withdrawal } from './entities/withdrawal.entity';
+import { Connection } from 'typeorm';
 
 interface PaginationParams {
   page: number;
@@ -98,9 +101,8 @@ export class WalletService {
     private walletBalanceRepository: Repository<WalletBalance>,
     private keyManagementService: KeyManagementService,
     private readonly exchangeService: ExchangeService,
+    private connection: Connection,
   ) {}
-
-
 
   private async initializeWalletBalances(wallet: Wallet) {
     // Get ALL tokens for ALL networks
@@ -173,12 +175,6 @@ export class WalletService {
     }
   }
 
-
-
-
-
-
-  // Add method to check if balances exist and create if missing
   async ensureWalletBalances(walletId: string) {
     const wallet = await this.walletRepository.findOne({
       where: { id: walletId }
@@ -196,11 +192,6 @@ export class WalletService {
       await this.initializeWalletBalances(wallet);
     }
   }
-
-
-
-
-
 
   async getWallets(userId: string): Promise<Wallet[]> {
     return this.walletRepository.find({
@@ -220,11 +211,6 @@ export class WalletService {
     return wallet;
   }
 
-
-
-
-
-  // Get all balances for a wallet
   async getWalletBalances(
     userId: string, 
     walletId: string,
@@ -240,9 +226,6 @@ export class WalletService {
     });
   }
 
-
-
-  // Get specific token balance
   async getTokenBalance(
     userId: string,
     walletId: string,
@@ -265,9 +248,6 @@ export class WalletService {
     });
   }
 
-
-
-  // Update balance
   async updateBalance(
     userId: string,
     walletId: string,
@@ -1047,5 +1027,204 @@ export class WalletService {
     return new Decimal(data.total)
       .times(new Decimal(exchangeRate.rate))
       .toString();
+  }
+
+  async calculateWithdrawalFee(
+    tokenId: string,
+    amount: number,
+    networkVersion: string,
+    network: string,
+  ): Promise<{
+    feeAmount: string;
+    feeUSD: string;
+    receiveAmount: string;
+  }> {
+    const token = await this.tokenRepository.findOne({
+      where: { id: tokenId }
+    });
+    
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
+
+    // Get network config
+    const networkConfig = token.networkConfigs?.[networkVersion]?.[network];
+    if (!networkConfig) {
+      throw new BadRequestException('Invalid network configuration');
+    }
+
+    const fee = networkConfig.fee;
+    let feeAmount = '0';
+    
+    // Calculate fee based on type
+    switch (fee.type) {
+      case 'usd':
+        // Convert USD fee to token amount using current price
+        const usdFee = new Decimal(fee.value);
+        const tokenPrice = new Decimal(token.currentPrice || '0');
+        feeAmount = tokenPrice.isZero() 
+          ? '0' 
+          : usdFee.div(tokenPrice).toString();
+        break;
+        
+      case 'percentage':
+        // Calculate percentage of withdrawal amount
+        feeAmount = new Decimal(amount)
+          .times(new Decimal(fee.value))
+          .toString();
+        break;
+        
+      case 'token':
+        // Fixed token amount
+        feeAmount = fee.value;
+        break;
+        
+      default:
+        throw new BadRequestException('Invalid fee configuration');
+    }
+
+    // Calculate USD value of fee
+    const feeUSD = new Decimal(feeAmount)
+      .times(new Decimal(token.currentPrice || '0'))
+      .toString();
+
+    // Calculate amount user will receive
+    const receiveAmount = new Decimal(amount)
+      .minus(new Decimal(feeAmount))
+      .toString();
+
+    return {
+      feeAmount,
+      feeUSD,
+      receiveAmount,
+    };
+  }
+
+  async validateWithdrawalRequest(
+    userId: string,
+    tokenId: string,
+    amount: string,
+    networkVersion: string,
+    network: string,
+  ): Promise<{
+    token: Token;
+    balance: WalletBalance;
+    fee: {
+      feeAmount: string;
+      feeUSD: string;
+      receiveAmount: string;
+    };
+  }> {
+    // First get the token
+    const token = await this.tokenRepository.findOne({ 
+      where: { id: tokenId } 
+    });
+
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
+
+    // Then get the balance using token.baseSymbol
+    const balance = await this.walletBalanceRepository.findOne({
+      where: {
+        userId,
+        type: 'funding',
+        baseSymbol: token.baseSymbol,
+      }
+    });
+
+    if (!balance) {
+      throw new NotFoundException('Balance not found');
+    }
+
+    // Calculate fees
+    const fee = await this.calculateWithdrawalFee(
+      tokenId,
+      new Decimal(amount).toNumber(),
+      networkVersion,
+      network,
+    );
+
+    // Check if user has sufficient balance (amount + fee)
+    const totalRequired = new Decimal(amount).plus(new Decimal(fee.feeAmount));
+    const currentBalance = new Decimal(balance.balance);
+
+    if (currentBalance.lessThan(totalRequired)) {
+      throw new BadRequestException('Insufficient balance for withdrawal and fees');
+    }
+
+    return { token, balance, fee };
+  }
+
+  async createWithdrawal(
+    userId: string,
+    withdrawalDto: CreateWithdrawalDto,
+  ): Promise<Withdrawal> {
+    // First validate the request and calculate fees
+    const { token, balance, fee } = await this.validateWithdrawalRequest(
+      userId,
+      withdrawalDto.tokenId,
+      withdrawalDto.amount.toString(),
+      withdrawalDto.networkVersion,
+      withdrawalDto.network,
+    );
+
+    // Create withdrawal record
+    const withdrawal = new Withdrawal();
+    withdrawal.userId = userId;
+    withdrawal.tokenId = withdrawalDto.tokenId;
+    withdrawal.address = withdrawalDto.address;
+    withdrawal.amount = withdrawalDto.amount.toString();
+    withdrawal.fee = fee.feeAmount;
+    withdrawal.networkVersion = withdrawalDto.networkVersion;
+    withdrawal.network = withdrawalDto.network;
+    withdrawal.memo = withdrawalDto.memo;
+    withdrawal.tag = withdrawalDto.tag;
+    withdrawal.status = 'pending';
+    withdrawal.metadata = {
+      token: {
+        symbol: token.symbol,
+        name: token.name,
+        networkVersion: withdrawalDto.networkVersion,
+      },
+      fee: {
+        amount: fee.feeAmount,
+        usdValue: fee.feeUSD,
+      },
+      receiveAmount: fee.receiveAmount,
+    };
+
+    // Start transaction
+    const queryRunner = this.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Deduct from balance
+      const totalDeduction = new Decimal(withdrawalDto.amount)
+        .plus(new Decimal(fee.feeAmount))
+        .toString();
+        
+      await queryRunner.manager.update(
+        WalletBalance,
+        { id: balance.id },
+        { 
+          balance: new Decimal(balance.balance)
+            .minus(new Decimal(totalDeduction))
+            .toString() 
+        }
+      );
+
+      // Save withdrawal
+      const savedWithdrawal = await queryRunner.manager.save(withdrawal);
+      
+      await queryRunner.commitTransaction();
+      return savedWithdrawal;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 } 

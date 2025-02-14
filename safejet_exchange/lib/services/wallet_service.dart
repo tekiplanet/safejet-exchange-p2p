@@ -5,6 +5,7 @@ import '../services/service_locator.dart';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import '../models/coin.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WalletService {
   late final Dio _dio;
@@ -246,6 +247,108 @@ class WalletService {
       debugPrint('Error getting available coins: $e');
       rethrow;
     }
+  }
+
+  Future<Map<String, dynamic>> calculateWithdrawalFee({
+    required String tokenId,
+    required double amount,
+    required String networkVersion,
+    required String network,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/wallets/calculate-withdrawal-fee',
+        data: {
+          'tokenId': tokenId,
+          'amount': amount,
+          'networkVersion': networkVersion,
+          'network': network,
+        },
+        options: Options(headers: await _getAuthHeaders()),
+      );
+
+      return response.data;
+    } catch (e) {
+      if (e is DioException) {
+        final message = e.response?.data['message'];
+        switch (e.response?.statusCode) {
+          case 400:
+            throw message ?? 'Invalid withdrawal request';
+          case 404:
+            throw 'Token or network configuration not found';
+          default:
+            throw 'Failed to calculate withdrawal fee';
+        }
+      }
+      throw 'An error occurred while calculating fee';
+    }
+  }
+
+  Future<Map<String, dynamic>> createWithdrawal({
+    required String tokenId,
+    required String address,
+    required double amount,
+    required String networkVersion,
+    required String network,
+    String? memo,
+    String? tag,
+    required String password,
+    required String twoFactorCode,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/wallets/withdraw',
+        data: {
+          'tokenId': tokenId,
+          'address': address,
+          'amount': amount,
+          'networkVersion': networkVersion,
+          'network': network,
+          'memo': memo,
+          'tag': tag,
+          'password': password,
+          'twoFactorCode': twoFactorCode,
+        },
+        options: Options(headers: await _getAuthHeaders()),
+      );
+
+      return response.data;
+    } catch (e) {
+      if (e is DioException) {
+        final message = e.response?.data['message'];
+        switch (e.response?.statusCode) {
+          case 400:
+            throw message ?? 'Invalid withdrawal request';
+          case 401:
+            if (message?.contains('password') ?? false) {
+              throw 'Invalid password';
+            }
+            if (message?.contains('2FA') ?? false) {
+              throw 'Invalid 2FA code';
+            }
+            throw 'Authentication failed';
+          case 403:
+            throw 'Insufficient permissions';
+          case 404:
+            throw 'Token or network not found';
+          case 422:
+            throw 'Insufficient balance';
+          default:
+            print('Withdrawal error details: ${e.response?.data}');
+            throw 'Failed to process withdrawal';
+        }
+      }
+      throw 'An error occurred during withdrawal';
+    }
+  }
+
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    return {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
   }
 }
 

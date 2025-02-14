@@ -1,13 +1,19 @@
-import { Controller, Post, Get, Param, Body, UseGuards, Request, Query, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, UseGuards, Request, Query, HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { User } from '../auth/entities/user.entity';
 import { CreateWalletDto } from './dto/create-wallet.dto';
+import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
+import { AuthService } from '../auth/auth.service';
+import { Withdrawal } from './entities/withdrawal.entity';
 
 @Controller('wallets')
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly authService: AuthService
+  ) {}
 
   @Get('balances')
   @UseGuards(JwtAuthGuard)
@@ -121,5 +127,49 @@ export class WalletController {
   @UseGuards(JwtAuthGuard)
   async getAvailableTokens() {
     return this.walletService.getAvailableTokens();
+  }
+
+  @Post('calculate-withdrawal-fee')
+  @UseGuards(JwtAuthGuard)
+  async calculateWithdrawalFee(
+    @GetUser('id') userId: string,
+    @Body() data: {
+      tokenId: string;
+      amount: number;
+      networkVersion: string;
+      network: string;
+    },
+  ): Promise<{
+    feeAmount: string;
+    feeUSD: string;
+    receiveAmount: string;
+  }> {
+    return this.walletService.calculateWithdrawalFee(
+      data.tokenId,
+      data.amount,
+      data.networkVersion,
+      data.network,
+    );
+  }
+
+  @Post('withdraw')
+  @UseGuards(JwtAuthGuard)
+  async createWithdrawal(
+    @GetUser() user: User,
+    @Body() withdrawalDto: CreateWithdrawalDto,
+    @Body('password') password: string,
+    @Body('twoFactorCode') twoFactorCode: string,
+  ): Promise<Withdrawal> {
+    // First verify password
+    const isPasswordValid = await this.authService.verifyPassword(password, user);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid password');
+    }
+
+    // Then verify 2FA
+    await this.authService.verify2FAAction(twoFactorCode, user);
+
+    // Process withdrawal
+    return this.walletService.createWithdrawal(user.id, withdrawalDto);
   }
 } 
