@@ -340,26 +340,22 @@ export class WalletService {
       const limit = Math.max(1, Math.floor(Number(pagination.limit)));
       const offset = (page - 1) * limit;
 
-      // First get all non-zero balances
-      const nonZeroBalances = await this.walletBalanceRepository
+      // Single query with proper ordering and pagination
+      const balances = await this.walletBalanceRepository
         .createQueryBuilder('balance')
         .where('balance.userId = :userId', { userId })
         .andWhere(type ? 'balance.type = :type' : '1=1', { type })
-        .andWhere('CAST(balance.balance AS DECIMAL) > 0')
-        .getMany();
-
-      // Then get remaining balances with pagination
-      const remainingBalances = await this.walletBalanceRepository
-        .createQueryBuilder('balance')
-        .where('balance.userId = :userId', { userId })
-        .andWhere(type ? 'balance.type = :type' : '1=1', { type })
-        .andWhere('CAST(balance.balance AS DECIMAL) = 0')
+        // Order by non-zero balances first, then by baseSymbol
+        .orderBy('CAST(balance.balance AS DECIMAL) > 0', 'DESC')
+        .addOrderBy('balance.baseSymbol', 'ASC')
         .skip(offset)
-        .take(limit - nonZeroBalances.length)
+        .take(limit)
         .getMany();
 
-      // Combine non-zero and remaining balances
-      const balances = [...nonZeroBalances, ...remainingBalances];
+      // Calculate total count for pagination
+      const totalCount = await this.walletBalanceRepository.count({
+        where: { userId, ...(type && { type }) }
+      });
 
       // First fetch all token prices in batch to avoid multiple DB queries
       const tokenIds = new Set<string>();
@@ -429,11 +425,6 @@ export class WalletService {
           };
         })
       );
-
-      // Calculate total count for pagination
-      const totalCount = await this.walletBalanceRepository.count({
-        where: { userId, ...(type && { type }) }
-      });
 
       // Calculate totals using Decimal.js
       const totalValue = processedBalances.reduce((acc: Decimal, balance) => {
