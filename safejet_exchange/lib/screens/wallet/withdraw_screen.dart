@@ -273,6 +273,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   bool _validateAmount(String amount) {
+    // Add debug prints
+    print('Asset data: ${widget.asset}');
+    print('Asset type: ${widget.asset['type']}');
+    print('Asset balance: ${widget.asset['balance']}');
+    
     if (amount.isEmpty) {
       setState(() => _amountError = 'Amount is required');
       return false;
@@ -289,12 +294,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return false;
     }
 
-    // Get actual balance from asset
-    final balance = double.tryParse(widget.asset['balance'].toString()) ?? 0.0;
+    // Use balance directly since this is already a funding wallet
+    final fundingBalance = double.tryParse(widget.asset['balance'].toString()) ?? 0.0;
     final coinAmount = _isFiat ? _convertAmount(amount, false) : parsedAmount;
     
-    if (coinAmount > balance) {
-      setState(() => _amountError = 'Insufficient balance');
+    print('Attempting to withdraw: $coinAmount');
+    print('Available funding balance: $fundingBalance');
+    
+    if (coinAmount > fundingBalance) {
+      setState(() => _amountError = 'Insufficient funding balance');
       return false;
     }
 
@@ -738,7 +746,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       onPressed: () {
                                         setState(() {
                                           _maxAmount = true;
-                                          final balance = double.tryParse(widget.asset['balance'].toString()) ?? 0.0;
+                                          final balance = double.tryParse(widget.asset['balance']?.toString() ?? '0') ?? 0.0;
                                           _amountController.text = _isFiat 
                                               ? _convertAmount(balance.toString(), true).toStringAsFixed(2)
                                               : balance.toString();

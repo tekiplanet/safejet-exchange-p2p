@@ -656,17 +656,50 @@ class _WalletsTabState extends State<WalletsTab> {
                                   label: 'Withdraw',
                                   description: 'To bank',
                                   color: isDark ? Colors.white : SafeJetColors.lightText,
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => WithdrawScreen(
-                                        asset: _balances.first,
-                                        showInUSD: _showInUSD,
-                                        userCurrencyRate: _userCurrencyRate,
-                                        userCurrency: _userCurrency,
-                                      ),
-                                    ),
-                                  ),
+                                  onTap: () async {
+                                    // If we're not in funding tab, load funding balances first
+                                    if (_selectedFilter != 'Funding') {
+                                      setState(() => _isLoading = true);
+                                      final data = await _walletService.getBalances(
+                                        type: 'funding',
+                                        currency: _showInUSD ? 'USD' : _userCurrency,
+                                        page: 1,
+                                        limit: _pageSize,
+                                      );
+                                      setState(() => _isLoading = false);
+
+                                      // Find the funding balance for this token
+                                      final fundingBalance = data['balances'].firstWhere(
+                                        (b) => b['token']['id'] == _balances.first['token']['id'],
+                                        orElse: () => _balances.first,
+                                      );
+
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => WithdrawScreen(
+                                            asset: fundingBalance,
+                                            showInUSD: _showInUSD,
+                                            userCurrencyRate: _userCurrencyRate,
+                                            userCurrency: _userCurrency,
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      // Already in funding tab, use current balance
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => WithdrawScreen(
+                                            asset: _balances.first,
+                                            showInUSD: _showInUSD,
+                                            userCurrencyRate: _userCurrencyRate,
+                                            userCurrency: _userCurrency,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
                                 ),
                                 const SizedBox(width: 12),
                                 _buildQuickActionCard(
