@@ -459,10 +459,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: _handleCoinSelection,
-                          child: _buildCoinSelection(theme, isDark),
-                        ),
+                        _buildCoinSelection(theme, isDark),
                       ],
                     ),
                   ),
@@ -1128,126 +1125,52 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   Widget _buildCoinSelection(ThemeData theme, bool isDark) {
-    if (_selectedCoin == null) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark 
-              ? SafeJetColors.primaryAccent.withOpacity(0.1)
-              : SafeJetColors.lightCardBackground,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                : SafeJetColors.lightCardBorder,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isDark 
-                    ? Colors.white.withOpacity(0.1)
-                    : Colors.black.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                Icons.currency_exchange,
-                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Select a coin',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark 
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-              : SafeJetColors.lightCardBorder,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              image: _selectedCoin?.iconUrl != null
-                  ? DecorationImage(
-                      image: NetworkImage(_selectedCoin!.iconUrl!),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: _selectedCoin?.iconUrl == null
-                ? Center(
-                    child: Text(
-                      _selectedCoin!.symbol[0],
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
+    return GestureDetector(
+      onTap: _handleCoinSelection,
+      child: ListTile(
+        leading: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            image: _selectedCoin?.iconUrl != null
+                ? DecorationImage(
+                    image: NetworkImage(_selectedCoin!.iconUrl!),
+                    fit: BoxFit.cover,
                   )
                 : null,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _selectedCoin!.name,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+          child: _selectedCoin?.iconUrl == null
+              ? Center(
+                  child: Text(
+                    _selectedCoin?.symbol[0] ?? 'S',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
                   ),
-                ),
-                Text(
-                  _selectedCoin!.symbol,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                  ),
-                ),
-              ],
-            ),
+                )
+              : null,
+        ),
+        title: Text(
+          _selectedCoin?.name ?? 'Select Coin',
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.bold,
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: isDark 
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '${_selectedCoin!.networks.length} network${_selectedCoin!.networks.length > 1 ? 's' : ''}',
-              style: TextStyle(
-                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                fontSize: 12,
-              ),
-            ),
+        ),
+        subtitle: Text(
+          _selectedCoin?.symbol ?? 'Choose a coin to withdraw',
+          style: TextStyle(
+            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+            fontSize: 13,
           ),
-        ],
+        ),
+        trailing: _selectedCoin != null ? Text(
+          '${_selectedCoin!.networks.length} ${_selectedCoin!.networks.length == 1 ? 'network' : 'networks'}',
+          style: TextStyle(
+            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+            fontSize: 12,
+          ),
+        ) : null,
       ),
     );
   }
