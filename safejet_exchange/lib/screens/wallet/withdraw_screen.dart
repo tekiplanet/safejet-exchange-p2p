@@ -187,13 +187,19 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return;
     }
 
-    final amount = double.tryParse(_amountController.text);
-    if (amount == null) return;
+    final inputAmount = double.tryParse(_amountController.text);
+    if (inputAmount == null) return;
 
     try {
+      // Convert fiat amount to token amount if needed
+      final tokenAmount = _isFiat 
+          ? _convertAmount(_amountController.text, false)  // Convert from fiat to token
+          : inputAmount;  // Already in token amount
+
+      // Calculate fee using token amount
       final feeDetails = await _walletService.calculateWithdrawalFee(
         tokenId: _selectedCoin!.id,
-        amount: amount,
+        amount: tokenAmount,
         networkVersion: _selectedNetwork!.version,
         network: _selectedNetwork!.network,
       );
@@ -918,8 +924,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                 ),
                                 Text(
                                   _feeDetails != null 
-                                      ? '${_feeDetails!['feeAmount']} ${_selectedCoin?.symbol}'
-                                      : '- ${_selectedCoin?.symbol}',
+                                      ? _isFiat 
+                                          ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
+                                              double.parse(_feeDetails!['feeUSD']) *  // Use feeUSD directly
+                                              (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
+                                            )}'
+                                          : '${_feeDetails!['feeAmount']} ${_selectedCoin?.symbol}'
+                                      : '- ${_isFiat ? _selectedFiatCurrency : _selectedCoin?.symbol}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -937,7 +948,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                   ),
                                 ),
                                 Text(
-                                  '${_receiveAmount?.toStringAsFixed(4) ?? '0.0000'} ${_selectedCoin?.symbol}',
+                                  _receiveAmount != null
+                                      ? _isFiat
+                                          ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
+                                              double.parse(_feeDetails!['receiveAmount']) * 
+                                              double.parse(widget.asset['token']?['currentPrice'] ?? '0') *  // Convert token to USD
+                                              (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
+                                            )}'
+                                          : '${_receiveAmount?.toStringAsFixed(4)} ${_selectedCoin?.symbol}'
+                                      : '0.0000 ${_isFiat ? _selectedFiatCurrency : _selectedCoin?.symbol}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
