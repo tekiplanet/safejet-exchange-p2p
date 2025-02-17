@@ -171,11 +171,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
       setState(() {
         _feeDetails = feeDetails;
-        _receiveAmount = feeDetails['receiveAmount'];
+        _receiveAmount = double.parse(feeDetails['receiveAmount']);
       });
     } catch (e) {
       print('Error calculating fee: $e');
-      // Don't show error to user yet, will show during validation
     }
   }
 
@@ -247,10 +246,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return false;
     }
 
+    // Get actual balance from asset
+    final balance = double.tryParse(widget.asset['balance'].toString()) ?? 0.0;
     final coinAmount = _isFiat ? _convertAmount(amount, false) : parsedAmount;
-    const maxAmount = 0.2384; // Example max amount in coin
     
-    if (coinAmount > maxAmount) {
+    if (coinAmount > balance) {
       setState(() => _amountError = 'Insufficient balance');
       return false;
     }
@@ -694,9 +694,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       onPressed: () {
                                         setState(() {
                                           _maxAmount = true;
+                                          final balance = double.tryParse(widget.asset['balance'].toString()) ?? 0.0;
                                           _amountController.text = _isFiat 
-                                              ? _convertAmount('0.2384', true).toStringAsFixed(2)
-                                              : '0.2384';
+                                              ? _convertAmount(balance.toString(), true).toStringAsFixed(2)
+                                              : balance.toString();
                                         });
                                       },
                                       child: const Text('MAX'),
@@ -763,11 +764,31 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     arrivalTime: '10-30 minutes',
                                     network: 'mainnet',
                                   ),
-                                  onNetworkSelected: (network) {
+                                  onNetworkSelected: (network) async {
                                     setState(() {
                                       _selectedNetwork = network;
                                       _updateWarningMessage();
                                     });
+                                    
+                                    // Calculate initial fee
+                                    if (_selectedCoin != null && _amountController.text.isNotEmpty) {
+                                      try {
+                                        final amount = double.tryParse(_amountController.text) ?? 0;
+                                        final feeDetails = await _walletService.calculateWithdrawalFee(
+                                          tokenId: _selectedCoin!.id,
+                                          amount: amount,
+                                          networkVersion: network.version,
+                                          network: network.network,
+                                        );
+                                        
+                                        setState(() {
+                                          _feeDetails = feeDetails;
+                                        });
+                                      } catch (e) {
+                                        print('Error calculating fee: $e');
+                                      }
+                                    }
+                                    
                                     Navigator.pop(context);
                                   },
                                 ),
@@ -793,7 +814,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _selectedNetwork?.name ?? 'Select a network',
+                                          '${_selectedNetwork?.blockchain.toUpperCase()} (${_selectedNetwork?.version})' +
+                                          (_selectedNetwork?.network == 'testnet' ? ' - TESTNET' : ''),
                                           style: theme.textTheme.titleSmall?.copyWith(
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -865,7 +887,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                   ),
                                 ),
                                 Text(
-                                  '0.0001 ${_selectedCoin?.symbol}',
+                                  _feeDetails != null 
+                                      ? '${_feeDetails!['feeAmount']} ${_selectedCoin?.symbol}'
+                                      : '- ${_selectedCoin?.symbol}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),

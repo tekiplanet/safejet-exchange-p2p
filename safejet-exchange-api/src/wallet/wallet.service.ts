@@ -1054,6 +1054,10 @@ export class WalletService {
     }
 
     const fee = networkConfig.fee;
+    if (!fee) {
+      throw new BadRequestException('Fee configuration not found');
+    }
+
     let feeAmount = '0';
     
     // Calculate fee based on type
