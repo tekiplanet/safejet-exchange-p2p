@@ -47,6 +47,9 @@ interface NetworkConfig {
         type: FeeType;
         value: string;  // Make value required
     };
+    // Add new message fields
+    withdrawMessage?: string;
+    depositMessage?: string;
 }
 
 interface Token {
@@ -1084,6 +1087,71 @@ export default function TokenManagement() {
                                                     label="Requires Memo"
                                                 />
                                             </div>
+
+                                            {/* Add new message fields */}
+                                            <TextField
+                                                fullWidth
+                                                label="Deposit Message"
+                                                multiline
+                                                rows={2}
+                                                value={(() => {
+                                                    const version = editToken?.networkVersion;
+                                                    if (!version) return '';
+                                                    return editToken?.networkConfigs?.[version]?.[network]?.depositMessage || '';
+                                                })()}
+                                                onChange={(e) => {
+                                                    const currentConfigs = editToken?.networkConfigs || {};
+                                                    const version = editToken?.networkVersion || '';
+                                                    
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        networkConfigs: {
+                                                            ...currentConfigs,
+                                                            [version]: {
+                                                                ...currentConfigs[version],
+                                                                [network]: {
+                                                                    ...currentConfigs[version]?.[network],
+                                                                    depositMessage: e.target.value
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                                margin="normal"
+                                                placeholder="Enter deposit instructions or message"
+                                            />
+
+                                            <TextField
+                                                fullWidth
+                                                label="Withdraw Message"
+                                                multiline
+                                                rows={2}
+                                                value={(() => {
+                                                    const version = editToken?.networkVersion;
+                                                    if (!version) return '';
+                                                    return editToken?.networkConfigs?.[version]?.[network]?.withdrawMessage || '';
+                                                })()}
+                                                onChange={(e) => {
+                                                    const currentConfigs = editToken?.networkConfigs || {};
+                                                    const version = editToken?.networkVersion || '';
+                                                    
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        networkConfigs: {
+                                                            ...currentConfigs,
+                                                            [version]: {
+                                                                ...currentConfigs[version],
+                                                                [network]: {
+                                                                    ...currentConfigs[version]?.[network],
+                                                                    withdrawMessage: e.target.value
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                                margin="normal"
+                                                placeholder="Enter withdrawal instructions or message"
+                                            />
                                         </Box>
                                     ))}
                                 </Box>
