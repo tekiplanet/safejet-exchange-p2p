@@ -90,8 +90,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (amount.isEmpty) return 0;
     final parsedAmount = double.tryParse(amount) ?? 0;
     
-    // Get token price from asset data
-    final tokenPrice = double.tryParse(widget.asset['token']?['currentPrice']?.toString() ?? '0') ?? 0.0;
+    // Get token price from current asset data
+    final tokenPrice = double.tryParse(_currentAsset['token']?['currentPrice']?.toString() ?? '0') ?? 0.0;
     
     if (toFiat) {
       // Converting from token to fiat (e.g., 1 BTC -> USD or EUR)
@@ -273,10 +273,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   bool _validateAmount(String amount) {
-    // Add debug prints
-    print('Asset data: ${widget.asset}');
-    print('Asset type: ${widget.asset['type']}');
-    print('Asset balance: ${widget.asset['balance']}');
+    // Update debug prints to use _currentAsset
+    print('Asset data: $_currentAsset');
+    print('Asset type: ${_currentAsset['type']}');
+    print('Asset balance: ${_currentAsset['balance']}');
     
     if (amount.isEmpty) {
       setState(() => _amountError = 'Amount is required');
@@ -838,26 +838,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     setState(() {
                                       _selectedNetwork = network;
                                       _updateWarningMessage();
+                                      
+                                      // Reset amount-related states when network changes
+                                      _amountController.clear();
+                                      _amountError = null;
+                                      _maxAmount = false;
+                                      _feeDetails = null;
+                                      _receiveAmount = null;
                                     });
-                                    
-                                    // Calculate initial fee
-                                    if (_selectedCoin != null && _amountController.text.isNotEmpty) {
-                                      try {
-                                        final amount = double.tryParse(_amountController.text) ?? 0;
-                                        final feeDetails = await _walletService.calculateWithdrawalFee(
-                                          tokenId: _selectedCoin!.id,
-                                          amount: amount,
-                                          networkVersion: network.version,
-                                          network: network.network,
-                                        );
-                                        
-                                        setState(() {
-                                          _feeDetails = feeDetails;
-                                        });
-                                      } catch (e) {
-                                        print('Error calculating fee: $e');
-                                      }
-                                    }
                                     
                                     Navigator.pop(context);
                                   },
@@ -986,7 +974,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       ? _isFiat
                                           ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
                                               double.parse(_feeDetails!['receiveAmount']) * 
-                                              double.parse(widget.asset['token']?['currentPrice'] ?? '0') *
+                                              double.parse(_currentAsset['token']?['currentPrice'] ?? '0') *  // Use _currentAsset here
                                               (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
                                             )}'
                                           : '≈ ${_receiveAmount!.toStringAsFixed(4)} ${_selectedCoin?.symbol}'
