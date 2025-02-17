@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get_it/get_it.dart';
 import '../../services/service_locator.dart';
 import '../../services/wallet_service.dart';
+import 'package:intl/intl.dart';
 
 class WithdrawScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -57,39 +58,67 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   Map<String, dynamic>? _feeDetails;
   double? _receiveAmount;
 
-  String _selectedFiat = 'USD'; // Default to USD
+  String _selectedFiatCurrency = 'USD';  // Remove hardcoded NGN
   bool get _showInUSD => widget.showInUSD;
   String get _userCurrency => widget.userCurrency;
   double get _userCurrencyRate => widget.userCurrencyRate;
 
-  final Map<String, Map<String, double>> _conversionRates = {
-    'BTC': {
-      'USD': 43000.0,
-      'NGN': 53750000.0,
-    },
-    'ETH': {
-      'USD': 2250.0,
-      'NGN': 2812500.0,
-    },
-  };
+  // Add number formatters
+  final _numberFormat = NumberFormat("#,##0.00", "en_US");
+  final _cryptoFormat = NumberFormat("#,##0.00######", "en_US");
+
+  // Add the currency symbol helper
+  String _getCurrencySymbol(String currency) {
+    switch (currency) {
+      case 'USD':
+        return '\$';
+      case 'EUR':
+        return '€';
+      case 'GBP':
+        return '£';
+      case 'NGN':
+        return '₦';
+      default:
+        return currency;
+    }
+  }
 
   double _convertAmount(String amount, bool toFiat) {
     if (amount.isEmpty) return 0;
     final parsedAmount = double.tryParse(amount) ?? 0;
     
+    // Get token price from asset data
+    final tokenPrice = double.tryParse(widget.asset['token']?['currentPrice']?.toString() ?? '0') ?? 0.0;
+    
     if (toFiat) {
-      return parsedAmount * (_showInUSD ? 1 : _userCurrencyRate);
+      // Converting from token to fiat (e.g., 1 BTC -> USD or EUR)
+      final usdAmount = parsedAmount * tokenPrice;
+      return _selectedFiatCurrency == 'USD' ? usdAmount : usdAmount * _userCurrencyRate;
     } else {
-      return parsedAmount / (_showInUSD ? 1 : _userCurrencyRate);
+      // Converting from fiat to token (e.g., USD or EUR -> BTC)
+      if (_selectedFiatCurrency == 'USD') {
+        return tokenPrice > 0 ? parsedAmount / tokenPrice : 0;
+      } else {
+        // First convert user currency to USD, then to token
+        final usdAmount = parsedAmount / _userCurrencyRate;
+        return tokenPrice > 0 ? usdAmount / tokenPrice : 0;
+      }
     }
   }
 
   String _getFormattedAmount() {
     if (_amountController.text.isEmpty) return '';
     final amount = double.tryParse(_amountController.text) ?? 0;
-    return _isFiat 
-        ? '≈ ${_convertAmount(_amountController.text, false).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
-        : '≈ ${_convertAmount(_amountController.text, true).toStringAsFixed(2)} ${_showInUSD ? 'USD' : _userCurrency}';
+    
+    if (_isFiat) {
+      // When input is in fiat, show crypto equivalent
+      final cryptoAmount = _convertAmount(_amountController.text, false);
+      return '≈ ${_cryptoFormat.format(cryptoAmount)} ${_selectedCoin?.symbol}';
+    } else {
+      // When input is in crypto, show fiat equivalent
+      final fiatAmount = _convertAmount(_amountController.text, true);
+      return '≈ ${_numberFormat.format(fiatAmount)} ${_selectedFiatCurrency}';
+    }
   }
 
   @override
@@ -565,6 +594,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       if (selected) {
                                         setState(() {
                                           _isFiat = false;
+                                          _selectedFiatCurrency = _showInUSD ? 'USD' : _userCurrency;
                                           if (_amountController.text.isNotEmpty) {
                                             _amountController.text = _convertAmount(_amountController.text, false).toStringAsFixed(8);
                                           }
@@ -577,19 +607,19 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     label: Text(
                                       'USD',
                                       style: TextStyle(
-                                        color: _isFiat && _selectedFiat == 'USD' 
+                                        color: _isFiat && _selectedFiatCurrency == 'USD' 
                                             ? Colors.black 
                                             : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                        fontWeight: _isFiat && _selectedFiat == 'USD' ? FontWeight.bold : FontWeight.normal,
+                                        fontWeight: _isFiat && _selectedFiatCurrency == 'USD' ? FontWeight.bold : FontWeight.normal,
                                       ),
                                     ),
-                                    selected: _isFiat && _selectedFiat == 'USD',
+                                    selected: _isFiat && _selectedFiatCurrency == 'USD',
                                     selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
                                     backgroundColor: Colors.transparent,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                       side: BorderSide(
-                                        color: _isFiat && _selectedFiat == 'USD'
+                                        color: _isFiat && _selectedFiatCurrency == 'USD'
                                             ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
                                             : Colors.transparent,
                                       ),
@@ -599,10 +629,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       if (selected) {
                                         setState(() {
                                           _isFiat = true;
-                                          _selectedFiat = 'USD';
-                                          if (_amountController.text.isNotEmpty) {
-                                            _amountController.text = _convertAmount(_amountController.text, true).toStringAsFixed(2);
-                                          }
+                                          _selectedFiatCurrency = 'USD';
+                                          _amountController.clear(); // Clear amount
+                                          _feeDetails = null; // Reset fee details
                                         });
                                       }
                                     },
@@ -610,21 +639,21 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                   const SizedBox(width: 8),
                                   ChoiceChip(
                                     label: Text(
-                                      'NGN',
+                                      _userCurrency,  // Use actual user currency
                                       style: TextStyle(
-                                        color: _isFiat && _selectedFiat == 'NGN' 
+                                        color: _isFiat && _selectedFiatCurrency == _userCurrency
                                             ? Colors.black 
                                             : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                        fontWeight: _isFiat && _selectedFiat == 'NGN' ? FontWeight.bold : FontWeight.normal,
+                                        fontWeight: _isFiat && _selectedFiatCurrency == _userCurrency ? FontWeight.bold : FontWeight.normal,
                                       ),
                                     ),
-                                    selected: _isFiat && _selectedFiat == 'NGN',
+                                    selected: _isFiat && _selectedFiatCurrency == _userCurrency,
                                     selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
                                     backgroundColor: Colors.transparent,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                       side: BorderSide(
-                                        color: _isFiat && _selectedFiat == 'NGN'
+                                        color: _isFiat && _selectedFiatCurrency == _userCurrency
                                             ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
                                             : Colors.transparent,
                                       ),
@@ -634,10 +663,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       if (selected) {
                                         setState(() {
                                           _isFiat = true;
-                                          _selectedFiat = 'NGN';
-                                          if (_amountController.text.isNotEmpty) {
-                                            _amountController.text = _convertAmount(_amountController.text, true).toStringAsFixed(2);
-                                          }
+                                          _selectedFiatCurrency = _userCurrency;
+                                          _amountController.clear(); // Clear amount
+                                          _feeDetails = null; // Reset fee details
                                         });
                                       }
                                     },
@@ -681,7 +709,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                           hintStyle: TextStyle(
                                             color: isDark ? Colors.grey[600] : Colors.grey[400],
                                           ),
-                                          prefixText: _isFiat ? (_selectedFiat == 'USD' ? '\$ ' : '₦ ') : '',
+                                          prefixText: _isFiat 
+                                              ? '${_getCurrencySymbol(_selectedFiatCurrency)} ' 
+                                              : '',
                                         ),
                                         onChanged: (value) {
                                           setState(() {
