@@ -181,6 +181,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         _warningMessage = networkConfig['withdrawMessage'] as String? ?? 
             'Ensure the withdrawal address is correct';  // Default message
       });
+
+      // Recalculate fee when network changes
+      _onAmountChanged();
     } catch (e) {
       setState(() => _warningMessage = 'Ensure the withdrawal address is correct');
     }
@@ -199,16 +202,40 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     if (inputAmount == null) return;
 
     try {
-      // Convert fiat amount to token amount if needed
       final tokenAmount = _isFiat 
-          ? _convertAmount(_amountController.text, false)  // Convert from fiat to token
-          : inputAmount;  // Already in token amount
+          ? _convertAmount(_amountController.text, false)
+          : inputAmount;
+
+      // Get token data from current asset
+      final token = _currentAsset['token'] as Map<String, dynamic>;
+      
+      // Debug logs for network data
+      print('Current Asset Token: $token');
+      
+      // Create network key in the same format as metadata
+      final networkKey = '${_selectedNetwork!.blockchain}_${_selectedNetwork!.network}';
+      print('Looking for network key: $networkKey');
+      
+      final networks = _currentAsset['metadata']['networks'] as Map<String, dynamic>;
+      print('Available Networks: $networks');
+      
+      // Get network data directly using the network key
+      final networkData = networks[networkKey] as Map<String, dynamic>?;
+      
+      if (networkData == null) {
+        print('Network not found: $networkKey');
+        throw Exception('Network configuration not found');
+      }
+
+      print('Found network configuration:');
+      print('TokenId: ${networkData['tokenId']}');
+      print('Network Version: ${networkData['networkVersion']}');
 
       // Calculate fee using token amount
       final feeDetails = await _walletService.calculateWithdrawalFee(
-        tokenId: _selectedCoin!.id,
+        tokenId: networkData['tokenId'] as String,
         amount: tokenAmount,
-        networkVersion: _selectedNetwork!.version,
+        networkVersion: networkData['networkVersion'] as String,
         network: _selectedNetwork!.network,
       );
 
@@ -218,6 +245,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       });
     } catch (e) {
       print('Error calculating fee: $e');
+      setState(() {
+        _feeDetails = null;
+        _receiveAmount = null;
+      });
     }
   }
 
@@ -840,12 +871,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       _updateWarningMessage();
                                       
                                       // Reset amount-related states when network changes
-                                      _amountController.clear();
                                       _amountError = null;
                                       _maxAmount = false;
                                       _feeDetails = null;
                                       _receiveAmount = null;
                                     });
+                                    
+                                    // Recalculate fee with new network
+                                    await _onAmountChanged();
                                     
                                     Navigator.pop(context);
                                   },
