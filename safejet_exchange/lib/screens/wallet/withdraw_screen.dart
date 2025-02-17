@@ -67,6 +67,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   final _numberFormat = NumberFormat("#,##0.00", "en_US");
   final _cryptoFormat = NumberFormat("#,##0.00######", "en_US");
 
+  // Add local asset state
+  late Map<String, dynamic> _currentAsset;
+
   // Add the currency symbol helper
   String _getCurrencySymbol(String currency) {
     switch (currency) {
@@ -124,8 +127,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedCoin = null;
-    _selectedNetwork = null;
+    _currentAsset = widget.asset;
+    _initializeCoin();  // This will set _selectedCoin and _selectedNetwork
     _amountController.addListener(_onAmountChanged);
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -141,49 +144,46 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   }
 
   void _initializeCoin() {
-    final token = widget.asset['token'] as Map<String, dynamic>;
-    final metadata = token['metadata'] as Map<String, dynamic>;
-
+    final token = _currentAsset['token'] as Map<String, dynamic>;
     _selectedCoin = Coin(
       id: token['id'],
-      symbol: token['symbol'],
+      symbol: token['baseSymbol'],
       name: token['name'],
       networks: [
         Network(
-          name: metadata['networks']?.first ?? 'mainnet',
-          blockchain: token['blockchain'],
-          version: token['networkVersion'],
-          arrivalTime: '10-30 minutes',
-          network: metadata['networks']?.first ?? 'mainnet',
+          name: token['network'] ?? 'mainnet',
+          blockchain: token['blockchain'] ?? 'unknown',
+          version: token['networkVersion'] ?? '1.0',
+          arrivalTime: token['arrivalTime'] ?? '10-30 minutes',
+          network: token['network'] ?? 'mainnet',
         )
       ],
-      iconUrl: metadata['icon'],
+      iconUrl: token['icon'],
     );
-    _selectedNetwork = _selectedCoin?.networks[0];
+    _selectedNetwork = _selectedCoin!.networks[0];
 
     // Set initial warning message
     _updateWarningMessage();
   }
 
   void _updateWarningMessage() {
-    setState(() {
-      if (_selectedCoin == null || _selectedNetwork == null) {
-        _warningMessage = null;  // Clear warning when no coin selected
-        return;
-      }
+    if (_selectedCoin == null || _selectedNetwork == null) {
+      setState(() => _warningMessage = null);
+      return;
+    }
+    
+    try {
+      final token = _currentAsset['token'] as Map<String, dynamic>;
+      final networkConfigs = token['networkConfigs'] as Map<String, dynamic>? ?? {};
+      final networkConfig = networkConfigs[_selectedNetwork!.version]?[_selectedNetwork!.network] ?? {};
       
-      // Get network config from token metadata
-      final token = widget.asset['token'] as Map<String, dynamic>;
-      final networkConfigs = token['networkConfigs'] as Map<String, dynamic>;
-      final networkConfig = networkConfigs[_selectedNetwork!.version]?[_selectedNetwork!.network];
-      
-      if (networkConfig != null) {
-        _warningMessage = networkConfig['withdrawMessage'] as String;
-      } else {
-        // Fallback message if config not found
-        _warningMessage = 'Ensure the withdrawal address is correct';
-      }
-    });
+      setState(() {
+        _warningMessage = networkConfig['withdrawMessage'] as String? ?? 
+            'Ensure the withdrawal address is correct';  // Default message
+      });
+    } catch (e) {
+      setState(() => _warningMessage = 'Ensure the withdrawal address is correct');
+    }
   }
 
   Future<void> _onAmountChanged() async {
@@ -295,7 +295,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     }
 
     // Use balance directly since this is already a funding wallet
-    final fundingBalance = double.tryParse(widget.asset['balance'].toString()) ?? 0.0;
+    final fundingBalance = double.tryParse(_currentAsset['balance']?.toString() ?? '0') ?? 0.0;
     final coinAmount = _isFiat ? _convertAmount(amount, false) : parsedAmount;
     
     print('Attempting to withdraw: $coinAmount');
@@ -402,11 +402,32 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     );
     
     if (result != null) {
-      setState(() {
-        _selectedCoin = result;
-        _selectedNetwork = result.networks[0];
-        _updateWarningMessage();
-      });
+      final data = await _walletService.getBalances(
+        type: 'funding',
+        currency: widget.showInUSD ? 'USD' : widget.userCurrency,
+      );
+
+      if (data != null && data['balances'] != null) {
+        final newAsset = data['balances'].firstWhere(
+          (b) => b['baseSymbol'] == result.symbol,
+          orElse: () => null,
+        );
+
+        if (newAsset != null) {
+          setState(() {
+            _currentAsset = newAsset;  // Update current asset
+            _selectedCoin = result;
+            _selectedNetwork = result.networks[0];
+            _amountController.clear();  // Clear amount when changing coins
+            _amountError = null;
+            _maxAmount = false;
+            _feeDetails = null;
+          });
+          
+          // Call _updateWarningMessage after state is updated
+          _updateWarningMessage();
+        }
+      }
     }
   }
 
@@ -743,7 +764,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       onPressed: () {
                                         setState(() {
                                           _maxAmount = true;
-                                          final balance = double.tryParse(widget.asset['balance']?.toString() ?? '0') ?? 0.0;
+                                          final balance = double.tryParse(_currentAsset['balance']?.toString() ?? '0') ?? 0.0;
                                           _amountController.text = _isFiat 
                                               ? _convertAmount(balance.toString(), true).toStringAsFixed(2)
                                               : balance.toString();
