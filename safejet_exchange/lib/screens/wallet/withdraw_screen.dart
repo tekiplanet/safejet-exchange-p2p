@@ -357,68 +357,230 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   // Add withdrawal confirmation dialog
   Future<bool> _showConfirmationDialog() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? SafeJetColors.primaryBackground
-            : SafeJetColors.lightBackground,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text('Confirm Withdrawal'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Please confirm your withdrawal details:'),
-            const SizedBox(height: 16),
-            _buildConfirmationRow('Amount:', '${_amountController.text} ${_selectedCoin?.symbol}'),
-            _buildConfirmationRow('Network Fee:', '0.0001 ${_selectedCoin?.symbol}'),
-            _buildConfirmationRow('You will receive:', '${(double.parse(_amountController.text) - 0.0001).toStringAsFixed(4)} ${_selectedCoin?.symbol}'),
-            _buildConfirmationRow('Network:', _selectedNetwork?.name ?? 'Not selected'),
-            _buildConfirmationRow('Address:', _addressController.text),
-            const SizedBox(height: 16),
-            Text(
-              'This action cannot be undone.',
-              style: TextStyle(color: SafeJetColors.error),
+      barrierDismissible: false,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: isDark 
+              ? SafeJetColors.primaryBackground 
+              : SafeJetColors.lightBackground,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.close,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              onPressed: () => Navigator.pop(context, false),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: SafeJetColors.secondaryHighlight,
-              foregroundColor: Colors.black,
+            title: Text(
+              'Confirm Withdrawal',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            child: const Text('Confirm'),
           ),
-        ],
+          body: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Please confirm your withdrawal details:',
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      _buildDetailCard(
+                        title: 'Amount',
+                        value: '${_amountController.text} ${_selectedCoin?.symbol}',
+                        icon: Icons.account_balance_wallet,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'Network Fee',
+                        value: '${_feeDetails?['fee'] ?? '0.0001'} ${_selectedCoin?.symbol}',
+                        icon: Icons.local_gas_station,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'You will receive',
+                        value: '${_receiveAmount?.toStringAsFixed(8) ?? '0.0000'} ${_selectedCoin?.symbol}',
+                        icon: Icons.call_received,
+                        isDark: isDark,
+                        highlight: true,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'Network',
+                        value: _selectedNetwork?.name ?? 'Not selected',
+                        icon: Icons.lan,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'Address',
+                        value: _addressController.text,
+                        icon: Icons.qr_code,
+                        isDark: isDark,
+                        copyable: true,
+                      ),
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: SafeJetColors.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: SafeJetColors.error,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'This action cannot be undone.',
+                                style: TextStyle(
+                                  color: SafeJetColors.error,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: SafeJetColors.secondaryHighlight,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Confirm',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     ) ?? false;
   }
 
-  Widget _buildConfirmationRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+  Widget _buildDetailCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required bool isDark,
+    bool highlight = false,
+    bool copyable = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: highlight 
+            ? (isDark ? SafeJetColors.secondaryHighlight.withOpacity(0.1) : SafeJetColors.secondaryHighlight.withOpacity(0.05))
+            : (isDark ? Colors.black.withOpacity(0.3) : Colors.white),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: highlight
+                  ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
+                  : (isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: highlight
+                  ? SafeJetColors.secondaryHighlight
+                  : (isDark ? Colors.grey[400] : Colors.grey[600]),
             ),
           ),
+          const SizedBox(width: 16),
           Expanded(
-            child: Text(value),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
           ),
+          if (copyable)
+            IconButton(
+              icon: Icon(
+                Icons.copy,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                size: 20,
+              ),
+              onPressed: () {
+                // Add copy functionality
+              },
+            ),
         ],
       ),
     );
