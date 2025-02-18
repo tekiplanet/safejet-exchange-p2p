@@ -359,20 +359,6 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   Future<bool> _showConfirmationDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    // Ensure we have the latest fee calculation
-    await _onAmountChanged();
-    
-    if (_feeDetails == null) {
-      // Show error if fee calculation failed
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to calculate network fee. Please try again.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return false;
-    }
-
     return await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -424,19 +410,21 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                       const SizedBox(height: 16),
                       _buildDetailCard(
                         title: 'Network Fee',
-                        value: _isFiat 
-                            ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
-                                double.parse(_feeDetails!['feeUSD']) * 
-                                (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
-                              )}'
-                            : '≈ ${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}',
+                        value: _feeDetails != null 
+                            ? _isFiat 
+                                ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
+                                    double.parse(_feeDetails!['feeUSD']) * 
+                                    (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
+                                  )}'
+                                : '${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
+                            : '- ${_isFiat ? _selectedFiatCurrency : _selectedCoin?.symbol}',
                         icon: Icons.local_gas_station,
                         isDark: isDark,
                       ),
                       const SizedBox(height: 16),
                       _buildDetailCard(
                         title: 'You will receive',
-                        value: '${_receiveAmount?.toStringAsFixed(8)} ${_selectedCoin?.symbol}',
+                        value: '${_receiveAmount?.toStringAsFixed(8) ?? '0.0000'} ${_selectedCoin?.symbol}',
                         icon: Icons.call_received,
                         isDark: isDark,
                         highlight: true,
