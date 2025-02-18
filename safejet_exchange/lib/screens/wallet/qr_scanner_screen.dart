@@ -11,10 +11,12 @@ class QRScannerScreen extends StatefulWidget {
 
 class _QRScannerScreenState extends State<QRScannerScreen> {
   late MobileScannerController _controller;
+  bool _hasScanned = false;
 
   @override
   void initState() {
     super.initState();
+    _hasScanned = false;
     _controller = MobileScannerController(
       formats: [BarcodeFormat.qrCode],
       facing: CameraFacing.back,
@@ -74,9 +76,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           MobileScanner(
             controller: _controller,
             onDetect: (capture) {
+              if (_hasScanned) return;
+              
               final List<Barcode> barcodes = capture.barcodes;
               for (final barcode in barcodes) {
+                print('Detected barcode: ${barcode.rawValue}');
                 if (barcode.rawValue != null) {
+                  print('Returning scanned address: ${barcode.rawValue}');
+                  _hasScanned = true;
                   Navigator.pop(context, barcode.rawValue);
                   break;
                 }

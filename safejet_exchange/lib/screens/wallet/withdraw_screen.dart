@@ -568,6 +568,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     icon: Icons.qr_code_scanner,
                                     label: 'Scan QR',
                                     onTap: () async {
+                                      print('Opening QR scanner...');
                                       final scannedAddress = await Navigator.push<String>(
                                         context,
                                         MaterialPageRoute(
@@ -575,7 +576,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                         ),
                                       );
                                       
+                                      print('Received scanned address: $scannedAddress');
                                       if (scannedAddress != null) {
+                                        print('Setting address and validating...');
                                         setState(() {
                                           _addressController.text = scannedAddress;
                                           _validateAddress(scannedAddress);
