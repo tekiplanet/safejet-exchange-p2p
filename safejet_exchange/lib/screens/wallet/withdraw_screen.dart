@@ -252,46 +252,67 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return false;
     }
 
-    switch (_selectedNetwork?.name) {
-      case 'Bitcoin Network (BTC)':
-        if (!address.startsWith('bc1') && !address.startsWith('1') && !address.startsWith('3')) {
-          setState(() => _addressError = 'Invalid Bitcoin address');
-          return false;
-        }
-        if (address.length < 26 || address.length > 35) {
-          setState(() => _addressError = 'Invalid Bitcoin address length');
-          return false;
-        }
-        break;
-      case 'ERC-20':
-      case 'BEP-20':
-        if (!address.startsWith('0x')) {
-          setState(() => _addressError = 'Invalid address format');
-          return false;
-        }
-        if (address.length != 42) {
-          setState(() => _addressError = 'Invalid address length');
-          return false;
-        }
-        break;
-      case 'TRC-20':
-        if (!address.startsWith('T')) {
-          setState(() => _addressError = 'Invalid TRON address');
-          return false;
-        }
-        if (address.length != 34) {
-          setState(() => _addressError = 'Invalid address length');
-          return false;
-        }
-        break;
-      case 'Solana Network':
-        if (address.length != 44) {
-          setState(() => _addressError = 'Invalid Solana address length');
-          return false;
-        }
-        break;
+    final networkName = _selectedNetwork?.name.toUpperCase() ?? '';
+    print('Validating address: $address');
+    print('Full Network Name: $networkName');  // Debug full network name
+
+    // Bitcoin validation
+    if (networkName.contains('BITCOIN') || networkName.contains('BTC')) {
+      // Check for all valid Bitcoin address formats (both mainnet and testnet)
+      if (!address.startsWith('1') && 
+          !address.startsWith('3') && 
+          !address.startsWith('bc1') &&
+          !address.startsWith('m') && 
+          !address.startsWith('n') && 
+          !address.startsWith('2') && 
+          !address.startsWith('tb1')) {
+        setState(() => _addressError = 'Invalid Bitcoin address');
+        return false;
+      }
+
+      // Length validation (covers both mainnet and testnet)
+      if (address.length < 26 || address.length > 89) {
+        setState(() => _addressError = 'Invalid Bitcoin address length');
+        return false;
+      }
+    }
+    // Ethereum and BSC validation
+    else if (networkName.contains('ETH') || networkName.contains('ERC20') || 
+             networkName.contains('BSC') || networkName.contains('BEP20')) {
+      if (!address.startsWith('0x')) {
+        setState(() => _addressError = 'Invalid address format');
+        return false;
+      }
+      if (address.length != 42) {
+        setState(() => _addressError = 'Invalid address length');
+        return false;
+      }
+    }
+    // TRON validation
+    else if (networkName.contains('TRX') || networkName.contains('TRON') || networkName.contains('TRC20')) {
+      if (!address.startsWith('T')) {
+        setState(() => _addressError = 'Invalid TRON address');
+        return false;
+      }
+      if (address.length != 34) {
+        setState(() => _addressError = 'Invalid address length');
+        return false;
+      }
+    }
+    // XRP validation
+    else if (networkName.contains('XRP') || networkName.contains('RIPPLE')) {
+      if (!address.startsWith('r')) {
+        setState(() => _addressError = 'Invalid XRP address');
+        return false;
+      }
+      if (address.length < 25 || address.length > 35) {
+        setState(() => _addressError = 'Invalid XRP address length');
+        return false;
+      }
     }
 
+    // If we get here, the address is valid for the selected network
+    print('Address validation passed');
     setState(() => _addressError = null);
     return true;
   }
@@ -615,6 +636,20 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                   ),
                                 ),
                               ),
+                              if (_addressError != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8, left: 4),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      _addressError!,
+                                      style: TextStyle(
+                                        color: SafeJetColors.error,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
