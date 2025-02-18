@@ -18,6 +18,8 @@ import { NetworkConfig, NetworkResponse } from './types/network.types';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { Withdrawal } from './entities/withdrawal.entity';
 import { Connection } from 'typeorm';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface PaginationParams {
   page: number;
@@ -1029,6 +1031,19 @@ export class WalletService {
       .toString();
   }
 
+  private logToFile(message: string) {
+    const logDir = path.join(process.cwd(), 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir);
+    }
+    
+    const logFile = path.join(logDir, 'withdrawal-fee.log');
+    const timestamp = new Date().toISOString();
+    const logMessage = `${timestamp} ${message}\n`;
+    
+    fs.appendFileSync(logFile, logMessage);
+  }
+
   async calculateWithdrawalFee(
     tokenId: string,
     amount: number,
@@ -1039,17 +1054,68 @@ export class WalletService {
     feeUSD: string;
     receiveAmount: string;
   }> {
+    this.logToFile(`[FEE] Calculating withdrawal fee - Input params:
+      tokenId: ${tokenId}
+      amount: ${amount}
+      networkVersion: ${networkVersion}
+      network: ${network}`);
+
     const token = await this.tokenRepository.findOne({
       where: { id: tokenId }
     });
     
     if (!token) {
+      this.logToFile(`[ERROR] Token not found with id: ${tokenId}`);
       throw new NotFoundException('Token not found');
     }
 
-    // Get network config
+    // If requesting testnet but have mainnet token, find the corresponding testnet token
+    if (network === 'testnet' && !token.networkConfigs?.[networkVersion]?.[network]) {
+      this.logToFile(`[INFO] Looking for testnet token for ${token.symbol}`);
+      
+      try {
+        // Fixed query with proper column name quoting
+        const testnetToken = await this.tokenRepository
+          .createQueryBuilder('tokens')
+          .where('"tokens"."baseSymbol" = :baseSymbol', { baseSymbol: token.baseSymbol })
+          .andWhere('"tokens"."networkVersion" = :networkVersion', { networkVersion })
+          .andWhere(`"tokens"."networkConfigs"::jsonb -> :version -> 'testnet' IS NOT NULL`, 
+            { version: networkVersion })
+          .getOne();
+
+        if (testnetToken) {
+          this.logToFile(`[INFO] Found testnet token: ${testnetToken.id}`);
+          return this.calculateWithdrawalFee(testnetToken.id, amount, networkVersion, network);
+        } else {
+          this.logToFile(`[ERROR] No testnet token found for ${token.symbol} with version ${networkVersion}`);
+          throw new BadRequestException(`No testnet configuration available for ${token.symbol}`);
+        }
+      } catch (error) {
+        this.logToFile(`[ERROR] Error finding testnet token: ${error.message}`);
+        throw new BadRequestException('Error finding network configuration');
+      }
+    }
+
+    this.logToFile(`[TOKEN] Found:
+      id: ${token.id}
+      symbol: ${token.symbol}
+      networkVersion: ${token.networkVersion}
+      networkConfigs: ${JSON.stringify(token.networkConfigs, null, 2)}`);
+
     const networkConfig = token.networkConfigs?.[networkVersion]?.[network];
+    
+    this.logToFile(`[CONFIG] Network configuration:
+      Looking for: ${networkVersion}/${network}
+      Found config: ${JSON.stringify(networkConfig, null, 2)}
+      Available versions: ${Object.keys(token.networkConfigs || {}).join(', ')}
+      Available networks for ${networkVersion}: ${
+        Object.keys(token.networkConfigs?.[networkVersion] || {}).join(', ')
+      }`);
+
     if (!networkConfig) {
+      this.logToFile(`[ERROR] Invalid network configuration for ${token.symbol}:
+        Requested: ${networkVersion}/${network}
+        Available configs: ${JSON.stringify(token.networkConfigs, null, 2)}`);
       throw new BadRequestException('Invalid network configuration');
     }
 
@@ -1060,10 +1126,8 @@ export class WalletService {
 
     let feeAmount = '0';
     
-    // Calculate fee based on type
     switch (fee.type) {
       case 'usd':
-        // Convert USD fee to token amount using current price
         const usdFee = new Decimal(fee.value);
         const tokenPrice = new Decimal(token.currentPrice || '0');
         feeAmount = tokenPrice.isZero() 
@@ -1072,14 +1136,12 @@ export class WalletService {
         break;
         
       case 'percentage':
-        // Calculate percentage of withdrawal amount
         feeAmount = new Decimal(amount)
           .times(new Decimal(fee.value))
           .toString();
         break;
         
       case 'token':
-        // Fixed token amount
         feeAmount = fee.value;
         break;
         
@@ -1087,15 +1149,18 @@ export class WalletService {
         throw new BadRequestException('Invalid fee configuration');
     }
 
-    // Calculate USD value of fee
     const feeUSD = new Decimal(feeAmount)
       .times(new Decimal(token.currentPrice || '0'))
       .toString();
 
-    // Calculate amount user will receive
     const receiveAmount = new Decimal(amount)
       .minus(new Decimal(feeAmount))
       .toString();
+
+    this.logToFile(`[RESULT] Fee calculation results:
+      Fee Amount: ${feeAmount} ${token.symbol}
+      Fee USD: $${feeUSD}
+      Receive Amount: ${receiveAmount} ${token.symbol}`);
 
     return {
       feeAmount,

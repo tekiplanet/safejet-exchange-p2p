@@ -206,20 +206,11 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
           ? _convertAmount(_amountController.text, false)
           : inputAmount;
 
-      // Get token data from current asset
-      final token = _currentAsset['token'] as Map<String, dynamic>;
-      
-      // Debug logs for network data
-      print('Current Asset Token: $token');
-      
-      // Create network key in the same format as metadata
-      final networkKey = '${_selectedNetwork!.blockchain}_${_selectedNetwork!.network}';
-      print('Looking for network key: $networkKey');
-      
+      // Get network metadata which contains the correct token ID for each network
       final networks = _currentAsset['metadata']['networks'] as Map<String, dynamic>;
-      print('Available Networks: $networks');
       
       // Get network data directly using the network key
+      final networkKey = '${_selectedNetwork!.blockchain}_${_selectedNetwork!.network}';
       final networkData = networks[networkKey] as Map<String, dynamic>?;
       
       if (networkData == null) {
@@ -227,17 +218,16 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         throw Exception('Network configuration not found');
       }
 
-      print('Found network configuration:');
-      print('TokenId: ${networkData['tokenId']}');
-      print('Network Version: ${networkData['networkVersion']}');
-
-      // Calculate fee using token amount
+      // Calculate fee using token amount with network-specific token ID
       final feeDetails = await _walletService.calculateWithdrawalFee(
         tokenId: networkData['tokenId'] as String,
         amount: tokenAmount,
         networkVersion: networkData['networkVersion'] as String,
-        network: _selectedNetwork!.network,
+        network: networkData['network'] as String,
       );
+
+      print('Fee calculation successful:');
+      print('Fee Details: $feeDetails');
 
       setState(() {
         _feeDetails = feeDetails;
@@ -245,6 +235,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       });
     } catch (e) {
       print('Error calculating fee: $e');
+      print('Current network data: $_selectedNetwork');
+      print('Current token data: ${_currentAsset['token']}');
+      print('Network metadata: ${_currentAsset['metadata']['networks']}');
       setState(() {
         _feeDetails = null;
         _receiveAmount = null;
@@ -439,6 +432,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       );
 
       if (data != null && data['balances'] != null) {
+        // Only match by symbol, don't filter by network yet
         final newAsset = data['balances'].firstWhere(
           (b) => b['baseSymbol'] == result.symbol,
           orElse: () => null,
@@ -446,16 +440,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
         if (newAsset != null) {
           setState(() {
-            _currentAsset = newAsset;  // Update current asset
+            _currentAsset = newAsset;
             _selectedCoin = result;
             _selectedNetwork = result.networks[0];
-            _amountController.clear();  // Clear amount when changing coins
+            _amountController.clear();
             _amountError = null;
             _maxAmount = false;
             _feeDetails = null;
           });
           
-          // Call _updateWarningMessage after state is updated
           _updateWarningMessage();
         }
       }
@@ -868,16 +861,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                   onNetworkSelected: (network) async {
                                     setState(() {
                                       _selectedNetwork = network;
-                                      _updateWarningMessage();
-                                      
-                                      // Reset amount-related states when network changes
                                       _amountError = null;
                                       _maxAmount = false;
                                       _feeDetails = null;
                                       _receiveAmount = null;
                                     });
                                     
-                                    // Recalculate fee with new network
+                                    _updateWarningMessage();
                                     await _onAmountChanged();
                                     
                                     Navigator.pop(context);
