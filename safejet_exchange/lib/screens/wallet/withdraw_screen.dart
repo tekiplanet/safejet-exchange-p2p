@@ -411,13 +411,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                       _buildDetailCard(
                         title: 'Network Fee',
                         value: _feeDetails != null 
-                            ? _isFiat 
-                                ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
-                                    double.parse(_feeDetails!['feeUSD']) * 
-                                    (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
-                                  )}'
-                                : '${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
-                            : '- ${_isFiat ? _selectedFiatCurrency : _selectedCoin?.symbol}',
+                            ? '${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
+                            : '- ${_selectedCoin?.symbol}',
                         icon: Icons.local_gas_station,
                         isDark: isDark,
                       ),
@@ -1151,13 +1146,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                 ),
                                 Text(
                                   _feeDetails != null 
-                                      ? _isFiat 
-                                          ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
-                                              double.parse(_feeDetails!['feeUSD']) * 
-                                              (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
-                                            )}'
-                                          : '≈ ${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
-                                      : '- ${_isFiat ? _selectedFiatCurrency : _selectedCoin?.symbol}',
+                                      ? '${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
+                                      : '- ${_selectedCoin?.symbol}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -1176,14 +1166,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                 ),
                                 Text(
                                   _receiveAmount != null
-                                      ? _isFiat
-                                          ? '${_getCurrencySymbol(_selectedFiatCurrency)} ${_numberFormat.format(
-                                              double.parse(_feeDetails!['receiveAmount']) * 
-                                              double.parse(_currentAsset['token']?['currentPrice'] ?? '0') *  // Use _currentAsset here
-                                              (_selectedFiatCurrency == 'USD' ? 1 : _userCurrencyRate)
-                                            )}'
-                                          : '≈ ${_receiveAmount!.toStringAsFixed(4)} ${_selectedCoin?.symbol}'
-                                      : '0.0000 ${_isFiat ? _selectedFiatCurrency : _selectedCoin?.symbol}',
+                                      ? '≈ ${_receiveAmount!.toStringAsFixed(4)} ${_selectedCoin?.symbol}'
+                                      : '0.0000 ${_selectedCoin?.symbol}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
