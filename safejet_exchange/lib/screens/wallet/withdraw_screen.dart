@@ -419,7 +419,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                       const SizedBox(height: 16),
                       _buildDetailCard(
                         title: 'You will receive',
-                        value: '${_receiveAmount?.toStringAsFixed(8) ?? '0.0000'} ${_selectedCoin?.symbol}',
+                        value: _receiveAmount != null
+                            ? '${_receiveAmount!.toStringAsFixed(8)} ${_selectedCoin?.symbol}'
+                            : '0.00000000 ${_selectedCoin?.symbol}',
                         icon: Icons.call_received,
                         isDark: isDark,
                         highlight: true,
@@ -1166,8 +1168,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                 ),
                                 Text(
                                   _receiveAmount != null
-                                      ? '≈ ${_receiveAmount!.toStringAsFixed(4)} ${_selectedCoin?.symbol}'
-                                      : '0.0000 ${_selectedCoin?.symbol}',
+                                      ? '${_receiveAmount!.toStringAsFixed(8)} ${_selectedCoin?.symbol}'
+                                      : '0.00000000 ${_selectedCoin?.symbol}',
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
