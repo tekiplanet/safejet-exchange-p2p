@@ -538,73 +538,82 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                   : SafeJetColors.lightCardBorder,
                             ),
                           ),
-                          child: Row(
+                          child: Column(
                             children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _addressController,
-                                  onChanged: (value) => _validateAddress(value),
-                                  style: theme.textTheme.bodyMedium,
-                                  decoration: InputDecoration(
-                                    hintText: 'Enter wallet address',
-                                    border: InputBorder.none,
-                                    isDense: false,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                                    hintStyle: TextStyle(
-                                      color: isDark ? Colors.grey[600] : Colors.grey[400],
-                                    ),
-                                    suffixIcon: IconButton(
-                                      icon: const Icon(Icons.qr_code_scanner),
-                                      onPressed: () async {
-                                        final scannedAddress = await Navigator.push<String>(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => const QRScannerScreen(),
-                                          ),
-                                        );
-                                        
-                                        if (scannedAddress != null) {
-                                          setState(() {
-                                            _addressController.text = scannedAddress;
-                                            _validateAddress(scannedAddress);
-                                          });
-                                        }
-                                      },
-                                    ),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _AddressInputButton(
+                                    icon: Icons.qr_code_scanner,
+                                    label: 'Scan QR',
+                                    onTap: () async {
+                                      final scannedAddress = await Navigator.push<String>(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => const QRScannerScreen(),
+                                        ),
+                                      );
+                                      
+                                      if (scannedAddress != null) {
+                                        setState(() {
+                                          _addressController.text = scannedAddress;
+                                          _validateAddress(scannedAddress);
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  _AddressInputButton(
+                                    icon: Icons.book_outlined,
+                                    label: 'Address Book',
+                                    onTap: () async {
+                                      final address = await showModalBottomSheet<RecentAddress>(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (context) => AddressBookModal(
+                                          selectedCoin: _selectedCoin?.symbol ?? '',
+                                          selectedNetwork: _selectedNetwork?.name ?? '',
+                                          addressService: GetIt.I<AddressService>(),
+                                        ),
+                                      );
+
+                                      if (address != null) {
+                                        setState(() {
+                                          _addressController.text = address.address;
+                                          _validateAddress(address.address);
+                                        });
+                                      }
+                                    },
+                                  ),
+                                  _AddressInputButton(
+                                    icon: Icons.paste_rounded,
+                                    label: 'Paste',
+                                    onTap: () async {
+                                      final data = await Clipboard.getData('text/plain');
+                                      if (data?.text != null) {
+                                        setState(() {
+                                          _addressController.text = data!.text!;
+                                          _validateAddress(data.text!);
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _addressController,
+                                onChanged: (value) => _validateAddress(value),
+                                style: theme.textTheme.bodyMedium,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter wallet address',
+                                  border: InputBorder.none,
+                                  isDense: false,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                                  hintStyle: TextStyle(
+                                    color: isDark ? Colors.grey[600] : Colors.grey[400],
                                   ),
                                 ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.book_outlined),
-                                onPressed: () async {
-                                  final address = await showModalBottomSheet<RecentAddress>(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    backgroundColor: Colors.transparent,
-                                    builder: (context) => AddressBookModal(
-                                      selectedCoin: _selectedCoin?.symbol ?? '',
-                                      selectedNetwork: _selectedNetwork?.name ?? '',
-                                      addressService: GetIt.I<AddressService>(),
-                                    ),
-                                  );
-
-                                  if (address != null) {
-                                    setState(() {
-                                      _addressController.text = address.address;
-                                      _validateAddress(address.address);
-                                    });
-                                  }
-                                },
-                              ),
-                              IconButton(
-                                onPressed: () async {
-                                  final data = await Clipboard.getData('text/plain');
-                                  if (data?.text != null) {
-                                    _addressController.text = data!.text!;
-                                  }
-                                },
-                                icon: const Icon(Icons.paste_rounded),
-                                color: SafeJetColors.secondaryHighlight,
                               ),
                             ],
                           ),
@@ -626,115 +635,81 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Amount',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Row(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  ChoiceChip(
-                                    label: Text(
-                                      _selectedCoin?.symbol ?? '',
-                                      style: TextStyle(
-                                        color: !_isFiat ? Colors.black : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                        fontWeight: !_isFiat ? FontWeight.bold : FontWeight.normal,
-                                      ),
+                                  Text(
+                                    'Amount',
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    selected: !_isFiat,
-                                    selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                                    backgroundColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: BorderSide(
-                                        color: !_isFiat 
-                                            ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
-                                            : Colors.transparent,
-                                      ),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    onSelected: (selected) {
-                                      if (selected) {
-                                        setState(() {
-                                          _isFiat = false;
-                                          _selectedFiatCurrency = _showInUSD ? 'USD' : _userCurrency;
-                                          if (_amountController.text.isNotEmpty) {
-                                            _amountController.text = _convertAmount(_amountController.text, false).toStringAsFixed(8);
-                                          }
-                                        });
-                                      }
-                                    },
                                   ),
-                                  const SizedBox(width: 8),
-                                  ChoiceChip(
-                                    label: Text(
-                                      'USD',
-                                      style: TextStyle(
-                                        color: _isFiat && _selectedFiatCurrency == 'USD' 
-                                            ? Colors.black 
-                                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                        fontWeight: _isFiat && _selectedFiatCurrency == 'USD' ? FontWeight.bold : FontWeight.normal,
-                                      ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Available: ${_currentAsset['balance']?.toString() ?? '0.00'} ${_selectedCoin?.symbol}',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                      fontSize: 13,
                                     ),
-                                    selected: _isFiat && _selectedFiatCurrency == 'USD',
-                                    selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                                    backgroundColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: BorderSide(
-                                        color: _isFiat && _selectedFiatCurrency == 'USD'
-                                            ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
-                                            : Colors.transparent,
-                                      ),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    onSelected: (selected) {
-                                      if (selected) {
-                                        setState(() {
-                                          _isFiat = true;
-                                          _selectedFiatCurrency = 'USD';
-                                          _amountController.clear(); // Clear amount
-                                          _feeDetails = null; // Reset fee details
-                                        });
-                                      }
-                                    },
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ChoiceChip(
-                                    label: Text(
-                                      _userCurrency,  // Use actual user currency
-                                      style: TextStyle(
-                                        color: _isFiat && _selectedFiatCurrency == _userCurrency
-                                            ? Colors.black 
-                                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                        fontWeight: _isFiat && _selectedFiatCurrency == _userCurrency ? FontWeight.bold : FontWeight.normal,
-                                      ),
-                                    ),
-                                    selected: _isFiat && _selectedFiatCurrency == _userCurrency,
-                                    selectedColor: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                                    backgroundColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      side: BorderSide(
-                                        color: _isFiat && _selectedFiatCurrency == _userCurrency
-                                            ? SafeJetColors.secondaryHighlight.withOpacity(0.3)
-                                            : Colors.transparent,
-                                      ),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    onSelected: (selected) {
-                                      if (selected) {
-                                        setState(() {
-                                          _isFiat = true;
-                                          _selectedFiatCurrency = _userCurrency;
-                                          _amountController.clear(); // Clear amount
-                                          _feeDetails = null; // Reset fee details
-                                        });
-                                      }
-                                    },
                                   ),
                                 ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: isDark 
+                                      ? Colors.grey[900]
+                                      : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _CurrencyTab(
+                                      label: _selectedCoin?.symbol ?? '',
+                                      isSelected: !_isFiat,
+                                      onSelected: (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _isFiat = false;
+                                            _selectedFiatCurrency = _showInUSD ? 'USD' : _userCurrency;
+                                            if (_amountController.text.isNotEmpty) {
+                                              _amountController.text = _convertAmount(_amountController.text, false).toStringAsFixed(8);
+                                            }
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    _CurrencyTab(
+                                      label: 'USD',
+                                      isSelected: _isFiat && _selectedFiatCurrency == 'USD',
+                                      onSelected: (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _isFiat = true;
+                                            _selectedFiatCurrency = 'USD';
+                                            _amountController.clear();
+                                            _feeDetails = null;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    _CurrencyTab(
+                                      label: _userCurrency,
+                                      isSelected: _isFiat && _selectedFiatCurrency == _userCurrency,
+                                      onSelected: (selected) {
+                                        if (selected) {
+                                          setState(() {
+                                            _isFiat = true;
+                                            _selectedFiatCurrency = _userCurrency;
+                                            _amountController.clear();
+                                            _feeDetails = null;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -1203,6 +1178,95 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
             fontSize: 12,
           ),
         ) : null,
+      ),
+    );
+  }
+}
+
+class _CurrencyTab extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Function(bool) onSelected;
+
+  const _CurrencyTab({
+    required this.label,
+    required this.isSelected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return GestureDetector(
+      onTap: () => onSelected(true),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? (isDark ? SafeJetColors.secondaryHighlight.withOpacity(0.2) : SafeJetColors.secondaryHighlight.withOpacity(0.15))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected 
+              ? Border.all(
+                  color: SafeJetColors.secondaryHighlight.withOpacity(0.3),
+                  width: 1,
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? (isDark ? Colors.white : Colors.black)
+                : (isDark ? Colors.grey[400] : Colors.grey[600]),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddressInputButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _AddressInputButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              size: 20,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
