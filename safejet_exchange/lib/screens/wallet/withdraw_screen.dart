@@ -73,6 +73,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   // Add local asset state
   late Map<String, dynamic> _currentAsset;
 
+  // Add these at the top with other variables
+  String? _verifiedPassword;
+  String? _verifiedTwoFactorCode;
+
   // Add the currency symbol helper
   String _getCurrencySymbol(String currency) {
     switch (currency) {
@@ -792,6 +796,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               return;
                             }
                             
+                            _verifiedPassword = passwordController.text;
                             Navigator.pop(context, true);
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -1467,6 +1472,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               network: _selectedNetwork!.network,
                               memo: _memoController.text.isNotEmpty ? _memoController.text : null,
                               tag: _tagController.text.isNotEmpty ? _tagController.text : null,
+                              password: _verifiedPassword,
+                              twoFactorCode: _verifiedTwoFactorCode,
                             );
 
                             if (mounted) {

@@ -290,20 +290,24 @@ class WalletService {
     required String address,
     required String networkVersion,
     required String network,
+    String? password,
+    String? twoFactorCode,
     String? memo,
     String? tag,
   }) async {
     try {
       final response = await _dio.post(
-        '/withdrawals',
+        '/wallets/withdraw',
         data: {
           'tokenId': tokenId,
-          'amount': amount,
+          'amount': double.parse(amount),
           'address': address,
           'networkVersion': networkVersion,
           'network': network,
           'memo': memo,
           'tag': tag,
+          if (password != null) 'password': password,
+          if (twoFactorCode != null) 'twoFactorCode': twoFactorCode,
         },
       );
       return response.data;

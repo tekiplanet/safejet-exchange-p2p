@@ -7,12 +7,16 @@ import { CreateWalletDto } from './dto/create-wallet.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
 import { AuthService } from '../auth/auth.service';
 import { Withdrawal } from './entities/withdrawal.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Controller('wallets')
 export class WalletController {
   constructor(
     private readonly walletService: WalletService,
-    private readonly authService: AuthService
+    private readonly authService: AuthService,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>
   ) {}
 
   @Get('balances')
@@ -155,19 +159,44 @@ export class WalletController {
   @Post('withdraw')
   @UseGuards(JwtAuthGuard)
   async createWithdrawal(
-    @GetUser() user: User,
+    @GetUser() jwtUser: any,
     @Body() withdrawalDto: CreateWithdrawalDto,
-    @Body('password') password: string,
-    @Body('twoFactorCode') twoFactorCode: string,
+    @Body('password') password?: string,
+    @Body('twoFactorCode') twoFactorCode?: string,
   ): Promise<Withdrawal> {
-    // First verify password
-    const isPasswordValid = await this.authService.verifyPassword(password, user);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid password');
+    // Get user directly from repository to include all fields
+    const user = await this.userRepository.findOne({
+      where: { id: jwtUser.id }
+    });
+
+    console.log('Withdrawal request from user:', {
+      userId: user.id,
+      email: user.email,
+      biometricEnabled: user.biometricEnabled,
+      twoFactorEnabled: user.twoFactorEnabled
+    });
+
+    // For biometric users, skip password verification
+    if (user.biometricEnabled === true) {
+      console.log('Biometric user, skipping password verification');
+    } else {
+      console.log('Non-biometric user, requiring password');
+      if (!password) {
+        throw new UnauthorizedException('Password required');
+      }
+      const isPasswordValid = await this.authService.verifyPassword(password, user);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Invalid password');
+      }
     }
 
-    // Then verify 2FA
-    await this.authService.verify2FAAction(twoFactorCode, user);
+    // Only verify 2FA if user has it enabled
+    if (user.twoFactorEnabled) {
+      if (!twoFactorCode) {
+        throw new UnauthorizedException('2FA code required');
+      }
+      await this.authService.verify2FAAction(twoFactorCode, user);
+    }
 
     // Process withdrawal
     return this.walletService.createWithdrawal(user.id, withdrawalDto);
