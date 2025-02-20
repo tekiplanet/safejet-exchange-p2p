@@ -77,6 +77,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   String? _verifiedPassword;
   String? _verifiedTwoFactorCode;
 
+  bool _isAddressInAddressBook = false;  // Add new variable
+
   // Add this helper function to format balance
   String _formatBalance(String? balanceStr) {
     final balance = double.tryParse(balanceStr ?? '0') ?? 0.0;
@@ -271,6 +273,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       return false;
     }
 
+    // Add address book check here
+    _checkAddressExists(address);  // This won't affect the validation result
+
     final networkName = _selectedNetwork?.name.toUpperCase() ?? '';
     print('Validating address: $address');
     print('Full Network Name: $networkName');  // Debug full network name
@@ -377,174 +382,226 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   // Add withdrawal confirmation dialog
   Future<bool> _showConfirmationDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    bool saveAddress = false;
+    String addressName = '';  // Add this variable
+    final addressNameController = TextEditingController();  // Add controller for name input
+
     return await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog.fullscreen(
-        child: Scaffold(
-          backgroundColor: isDark 
-            ? SafeJetColors.primaryBackground
-            : SafeJetColors.lightBackground,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(
-                Icons.close,
-                color: isDark ? Colors.white : Colors.black,
+      builder: (context) => StatefulBuilder(  // Wrap with StatefulBuilder for checkbox state
+        builder: (context, setState) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: isDark 
+              ? SafeJetColors.primaryBackground
+              : SafeJetColors.lightBackground,
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(
+                  Icons.close,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+                onPressed: () => Navigator.pop(context, false),
               ),
-              onPressed: () => Navigator.pop(context, false),
-            ),
-            title: Text(
-              'Confirm Withdrawal',
-              style: TextStyle(
-                color: isDark ? Colors.white : Colors.black,
-                fontWeight: FontWeight.bold,
+              title: Text(
+                'Confirm Withdrawal',
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
-          body: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-                      Text(
-                        'Please confirm your withdrawal details:',
-                        style: TextStyle(
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          fontSize: 16,
+            body: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Please confirm your withdrawal details:',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
-                      _buildDetailCard(
-                        title: 'Amount',
-                        value: '${_amountController.text} ${_selectedCoin?.symbol}',
-                        icon: Icons.account_balance_wallet,
-                        isDark: isDark,
-                      ),
-            const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'Network Fee',
-                        value: _feeDetails != null 
-                            ? '${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
-                            : '- ${_selectedCoin?.symbol}',
-                        icon: Icons.local_gas_station,
-                        isDark: isDark,
-                      ),
-            const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'You will receive',
-                        value: _receiveAmount != null
-                            ? '${_receiveAmount!.toStringAsFixed(8)} ${_selectedCoin?.symbol}'
-                            : '0.00000000 ${_selectedCoin?.symbol}',
-                        icon: Icons.call_received,
-                        isDark: isDark,
-                        highlight: true,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'Network',
-                        value: _selectedNetwork?.name ?? 'Not selected',
-                        icon: Icons.lan,
-                        isDark: isDark,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'Address',
-                        value: _addressController.text,
-                        icon: Icons.qr_code,
-                        isDark: isDark,
-                        copyable: true,
-                      ),
-                      const SizedBox(height: 32),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: SafeJetColors.error.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                        const SizedBox(height: 32),
+                        _buildDetailCard(
+                          title: 'Amount',
+                          value: '${_amountController.text} ${_selectedCoin?.symbol}',
+                          icon: Icons.account_balance_wallet,
+                          isDark: isDark,
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color: SafeJetColors.error,
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'Network Fee',
+                          value: _feeDetails != null 
+                              ? '${double.parse(_feeDetails!['feeAmount']).toStringAsFixed(8)} ${_selectedCoin?.symbol}'
+                              : '- ${_selectedCoin?.symbol}',
+                          icon: Icons.local_gas_station,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'You will receive',
+                          value: _receiveAmount != null
+                              ? '${_receiveAmount!.toStringAsFixed(8)} ${_selectedCoin?.symbol}'
+                              : '0.00000000 ${_selectedCoin?.symbol}',
+                          icon: Icons.call_received,
+                          isDark: isDark,
+                          highlight: true,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'Network',
+                          value: _selectedNetwork?.name ?? 'Not selected',
+                          icon: Icons.lan,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'Address',
+                          value: _addressController.text,
+                          icon: Icons.qr_code,
+                          isDark: isDark,
+                          copyable: true,
+                        ),
+                        const SizedBox(height: 16),
+                        if (!_isAddressInAddressBook) ...[
+                          CheckboxListTile(
+                            value: saveAddress,
+                            onChanged: (value) {
+                              setState(() => saveAddress = value ?? false);
+                            },
+                            title: Text(
+                              'Save to address book',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-              'This action cannot be undone.',
-                                style: TextStyle(
-                                  color: SafeJetColors.error,
-                                  fontWeight: FontWeight.w500,
+                          ),
+                          if (saveAddress) ...[
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: addressNameController,
+                              decoration: InputDecoration(
+                                labelText: 'Address Name',
+                                hintText: 'Enter a name for this address',
+                                errorText: addressNameController.text.isEmpty ? 'Name is required' : null,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
-            ),
-          ],
-        ),
+                              onChanged: (value) {
+                                setState(() {});  // Rebuild to update error state
+                              },
+                            ),
+                          ],
+                        ],
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: SafeJetColors.error.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: SafeJetColors.error,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'This action cannot be undone.',
+                                  style: TextStyle(
+                                    color: SafeJetColors.error,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            // Validate address name if saving
+                            if (saveAddress && addressNameController.text.isEmpty) {
+                              return;  // Don't proceed if name is empty
+                            }
+
+                            try {
+                              final success = await _handleWithdrawalConfirmation();
+                              if (success) {
+                                // Save address if checkbox is checked
+                                if (saveAddress) {
+                                  await _walletService.createAddressBookEntry(
+                                    name: addressNameController.text,
+                                    address: _addressController.text,
+                                    blockchain: _selectedNetwork!.blockchain,
+                                    network: _selectedNetwork!.network,
+                                    memo: _memoController.text,
+                                    tag: _tagController.text,
+                                  );
+                                }
+                                Navigator.pop(context, true);
+                              }
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e.toString().replaceAll('Exception: ', '')),
+                                  backgroundColor: SafeJetColors.error,
+                                ),
+                              );
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: SafeJetColors.secondaryHighlight,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Confirm',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-            onPressed: () => Navigator.pop(context, false),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-            child: const Text('Cancel'),
-          ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          try {
-                            final success = await _handleWithdrawalConfirmation();
-                            if (success) {
-                              // Proceed with withdrawal
-                              Navigator.pop(context, true);
-                            }
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(e.toString().replaceAll('Exception: ', '')),
-                                backgroundColor: SafeJetColors.error,
-                              ),
-                            );
-                          }
-                        },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: SafeJetColors.secondaryHighlight,
-              foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          'Confirm',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -618,7 +675,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               onPressed: () {
                 // Add copy functionality
               },
-          ),
+            ),
         ],
       ),
     );
@@ -865,6 +922,20 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
     }
 
     return true;
+  }
+
+  // Add new method to check address
+  Future<void> _checkAddressExists(String address) async {
+    if (address.isEmpty) return;
+    
+    try {
+      final exists = await _walletService.checkAddressExists(address);
+      setState(() {
+        _isAddressInAddressBook = exists;
+      });
+    } catch (e) {
+      print('Error checking address: $e');
+    }
   }
 
   @override

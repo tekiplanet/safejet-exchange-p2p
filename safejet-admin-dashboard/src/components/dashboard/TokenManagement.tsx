@@ -24,7 +24,9 @@ import {
     Tooltip,
     Checkbox,
     ListItemText,
-    Avatar
+    Avatar,
+    InputAdornment,
+    FormHelperText
 } from '@mui/material';
 import { Edit as EditIcon, Add as AddIcon, Visibility as VisibilityIcon, Sync as SyncIcon } from '@mui/icons-material';
 import { TOKEN_CONFIG, NetworkVersion, Network, Blockchain, PriceFeedProvider } from '../../config/tokens';
@@ -50,6 +52,7 @@ interface NetworkConfig {
     // Add new message fields
     withdrawMessage?: string;
     depositMessage?: string;
+    minWithdrawal?: string;
 }
 
 interface Token {
@@ -1152,6 +1155,36 @@ export default function TokenManagement() {
                                                 margin="normal"
                                                 placeholder="Enter withdrawal instructions or message"
                                             />
+
+                                            <FormControl fullWidth sx={{ mt: 2 }}>
+                                                <TextField
+                                                    label="Minimum Withdrawal"
+                                                    type="number"
+                                                    value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.minWithdrawal || ''}
+                                                    onChange={(e) => {
+                                                        const currentConfigs = editToken?.networkConfigs || {};
+                                                        const currentVersion = editToken?.networkVersion || '';
+                                                        
+                                                        setEditToken({
+                                                            ...editToken,
+                                                            networkConfigs: {
+                                                                ...currentConfigs,
+                                                                [currentVersion]: {
+                                                                    ...currentConfigs[currentVersion],
+                                                                    [network]: {
+                                                                        ...currentConfigs[currentVersion]?.[network],
+                                                                        minWithdrawal: e.target.value
+                                                                    }
+                                                                }
+                                                            }
+                                                        });
+                                                    }}
+                                                    InputProps={{
+                                                        startAdornment: <InputAdornment position="start">Token</InputAdornment>,
+                                                    }}
+                                                />
+                                                <FormHelperText>Minimum amount that can be withdrawn</FormHelperText>
+                                            </FormControl>
                                         </Box>
                                     ))}
                                 </Box>

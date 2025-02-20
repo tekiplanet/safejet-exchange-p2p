@@ -22,6 +22,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { User } from '../auth/entities/user.entity';
 import { KYCLevel } from '../auth/entities/kyc-level.entity';
+import { AddressBook } from './entities/address-book.entity';
+import { CreateAddressBookDto } from './dto/create-address-book.dto';
 
 interface PaginationParams {
   page: number;
@@ -112,6 +114,8 @@ export class WalletService {
     private keyManagementService: KeyManagementService,
     private readonly exchangeService: ExchangeService,
     private connection: Connection,
+    @InjectRepository(AddressBook)
+    private addressBookRepository: Repository<AddressBook>,
   ) {}
 
   private async initializeWalletBalances(wallet: Wallet) {
@@ -1162,9 +1166,22 @@ export class WalletService {
       .times(new Decimal(token.currentPrice || '0'))
       .toString();
 
-    const receiveAmount = new Decimal(amount)
-      .minus(new Decimal(feeAmount))
-      .toString();
+    // Check minimum withdrawal
+    if (new Decimal(amount).lessThan(networkConfig.minWithdrawal)) {
+      throw new BadRequestException(
+        `Minimum withdrawal amount is ${networkConfig.minWithdrawal} ${token.symbol}`
+      );
+    }
+
+    // Calculate fee
+    const receiveAmount = new Decimal(amount).minus(new Decimal(feeAmount));
+    
+    // Check if receive amount would be negative or zero
+    if (receiveAmount.lessThanOrEqualTo(0)) {
+      throw new BadRequestException(
+        `Withdrawal amount must be greater than fee (${feeAmount} ${token.symbol})`
+      );
+    }
 
     this.logToFile(`[RESULT] Fee calculation results:
       Fee Amount: ${feeAmount} ${token.symbol}
@@ -1229,7 +1246,7 @@ export class WalletService {
     return {
       feeAmount,
       feeUSD,
-      receiveAmount,
+      receiveAmount: receiveAmount.toString(),
     };
   }
 
@@ -1364,5 +1381,30 @@ export class WalletService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async createAddressBookEntry(
+    userId: string,
+    createAddressBookDto: CreateAddressBookDto,
+  ): Promise<AddressBook> {
+    const entry = this.addressBookRepository.create({
+      userId,
+      ...createAddressBookDto,
+    });
+    return this.addressBookRepository.save(entry);
+  }
+
+  async getAddressBook(userId: string): Promise<AddressBook[]> {
+    return this.addressBookRepository.find({
+      where: { userId, isActive: true },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async checkAddressExists(userId: string, address: string): Promise<boolean> {
+    const entry = await this.addressBookRepository.findOne({
+      where: { userId, address, isActive: true },
+    });
+    return !!entry;
   }
 } 

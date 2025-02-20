@@ -12,6 +12,9 @@ export interface NetworkConfig {
     type: 'percentage' | 'usd' | 'token';
     value: string;
   };
+  withdrawMessage?: string;
+  depositMessage?: string;
+  minWithdrawal: string;
 }
 
 export interface NetworkResponse {

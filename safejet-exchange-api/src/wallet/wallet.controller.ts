@@ -9,6 +9,8 @@ import { AuthService } from '../auth/auth.service';
 import { Withdrawal } from './entities/withdrawal.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CreateAddressBookDto } from './dto/create-address-book.dto';
+import { AddressBook } from './entities/address-book.entity';
 
 @Controller('wallets')
 export class WalletController {
@@ -201,5 +203,29 @@ export class WalletController {
 
     // Process withdrawal
     return this.walletService.createWithdrawal(user.id, withdrawalDto);
+  }
+
+  @Post('address-book')
+  @UseGuards(JwtAuthGuard)
+  async createAddressBookEntry(
+    @GetUser('id') userId: string,
+    @Body() createAddressBookDto: CreateAddressBookDto,
+  ): Promise<AddressBook> {
+    return this.walletService.createAddressBookEntry(userId, createAddressBookDto);
+  }
+
+  @Get('address-book')
+  @UseGuards(JwtAuthGuard)
+  async getAddressBook(@GetUser('id') userId: string): Promise<AddressBook[]> {
+    return this.walletService.getAddressBook(userId);
+  }
+
+  @Get('address-book/check/:address')
+  @UseGuards(JwtAuthGuard)
+  async checkAddressExists(
+    @GetUser('id') userId: string,
+    @Param('address') address: string,
+  ): Promise<boolean> {
+    return this.walletService.checkAddressExists(userId, address);
   }
 } 

@@ -331,6 +331,52 @@ class WalletService {
       'Content-Type': 'application/json',
     };
   }
+
+  Future<void> createAddressBookEntry({
+    required String name,
+    required String address,
+    required String blockchain,
+    required String network,
+    String? memo,
+    String? tag,
+  }) async {
+    final token = await storage.read(key: 'token');
+    
+    await _dio.post(
+      '/wallets/address-book',
+      data: {
+        'name': name,
+        'address': address,
+        'blockchain': blockchain,
+        'network': network,
+        'memo': memo,
+        'tag': tag,
+      },
+      options: Options(
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      ),
+    );
+  }
+
+  Future<bool> checkAddressExists(String address) async {
+    final token = await storage.read(key: 'token');
+    
+    try {
+      final response = await _dio.get(
+        '/wallets/address-book/check/$address',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+      return response.data as bool;
+    } catch (e) {
+      return false;  // Assume address doesn't exist if request fails
+    }
+  }
 }
 
 class CacheEntry {
