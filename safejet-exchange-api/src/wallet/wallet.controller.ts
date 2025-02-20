@@ -153,6 +153,7 @@ export class WalletController {
       data.amount,
       data.networkVersion,
       data.network,
+      userId,
     );
   }
 

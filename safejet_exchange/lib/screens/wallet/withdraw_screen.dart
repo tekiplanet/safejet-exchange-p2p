@@ -250,21 +250,16 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         network: networkData['network'] as String,
       );
 
-      print('Fee calculation successful:');
-      print('Fee Details: $feeDetails');
-
       setState(() {
         _feeDetails = feeDetails;
         _receiveAmount = double.parse(feeDetails['receiveAmount']);
       });
     } catch (e) {
       print('Error calculating fee: $e');
-      print('Current network data: $_selectedNetwork');
-      print('Current token data: ${_currentAsset['token']}');
-      print('Network metadata: ${_currentAsset['metadata']['networks']}');
       setState(() {
         _feeDetails = null;
         _receiveAmount = null;
+        _amountError = e.toString().replaceAll('Exception: ', '');  // Show KYC limit error
       });
     }
   }
@@ -1466,71 +1461,77 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                     child: SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () async {
-                          // Validate inputs
-                          final isAddressValid = _validateAddress(_addressController.text);
-                          final isAmountValid = _validateAmount(_amountController.text);
+                        onPressed: (_addressError != null || 
+                                    _amountError != null || 
+                                    _addressController.text.isEmpty ||
+                                    _amountController.text.isEmpty ||
+                                    _feeDetails == null)  // Also disable if fee calculation failed
+                            ? null  // This will disable the button
+                            : () async {
+                                // Validate inputs
+                                final isAddressValid = _validateAddress(_addressController.text);
+                                final isAmountValid = _validateAmount(_amountController.text);
 
-                          if (!isAddressValid || !isAmountValid) {
-                            return;
-                          }
+                                if (!isAddressValid || !isAmountValid) {
+                                  return;
+                                }
 
-                          // Save address to recent addresses
-                          await _saveAddress(_addressController.text);
+                                // Save address to recent addresses
+                                await _saveAddress(_addressController.text);
 
-                          // Show confirmation dialog and handle authentication
-                          final confirmed = await _showConfirmationDialog();
-                          if (!confirmed) {
-                            return;
-                          }
+                                // Show confirmation dialog and handle authentication
+                                final confirmed = await _showConfirmationDialog();
+                                if (!confirmed) {
+                                  return;
+                                }
 
-                          try {
-                            // Get the correct network configuration
-                            final networks = _currentAsset['metadata']['networks'] as Map<String, dynamic>;
-                            final networkKey = '${_selectedNetwork!.blockchain}_${_selectedNetwork!.network}';
-                            final networkData = networks[networkKey] as Map<String, dynamic>?;
+                                try {
+                                  // Get the correct network configuration
+                                  final networks = _currentAsset['metadata']['networks'] as Map<String, dynamic>;
+                                  final networkKey = '${_selectedNetwork!.blockchain}_${_selectedNetwork!.network}';
+                                  final networkData = networks[networkKey] as Map<String, dynamic>?;
 
-                            if (networkData == null) {
-                              throw Exception('Network configuration not found');
-                            }
+                                  if (networkData == null) {
+                                    throw Exception('Network configuration not found');
+                                  }
 
-                            // Convert amount to token value if using fiat
-                            final amount = _isFiat 
-                                ? _convertAmount(_amountController.text, false).toString()  // Convert fiat to token amount
-                                : _amountController.text;  // Already in token amount
+                                  // Convert amount to token value if using fiat
+                                  final amount = _isFiat 
+                                      ? _convertAmount(_amountController.text, false).toString()  // Convert fiat to token amount
+                                      : _amountController.text;  // Already in token amount
 
-                            final response = await _walletService.createWithdrawal(
-                              tokenId: networkData['tokenId'],
-                              amount: amount,  // Use converted amount
-                              address: _addressController.text,
-                              networkVersion: networkData['networkVersion'],
-                              network: networkData['network'],
-                              memo: _memoController.text.isNotEmpty ? _memoController.text : null,
-                              tag: _tagController.text.isNotEmpty ? _tagController.text : null,
-                              password: _verifiedPassword,
-                              twoFactorCode: _verifiedTwoFactorCode,
-                            );
+                                  final response = await _walletService.createWithdrawal(
+                                    tokenId: networkData['tokenId'],
+                                    amount: amount,  // Use converted amount
+                                    address: _addressController.text,
+                                    networkVersion: networkData['networkVersion'],
+                                    network: networkData['network'],
+                                    memo: _memoController.text.isNotEmpty ? _memoController.text : null,
+                                    tag: _tagController.text.isNotEmpty ? _tagController.text : null,
+                                    password: _verifiedPassword,
+                                    twoFactorCode: _verifiedTwoFactorCode,
+                                  );
 
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Withdrawal initiated successfully'),
-                                backgroundColor: SafeJetColors.success,
-                              ),
-                            );
-                            Navigator.pop(context);
-                          }
-                          } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e.toString().replaceAll('Exception: ', '')),
-                                  backgroundColor: SafeJetColors.error,
-                                ),
-                              );
-                            }
-                          }
-                        },
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Withdrawal initiated successfully'),
+                                      backgroundColor: SafeJetColors.success,
+                                    ),
+                                  );
+                                  Navigator.pop(context);
+                                }
+                                } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(e.toString().replaceAll('Exception: ', '')),
+                                        backgroundColor: SafeJetColors.error,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: SafeJetColors.secondaryHighlight,
                           foregroundColor: Colors.black,

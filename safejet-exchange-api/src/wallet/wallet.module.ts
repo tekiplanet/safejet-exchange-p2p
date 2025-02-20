@@ -27,6 +27,8 @@ import { SweepTransaction } from './entities/sweep-transaction.entity';
 import { GasTankWallet } from './entities/gas-tank-wallet.entity';
 import { GasTankWalletController } from './admin/gas-tank-wallet.controller';
 import { GasTankWalletService } from './services/gas-tank-wallet.service';
+import { KYCLevel } from '../auth/entities/kyc-level.entity';
+import { Withdrawal } from './entities/withdrawal.entity';
 
 @Module({
   imports: [
@@ -40,7 +42,9 @@ import { GasTankWalletService } from './services/gas-tank-wallet.service';
       User,
       AdminWallet,
       SweepTransaction,
-      GasTankWallet
+      GasTankWallet,
+      KYCLevel,
+      Withdrawal
     ]),
     EventEmitterModule.forRoot(),
     ConfigModule,

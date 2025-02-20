@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull, Raw, In } from 'typeorm';
+import { Repository, Not, IsNull, Raw, In, MoreThanOrEqual } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { KeyManagementService } from './key-management.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
@@ -20,6 +20,8 @@ import { Withdrawal } from './entities/withdrawal.entity';
 import { Connection } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
+import { User } from '../auth/entities/user.entity';
+import { KYCLevel } from '../auth/entities/kyc-level.entity';
 
 interface PaginationParams {
   page: number;
@@ -101,6 +103,12 @@ export class WalletService {
     private tokenRepository: Repository<Token>,
     @InjectRepository(WalletBalance)
     private walletBalanceRepository: Repository<WalletBalance>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    @InjectRepository(KYCLevel)
+    private kycLevelRepository: Repository<KYCLevel>,
+    @InjectRepository(Withdrawal)
+    private withdrawalRepository: Repository<Withdrawal>,
     private keyManagementService: KeyManagementService,
     private readonly exchangeService: ExchangeService,
     private connection: Connection,
@@ -1049,6 +1057,7 @@ export class WalletService {
     amount: number,
     networkVersion: string,
     network: string,
+    userId: string,
   ): Promise<{
     feeAmount: string;
     feeUSD: string;
@@ -1085,7 +1094,7 @@ export class WalletService {
 
         if (testnetToken) {
           this.logToFile(`[INFO] Found testnet token: ${testnetToken.id}`);
-          return this.calculateWithdrawalFee(testnetToken.id, amount, networkVersion, network);
+          return this.calculateWithdrawalFee(testnetToken.id, amount, networkVersion, network, userId);
         } else {
           this.logToFile(`[ERROR] No testnet token found for ${token.symbol} with version ${networkVersion}`);
           throw new BadRequestException(`No testnet configuration available for ${token.symbol}`);
@@ -1162,6 +1171,61 @@ export class WalletService {
       Fee USD: $${feeUSD}
       Receive Amount: ${receiveAmount} ${token.symbol}`);
 
+    // Get user's KYC level first
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['kycLevel']
+    });
+
+    const kycLevel = await this.kycLevelRepository.findOne({
+      where: { level: user.kycLevel }
+    });
+
+    if (!kycLevel) {
+      throw new BadRequestException('KYC level not found');
+    }
+
+    // Calculate this withdrawal's USD value
+    const withdrawalUsdValue = new Decimal(amount)
+      .times(new Decimal(token.currentPrice || '0'))
+      .toString();
+
+    // Check withdrawal limits
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    const withdrawals = await this.withdrawalRepository.find({
+      where: {
+        userId,
+        status: In(['completed', 'pending']),
+        createdAt: MoreThanOrEqual(firstDayOfMonth)
+      }
+    });
+
+    let dailyTotal = new Decimal(0);
+    let monthlyTotal = new Decimal(0);
+
+    for (const withdrawal of withdrawals) {
+      const usdValue = withdrawal.metadata?.amount?.usdValue || '0';
+      monthlyTotal = monthlyTotal.plus(usdValue);
+      
+      if (withdrawal.createdAt >= today) {
+        dailyTotal = dailyTotal.plus(usdValue);
+      }
+    }
+
+    const newDailyTotal = dailyTotal.plus(withdrawalUsdValue);
+    const newMonthlyTotal = monthlyTotal.plus(withdrawalUsdValue);
+
+    const limits = kycLevel.limits.withdrawal;
+    if (newDailyTotal.greaterThan(limits.daily)) {
+      throw new BadRequestException(`Daily withdrawal limit of $${limits.daily} exceeded`);
+    }
+    if (newMonthlyTotal.greaterThan(limits.monthly)) {
+      throw new BadRequestException(`Monthly withdrawal limit of $${limits.monthly} exceeded`);
+    }
+
     return {
       feeAmount,
       feeUSD,
@@ -1184,16 +1248,13 @@ export class WalletService {
       receiveAmount: string;
     };
   }> {
-    // First get the token
-    const token = await this.tokenRepository.findOne({ 
-      where: { id: tokenId } 
-    });
-
+    // Get token
+    const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
     if (!token) {
       throw new NotFoundException('Token not found');
     }
 
-    // Then get the balance using token.baseSymbol
+    // Get balance
     const balance = await this.walletBalanceRepository.findOne({
       where: {
         userId,
@@ -1206,15 +1267,14 @@ export class WalletService {
       throw new NotFoundException('Balance not found');
     }
 
-    // Calculate fees
     const fee = await this.calculateWithdrawalFee(
       tokenId,
       new Decimal(amount).toNumber(),
       networkVersion,
       network,
+      userId,
     );
 
-    // Check if user has sufficient balance (amount + fee)
     const totalRequired = new Decimal(amount).plus(new Decimal(fee.feeAmount));
     const currentBalance = new Decimal(balance.balance);
 
