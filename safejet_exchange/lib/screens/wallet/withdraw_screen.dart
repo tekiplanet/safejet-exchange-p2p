@@ -837,18 +837,10 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       final verified = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => TwoFactorDialog(
+        builder: (context) => const TwoFactorDialog(
           action: 'withdraw',
           title: 'Verify 2FA',
           message: 'Enter the 6-digit code to confirm withdrawal',
-          onVerify: (code) async {
-            try {
-              await _walletService.verify2FAForAction(code);
-              return true;
-            } catch (e) {
-              return false;
-            }
-          },
         ),
       );
       
