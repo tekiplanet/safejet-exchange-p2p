@@ -77,6 +77,21 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   String? _verifiedPassword;
   String? _verifiedTwoFactorCode;
 
+  // Add this helper function to format balance
+  String _formatBalance(String? balanceStr) {
+    final balance = double.tryParse(balanceStr ?? '0') ?? 0.0;
+    final parts = balance.toString().split('.');
+    
+    if (parts.length == 1) return NumberFormat('#,##0').format(balance);
+    
+    var decimals = parts[1];
+    if (decimals.length > 8) decimals = decimals.substring(0, 8);
+    while (decimals.endsWith('0')) decimals = decimals.substring(0, decimals.length - 1);
+    
+    final wholeNumber = NumberFormat('#,##0').format(int.parse(parts[0]));
+    return decimals.isEmpty ? wholeNumber : '$wholeNumber.$decimals';
+  }
+
   // Add the currency symbol helper
   String _getCurrencySymbol(String currency) {
     switch (currency) {
@@ -275,45 +290,45 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
           !address.startsWith('n') && 
           !address.startsWith('2') && 
           !address.startsWith('tb1')) {
-        setState(() => _addressError = 'Invalid Bitcoin address');
-        return false;
-      }
+          setState(() => _addressError = 'Invalid Bitcoin address');
+          return false;
+        }
 
       // Length validation (covers both mainnet and testnet)
       if (address.length < 26 || address.length > 89) {
-        setState(() => _addressError = 'Invalid Bitcoin address length');
-        return false;
-      }
+          setState(() => _addressError = 'Invalid Bitcoin address length');
+          return false;
+        }
     }
     // Ethereum and BSC validation
     else if (networkName.contains('ETH') || networkName.contains('ERC20') || 
              networkName.contains('BSC') || networkName.contains('BEP20')) {
-      if (!address.startsWith('0x')) {
-        setState(() => _addressError = 'Invalid address format');
-        return false;
-      }
-      if (address.length != 42) {
-        setState(() => _addressError = 'Invalid address length');
-        return false;
-      }
+        if (!address.startsWith('0x')) {
+          setState(() => _addressError = 'Invalid address format');
+          return false;
+        }
+        if (address.length != 42) {
+          setState(() => _addressError = 'Invalid address length');
+          return false;
+        }
     }
     // TRON validation
     else if (networkName.contains('TRX') || networkName.contains('TRON') || networkName.contains('TRC20')) {
-      if (!address.startsWith('T')) {
-        setState(() => _addressError = 'Invalid TRON address');
-        return false;
-      }
-      if (address.length != 34) {
-        setState(() => _addressError = 'Invalid address length');
-        return false;
-      }
+        if (!address.startsWith('T')) {
+          setState(() => _addressError = 'Invalid TRON address');
+          return false;
+        }
+        if (address.length != 34) {
+          setState(() => _addressError = 'Invalid address length');
+          return false;
+        }
     }
     // XRP validation
     else if (networkName.contains('XRP') || networkName.contains('RIPPLE')) {
       if (!address.startsWith('r')) {
         setState(() => _addressError = 'Invalid XRP address');
-        return false;
-      }
+          return false;
+        }
       if (address.length < 25 || address.length > 35) {
         setState(() => _addressError = 'Invalid XRP address length');
         return false;
@@ -374,8 +389,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       builder: (context) => Dialog.fullscreen(
         child: Scaffold(
           backgroundColor: isDark 
-              ? SafeJetColors.primaryBackground 
-              : SafeJetColors.lightBackground,
+            ? SafeJetColors.primaryBackground
+            : SafeJetColors.lightBackground,
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
@@ -400,8 +415,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
                       Text(
                         'Please confirm your withdrawal details:',
                         style: TextStyle(
@@ -416,7 +431,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                         icon: Icons.account_balance_wallet,
                         isDark: isDark,
                       ),
-                      const SizedBox(height: 16),
+            const SizedBox(height: 16),
                       _buildDetailCard(
                         title: 'Network Fee',
                         value: _feeDetails != null 
@@ -425,7 +440,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                         icon: Icons.local_gas_station,
                         isDark: isDark,
                       ),
-                      const SizedBox(height: 16),
+            const SizedBox(height: 16),
                       _buildDetailCard(
                         title: 'You will receive',
                         value: _receiveAmount != null
@@ -466,15 +481,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
-                                'This action cannot be undone.',
+              'This action cannot be undone.',
                                 style: TextStyle(
                                   color: SafeJetColors.error,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
+            ),
+          ],
+        ),
                       ),
                     ],
                   ),
@@ -486,15 +501,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   children: [
                     Expanded(
                       child: TextButton(
-                        onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, false),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text('Cancel'),
-                      ),
+            child: const Text('Cancel'),
+          ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -515,9 +530,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                             );
                           }
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: SafeJetColors.secondaryHighlight,
-                          foregroundColor: Colors.black,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: SafeJetColors.secondaryHighlight,
+              foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -608,7 +623,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               onPressed: () {
                 // Add copy functionality
               },
-            ),
+          ),
         ],
       ),
     );
@@ -850,6 +865,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       );
       
       if (verified != true) return false;
+      _verifiedTwoFactorCode = authProvider.getLastVerificationToken();
+      print('🔐 2FA code captured: ${_verifiedTwoFactorCode != null}');
     }
 
     return true;
@@ -948,54 +965,54 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     label: 'Scan QR',
                                     onTap: () async {
                                       print('Opening QR scanner...');
-                                      final scannedAddress = await Navigator.push<String>(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => const QRScannerScreen(),
-                                        ),
-                                      );
-                                      
+                                        final scannedAddress = await Navigator.push<String>(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => const QRScannerScreen(),
+                                          ),
+                                        );
+                                        
                                       print('Received scanned address: $scannedAddress');
-                                      if (scannedAddress != null) {
+                                        if (scannedAddress != null) {
                                         print('Setting address and validating...');
-                                        setState(() {
-                                          _addressController.text = scannedAddress;
-                                          _validateAddress(scannedAddress);
-                                        });
-                                      }
-                                    },
-                                  ),
+                                          setState(() {
+                                            _addressController.text = scannedAddress;
+                                            _validateAddress(scannedAddress);
+                                          });
+                                        }
+                                      },
+                                    ),
                                   _AddressInputButton(
                                     icon: Icons.book_outlined,
                                     label: 'Address Book',
                                     onTap: () async {
-                                      final address = await showModalBottomSheet<RecentAddress>(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.transparent,
-                                        builder: (context) => AddressBookModal(
-                                          selectedCoin: _selectedCoin?.symbol ?? '',
-                                          selectedNetwork: _selectedNetwork?.name ?? '',
-                                          addressService: GetIt.I<AddressService>(),
-                                        ),
-                                      );
+                                  final address = await showModalBottomSheet<RecentAddress>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (context) => AddressBookModal(
+                                      selectedCoin: _selectedCoin?.symbol ?? '',
+                                      selectedNetwork: _selectedNetwork?.name ?? '',
+                                      addressService: GetIt.I<AddressService>(),
+                                    ),
+                                  );
 
-                                      if (address != null) {
-                                        setState(() {
-                                          _addressController.text = address.address;
-                                          _validateAddress(address.address);
-                                        });
-                                      }
-                                    },
-                                  ),
+                                  if (address != null) {
+                                    setState(() {
+                                      _addressController.text = address.address;
+                                      _validateAddress(address.address);
+                                    });
+                                  }
+                                },
+                              ),
                                   _AddressInputButton(
                                     icon: Icons.paste_rounded,
                                     label: 'Paste',
                                     onTap: () async {
-                                      final data = await Clipboard.getData('text/plain');
-                                      if (data?.text != null) {
+                                  final data = await Clipboard.getData('text/plain');
+                                  if (data?.text != null) {
                                         setState(() {
-                                          _addressController.text = data!.text!;
+                                    _addressController.text = data!.text!;
                                           _validateAddress(data.text!);
                                         });
                                       }
@@ -1031,7 +1048,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       ),
                                     ),
                                   ),
-                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1051,26 +1068,31 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                         children: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Amount',
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Amount',
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Available: ${_currentAsset['balance']?.toString() ?? '0.00'} ${_selectedCoin?.symbol}',
-                                    style: TextStyle(
-                                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                      fontSize: 13,
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Available: ${_formatBalance(_currentAsset['balance']?.toString())} ${_selectedCoin?.symbol}',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                                        fontSize: 13,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 12),
                               Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
@@ -1085,47 +1107,47 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     _CurrencyTab(
                                       label: _selectedCoin?.symbol ?? '',
                                       isSelected: !_isFiat,
-                                      onSelected: (selected) {
-                                        if (selected) {
-                                          setState(() {
-                                            _isFiat = false;
-                                            _selectedFiatCurrency = _showInUSD ? 'USD' : _userCurrency;
-                                            if (_amountController.text.isNotEmpty) {
-                                              _amountController.text = _convertAmount(_amountController.text, false).toStringAsFixed(8);
-                                            }
-                                          });
-                                        }
-                                      },
-                                    ),
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _isFiat = false;
+                                          _selectedFiatCurrency = _showInUSD ? 'USD' : _userCurrency;
+                                          if (_amountController.text.isNotEmpty) {
+                                            _amountController.text = _convertAmount(_amountController.text, false).toStringAsFixed(8);
+                                          }
+                                        });
+                                      }
+                                    },
+                                  ),
                                     _CurrencyTab(
                                       label: 'USD',
                                       isSelected: _isFiat && _selectedFiatCurrency == 'USD',
-                                      onSelected: (selected) {
-                                        if (selected) {
-                                          setState(() {
-                                            _isFiat = true;
-                                            _selectedFiatCurrency = 'USD';
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _isFiat = true;
+                                          _selectedFiatCurrency = 'USD';
                                             _amountController.clear();
                                             _feeDetails = null;
-                                          });
-                                        }
-                                      },
-                                    ),
+                                        });
+                                      }
+                                    },
+                                  ),
                                     _CurrencyTab(
                                       label: _userCurrency,
                                       isSelected: _isFiat && _selectedFiatCurrency == _userCurrency,
-                                      onSelected: (selected) {
-                                        if (selected) {
-                                          setState(() {
-                                            _isFiat = true;
-                                            _selectedFiatCurrency = _userCurrency;
+                                    onSelected: (selected) {
+                                      if (selected) {
+                                        setState(() {
+                                          _isFiat = true;
+                                          _selectedFiatCurrency = _userCurrency;
                                             _amountController.clear();
                                             _feeDetails = null;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ],
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
                                 ),
                               ),
                             ],
@@ -1288,7 +1310,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       children: [
                                         Text(
                                           '${_selectedNetwork?.blockchain.toUpperCase()} (${_selectedNetwork?.version})' +
-                                              (_selectedNetwork?.network == 'testnet' ? ' - TESTNET' : ''),
+                                          (_selectedNetwork?.network == 'testnet' ? ' - TESTNET' : ''),
                                           style: theme.textTheme.titleSmall?.copyWith(
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -1477,17 +1499,17 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                             );
 
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
                                   content: Text('Withdrawal initiated successfully'),
                                   backgroundColor: SafeJetColors.success,
-                                ),
-                              );
+                              ),
+                            );
                               Navigator.pop(context);
-                            }
+                          }
                           } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(e.toString().replaceAll('Exception: ', '')),
                                   backgroundColor: SafeJetColors.error,

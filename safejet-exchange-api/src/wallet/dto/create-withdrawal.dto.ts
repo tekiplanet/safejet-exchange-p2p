@@ -28,4 +28,12 @@ export class CreateWithdrawalDto {
   @IsOptional()
   @IsString()
   tag?: string;
+
+  @IsString()
+  @IsOptional()
+  password?: string;
+
+  @IsString()
+  @IsOptional()
+  twoFactorCode?: string;
 } 
