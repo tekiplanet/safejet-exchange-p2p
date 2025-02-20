@@ -4,6 +4,7 @@ class User {
   final String? name;
   final bool isEmailVerified;
   final bool is2FAEnabled;
+  final bool biometricEnabled;  // For biometric authentication
 
   User({
     required this.id,
@@ -11,6 +12,7 @@ class User {
     this.name,
     this.isEmailVerified = false,
     this.is2FAEnabled = false,
+    this.biometricEnabled = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class User {
       name: json['name'],
       isEmailVerified: json['isEmailVerified'] ?? false,
       is2FAEnabled: json['is2FAEnabled'] ?? false,
+      biometricEnabled: json['biometricEnabled'] ?? false,
     );
   }
 } 

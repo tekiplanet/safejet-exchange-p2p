@@ -286,59 +286,30 @@ class WalletService {
 
   Future<Map<String, dynamic>> createWithdrawal({
     required String tokenId,
+    required String amount,
     required String address,
-    required double amount,
     required String networkVersion,
     required String network,
     String? memo,
     String? tag,
-    required String password,
-    required String twoFactorCode,
   }) async {
     try {
       final response = await _dio.post(
-        '/wallets/withdraw',
+        '/withdrawals',
         data: {
           'tokenId': tokenId,
-          'address': address,
           'amount': amount,
+          'address': address,
           'networkVersion': networkVersion,
           'network': network,
           'memo': memo,
           'tag': tag,
-          'password': password,
-          'twoFactorCode': twoFactorCode,
         },
-        options: Options(headers: await _getAuthHeaders()),
       );
-
       return response.data;
     } catch (e) {
-      if (e is DioException) {
-        final message = e.response?.data['message'];
-        switch (e.response?.statusCode) {
-          case 400:
-            throw message ?? 'Invalid withdrawal request';
-          case 401:
-            if (message?.contains('password') ?? false) {
-              throw 'Invalid password';
-            }
-            if (message?.contains('2FA') ?? false) {
-              throw 'Invalid 2FA code';
-            }
-            throw 'Authentication failed';
-          case 403:
-            throw 'Insufficient permissions';
-          case 404:
-            throw 'Token or network not found';
-          case 422:
-            throw 'Insufficient balance';
-          default:
-            print('Withdrawal error details: ${e.response?.data}');
-            throw 'Failed to process withdrawal';
-        }
-      }
-      throw 'An error occurred during withdrawal';
+      print('Error creating withdrawal: $e');
+      rethrow;
     }
   }
 

@@ -4,6 +4,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:provider/provider.dart';
+import 'package:flutter/material.dart';
+import '../providers/auth_provider.dart';
+import '../main.dart';
 
 class BiometricSettingsService {
   late final Dio _dio;
@@ -235,7 +239,7 @@ class BiometricSettingsService {
           throw 'No valid tokens available to store';
         }
 
-        // Finally store tokens in biometric storage
+        // Store tokens in biometric storage
         await storeBiometricTokens(token, refreshToken);
         print('Tokens stored in biometric storage');
       } else {
@@ -248,10 +252,23 @@ class BiometricSettingsService {
         );
         print('Server status updated');
 
-        // Then clear biometric tokens
+        // Clear biometric tokens
         await clearBiometricTokens();
         print('Biometric tokens cleared');
       }
+
+      // Add this: Refresh user data after updating biometric status
+      if (navigatorKey.currentContext != null) {
+        final authProvider = Provider.of<AuthProvider>(
+          navigatorKey.currentContext!, 
+          listen: false
+        );
+        await authProvider.refreshUserData();
+        print('User data refreshed after biometric update');
+      } else {
+        print('Warning: No context available to refresh user data');
+      }
+
     } catch (e) {
       print('Error in updateBiometricStatus: $e');
       if (!enabled) {

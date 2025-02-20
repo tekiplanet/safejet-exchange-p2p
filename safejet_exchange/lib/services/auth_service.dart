@@ -3,30 +3,31 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/env/env_config.dart';
 import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import 'package:flutter/material.dart';
 
 class AuthService {
   final String baseUrl = EnvConfig.authBaseUrl;
   final storage = const FlutterSecureStorage();
   late final Dio _dio;
+  final navigatorKey = GlobalKey<NavigatorState>();
 
   AuthService() {
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-      sendTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
     ));
 
-    // Add interceptor for logging
+    // Add logging interceptor
     _dio.interceptors.add(LogInterceptor(
-      request: true,
-      requestHeader: true,
       requestBody: true,
-      responseHeader: true,
       responseBody: true,
       error: true,
     ));
@@ -405,6 +406,14 @@ class AuthService {
 
       final data = json.decode(response.body);
       if (response.statusCode == 201 || response.statusCode == 200) {
+        if (navigatorKey.currentContext != null) {
+          final authProvider = Provider.of<AuthProvider>(
+            navigatorKey.currentContext!, 
+            listen: false
+          );
+          await authProvider.refreshUserData();
+          print('User data refreshed after enabling 2FA');
+        }
         return data;
       }
 
@@ -444,6 +453,15 @@ class AuthService {
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         throw response.data['message'] ?? 'Failed to disable 2FA';
+      }
+
+      if (navigatorKey.currentContext != null) {
+        final authProvider = Provider.of<AuthProvider>(
+          navigatorKey.currentContext!, 
+          listen: false
+        );
+        await authProvider.refreshUserData();
+        print('User data refreshed after disabling 2FA');
       }
     } catch (e) {
       print('Disable 2FA error: $e');

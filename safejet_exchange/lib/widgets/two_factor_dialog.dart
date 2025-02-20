@@ -172,6 +172,7 @@ class _TwoFactorDialogState extends State<TwoFactorDialog> {
                         case 'updatePaymentMethod':
                         case 'createPaymentMethod':
                         case 'deletePaymentMethod':
+                        case 'withdraw':
                           print('=== TwoFactorDialog Debug ===');
                           print('Action: ${widget.action}');
                           print('Code: $_code');

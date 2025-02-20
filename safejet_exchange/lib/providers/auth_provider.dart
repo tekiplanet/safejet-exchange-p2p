@@ -761,6 +761,7 @@ class User {
   final bool emailVerified;
   final bool phoneVerified;
   final bool twoFactorEnabled;
+  final bool biometricEnabled;
   final String? phone;
   final String? countryCode;
   final String? countryName;
@@ -774,6 +775,7 @@ class User {
     required this.emailVerified,
     required this.phoneVerified,
     required this.twoFactorEnabled,
+    this.biometricEnabled = false,
     this.phone,
     this.countryCode,
     this.countryName,
@@ -789,11 +791,29 @@ class User {
       emailVerified: json['emailVerified'] ?? false,
       phoneVerified: json['phoneVerified'] ?? false,
       twoFactorEnabled: json['twoFactorEnabled'] ?? false,
+      biometricEnabled: json['biometricEnabled'] ?? false,
       phone: json['phone'],
       countryCode: json['countryCode'],
       countryName: json['countryName'],
       kycLevel: json['kycLevel'] ?? 0,
       kycData: json['kycData'],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'email': email,
+      'fullName': fullName,
+      'emailVerified': emailVerified,
+      'phoneVerified': phoneVerified,
+      'twoFactorEnabled': twoFactorEnabled,
+      'biometricEnabled': biometricEnabled,
+      'phone': phone,
+      'countryCode': countryCode,
+      'countryName': countryName,
+      'kycLevel': kycLevel,
+      'kycData': kycData,
+    };
   }
 } 

@@ -20,6 +20,7 @@ import 'package:get_it/get_it.dart';
 import '../../services/service_locator.dart';
 import '../../services/wallet_service.dart';
 import 'package:intl/intl.dart';
+import '../../providers/auth_provider.dart';
 
 class WithdrawScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -43,6 +44,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   final _walletService = GetIt.I<WalletService>();
   final _addressController = TextEditingController();
   final _amountController = TextEditingController();
+  final _memoController = TextEditingController();
+  final _tagController = TextEditingController();
   
   late Coin? _selectedCoin;
   late Network? _selectedNetwork;
@@ -140,6 +143,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   void dispose() {
     _addressController.dispose();
     _amountController.dispose();
+    _memoController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -490,7 +495,22 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context, true),
+                        onPressed: () async {
+                          try {
+                            final success = await _handleWithdrawalConfirmation();
+                            if (success) {
+                              // Proceed with withdrawal
+                              Navigator.pop(context, true);
+                            }
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e.toString().replaceAll('Exception: ', '')),
+                                backgroundColor: SafeJetColors.error,
+                              ),
+                            );
+                          }
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: SafeJetColors.secondaryHighlight,
                           foregroundColor: Colors.black,
@@ -640,6 +660,202 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         }
       }
     }
+  }
+
+  Future<bool> _handleWithdrawalConfirmation() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    print('🔐 User data:');
+    print('   - Email: ${authProvider.user?.email}');
+    print('   - Biometric enabled: ${authProvider.user?.biometricEnabled}');
+    print('   - 2FA enabled: ${authProvider.user?.twoFactorEnabled}');
+    
+    // First check if biometrics is enabled
+    if (authProvider.user?.biometricEnabled == true) {
+      print('🔐 Biometrics is enabled, using biometric authentication');
+      // Use biometric authentication
+      final authenticated = await BiometricService.authenticate();
+      print('🔐 Biometric authentication result: $authenticated');
+      
+      if (!authenticated) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Biometric authentication failed'),
+              backgroundColor: SafeJetColors.error,
+            ),
+          );
+        }
+        return false;
+      }
+    } else {
+      print('🔐 Biometrics not enabled, using password authentication');
+      // Only show password dialog if biometrics is not enabled
+      final passwordController = TextEditingController();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: isDark 
+              ? SafeJetColors.primaryBackground
+              : SafeJetColors.lightBackground,
+          child: Container(
+            width: 320,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Confirm Password',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Enter your password to confirm withdrawal',
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark 
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        : SafeJetColors.lightCardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Enter your password',
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[600] : Colors.grey[400],
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          try {
+                            final isValid = await authProvider.verifyCurrentPassword(
+                              passwordController.text
+                            );
+                            
+                            if (!isValid) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Invalid password. Please try again.'),
+                                  backgroundColor: SafeJetColors.error,
+                                ),
+                              );
+                              return;
+                            }
+                            
+                            Navigator.pop(context, true);
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e.toString().replaceAll('Exception: ', '')),
+                                backgroundColor: SafeJetColors.error,
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: SafeJetColors.secondaryHighlight,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Confirm',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      print('🔐 Password confirmation result: $confirmed');
+      if (confirmed != true) return false;
+    }
+
+    print('🔐 Checking 2FA status: ${authProvider.user?.twoFactorEnabled}');
+    // Then check 2FA if enabled
+    if (authProvider.user?.twoFactorEnabled == true) {
+      print('🔐 2FA is enabled, showing verification dialog');
+      final verified = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => TwoFactorDialog(
+          action: 'withdraw',
+          title: 'Verify 2FA',
+          message: 'Enter the 6-digit code to confirm withdrawal',
+          onVerify: (code) async {
+            try {
+              await _walletService.verify2FAForAction(code);
+              return true;
+            } catch (e) {
+              return false;
+            }
+          },
+        ),
+      );
+      
+      if (verified != true) return false;
+    }
+
+    return true;
   }
 
   @override
@@ -1075,7 +1291,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       children: [
                                         Text(
                                           '${_selectedNetwork?.blockchain.toUpperCase()} (${_selectedNetwork?.version})' +
-                                          (_selectedNetwork?.network == 'testnet' ? ' - TESTNET' : ''),
+                                              (_selectedNetwork?.network == 'testnet' ? ' - TESTNET' : ''),
                                           style: theme.textTheme.titleSmall?.copyWith(
                                             fontWeight: FontWeight.bold,
                                           ),
@@ -1243,57 +1459,42 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                           // Save address to recent addresses
                           await _saveAddress(_addressController.text);
 
-                          // Show confirmation dialog
+                          // Show confirmation dialog and handle authentication
                           final confirmed = await _showConfirmationDialog();
                           if (!confirmed) {
                             return;
                           }
 
-                          // Authenticate with biometrics
-                          final authenticated = await BiometricService.authenticate();
-                          if (!authenticated) {
+                          try {
+                            // Create withdrawal
+                            final response = await _walletService.createWithdrawal(
+                              tokenId: _selectedCoin!.id,
+                              amount: _amountController.text,
+                              address: _addressController.text,
+                              networkVersion: _selectedNetwork!.version,
+                              network: _selectedNetwork!.network,
+                              memo: _memoController.text.isNotEmpty ? _memoController.text : null,
+                              tag: _tagController.text.isNotEmpty ? _tagController.text : null,
+                            );
+
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Authentication failed'),
+                                  content: Text('Withdrawal initiated successfully'),
+                                  backgroundColor: SafeJetColors.success,
+                                ),
+                              );
+                              Navigator.pop(context);
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(e.toString().replaceAll('Exception: ', '')),
                                   backgroundColor: SafeJetColors.error,
                                 ),
                               );
                             }
-                            return;
-                          }
-
-                          // Show 2FA dialog
-                          final code = await showDialog<String>(
-                            context: context,
-                            builder: (context) => const TwoFactorDialog(),
-                          );
-
-                          if (code == null) {
-                            return;
-                          }
-
-                          // TODO: Validate 2FA code
-                          if (code != '123456') { // Example validation
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Invalid 2FA code'),
-                                backgroundColor: SafeJetColors.error,
-                              ),
-                            );
-                            return;
-                          }
-
-                          // TODO: Process withdrawal
-                          // Show success message
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Withdrawal initiated successfully'),
-                                backgroundColor: SafeJetColors.success,
-                              ),
-                            );
-                            Navigator.pop(context);
                           }
                         },
                         style: ElevatedButton.styleFrom(

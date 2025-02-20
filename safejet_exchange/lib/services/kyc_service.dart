@@ -10,9 +10,9 @@ class KYCService {
 
   KYCService(Dio dio) : _dio = dio {
     _dio.options.baseUrl = dotenv.env['API_URL'] ?? 'http://localhost:3000';
-    _dio.options.connectTimeout = const Duration(seconds: 10);
+    _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
-    _dio.options.sendTimeout = const Duration(seconds: 10);
+    _dio.options.sendTimeout = const Duration(seconds: 30);
   }
 
   Future<Map<String, String>> _getAuthHeaders() async {
