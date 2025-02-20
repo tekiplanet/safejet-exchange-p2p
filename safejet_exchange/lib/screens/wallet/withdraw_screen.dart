@@ -493,7 +493,36 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                 errorText: addressNameController.text.isEmpty ? 'Name is required' : null,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: isDark ? Colors.grey[600]! : Colors.grey[300]!,
+                                  ),
                                 ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: isDark ? Colors.grey[600]! : Colors.grey[300]!,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: isDark ? Colors.grey[400]! : SafeJetColors.secondaryHighlight,
+                                  ),
+                                ),
+                                labelStyle: TextStyle(
+                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                ),
+                                floatingLabelStyle: TextStyle(
+                                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                ),
+                                hintStyle: TextStyle(
+                                  color: isDark ? Colors.grey[500] : Colors.grey[400],
+                                ),
+                                filled: true,
+                                fillColor: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
+                              ),
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
                               ),
                               onChanged: (value) {
                                 setState(() {});  // Rebuild to update error state
