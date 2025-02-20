@@ -1163,68 +1163,79 @@ export default function TokenManagement() {
                                 Fee Configuration
                             </Typography>
                             
-                            <div className="grid grid-cols-2 gap-4">
-                                <FormControl fullWidth margin="normal">
-                                    <InputLabel>Fee Type</InputLabel>
-                                    <Select
-                                        value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[editToken?.metadata?.networks[0] || '']?.fee?.type || 'percentage'}
-                                        onChange={(e) => {
-                                            const currentConfigs = editToken?.networkConfigs || {};
-                                            const currentVersion = editToken?.networkVersion || '';
-                                            
-                                            setEditToken({
-                                                ...editToken,
-                                                networkConfigs: {
-                                                    ...currentConfigs,
-                                                    [currentVersion]: {
-                                                        ...currentConfigs[currentVersion],
-                                                        [editToken?.metadata?.networks[0] || '']: {
-                                                            ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || ''],
-                                                            fee: {
-                                                                ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || '']?.fee,
-                                                                type: e.target.value as FeeType
+                            {editToken?.metadata?.networks.map((network) => (
+                                <Box key={network} sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                                    <Typography variant="subtitle2" gutterBottom>
+                                        {network.charAt(0).toUpperCase() + network.slice(1)} Fee Configuration
+                                    </Typography>
+
+                                    {/* Only show fee config if network is active */}
+                                    {editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.isActive && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormControl fullWidth margin="normal">
+                                                <InputLabel>Fee Type</InputLabel>
+                                                <Select
+                                                    value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.fee?.type || 'percentage'}
+                                                    onChange={(e) => {
+                                                        const currentConfigs = editToken?.networkConfigs || {};
+                                                        const currentVersion = editToken?.networkVersion || '';
+                                                        
+                                                        setEditToken({
+                                                            ...editToken,
+                                                            networkConfigs: {
+                                                                ...currentConfigs,
+                                                                [currentVersion]: {
+                                                                    ...currentConfigs[currentVersion],
+                                                                    [network]: {
+                                                                        ...currentConfigs[currentVersion]?.[network],
+                                                                        fee: {
+                                                                            ...currentConfigs[currentVersion]?.[network]?.fee,
+                                                                            type: e.target.value as FeeType
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        });
+                                                    }}
+                                                    label="Fee Type"
+                                                >
+                                                    <MenuItem value="percentage">Percentage</MenuItem>
+                                                    <MenuItem value="usd">USD</MenuItem>
+                                                    <MenuItem value="token">Token</MenuItem>
+                                                </Select>
+                                            </FormControl>
+
+                                            <TextField
+                                                fullWidth
+                                                label="Fee Value"
+                                                value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.fee?.value || ''}
+                                                onChange={(e) => {
+                                                    const currentConfigs = editToken?.networkConfigs || {};
+                                                    const currentVersion = editToken?.networkVersion || '';
+                                                    
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        networkConfigs: {
+                                                            ...currentConfigs,
+                                                            [currentVersion]: {
+                                                                ...currentConfigs[currentVersion],
+                                                                [network]: {
+                                                                    ...currentConfigs[currentVersion]?.[network],
+                                                                    fee: {
+                                                                        ...currentConfigs[currentVersion]?.[network]?.fee,
+                                                                        value: e.target.value
+                                                                    }
+                                                                }
                                                             }
                                                         }
-                                                    }
-                                                }
-                                            });
-                                        }}
-                                        label="Fee Type"
-                                    >
-                                        <MenuItem value="percentage">Percentage</MenuItem>
-                                        <MenuItem value="usd">USD</MenuItem>
-                                        <MenuItem value="token">Token</MenuItem>
-                                    </Select>
-                                </FormControl>
-
-                                <TextField
-                                    fullWidth
-                                    label="Fee Value"
-                                    value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[editToken?.metadata?.networks[0] || '']?.fee?.value || ''}
-                                    onChange={(e) => {
-                                        const currentConfigs = editToken?.networkConfigs || {};
-                                        const currentVersion = editToken?.networkVersion || '';
-                                        
-                                        setEditToken({
-                                            ...editToken,
-                                            networkConfigs: {
-                                                ...currentConfigs,
-                                                [currentVersion]: {
-                                                    ...currentConfigs[currentVersion],
-                                                    [editToken?.metadata?.networks[0] || '']: {
-                                                        ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || ''],
-                                                        fee: {
-                                                            ...currentConfigs[currentVersion]?.[editToken?.metadata?.networks[0] || '']?.fee,
-                                                            value: e.target.value
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        });
-                                    }}
-                                    margin="normal"
-                                />
-                            </div>
+                                                    });
+                                                }}
+                                                margin="normal"
+                                            />
+                                        </div>
+                                    )}
+                                </Box>
+                            ))}
                         </Box>
 
                         <Box sx={{ mt: 3, mb: 2 }}>

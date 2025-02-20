@@ -1073,13 +1073,13 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Amount',
-                                      style: theme.textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                            children: [
+                              Text(
+                                'Amount',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                                     const SizedBox(height: 4),
                                     Text(
                                       'Available: ${_formatBalance(_currentAsset['balance']?.toString())} ${_selectedCoin?.symbol}',
@@ -1494,9 +1494,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               throw Exception('Network configuration not found');
                             }
 
+                            // Convert amount to token value if using fiat
+                            final amount = _isFiat 
+                                ? _convertAmount(_amountController.text, false).toString()  // Convert fiat to token amount
+                                : _amountController.text;  // Already in token amount
+
                             final response = await _walletService.createWithdrawal(
-                              tokenId: networkData['tokenId'],  // Use network-specific tokenId
-                              amount: _amountController.text,
+                              tokenId: networkData['tokenId'],
+                              amount: amount,  // Use converted amount
                               address: _addressController.text,
                               networkVersion: networkData['networkVersion'],
                               network: networkData['network'],
@@ -1506,14 +1511,14 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               twoFactorCode: _verifiedTwoFactorCode,
                             );
 
-                            if (mounted) {
+                          if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                  content: Text('Withdrawal initiated successfully'),
-                                  backgroundColor: SafeJetColors.success,
+                                content: Text('Withdrawal initiated successfully'),
+                                backgroundColor: SafeJetColors.success,
                               ),
                             );
-                              Navigator.pop(context);
+                            Navigator.pop(context);
                           }
                           } catch (e) {
                           if (mounted) {
