@@ -1238,6 +1238,11 @@ export class WalletService {
       withdrawalDto.network,
     );
 
+    // Calculate USD value of withdrawal amount
+    const usdValue = new Decimal(withdrawalDto.amount)
+      .times(new Decimal(token.currentPrice || '0'))
+      .toString();
+
     // Create withdrawal record
     const withdrawal = new Withdrawal();
     withdrawal.userId = userId;
@@ -1255,6 +1260,10 @@ export class WalletService {
         symbol: token.symbol,
         name: token.name,
         networkVersion: withdrawalDto.networkVersion,
+      },
+      amount: {  // Add amount metadata
+        value: withdrawalDto.amount.toString(),
+        usdValue: usdValue,
       },
       fee: {
         amount: fee.feeAmount,
