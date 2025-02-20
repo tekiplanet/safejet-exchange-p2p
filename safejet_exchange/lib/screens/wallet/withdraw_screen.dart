@@ -1485,13 +1485,21 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                           }
 
                           try {
-                            // Create withdrawal
+                            // Get the correct network configuration
+                            final networks = _currentAsset['metadata']['networks'] as Map<String, dynamic>;
+                            final networkKey = '${_selectedNetwork!.blockchain}_${_selectedNetwork!.network}';
+                            final networkData = networks[networkKey] as Map<String, dynamic>?;
+
+                            if (networkData == null) {
+                              throw Exception('Network configuration not found');
+                            }
+
                             final response = await _walletService.createWithdrawal(
-                              tokenId: _selectedCoin!.id,
+                              tokenId: networkData['tokenId'],  // Use network-specific tokenId
                               amount: _amountController.text,
                               address: _addressController.text,
-                              networkVersion: _selectedNetwork!.version,
-                              network: _selectedNetwork!.network,
+                              networkVersion: networkData['networkVersion'],
+                              network: networkData['network'],
                               memo: _memoController.text.isNotEmpty ? _memoController.text : null,
                               tag: _tagController.text.isNotEmpty ? _tagController.text : null,
                               password: _verifiedPassword,

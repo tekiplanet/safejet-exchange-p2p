@@ -290,12 +290,18 @@ class WalletService {
     required String address,
     required String networkVersion,
     required String network,
-    String? password,
-    String? twoFactorCode,
     String? memo,
     String? tag,
+    String? password,
+    String? twoFactorCode,
   }) async {
     try {
+      // Add only debug logs
+      print('Withdrawal request network config:');
+      print('  Network: $network');
+      print('  Version: $networkVersion');
+      print('  Token ID: $tokenId');
+
       final response = await _dio.post(
         '/wallets/withdraw',
         data: {
