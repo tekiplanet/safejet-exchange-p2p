@@ -1401,10 +1401,30 @@ export class WalletService {
     });
   }
 
-  async checkAddressExists(userId: string, address: string): Promise<boolean> {
-    const entry = await this.addressBookRepository.findOne({
-      where: { userId, address, isActive: true },
+  async checkAddressExists(
+    userId: string, 
+    address: string,
+    blockchain: string,
+    network: string,
+  ): Promise<boolean> {
+    console.log('Checking address existence:', {
+      userId,
+      address,
+      blockchain,
+      network
     });
+
+    const entry = await this.addressBookRepository.findOne({
+      where: { 
+        userId, 
+        address, 
+        blockchain,
+        network,
+        isActive: true 
+      },
+    });
+
+    console.log('Found entry:', entry);
     return !!entry;
   }
 } 

@@ -360,21 +360,33 @@ class WalletService {
     );
   }
 
-  Future<bool> checkAddressExists(String address) async {
-    final token = await storage.read(key: 'token');
+  Future<bool> checkAddressExists(String address, String blockchain, String network) async {
+    final token = await storage.read(key: 'accessToken');
     
     try {
-      final response = await _dio.get(
-        '/wallets/address-book/check/$address',
+      final response = await _dio.post(
+        '/wallets/address-book/check',
+        data: {
+          'address': address,
+          'blockchain': blockchain,
+          'network': network,
+        },
         options: Options(
           headers: {
             'Authorization': 'Bearer $token',
           },
         ),
       );
-      return response.data as bool;
+      
+      if (response.data is bool) {
+        return response.data as bool;
+      } else if (response.data is Map) {
+        return response.data['exists'] as bool;
+      }
+      return false;
     } catch (e) {
-      return false;  // Assume address doesn't exist if request fails
+      print('Error checking address: $e');
+      return false;
     }
   }
 }

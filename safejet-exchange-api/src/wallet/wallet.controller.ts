@@ -220,12 +220,22 @@ export class WalletController {
     return this.walletService.getAddressBook(userId);
   }
 
-  @Get('address-book/check/:address')
+  @Post('address-book/check')
   @UseGuards(JwtAuthGuard)
   async checkAddressExists(
     @GetUser('id') userId: string,
-    @Param('address') address: string,
-  ): Promise<boolean> {
-    return this.walletService.checkAddressExists(userId, address);
+    @Body() data: {
+      address: string,
+      blockchain: string,
+      network: string,
+    },
+  ): Promise<{ exists: boolean }> {
+    const exists = await this.walletService.checkAddressExists(
+      userId, 
+      data.address, 
+      data.blockchain, 
+      data.network
+    );
+    return { exists };
   }
 } 

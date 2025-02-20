@@ -383,13 +383,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
   Future<bool> _showConfirmationDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     bool saveAddress = false;
-    String addressName = '';  // Add this variable
-    final addressNameController = TextEditingController();  // Add controller for name input
+    final addressNameController = TextEditingController();
+
+    // Check if address exists before showing dialog
+    await _checkAddressExists(_addressController.text);
 
     return await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => StatefulBuilder(  // Wrap with StatefulBuilder for checkbox state
+      builder: (context) => StatefulBuilder(
         builder: (context, setState) => Dialog.fullscreen(
           child: Scaffold(
             backgroundColor: isDark 
@@ -955,13 +957,29 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
   // Add new method to check address
   Future<void> _checkAddressExists(String address) async {
-    if (address.isEmpty) return;
+    if (address.isEmpty || _selectedNetwork == null) return;
     
     try {
-      final exists = await _walletService.checkAddressExists(address);
+      print('Checking address existence: ${
+        {
+          'address': address,
+          'blockchain': _selectedNetwork!.blockchain,
+          'network': _selectedNetwork!.network,
+        }
+      }');
+      
+      final exists = await _walletService.checkAddressExists(
+        address,
+        _selectedNetwork!.blockchain,
+        _selectedNetwork!.network,
+      );
+      
+      print('Address exists response: $exists');
+      
       setState(() {
         _isAddressInAddressBook = exists;
       });
+      print('Updated _isAddressInAddressBook to: $_isAddressInAddressBook');
     } catch (e) {
       print('Error checking address: $e');
     }
