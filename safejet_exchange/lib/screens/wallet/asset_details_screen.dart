@@ -13,6 +13,7 @@ import '../../services/wallet_service.dart';
 import 'deposit_screen.dart';
 import '../../models/coin.dart';
 import 'withdraw_screen.dart';
+import 'transfer_screen.dart';
 
 class AssetDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -157,6 +158,20 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => WithdrawScreen(
+          asset: widget.asset,
+          showInUSD: widget.showInUSD,
+          userCurrencyRate: widget.userCurrencyRate,
+          userCurrency: widget.userCurrency,
+        ),
+      ),
+    );
+  }
+
+  void _handleTransferTap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TransferScreen(
           asset: widget.asset,
           showInUSD: widget.showInUSD,
           userCurrencyRate: widget.userCurrencyRate,
@@ -715,7 +730,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
               'Transfer',
               Icons.swap_horiz_rounded,
               SafeJetColors.primary,
-              () {},
+              _handleTransferTap,
               isDark,
             ),
             _buildAdvancedNavButton(

@@ -408,6 +408,66 @@ class WalletService {
       throw e;  // Rethrow the error for handling in the UI
     }
   }
+
+  String _handleError(dynamic error) {
+    if (error is DioException) {
+      // Handle Dio specific errors
+      if (error.response != null) {
+        return error.response?.data['message'] ?? 'An error occurred';
+      } else {
+        return 'Network error: ${error.message}';
+      }
+    }
+    return 'An unexpected error occurred';
+  }
+
+  Future<Map<String, dynamic>> getWalletBalances(String tokenId) async {
+    try {
+      // Use the existing getBalances method
+      final response = await getBalances();
+      final balances = response['balances'] as List<dynamic>;
+      
+      // Filter and transform balances for the specific token
+      double spotBalance = 0.0;
+      double fundingBalance = 0.0;
+
+      for (var balance in balances) {
+        if (balance['token']['id'] == tokenId) {
+          if (balance['type'] == 'spot') {
+            spotBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;
+          } else if (balance['type'] == 'funding') {
+            fundingBalance = double.tryParse(balance['balance'].toString()) ?? 0.0;
+          }
+        }
+      }
+
+      return {
+        'spot': spotBalance.toString(),
+        'funding': fundingBalance.toString(),
+      };
+    } catch (e) {
+      print('Error getting wallet balances: $e');
+      throw 'Failed to load balances';
+    }
+  }
+
+  Future<void> transferBalance({
+    required String tokenId,
+    required double amount,
+    required String from,
+    required String to,
+  }) async {
+    try {
+      await _dio.post('/wallets/transfer', data: {
+        'tokenId': tokenId,
+        'amount': amount,
+        'from': from,
+        'to': to,
+      });
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
 }
 
 class CacheEntry {
