@@ -30,6 +30,7 @@ import { GasTankWalletService } from './services/gas-tank-wallet.service';
 import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { Withdrawal } from './entities/withdrawal.entity';
 import { AddressBook } from './entities/address-book.entity';
+import { Transfer } from './entities/transfer.entity';
 
 @Module({
   imports: [
@@ -46,7 +47,8 @@ import { AddressBook } from './entities/address-book.entity';
       GasTankWallet,
       KYCLevel,
       Withdrawal,
-      AddressBook
+      AddressBook,
+      Transfer
     ]),
     EventEmitterModule.forRoot(),
     ConfigModule,

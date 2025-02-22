@@ -298,4 +298,24 @@ export class EmailService {
       console.error('Withdrawal notification email error:', error);
     }
   }
+
+  async sendTransferConfirmation(
+    email: string,
+    data: {
+      amount: string;
+      token: string;
+      fromType: string;
+      toType: string;
+      date: Date;
+    },
+  ): Promise<void> {
+    const template = await this.emailTemplatesService.getTransferConfirmationTemplate(data);
+    
+    await this.transporter.sendMail({
+      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      to: email,
+      subject: 'Transfer Confirmation',
+      html: template,
+    });
+  }
 }

@@ -11,6 +11,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateAddressBookDto } from './dto/create-address-book.dto';
 import { AddressBook } from './entities/address-book.entity';
+import { TransferDto } from './dto/transfer.dto';
+import { Transfer } from './entities/transfer.entity';
 
 @Controller('wallets')
 export class WalletController {
@@ -239,5 +241,24 @@ export class WalletController {
 
     // Process withdrawal
     return this.walletService.createWithdrawal(user.id, withdrawalDto);
+  }
+
+  @Post('transfer')
+  @UseGuards(JwtAuthGuard)
+  async transferBalance(
+    @Request() req,
+    @Body() transferDto: TransferDto,
+  ): Promise<Transfer> {
+    return this.walletService.transferBalance(req.user.id, transferDto);
+  }
+
+  @Get('transfers')
+  @UseGuards(JwtAuthGuard)
+  async getTransferHistory(
+    @Request() req,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ): Promise<{ transfers: Transfer[]; total: number }> {
+    return this.walletService.getTransferHistory(req.user.id, page, limit);
   }
 } 

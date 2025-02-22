@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull, Raw, In, MoreThanOrEqual } from 'typeorm';
+import { Repository, Not, IsNull, Raw, In, MoreThanOrEqual, DataSource } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { KeyManagementService } from './key-management.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
@@ -25,6 +25,8 @@ import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { AddressBook } from './entities/address-book.entity';
 import { CreateAddressBookDto } from './dto/create-address-book.dto';
 import { EmailService } from '../email/email.service';
+import { Transfer } from './entities/transfer.entity';
+import { TransferDto } from './dto/transfer.dto';
 
 interface PaginationParams {
   page: number;
@@ -118,6 +120,9 @@ export class WalletService {
     @InjectRepository(AddressBook)
     private addressBookRepository: Repository<AddressBook>,
     private readonly emailService: EmailService,
+    @InjectRepository(Transfer)
+    private transferRepository: Repository<Transfer>,
+    private readonly dataSource: DataSource,
   ) {}
 
   private async initializeWalletBalances(wallet: Wallet) {
@@ -1438,5 +1443,108 @@ export class WalletService {
 
     console.log('Found entry:', entry);
     return !!entry;
+  }
+
+  async transferBalance(
+    userId: string,
+    transferDto: TransferDto,
+  ): Promise<Transfer> {
+    const { tokenId, amount, fromType, toType } = transferDto;
+
+    // Get the token to find its baseSymbol
+    const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
+
+    const baseSymbol = token.baseSymbol || token.symbol;
+
+    // Start transaction
+    return await this.dataSource.transaction(async (manager) => {
+      // 1. Check if user has sufficient balance
+      const fromBalance = await this.getBalance(userId, baseSymbol, fromType);
+      if (parseFloat(fromBalance) < amount) {
+        throw new BadRequestException('Insufficient balance');
+      }
+
+      // 2. Update balances
+      await manager.query(
+        `UPDATE balances 
+         SET balance = balance - $1 
+         WHERE "userId" = $2 AND "tokenId" = $3 AND type = $4`,
+        [amount, userId, tokenId, fromType],
+      );
+
+      await manager.query(
+        `UPDATE balances 
+         SET balance = balance + $1 
+         WHERE "userId" = $2 AND "tokenId" = $3 AND type = $4`,
+        [amount, userId, tokenId, toType],
+      );
+
+      // 3. Create transfer record
+      const transfer = manager.create(Transfer, {
+        userId,
+        tokenId,
+        amount: amount.toString(),
+        fromType,
+        toType,
+        status: 'completed',
+        metadata: {
+          timestamp: new Date(),
+        },
+      });
+
+      const savedTransfer = await manager.save(transfer);
+
+      // 4. Send email notification
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
+
+      await this.emailService.sendTransferConfirmation(
+        user.email,
+        {
+          amount: amount.toString(),
+          token: token.symbol,
+          fromType,
+          toType,
+          date: new Date(),
+        },
+      );
+
+      return savedTransfer;
+    });
+  }
+
+  async getTransferHistory(
+    userId: string,
+    page = 1,
+    limit = 10,
+  ): Promise<{ transfers: Transfer[]; total: number }> {
+    const [transfers, total] = await this.transferRepository.findAndCount({
+      where: { userId },
+      relations: ['token'],
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return { transfers, total };
+  }
+
+  async getBalance(userId: string, baseSymbol: string, type: 'spot' | 'funding'): Promise<string> {
+    const balance = await this.walletBalanceRepository.findOne({
+      where: {
+        userId,
+        baseSymbol,
+        type,
+      },
+    });
+
+    if (!balance) {
+      return '0';
+    }
+
+    return balance.balance;
   }
 } 

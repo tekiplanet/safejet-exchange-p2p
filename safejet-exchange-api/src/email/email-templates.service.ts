@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { baseTemplate } from './templates/base.template';
 import { LoginInfoDto } from '../auth/dto/login-info.dto';
+import { format } from 'date-fns';
 
 @Injectable()
 export class EmailTemplatesService {
@@ -520,5 +521,75 @@ export class EmailTemplatesService {
     `;
 
     return baseTemplate(content, isDark);
+  }
+
+  private compile(templateName: string, data: any): string {
+    switch (templateName) {
+      case 'transfer-confirmation':
+        return this.transferConfirmationEmail(
+          data.amount,
+          data.token,
+          data.fromType,
+          data.toType,
+          data.date,
+        );
+      default:
+        throw new Error(`Template ${templateName} not found`);
+    }
+  }
+
+  private transferConfirmationEmail(
+    amount: string,
+    token: string,
+    fromType: string,
+    toType: string,
+    date: string,
+    isDark = true,
+  ): string {
+    const content = `
+      <h1>Transfer Confirmation ✅</h1>
+      <p>Your transfer has been completed successfully:</p>
+      
+      <div style="margin: 20px 0;">
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${amount} ${token}</h3>
+          <p style="margin: 5px 0;">From: ${fromType}</p>
+          <p style="margin: 5px 0;">To: ${toType}</p>
+          <p style="margin: 5px 0; font-size: 0.9em;">Date: ${date}</p>
+        </div>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  async getTransferConfirmationTemplate(data: {
+    amount: string;
+    token: string;
+    fromType: string;
+    toType: string;
+    date: Date;
+  }): Promise<string> {
+    const content = `
+      <h1>Transfer Confirmation ✅</h1>
+      <p>Your transfer has been completed successfully:</p>
+      
+      <div style="margin: 20px 0;">
+        <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${data.amount} ${data.token}</h3>
+          <p style="margin: 5px 0;">From: ${data.fromType}</p>
+          <p style="margin: 5px 0;">To: ${data.toType}</p>
+          <p style="margin: 5px 0; font-size: 0.9em;">Date: ${format(data.date, 'PPpp')}</p>
+        </div>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, true); // Assuming true for dark mode
   }
 }
