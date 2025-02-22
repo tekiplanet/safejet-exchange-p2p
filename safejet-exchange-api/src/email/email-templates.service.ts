@@ -501,4 +501,24 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  withdrawalNotificationEmail(userName: string, amount: string, currency: string, isDark = true) {
+    const content = `
+      <h1>Withdrawal Placed! 💸</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>Your withdrawal has been successfully placed:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${amount} ${currency}</h3>
+        </div>
+        <p>If you did not initiate this withdrawal, please contact our support team immediately.</p>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }

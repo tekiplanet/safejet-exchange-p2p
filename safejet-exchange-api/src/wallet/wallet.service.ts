@@ -24,6 +24,7 @@ import { User } from '../auth/entities/user.entity';
 import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { AddressBook } from './entities/address-book.entity';
 import { CreateAddressBookDto } from './dto/create-address-book.dto';
+import { EmailService } from '../email/email.service';
 
 interface PaginationParams {
   page: number;
@@ -116,6 +117,7 @@ export class WalletService {
     private connection: Connection,
     @InjectRepository(AddressBook)
     private addressBookRepository: Repository<AddressBook>,
+    private readonly emailService: EmailService,
   ) {}
 
   private async initializeWalletBalances(wallet: Wallet) {
@@ -1374,6 +1376,14 @@ export class WalletService {
       // Save withdrawal
       const savedWithdrawal = await queryRunner.manager.save(withdrawal);
       
+      // Send email notification
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      await this.emailService.sendWithdrawalNotificationEmail(
+        user.email,
+        user.fullName || 'User',
+        savedWithdrawal
+      );
+
       await queryRunner.commitTransaction();
       return savedWithdrawal;
     } catch (err) {

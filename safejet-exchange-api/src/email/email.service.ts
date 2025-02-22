@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { EmailTemplatesService } from './email-templates.service';
 import { LoginInfoDto } from '../auth/dto/login-info.dto';
+import { Withdrawal } from '../wallet/entities/withdrawal.entity';
 
 @Injectable()
 export class EmailService {
@@ -275,6 +276,26 @@ export class EmailService {
       });
     } catch (error) {
       console.error('Deposit confirmed email error:', error);
+    }
+  }
+
+  async sendWithdrawalNotificationEmail(
+    email: string, 
+    userName: string,  // This remains unchanged
+    withdrawal: Withdrawal
+  ) {
+    const amount = withdrawal.amount;
+    const currency = withdrawal.metadata.token.symbol;  // Get symbol from metadata
+
+    try {
+      await this.transporter.sendMail({
+        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        to: email,
+        subject: 'Withdrawal Placed - SafeJet Exchange',
+        html: this.emailTemplatesService.withdrawalNotificationEmail(userName, amount, currency),
+      });
+    } catch (error) {
+      console.error('Withdrawal notification email error:', error);
     }
   }
 }
