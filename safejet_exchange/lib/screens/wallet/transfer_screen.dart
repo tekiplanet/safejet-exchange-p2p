@@ -4,7 +4,6 @@ import '../../config/theme/colors.dart';
 import 'package:intl/intl.dart';
 import 'package:get_it/get_it.dart';
 import '../../services/wallet_service.dart';
-import 'package:animate_do/animate_do.dart';
 
 class TransferScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -29,11 +28,11 @@ class _TransferScreenState extends State<TransferScreen> {
   final _amountController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
-  
+
   // Transfer direction
   String _fromWallet = 'Spot';
   String _toWallet = 'Funding';
-  
+
   // Available balances
   double _spotBalance = 0.0;
   double _fundingBalance = 0.0;
@@ -178,34 +177,33 @@ class _TransferScreenState extends State<TransferScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? Colors.black.withOpacity(0.3) 
-                          : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.grey[300]!,
+                  Card(
+                    elevation: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: isDark 
+                            ? Colors.black.withOpacity(0.3) 
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _fromWallet,
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Available: ${_formatBalance(_fromWallet == 'Spot' ? _spotBalance : _fundingBalance)} ${token['symbol']}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _fromWallet,
+                            style: theme.textTheme.titleMedium,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Available: ${_formatBalance(_fromWallet == 'Spot' ? _spotBalance : _fundingBalance)} ${token['symbol']}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   // Switch Button
@@ -227,34 +225,33 @@ class _TransferScreenState extends State<TransferScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark 
-                          ? Colors.black.withOpacity(0.3) 
-                          : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.grey[300]!,
+                  Card(
+                    elevation: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: isDark 
+                            ? Colors.black.withOpacity(0.3) 
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _toWallet,
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Available: ${_formatBalance(_toWallet == 'Spot' ? _spotBalance : _fundingBalance)} ${token['symbol']}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _toWallet,
+                            style: theme.textTheme.titleMedium,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Available: ${_formatBalance(_toWallet == 'Spot' ? _spotBalance : _fundingBalance)} ${token['symbol']}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -277,7 +274,7 @@ class _TransferScreenState extends State<TransferScreen> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _handleTransfer,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: SafeJetColors.primaryAccent,
+                        backgroundColor: SafeJetColors.warning,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -347,4 +344,4 @@ class _TransferScreenState extends State<TransferScreen> {
       ),
     );
   }
-} 
+}
