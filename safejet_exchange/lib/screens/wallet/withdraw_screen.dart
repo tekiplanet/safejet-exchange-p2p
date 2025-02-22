@@ -1664,7 +1664,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                       ),
                                     );
                                   }
-                                }
+                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: SafeJetColors.secondaryHighlight,

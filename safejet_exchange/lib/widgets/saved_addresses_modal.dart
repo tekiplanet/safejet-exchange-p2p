@@ -32,15 +32,11 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
   Future<void> _loadAddresses() async {
     try {
       setState(() => _isLoading = true);
-      
       final addresses = await _walletService.getAddressBook();
-      
-      // Filter addresses by blockchain and network
       final filteredAddresses = addresses.where((address) =>
         address['blockchain'].toString().toLowerCase() == widget.blockchain.toLowerCase() &&
         address['network'].toString().toLowerCase() == widget.network.toLowerCase()
       ).toList();
-
       setState(() {
         _addresses = filteredAddresses;
         _isLoading = false;
@@ -55,83 +51,225 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground;
+    final cardColor = isDark ? SafeJetColors.secondaryBackground : SafeJetColors.lightSecondaryBackground;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.7,
+      height: MediaQuery.of(context).size.height * 0.85,
       decoration: BoxDecoration(
-        color: isDark ? SafeJetColors.primaryBackground : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        color: backgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
       ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Modern header with search bar
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Saved Addresses',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Saved Addresses',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : SafeJetColors.lightText,
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? SafeJetColors.secondaryHighlight : SafeJetColors.primaryAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search addresses',
+                      hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      border: InputBorder.none,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const Divider(),
+          const SizedBox(height: 20),
+          
+          // Address list
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: isDark ? SafeJetColors.secondaryHighlight : SafeJetColors.primaryAccent,
+                    ),
+                  )
                 : _error != null
-                    ? Center(child: Text(_error!))
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, 
+                              size: 48, 
+                              color: SafeJetColors.error
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _error!,
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: SafeJetColors.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
                     : _addresses.isEmpty
                         ? Center(
-                            child: Text(
-                              'No saved addresses found for ${widget.blockchain}',
-                              style: TextStyle(
-                                color: isDark ? Colors.grey[400] : Colors.grey[600],
-                              ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.bookmark_border,
+                                  size: 48,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No saved addresses found',
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
                             itemCount: _addresses.length,
-                            padding: const EdgeInsets.all(16),
                             itemBuilder: (context, index) {
                               final address = _addresses[index];
-                              return ListTile(
-                                title: Text(
-                                  address['name'] ?? 'Unnamed Address',
-                                  style: Theme.of(context).textTheme.titleMedium,
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      address['address'],
-                                      style: TextStyle(
-                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () => Navigator.pop(context, address),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: isDark 
+                                                ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
+                                                : SafeJetColors.primaryAccent.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: Icon(
+                                              Icons.account_balance_wallet,
+                                              color: isDark 
+                                                ? SafeJetColors.secondaryHighlight
+                                                : SafeJetColors.primaryAccent,
+                                              size: 20,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  address['name'] ?? 'Unnamed Address',
+                                                  style: theme.textTheme.titleMedium?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isDark ? Colors.white : SafeJetColors.lightText,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  address['address'],
+                                                  style: theme.textTheme.bodySmall?.copyWith(
+                                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                if (address['memo'] != null || address['tag'] != null)
+                                                  const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    if (address['memo'] != null)
+                                                      Container(
+                                                        margin: const EdgeInsets.only(right: 8),
+                                                        padding: const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 2,
+                                                        ),
+                                                        decoration: BoxDecoration(
+                                                          color: isDark 
+                                                            ? Colors.black.withOpacity(0.3)
+                                                            : Colors.grey[100],
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          'Memo: ${address['memo']}',
+                                                          style: theme.textTheme.bodySmall?.copyWith(
+                                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    if (address['tag'] != null)
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 2,
+                                                        ),
+                                                        decoration: BoxDecoration(
+                                                          color: isDark 
+                                                            ? Colors.black.withOpacity(0.3)
+                                                            : Colors.grey[100],
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          'Tag: ${address['tag']}',
+                                                          style: theme.textTheme.bodySmall?.copyWith(
+                                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    if (address['memo'] != null)
-                                      Text(
-                                        'Memo: ${address['memo']}',
-                                        style: TextStyle(
-                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                        ),
-                                      ),
-                                    if (address['tag'] != null)
-                                      Text(
-                                        'Tag: ${address['tag']}',
-                                        style: TextStyle(
-                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                        ),
-                                      ),
-                                  ],
+                                  ),
                                 ),
-                                onTap: () => Navigator.pop(context, address),
                               );
                             },
                           ),
