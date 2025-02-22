@@ -12,6 +12,7 @@ import 'package:get_it/get_it.dart';
 import '../../services/wallet_service.dart';
 import 'deposit_screen.dart';
 import '../../models/coin.dart';
+import 'withdraw_screen.dart';
 
 class AssetDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -142,6 +143,20 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => DepositScreen(
+          asset: widget.asset,
+          showInUSD: widget.showInUSD,
+          userCurrencyRate: widget.userCurrencyRate,
+          userCurrency: widget.userCurrency,
+        ),
+      ),
+    );
+  }
+
+  void _handleWithdrawTap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WithdrawScreen(
           asset: widget.asset,
           showInUSD: widget.showInUSD,
           userCurrencyRate: widget.userCurrencyRate,
@@ -692,7 +707,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
               'Withdraw',
               Icons.upload_rounded,
               SafeJetColors.error,
-              () {},
+              _handleWithdrawTap,
               isDark,
             ),
             _buildAdvancedNavButton(
