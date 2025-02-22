@@ -56,12 +56,48 @@ export class WalletController {
     return this.walletService.getWallets(user.id);
   }
 
+  @Get('address-book')
+  @UseGuards(JwtAuthGuard)
+  async getAddressBook(@GetUser('id') userId: string): Promise<AddressBook[]> {
+    console.log('Getting address book for user ID:', userId);
+    return this.walletService.getAddressBook(userId);
+  }
+
+  @Post('address-book')
+  @UseGuards(JwtAuthGuard)
+  async createAddressBookEntry(
+    @GetUser('id') userId: string,
+    @Body() createAddressBookDto: CreateAddressBookDto,
+  ): Promise<AddressBook> {
+    return this.walletService.createAddressBookEntry(userId, createAddressBookDto);
+  }
+
+  @Post('address-book/check')
+  @UseGuards(JwtAuthGuard)
+  async checkAddressExists(
+    @GetUser('id') userId: string,
+    @Body() data: {
+      address: string,
+      blockchain: string,
+      network: string,
+    },
+  ): Promise<{ exists: boolean }> {
+    const exists = await this.walletService.checkAddressExists(
+      userId, 
+      data.address, 
+      data.blockchain, 
+      data.network
+    );
+    return { exists };
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getWallet(
     @GetUser() user: User,
     @Param('id') walletId: string,
   ) {
+    console.log('Getting wallet for user ID:', user.id, 'and wallet ID:', walletId);
     return this.walletService.getWallet(user.id, walletId);
   }
 
@@ -203,39 +239,5 @@ export class WalletController {
 
     // Process withdrawal
     return this.walletService.createWithdrawal(user.id, withdrawalDto);
-  }
-
-  @Post('address-book')
-  @UseGuards(JwtAuthGuard)
-  async createAddressBookEntry(
-    @GetUser('id') userId: string,
-    @Body() createAddressBookDto: CreateAddressBookDto,
-  ): Promise<AddressBook> {
-    return this.walletService.createAddressBookEntry(userId, createAddressBookDto);
-  }
-
-  @Get('address-book')
-  @UseGuards(JwtAuthGuard)
-  async getAddressBook(@GetUser('id') userId: string): Promise<AddressBook[]> {
-    return this.walletService.getAddressBook(userId);
-  }
-
-  @Post('address-book/check')
-  @UseGuards(JwtAuthGuard)
-  async checkAddressExists(
-    @GetUser('id') userId: string,
-    @Body() data: {
-      address: string,
-      blockchain: string,
-      network: string,
-    },
-  ): Promise<{ exists: boolean }> {
-    const exists = await this.walletService.checkAddressExists(
-      userId, 
-      data.address, 
-      data.blockchain, 
-      data.network
-    );
-    return { exists };
   }
 } 

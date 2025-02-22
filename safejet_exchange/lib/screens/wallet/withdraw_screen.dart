@@ -21,6 +21,7 @@ import '../../services/service_locator.dart';
 import '../../services/wallet_service.dart';
 import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/saved_addresses_modal.dart';
 
 class WithdrawScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -395,8 +396,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         builder: (context, setState) => Dialog.fullscreen(
           child: Scaffold(
             backgroundColor: isDark 
-              ? SafeJetColors.primaryBackground
-              : SafeJetColors.lightBackground,
+            ? SafeJetColors.primaryBackground
+            : SafeJetColors.lightBackground,
             appBar: AppBar(
               backgroundColor: Colors.transparent,
               elevation: 0,
@@ -421,8 +422,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
                         Text(
                           'Please confirm your withdrawal details:',
                           style: TextStyle(
@@ -437,7 +438,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                           icon: Icons.account_balance_wallet,
                           isDark: isDark,
                         ),
-                        const SizedBox(height: 16),
+            const SizedBox(height: 16),
                         _buildDetailCard(
                           title: 'Network Fee',
                           value: _feeDetails != null 
@@ -446,7 +447,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                           icon: Icons.local_gas_station,
                           isDark: isDark,
                         ),
-                        const SizedBox(height: 16),
+            const SizedBox(height: 16),
                         _buildDetailCard(
                           title: 'You will receive',
                           value: _receiveAmount != null
@@ -548,15 +549,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
-                                  'This action cannot be undone.',
+              'This action cannot be undone.',
                                   style: TextStyle(
                                     color: SafeJetColors.error,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
+            ),
+          ],
+        ),
                         ),
                       ],
                     ),
@@ -568,15 +569,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                     children: [
                       Expanded(
                         child: TextButton(
-                          onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, false),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text('Cancel'),
-                        ),
+            child: const Text('Cancel'),
+          ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -612,9 +613,9 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                               );
                             }
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: SafeJetColors.secondaryHighlight,
-                            foregroundColor: Colors.black,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: SafeJetColors.secondaryHighlight,
+              foregroundColor: Colors.black,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -706,7 +707,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
               onPressed: () {
                 // Add copy functionality
               },
-            ),
+          ),
         ],
       ),
     );
@@ -1099,22 +1100,37 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     icon: Icons.book_outlined,
                                     label: 'Address Book',
                                     onTap: () async {
-                                  final address = await showModalBottomSheet<RecentAddress>(
+                                      if (_selectedNetwork == null) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Please select a network first'),
+                                            backgroundColor: SafeJetColors.error,
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      final selectedAddress = await showModalBottomSheet(
                                     context: context,
                                     isScrollControlled: true,
                                     backgroundColor: Colors.transparent,
-                                    builder: (context) => AddressBookModal(
-                                      selectedCoin: _selectedCoin?.symbol ?? '',
-                                      selectedNetwork: _selectedNetwork?.name ?? '',
-                                      addressService: GetIt.I<AddressService>(),
-                                    ),
-                                  );
+                                        builder: (context) => SavedAddressesModal(
+                                          blockchain: _selectedNetwork!.blockchain,
+                                          network: _selectedNetwork!.network,
+                                        ),
+                                      );
 
-                                  if (address != null) {
+                                      if (selectedAddress != null && mounted) {
                                     setState(() {
-                                      _addressController.text = address.address;
-                                      _validateAddress(address.address);
-                                    });
+                                          _addressController.text = selectedAddress['address'];
+                                          if (selectedAddress['memo'] != null) {
+                                            _memoController.text = selectedAddress['memo'];
+                                          }
+                                          if (selectedAddress['tag'] != null) {
+                                            _tagController.text = selectedAddress['tag'];
+                                          }
+                                        });
+                                        _validateAddress(_addressController.text);
                                   }
                                 },
                               ),
@@ -1586,22 +1602,22 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     _feeDetails == null)  // Also disable if fee calculation failed
                             ? null  // This will disable the button
                             : () async {
-                                // Validate inputs
-                                final isAddressValid = _validateAddress(_addressController.text);
-                                final isAmountValid = _validateAmount(_amountController.text);
+                          // Validate inputs
+                          final isAddressValid = _validateAddress(_addressController.text);
+                          final isAmountValid = _validateAmount(_amountController.text);
 
-                                if (!isAddressValid || !isAmountValid) {
-                                  return;
-                                }
+                          if (!isAddressValid || !isAmountValid) {
+                            return;
+                          }
 
-                                // Save address to recent addresses
-                                await _saveAddress(_addressController.text);
+                          // Save address to recent addresses
+                          await _saveAddress(_addressController.text);
 
                                 // Show confirmation dialog and handle authentication
-                                final confirmed = await _showConfirmationDialog();
-                                if (!confirmed) {
-                                  return;
-                                }
+                          final confirmed = await _showConfirmationDialog();
+                          if (!confirmed) {
+                            return;
+                          }
 
                                 try {
                                   // Get the correct network configuration
@@ -1630,15 +1646,15 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     twoFactorCode: _verifiedTwoFactorCode,
                                   );
 
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Withdrawal initiated successfully'),
-                                      backgroundColor: SafeJetColors.success,
-                                    ),
-                                  );
-                                  Navigator.pop(context);
-                                }
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Withdrawal initiated successfully'),
+                                backgroundColor: SafeJetColors.success,
+                              ),
+                            );
+                            Navigator.pop(context);
+                          }
                                 } catch (e) {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1649,7 +1665,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
                                     );
                                   }
                                 }
-                              },
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: SafeJetColors.secondaryHighlight,
                           foregroundColor: Colors.black,

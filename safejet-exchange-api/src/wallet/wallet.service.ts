@@ -214,6 +214,7 @@ export class WalletService {
   }
 
   async getWallet(userId: string, walletId: string): Promise<Wallet> {
+    console.log('Fetching wallet for user ID:', userId, 'and wallet ID:', walletId);
     const wallet = await this.walletRepository.findOne({
       where: { id: walletId, userId },
     });
@@ -1395,6 +1396,7 @@ export class WalletService {
   }
 
   async getAddressBook(userId: string): Promise<AddressBook[]> {
+    console.log('Fetching address book for user ID:', userId);
     return this.addressBookRepository.find({
       where: { userId, isActive: true },
       order: { createdAt: 'DESC' },

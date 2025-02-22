@@ -389,6 +389,25 @@ class WalletService {
       return false;
     }
   }
+
+  Future<List<dynamic>> getAddressBook() async {
+    final token = await storage.read(key: 'accessToken');
+    
+    try {
+      final response = await _dio.get(
+        '/wallets/address-book',
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+      return response.data;  // Assuming the response contains the list of addresses
+    } catch (e) {
+      print('Error fetching address book: $e');
+      throw e;  // Rethrow the error for handling in the UI
+    }
+  }
 }
 
 class CacheEntry {
