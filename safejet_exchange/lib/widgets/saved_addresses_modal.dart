@@ -21,12 +21,38 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
   final _walletService = GetIt.I<WalletService>();
   bool _isLoading = true;
   List<dynamic> _addresses = [];
+  List<dynamic> _filteredAddresses = [];
   String? _error;
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _loadAddresses();
+    _searchController.addListener(_filterAddresses);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _filterAddresses() {
+    final searchTerm = _searchController.text.toLowerCase();
+    setState(() {
+      _filteredAddresses = _addresses.where((address) {
+        final name = (address['name'] ?? '').toString().toLowerCase();
+        final addressText = address['address'].toString().toLowerCase();
+        final memo = (address['memo'] ?? '').toString().toLowerCase();
+        final tag = (address['tag'] ?? '').toString().toLowerCase();
+        
+        return name.contains(searchTerm) ||
+               addressText.contains(searchTerm) ||
+               memo.contains(searchTerm) ||
+               tag.contains(searchTerm);
+      }).toList();
+    });
   }
 
   Future<void> _loadAddresses() async {
@@ -39,6 +65,7 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
       ).toList();
       setState(() {
         _addresses = filteredAddresses;
+        _filteredAddresses = filteredAddresses;
         _isLoading = false;
       });
     } catch (e) {
@@ -100,6 +127,7 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: TextField(
+                    controller: _searchController,
                     decoration: InputDecoration(
                       hintText: 'Search addresses',
                       hintStyle: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
@@ -140,7 +168,7 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                           ],
                         ),
                       )
-                    : _addresses.isEmpty
+                    : _filteredAddresses.isEmpty
                         ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -162,9 +190,9 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
-                            itemCount: _addresses.length,
+                            itemCount: _filteredAddresses.length,
                             itemBuilder: (context, index) {
-                              final address = _addresses[index];
+                              final address = _filteredAddresses[index];
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 decoration: BoxDecoration(
