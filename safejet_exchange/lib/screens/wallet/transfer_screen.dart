@@ -116,6 +116,11 @@ class _TransferScreenState extends State<TransferScreen> {
     return NumberFormat('#,##0.########').format(balance);
   }
 
+  void _setMaxAmount() {
+    final maxBalance = _fromWallet == 'Spot' ? _spotBalance : _fundingBalance;
+    _amountController.text = maxBalance.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -183,9 +188,19 @@ class _TransferScreenState extends State<TransferScreen> {
                       padding: const EdgeInsets.all(16),
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: isDark 
-                            ? Colors.black.withOpacity(0.3) 
-                            : Colors.grey[100],
+                        gradient: LinearGradient(
+                          colors: isDark 
+                              ? [
+                                  SafeJetColors.darkGradientStart,
+                                  SafeJetColors.darkGradientEnd,
+                                ]
+                              : [
+                                  SafeJetColors.lightGradientStart,
+                                  SafeJetColors.lightGradientEnd,
+                                ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -231,9 +246,19 @@ class _TransferScreenState extends State<TransferScreen> {
                       padding: const EdgeInsets.all(16),
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: isDark 
-                            ? Colors.black.withOpacity(0.3) 
-                            : Colors.grey[100],
+                        gradient: LinearGradient(
+                          colors: isDark 
+                              ? [
+                                  SafeJetColors.darkGradientStart,
+                                  SafeJetColors.darkGradientEnd,
+                                ]
+                              : [
+                                  SafeJetColors.lightGradientStart,
+                                  SafeJetColors.lightGradientEnd,
+                                ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(
@@ -256,15 +281,95 @@ class _TransferScreenState extends State<TransferScreen> {
                   ),
                   const SizedBox(height: 24),
                   // Amount Input
-                  TextField(
-                    controller: _amountController,
-                    keyboardType: TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: 'Amount',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark 
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.grey[300]!,
                       ),
-                      suffixText: token['symbol'],
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Amount',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _setMaxAmount,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                backgroundColor: isDark 
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[200],
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'MAX',
+                                style: TextStyle(
+                                  color: SafeJetColors.warning,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _amountController,
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                decoration: InputDecoration(
+                                  hintText: '0.00',
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                token['symbol'],
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Available: ${_formatBalance(_fromWallet == 'Spot' ? _spotBalance : _fundingBalance)} ${token['symbol']}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),

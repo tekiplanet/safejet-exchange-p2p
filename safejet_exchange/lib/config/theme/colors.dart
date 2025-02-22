@@ -31,5 +31,9 @@ class SafeJetColors {
   static const error = Color(0xFFDC3545);
   static const info = Color(0xFF17A2B8);
   
-  static const Color primary = Color(0xFF2196F3);
+  static const Color primary = Color(0xFF6200EE);
+
+  // Define gradient colors
+  static const Color gradientStart = Color(0xFF6A1B9A); // Example color
+  static const Color gradientEnd = Color(0xFF8E24AA);   // Example color
 } 
