@@ -454,18 +454,21 @@ class WalletService {
   Future<void> transferBalance({
     required String tokenId,
     required double amount,
-    required String from,
-    required String to,
+    required String fromType,
+    required String toType,
   }) async {
     try {
-      await _dio.post('/wallets/transfer', data: {
-        'tokenId': tokenId,
-        'amount': amount,
-        'from': from,
-        'to': to,
-      });
+      await _dio.post(
+        '/wallets/transfer',
+        data: {
+          'tokenId': tokenId,
+          'amount': amount,
+          'fromType': fromType,
+          'toType': toType,
+        },
+      );
     } catch (e) {
-      throw _handleError(e);
+      rethrow;
     }
   }
 }

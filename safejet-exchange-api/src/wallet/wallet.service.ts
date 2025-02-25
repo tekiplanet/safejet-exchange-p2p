@@ -1469,17 +1469,17 @@ export class WalletService {
 
       // 2. Update balances
       await manager.query(
-        `UPDATE balances 
+        `UPDATE wallet_balances 
          SET balance = balance - $1 
-         WHERE "userId" = $2 AND "tokenId" = $3 AND type = $4`,
-        [amount, userId, tokenId, fromType],
+         WHERE "userId" = $2 AND "baseSymbol" = $3 AND type = $4`,
+        [amount, userId, baseSymbol, fromType],
       );
 
       await manager.query(
-        `UPDATE balances 
+        `UPDATE wallet_balances 
          SET balance = balance + $1 
-         WHERE "userId" = $2 AND "tokenId" = $3 AND type = $4`,
-        [amount, userId, tokenId, toType],
+         WHERE "userId" = $2 AND "baseSymbol" = $3 AND type = $4`,
+        [amount, userId, baseSymbol, toType],
       );
 
       // 3. Create transfer record
@@ -1499,7 +1499,6 @@ export class WalletService {
 
       // 4. Send email notification
       const user = await this.userRepository.findOne({ where: { id: userId } });
-      const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
 
       await this.emailService.sendTransferConfirmation(
         user.email,

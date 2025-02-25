@@ -88,6 +88,282 @@ class _TransferScreenState extends State<TransferScreen> {
       return;
     }
 
+    // Show confirmation dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark 
+                    ? [
+                        SafeJetColors.darkGradientStart,
+                        SafeJetColors.darkGradientEnd,
+                      ]
+                    : [
+                        SafeJetColors.lightGradientStart,
+                        SafeJetColors.lightGradientEnd,
+                      ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark 
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.grey[300]!,
+              ),
+            ),
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Confirm Transfer',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark 
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark 
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.grey[300]!,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Amount',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text(
+                            _amountController.text,
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isDark 
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              widget.asset['token']['symbol'],
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark 
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark 
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.grey[300]!,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.swap_vert,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Transfer Details',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.black.withOpacity(0.2)
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isDark 
+                                      ? Colors.white.withOpacity(0.05)
+                                      : Colors.grey[200]!,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'From',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _fromWallet,
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Icon(
+                              Icons.arrow_forward,
+                              color: isDark ? Colors.grey[600] : Colors.grey[400],
+                              size: 20,
+                            ),
+                          ),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.black.withOpacity(0.2)
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isDark 
+                                      ? Colors.white.withOpacity(0.05)
+                                      : Colors.grey[200]!,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'To',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _toWallet,
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          _executeTransfer(amount);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: SafeJetColors.warning,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Confirm',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // New method to execute the transfer
+  Future<void> _executeTransfer(double amount) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -97,8 +373,8 @@ class _TransferScreenState extends State<TransferScreen> {
       await _walletService.transferBalance(
         tokenId: widget.asset['token']['id'],
         amount: amount,
-        from: _fromWallet.toLowerCase(),
-        to: _toWallet.toLowerCase(),
+        fromType: _fromWallet.toLowerCase(),
+        toType: _toWallet.toLowerCase(),
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
