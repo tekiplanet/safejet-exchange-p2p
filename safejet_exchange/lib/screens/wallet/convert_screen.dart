@@ -56,35 +56,21 @@ class _ConvertScreenState extends State<ConvertScreen> {
   Future<void> _loadBalances() async {
     setState(() => _isLoading = true);
     try {
-      // Load all tokens with their funding balances
       final balances = await _walletService.getAllWalletBalances();
       
-      // Filter tokens with non-zero funding balance
+      // Only handle funding balances
       _fundingBalances = {};
-      _availableTokens = [];
-      
       for (var token in balances) {
         final fundingBalance = double.tryParse(token['funding']?.toString() ?? '0') ?? 0.0;
         if (fundingBalance > 0) {
           _fundingBalances[token['token']['id']] = fundingBalance;
-          _availableTokens.add(token);
         }
       }
 
       setState(() {
         _isLoading = false;
-        // Set first available token as default 'to' token
-        if (_availableTokens.isNotEmpty && _availableTokens[0]['token']['id'] != widget.fromAsset['token']['id']) {
-          _selectedToToken = _availableTokens[0];
-        } else if (_availableTokens.length > 1) {
-          _selectedToToken = _availableTokens[1];
-        }
       });
 
-      // Load initial exchange rate if we have both tokens
-      if (_selectedToToken != null) {
-        _updateExchangeRate();
-      }
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load balances';
@@ -614,19 +600,31 @@ class _ConvertScreenState extends State<ConvertScreen> {
   double _calculateAmountToReceive() {
     if (_amountController.text.isEmpty) return 0;
     final amount = double.tryParse(_amountController.text) ?? 0;
-    final baseAmount = amount * _exchangeRate;
     
-    // Apply conversion fee
+    // First calculate fee in source token amount
+    double feeInSourceToken = 0;
     if (_feeType == 'percentage') {
-      return baseAmount * (1 - _conversionFee / 100);
+      feeInSourceToken = amount * (_conversionFee / 100);
     } else if (_feeType == 'usd') {
-      // Convert USD fee to token amount and subtract
-      // This needs proper implementation based on token prices
-      return baseAmount;
+      // Convert USD fee to source token amount
+      final tokenPrice = double.tryParse(
+        widget.fromAsset['token']['currentPrice']?.toString() ?? '0'
+      ) ?? 0.0;
+      
+      if (tokenPrice > 0) {
+        feeInSourceToken = _conversionFee / tokenPrice;
+      }
     } else {
-      // Fee is in token amount
-      return baseAmount - _conversionFee;
+      // Fee is already in token amount
+      feeInSourceToken = _conversionFee;
     }
+
+    // Calculate amount after fee
+    final amountAfterFee = amount - feeInSourceToken;
+    if (amountAfterFee <= 0) return 0;
+
+    // Apply exchange rate to get final amount
+    return amountAfterFee * _exchangeRate;
   }
 
   Future<void> _handleConvert() async {
@@ -822,9 +820,12 @@ class _ConvertScreenState extends State<ConvertScreen> {
   Future<void> _loadAvailableTokens() async {
     try {
       final response = await _walletService.getAvailableCoins();
+      
+      if (!mounted) return; // Check if widget is still mounted
+      
       setState(() {
         _availableTokens = response
-            .where((coin) => coin.id != widget.fromAsset['token']['id']) // Filter out the current token
+            .where((coin) => coin.id != widget.fromAsset['token']['id'])
             .map((coin) => {
                   'token': {
                     'id': coin.id,
@@ -835,16 +836,22 @@ class _ConvertScreenState extends State<ConvertScreen> {
                 })
             .toList();
         
-        // Set first available token as default if none selected
+        // Just set the selected token, don't update exchange rate yet
         if (_selectedToToken == null && _availableTokens.isNotEmpty) {
           _selectedToToken = _availableTokens.first;
-          _updateExchangeRate(); // Update exchange rate for initial selection
         }
       });
+
+      // Update exchange rate only if we have a selected token and widget is still mounted
+      if (_selectedToToken != null && mounted) {
+        await _updateExchangeRate();
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load available tokens';
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load available tokens';
+        });
+      }
     }
   }
 } 

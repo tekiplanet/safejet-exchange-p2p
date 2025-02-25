@@ -1627,21 +1627,35 @@ export class WalletService {
     const exchangeRate = await this.getExchangeRate(fromTokenId, toTokenId);
     const conversionFee = await this.getConversionFee(fromTokenId, amount);
     
-    // Calculate fee amount based on type
+    // Calculate fee amount in source token
     let feeAmount = 0;
-    if (conversionFee.type === 'percentage') {
-      feeAmount = (amount * parseFloat(conversionFee.value)) / 100;
-    } else if (conversionFee.type === 'token') {
-      feeAmount = parseFloat(conversionFee.value);
-    } else {
-      // USD fee needs to be converted to token amount
-      const token = await this.tokenRepository.findOne({ where: { id: fromTokenId } });
-      feeAmount = parseFloat(conversionFee.value) / token.currentPrice;
+    const fromToken = await this.tokenRepository.findOne({ where: { id: fromTokenId } });
+    
+    if (!fromToken) {
+      throw new NotFoundException('Source token not found');
+    }
+
+    switch (conversionFee.type) {
+      case 'percentage':
+        feeAmount = (amount * parseFloat(conversionFee.value)) / 100;
+        break;
+      case 'token':
+        feeAmount = parseFloat(conversionFee.value);
+        break;
+      case 'usd':
+        if (fromToken.currentPrice && fromToken.currentPrice > 0) {
+          feeAmount = parseFloat(conversionFee.value) / fromToken.currentPrice;
+        }
+        break;
     }
 
     // Calculate final amounts
-    const fromAmount = amount;
-    const toAmount = (amount - feeAmount) * exchangeRate;
+    const amountAfterFee = amount - feeAmount;
+    if (amountAfterFee <= 0) {
+      throw new BadRequestException('Amount after fee must be greater than 0');
+    }
+
+    const toAmount = amountAfterFee * exchangeRate;
 
     // Start transaction
     return this.dataSource.transaction(async (manager) => {
@@ -1664,7 +1678,7 @@ export class WalletService {
         userId,
         fromTokenId,
         toTokenId,
-        fromAmount,
+        fromAmount: amount,
         toAmount,
         exchangeRate,
         feeAmount,
@@ -1672,7 +1686,7 @@ export class WalletService {
       });
 
       // Update balances using the correct parameters
-      await this.updateBalance(userId, fromWallet.id, fromTokenId, (-fromAmount).toString(), 'funding');
+      await this.updateBalance(userId, fromWallet.id, fromTokenId, (-amount).toString(), 'funding');
       await this.updateBalance(userId, toWallet.id, toTokenId, toAmount.toString(), 'funding');
 
       // Save conversion record
@@ -1682,7 +1696,7 @@ export class WalletService {
       await this.emailService.sendConversionConfirmation({
         to: (await this.userRepository.findOne({ where: { id: userId } })).email,
         data: {
-          fromAmount,
+          fromAmount: amount,
           fromToken: (await this.tokenRepository.findOne({ where: { id: fromTokenId } })).symbol,
           toAmount,
           toToken: (await this.tokenRepository.findOne({ where: { id: toTokenId } })).symbol,
