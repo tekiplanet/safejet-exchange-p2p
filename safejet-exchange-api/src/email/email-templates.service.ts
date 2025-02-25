@@ -572,24 +572,38 @@ export class EmailTemplatesService {
     fromType: string;
     toType: string;
     date: Date;
-  }): Promise<string> {
+  }, isDark = true): Promise<string> {
     const content = `
       <h1>Transfer Confirmation ✅</h1>
       <p>Your transfer has been completed successfully:</p>
       
       <div style="margin: 20px 0;">
-        <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 10px 0;">
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
           <h3 style="color: #ffc300; margin: 0;">${data.amount} ${data.token}</h3>
-          <p style="margin: 5px 0;">From: ${data.fromType}</p>
-          <p style="margin: 5px 0;">To: ${data.toType}</p>
-          <p style="margin: 5px 0; font-size: 0.9em;">Date: ${format(data.date, 'PPpp')}</p>
+          <div style="margin-top: 10px;">
+            <p style="margin: 5px 0;">From: <span style="color: #ffc300;">${data.fromType}</span></p>
+            <p style="margin: 5px 0;">To: <span style="color: #ffc300;">${data.toType}</span></p>
+            <p style="margin: 5px 0; font-size: 0.9em;">Date: ${format(data.date, 'PPpp')}</p>
+          </div>
         </div>
       </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Security Tips 🛡️</h2>
+        <ul style="list-style: none; padding: 0;">
+          <li>✓ Always verify your transfer details</li>
+          <li>✓ Enable 2FA for additional security</li>
+          <li>✓ Monitor your account activity regularly</li>
+        </ul>
+      </div>
+
+      <p>Need assistance? Contact our support team:</p>
+      <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
 
       <p>Thank you for using SafeJet Exchange!</p>
       <p>Best regards,<br>The SafeJet Team</p>
     `;
 
-    return baseTemplate(content, true); // Assuming true for dark mode
+    return baseTemplate(content, isDark);
   }
 }
