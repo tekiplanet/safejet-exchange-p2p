@@ -1555,16 +1555,17 @@ export class WalletService {
     toTokenId: string,
   ): Promise<number> {
     try {
-      // Validate UUIDs
-      if (!this.isValidUUID(fromTokenId) || !this.isValidUUID(toTokenId)) {
-        throw new BadRequestException('Invalid token ID format');
-      }
+      this.logger.debug(`Getting exchange rate for tokens: ${fromTokenId} -> ${toTokenId}`);
 
       // Get both tokens
       const [fromToken, toToken] = await Promise.all([
         this.tokenRepository.findOne({ where: { id: fromTokenId } }),
         this.tokenRepository.findOne({ where: { id: toTokenId } })
       ]);
+
+      this.logger.debug('Token prices:');
+      this.logger.debug(`From Token (${fromToken?.symbol}): ${fromToken?.currentPrice}`);
+      this.logger.debug(`To Token (${toToken?.symbol}): ${toToken?.currentPrice}`);
 
       if (!fromToken || !toToken) {
         throw new NotFoundException('One or both tokens not found');
@@ -1578,12 +1579,20 @@ export class WalletService {
       const fromPrice = new Decimal(fromToken.currentPrice);
       const toPrice = new Decimal(toToken.currentPrice);
 
+      this.logger.debug(`From Price (Decimal): ${fromPrice}`);
+      this.logger.debug(`To Price (Decimal): ${toPrice}`);
+
       if (fromPrice.isZero()) {
-        throw new BadRequestException('Invalid exchange rate');
+        throw new BadRequestException('Invalid exchange rate - from price is zero');
       }
 
-      // Return the exchange rate
-      return toPrice.dividedBy(fromPrice).toNumber();
+      // Calculate the exchange rate (reversed from previous calculation)
+      // For example: if BTC = $89393.52 and USDT = $1.001
+      // Then 1 BTC = 89393.52/1.001 USDT ≈ 89304.21 USDT
+      const exchangeRate = fromPrice.dividedBy(toPrice);
+      this.logger.debug(`Calculated exchange rate: ${exchangeRate}`);
+
+      return exchangeRate.toNumber();
     } catch (error) {
       this.logger.error(`Error calculating exchange rate: ${error.message}`);
       throw error;

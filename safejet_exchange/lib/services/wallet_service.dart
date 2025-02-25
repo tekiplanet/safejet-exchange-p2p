@@ -477,6 +477,10 @@ class WalletService {
     required String toTokenId,
   }) async {
     try {
+      print('Fetching exchange rate for tokens:');
+      print('From Token ID: $fromTokenId');
+      print('To Token ID: $toTokenId');
+
       final response = await _dio.get(
         '/wallets/exchange-rate',
         queryParameters: {
@@ -485,11 +489,16 @@ class WalletService {
         },
       );
       
+      print('Exchange rate response: ${response.data}');
+      
       if (response.data == null || response.data['exchangeRate'] == null) {
+        print('Invalid exchange rate response: ${response.data}');
         throw Exception('Invalid exchange rate response');
       }
       
-      return double.tryParse(response.data['exchangeRate'].toString()) ?? 0.0;
+      final rate = double.tryParse(response.data['exchangeRate'].toString()) ?? 0.0;
+      print('Calculated exchange rate: $rate');
+      return rate;
     } catch (e) {
       print('Error getting exchange rate: $e');
       return 0.0;

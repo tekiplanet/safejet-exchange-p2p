@@ -33,7 +33,7 @@ export class Token {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column('numeric', { precision: 40, scale: 18, default: 0 })
+  @Column('decimal', { precision: 18, scale: 8, default: 0 })
   currentPrice: number;
 
   @Column('numeric', { precision: 40, scale: 18, default: 0 })
