@@ -1623,8 +1623,14 @@ export class WalletService {
   }): Promise<Conversion> {
     const { fromTokenId, toTokenId, amount } = data;
     
-    // First check if user has sufficient balance
-    const currentBalance = await this.getBalance(userId, fromTokenId, 'funding');
+    // Get token first to get baseSymbol
+    const fromToken = await this.tokenRepository.findOne({ where: { id: fromTokenId } });
+    if (!fromToken) {
+      throw new NotFoundException('Source token not found');
+    }
+
+    // Check balance using baseSymbol
+    const currentBalance = await this.getBalance(userId, fromToken.baseSymbol || fromToken.symbol, 'funding');
     if (parseFloat(currentBalance) < amount) {
       throw new BadRequestException('Insufficient balance');
     }
@@ -1635,12 +1641,7 @@ export class WalletService {
     
     // Calculate fee amount in source token
     let feeAmount = 0;
-    const fromToken = await this.tokenRepository.findOne({ where: { id: fromTokenId } });
     
-    if (!fromToken) {
-      throw new NotFoundException('Source token not found');
-    }
-
     switch (conversionFee.type) {
       case 'percentage':
         feeAmount = (amount * parseFloat(conversionFee.value)) / 100;
@@ -1691,9 +1692,29 @@ export class WalletService {
         feeType: conversionFee.type,
       });
 
-      // Update balances using the correct parameters
-      await this.updateBalance(userId, fromWallet.id, fromTokenId, (-amount).toString(), 'funding');
-      await this.updateBalance(userId, toWallet.id, toTokenId, toAmount.toString(), 'funding');
+      // Update source balance
+      await this.walletBalanceRepository.update(
+        { 
+          userId,
+          baseSymbol: fromToken.baseSymbol || fromToken.symbol,
+          type: 'funding'
+        },
+        {
+          balance: () => `CAST(balance AS DECIMAL) - ${amount}`
+        }
+      );
+
+      // Update destination balance
+      await this.walletBalanceRepository.update(
+        { 
+          userId,
+          baseSymbol: (await this.tokenRepository.findOne({ where: { id: toTokenId } })).baseSymbol,
+          type: 'funding'
+        },
+        {
+          balance: () => `CAST(balance AS DECIMAL) + ${toAmount}`
+        }
+      );
 
       // Save conversion record
       await manager.save(conversion);
