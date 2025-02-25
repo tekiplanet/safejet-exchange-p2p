@@ -14,6 +14,7 @@ import 'deposit_screen.dart';
 import '../../models/coin.dart';
 import 'withdraw_screen.dart';
 import 'transfer_screen.dart';
+import 'convert_screen.dart';
 
 class AssetDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -738,7 +739,23 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
               'Convert',
               Icons.currency_exchange_rounded,
               SafeJetColors.secondaryHighlight,
-              () {},
+              () {
+                print('Asset data being passed: ${widget.asset}');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ConvertScreen(
+                      fromAsset: {
+                        'token': widget.asset['token'],
+                        'balance': widget.asset['balance'],
+                      },
+                      showInUSD: widget.showInUSD,
+                      userCurrencyRate: widget.userCurrencyRate,
+                      userCurrency: widget.userCurrency,
+                    ),
+                  ),
+                );
+              },
               isDark,
             ),
           ],

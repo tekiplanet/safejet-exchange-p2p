@@ -484,7 +484,7 @@ class WalletService {
           'toTokenId': toTokenId,
         },
       );
-      return double.parse(response.data['rate'].toString());
+      return double.parse(response.data['exchangeRate'].toString());
     } catch (e) {
       rethrow;
     }
@@ -496,14 +496,11 @@ class WalletService {
     required double amount,
   }) async {
     try {
-      await _dio.post(
-        '/wallets/convert',
-        data: {
-          'fromTokenId': fromTokenId,
-          'toTokenId': toTokenId,
-          'amount': amount,
-        },
-      );
+      await _dio.post('/wallets/convert', data: {
+        'fromTokenId': fromTokenId,
+        'toTokenId': toTokenId,
+        'amount': amount,
+      });
     } catch (e) {
       rethrow;
     }
@@ -522,6 +519,15 @@ class WalletService {
         },
       );
       return response.data;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllWalletBalances() async {
+    try {
+      final response = await _dio.get('/wallets/balances');
+      return List<Map<String, dynamic>>.from(response.data['balances']);
     } catch (e) {
       rethrow;
     }

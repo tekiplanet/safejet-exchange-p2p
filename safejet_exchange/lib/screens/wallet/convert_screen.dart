@@ -42,6 +42,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
   @override
   void initState() {
     super.initState();
+    print('Received fromAsset data: ${widget.fromAsset}');
     _loadBalances();
   }
 
@@ -119,305 +120,407 @@ class _ConvertScreenState extends State<ConvertScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return _buildShimmerLoading();
-    }
-
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final token = widget.fromAsset['token'];
 
     return Scaffold(
+      backgroundColor: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
       appBar: AppBar(
-        title: Text('Convert ${token['symbol']}'),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? Colors.white : Colors.black,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Convert ${token['symbol']}',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // From Token Section
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark 
-                      ? Colors.white.withOpacity(0.1)
-                      : Colors.grey[300]!,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'From',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Image.network(
-                        token['icon'],
-                        width: 24,
-                        height: 24,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        token['symbol'],
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Available: ${_formatBalance(_fundingBalances[token['id']] ?? 0)} ${token['symbol']}',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Amount Input Section
-            const SizedBox(height: 24),
-            Container(
-              decoration: BoxDecoration(
-                color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark 
-                      ? Colors.white.withOpacity(0.1)
-                      : Colors.grey[300]!,
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Amount',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _setMaxAmount,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          backgroundColor: isDark 
-                              ? Colors.white.withOpacity(0.1)
-                              : Colors.grey[200],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          'MAX',
-                          style: TextStyle(
-                            color: SafeJetColors.warning,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _amountController,
-                          keyboardType: TextInputType.numberWithOptions(decimal: true),
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: '0.00',
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          onChanged: (value) {
-                            // Update estimated amount when input changes
-                            setState(() {});
-                          },
-                        ),
-                      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark
+                ? [
+                    SafeJetColors.darkGradientStart,
+                    SafeJetColors.darkGradientEnd,
+                  ]
+                : [
+                    SafeJetColors.lightGradientStart,
+                    SafeJetColors.lightGradientEnd,
+                  ],
+          ),
+        ),
+        child: _isLoading 
+            ? _buildShimmerLoading()
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_errorMessage != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: isDark 
-                              ? Colors.white.withOpacity(0.1)
-                              : Colors.grey[200],
+                          color: SafeJetColors.error.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          token['symbol'],
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error_outline, color: SafeJetColors.error),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _errorMessage!,
+                                style: TextStyle(color: SafeJetColors.error),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // To Token Selection
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark 
-                      ? Colors.white.withOpacity(0.1)
-                      : Colors.grey[300]!,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'To',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    const SizedBox(height: 24),
+                    // From Asset Section
+                    Text(
+                      'From',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<Map<String, dynamic>>(
-                    value: _selectedToToken,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: isDark 
-                          ? Colors.black.withOpacity(0.2)
-                          : Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark 
+                              ? [
+                                  SafeJetColors.darkGradientStart,
+                                  SafeJetColors.darkGradientEnd,
+                                ]
+                              : [
+                                  SafeJetColors.lightGradientStart,
+                                  SafeJetColors.lightGradientEnd,
+                                ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
                           color: isDark 
                               ? Colors.white.withOpacity(0.1)
                               : Colors.grey[300]!,
                         ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    items: _availableTokens
-                        .where((t) => t['token']['id'] != widget.fromAsset['token']['id'])
-                        .map((token) {
-                      return DropdownMenuItem<Map<String, dynamic>>(
-                        value: token,
-                        child: Row(
-                          children: [
-                            Image.network(
-                              token['token']['icon'],
-                              width: 24,
-                              height: 24,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(token['token']['symbol']),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (newValue) {
-                      setState(() {
-                        _selectedToToken = newValue;
-                      });
-                      _updateExchangeRate();
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            // Conversion Details
-            if (_selectedToToken != null && _amountController.text.isNotEmpty)
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 24),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark 
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.grey[300]!,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Conversion Details',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                      child: Row(
+                        children: [
+                          Image.network(
+                            token['metadata']['icon'],
+                            width: 32,
+                            height: 32,
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                token['symbol'],
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                              ),
+                              Text(
+                                'Balance: ${widget.fromAsset['balance']}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _buildDetailRow(
-                      'Exchange Rate',
-                      '1 ${token['symbol']} = ${_formatBalance(_exchangeRate)} ${_selectedToToken!['token']['symbol']}',
-                      theme,
-                      isDark,
+
+                    // Amount Input Section
+                    const SizedBox(height: 24),
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isDark 
+                                ? [
+                                    SafeJetColors.darkGradientStart,
+                                    SafeJetColors.darkGradientEnd,
+                                  ]
+                                : [
+                                    SafeJetColors.lightGradientStart,
+                                    SafeJetColors.lightGradientEnd,
+                                  ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Amount',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _setMaxAmount,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    backgroundColor: isDark 
+                                        ? Colors.black.withOpacity(0.3)
+                                        : Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'MAX',
+                                    style: TextStyle(
+                                      color: SafeJetColors.warning,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _amountController,
+                                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.white : Colors.black,
+                                      ),
+                                      decoration: InputDecoration(
+                                        hintText: '0.00',
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                      ),
+                                      onChanged: (value) {
+                                        setState(() {});
+                                      },
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isDark 
+                                          ? Colors.black.withOpacity(0.2)
+                                          : Colors.grey[200],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      token['symbol'],
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark ? Colors.white : Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    _buildDetailRow(
-                      'Conversion Fee',
-                      '${_conversionFee} ${_feeType == 'percentage' ? '%' : (_feeType == 'usd' ? 'USD' : token['symbol'])}',
-                      theme,
-                      isDark,
+
+                    // To Token Selection
+                    const SizedBox(height: 24),
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isDark 
+                                ? [
+                                    SafeJetColors.darkGradientStart,
+                                    SafeJetColors.darkGradientEnd,
+                                  ]
+                                : [
+                                    SafeJetColors.lightGradientStart,
+                                    SafeJetColors.lightGradientEnd,
+                                  ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'To',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButtonFormField<Map<String, dynamic>>(
+                                value: _selectedToToken,
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: Colors.transparent,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: isDark 
+                                          ? Colors.white.withOpacity(0.1)
+                                          : Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                                items: _availableTokens
+                                    .where((t) => t['token']['id'] != widget.fromAsset['token']['id'])
+                                    .map((token) {
+                                  return DropdownMenuItem<Map<String, dynamic>>(
+                                    value: token,
+                                    child: Row(
+                                      children: [
+                                        Image.network(
+                                          token['token']['icon'],
+                                          width: 24,
+                                          height: 24,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(token['token']['symbol']),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (newValue) {
+                                  setState(() {
+                                    _selectedToToken = newValue;
+                                  });
+                                  _updateExchangeRate();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    _buildDetailRow(
-                      'You Will Receive',
-                      '${_formatBalance(_calculateAmountToReceive())} ${_selectedToToken!['token']['symbol']}',
-                      theme,
-                      isDark,
-                      isHighlighted: true,
+
+                    // Conversion Details
+                    if (_selectedToToken != null && _amountController.text.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 24),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark 
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Conversion Details',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDetailRow(
+                              'Exchange Rate',
+                              '1 ${token['symbol']} = ${_formatBalance(_exchangeRate)} ${_selectedToToken!['token']['symbol']}',
+                              theme,
+                              isDark,
+                            ),
+                            const SizedBox(height: 8),
+                            _buildDetailRow(
+                              'Conversion Fee',
+                              '${_conversionFee} ${_feeType == 'percentage' ? '%' : (_feeType == 'usd' ? 'USD' : token['symbol'])}',
+                              theme,
+                              isDark,
+                            ),
+                            const SizedBox(height: 8),
+                            _buildDetailRow(
+                              'You Will Receive',
+                              '${_formatBalance(_calculateAmountToReceive())} ${_selectedToToken!['token']['symbol']}',
+                              theme,
+                              isDark,
+                              isHighlighted: true,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Convert Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _handleConvert,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: SafeJetColors.warning,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          _isLoading ? 'Processing...' : 'Convert',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-
-            // Convert Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _handleConvert,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: SafeJetColors.warning,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  _isLoading ? 'Processing...' : 'Convert',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
