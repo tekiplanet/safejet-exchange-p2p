@@ -1550,16 +1550,50 @@ export class WalletService {
     return balance.balance;
   }
 
-  async getExchangeRate(fromTokenId: string, toTokenId: string): Promise<number> {
-    const fromToken = await this.tokenRepository.findOne({ where: { id: fromTokenId } });
-    const toToken = await this.tokenRepository.findOne({ where: { id: toTokenId } });
-    
-    if (!fromToken || !toToken) {
-      throw new NotFoundException('Token not found');
-    }
+  async getExchangeRate(
+    fromTokenId: string,
+    toTokenId: string,
+  ): Promise<number> {
+    try {
+      // Validate UUIDs
+      if (!this.isValidUUID(fromTokenId) || !this.isValidUUID(toTokenId)) {
+        throw new BadRequestException('Invalid token ID format');
+      }
 
-    // Calculate exchange rate using current prices
-    return toToken.currentPrice / fromToken.currentPrice;
+      // Get both tokens
+      const [fromToken, toToken] = await Promise.all([
+        this.tokenRepository.findOne({ where: { id: fromTokenId } }),
+        this.tokenRepository.findOne({ where: { id: toTokenId } })
+      ]);
+
+      if (!fromToken || !toToken) {
+        throw new NotFoundException('One or both tokens not found');
+      }
+
+      // Calculate exchange rate using current prices
+      if (!fromToken.currentPrice || !toToken.currentPrice) {
+        throw new BadRequestException('Price data not available');
+      }
+
+      const fromPrice = new Decimal(fromToken.currentPrice);
+      const toPrice = new Decimal(toToken.currentPrice);
+
+      if (fromPrice.isZero()) {
+        throw new BadRequestException('Invalid exchange rate');
+      }
+
+      // Return the exchange rate
+      return toPrice.dividedBy(fromPrice).toNumber();
+    } catch (error) {
+      this.logger.error(`Error calculating exchange rate: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Helper method to validate UUID
+  private isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
   }
 
   async getConversionFee(tokenId: string, amount: number): Promise<{ type: string; value: string }> {

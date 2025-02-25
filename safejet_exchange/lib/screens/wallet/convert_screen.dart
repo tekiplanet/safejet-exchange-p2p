@@ -44,6 +44,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
     super.initState();
     print('Received fromAsset data: ${widget.fromAsset}');
     _loadBalances();
+    _loadAvailableTokens();
   }
 
   @override
@@ -93,19 +94,40 @@ class _ConvertScreenState extends State<ConvertScreen> {
   }
 
   Future<void> _updateExchangeRate() async {
+    if (_selectedToToken == null) return;
+    
+    setState(() => _isLoading = true);
     try {
+      // Get exchange rate
       final rate = await _walletService.getExchangeRate(
         fromTokenId: widget.fromAsset['token']['id'],
         toTokenId: _selectedToToken!['token']['id'],
       );
+      
+      if (rate <= 0) {
+        throw Exception('Invalid exchange rate');
+      }
+
+      // Get conversion fee
+      final feeResponse = await _walletService.getConversionFee(
+        tokenId: widget.fromAsset['token']['id'],
+        amount: double.tryParse(_amountController.text) ?? 0,
+      );
+
       setState(() {
         _exchangeRate = rate;
-        // Also update conversion fee info here
-        // TODO: Implement fee calculation based on token's conversion fee configuration
+        _conversionFee = double.tryParse(feeResponse['value'] ?? '0') ?? 0;
+        _feeType = feeResponse['type'] ?? 'percentage';
+        _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
-      // Handle error
-      print('Error fetching exchange rate: $e');
+      setState(() {
+        _errorMessage = 'Failed to update exchange rate';
+        _isLoading = false;
+        _exchangeRate = 0;
+      });
+      print('Error updating exchange rate: $e');
     }
   }
 
@@ -404,6 +426,12 @@ class _ConvertScreenState extends State<ConvertScreen> {
                               ),
                               child: DropdownButtonFormField<Map<String, dynamic>>(
                                 value: _selectedToToken,
+                                isExpanded: true,
+                                icon: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: isDark ? Colors.white70 : Colors.black54,
+                                ),
+                                dropdownColor: isDark ? Colors.black87 : Colors.white,
                                 decoration: InputDecoration(
                                   filled: true,
                                   fillColor: Colors.transparent,
@@ -417,29 +445,39 @@ class _ConvertScreenState extends State<ConvertScreen> {
                                   ),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 ),
-                                items: _availableTokens
-                                    .where((t) => t['token']['id'] != widget.fromAsset['token']['id'])
-                                    .map((token) {
+                                items: _availableTokens.map((token) {
                                   return DropdownMenuItem<Map<String, dynamic>>(
                                     value: token,
                                     child: Row(
                                       children: [
-                                        Image.network(
-                                          token['token']['icon'],
-                                          width: 24,
-                                          height: 24,
+                                        if (token['token']['icon'] != null) ...[
+                                          Image.network(
+                                            token['token']['icon'],
+                                            width: 24,
+                                            height: 24,
+                                            errorBuilder: (context, error, stackTrace) => 
+                                              Icon(Icons.currency_bitcoin, size: 24),
+                                          ),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        Text(
+                                          token['token']['symbol'],
+                                          style: TextStyle(
+                                            color: isDark ? Colors.white : Colors.black,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(token['token']['symbol']),
                                       ],
                                     ),
                                   );
                                 }).toList(),
                                 onChanged: (newValue) {
-                                  setState(() {
-                                    _selectedToToken = newValue;
-                                  });
-                                  _updateExchangeRate();
+                                  if (newValue != null) {
+                                    setState(() {
+                                      _selectedToToken = newValue;
+                                    });
+                                    _updateExchangeRate();
+                                  }
                                 },
                               ),
                             ),
@@ -779,5 +817,34 @@ class _ConvertScreenState extends State<ConvertScreen> {
         );
       },
     );
+  }
+
+  Future<void> _loadAvailableTokens() async {
+    try {
+      final response = await _walletService.getAvailableCoins();
+      setState(() {
+        _availableTokens = response
+            .where((coin) => coin.id != widget.fromAsset['token']['id']) // Filter out the current token
+            .map((coin) => {
+                  'token': {
+                    'id': coin.id,
+                    'symbol': coin.symbol,
+                    'icon': coin.iconUrl,
+                    'name': coin.name,
+                  }
+                })
+            .toList();
+        
+        // Set first available token as default if none selected
+        if (_selectedToToken == null && _availableTokens.isNotEmpty) {
+          _selectedToToken = _availableTokens.first;
+          _updateExchangeRate(); // Update exchange rate for initial selection
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load available tokens';
+      });
+    }
   }
 } 

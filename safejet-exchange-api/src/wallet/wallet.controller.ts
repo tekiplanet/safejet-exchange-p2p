@@ -93,6 +93,28 @@ export class WalletController {
     return { exists };
   }
 
+  @Get('conversion-fee')
+  @UseGuards(JwtAuthGuard)
+  async getConversionFee(
+    @GetUser() user: User,
+    @Query('tokenId') tokenId: string,
+    @Query('amount') amount: number,
+  ) {
+    const fee = await this.walletService.getConversionFee(tokenId, amount);
+    return fee;
+  }
+
+  @Get('exchange-rate')
+  @UseGuards(JwtAuthGuard)
+  async getExchangeRate(
+    @GetUser() user: User,
+    @Query('fromTokenId') fromTokenId: string,
+    @Query('toTokenId') toTokenId: string,
+  ) {
+    const rate = await this.walletService.getExchangeRate(fromTokenId, toTokenId);
+    return { exchangeRate: rate };
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getWallet(

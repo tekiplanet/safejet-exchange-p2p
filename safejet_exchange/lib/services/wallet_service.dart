@@ -484,9 +484,15 @@ class WalletService {
           'toTokenId': toTokenId,
         },
       );
-      return double.parse(response.data['exchangeRate'].toString());
+      
+      if (response.data == null || response.data['exchangeRate'] == null) {
+        throw Exception('Invalid exchange rate response');
+      }
+      
+      return double.tryParse(response.data['exchangeRate'].toString()) ?? 0.0;
     } catch (e) {
-      rethrow;
+      print('Error getting exchange rate: $e');
+      return 0.0;
     }
   }
 
@@ -506,7 +512,7 @@ class WalletService {
     }
   }
 
-  Future<Map<String, dynamic>> getConversionFee({
+  Future<Map<String, String>> getConversionFee({
     required String tokenId,
     required double amount,
   }) async {
@@ -518,9 +524,16 @@ class WalletService {
           'amount': amount,
         },
       );
-      return response.data;
+      return {
+        'type': response.data['type'] ?? 'percentage',
+        'value': response.data['value']?.toString() ?? '0',
+      };
     } catch (e) {
-      rethrow;
+      print('Error getting conversion fee: $e');
+      return {
+        'type': 'percentage',
+        'value': '0',
+      };
     }
   }
 
