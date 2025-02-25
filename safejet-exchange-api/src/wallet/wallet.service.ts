@@ -27,6 +27,7 @@ import { CreateAddressBookDto } from './dto/create-address-book.dto';
 import { EmailService } from '../email/email.service';
 import { Transfer } from './entities/transfer.entity';
 import { TransferDto } from './dto/transfer.dto';
+import { Conversion } from './entities/conversion.entity';
 
 interface PaginationParams {
   page: number;
@@ -123,6 +124,8 @@ export class WalletService {
     @InjectRepository(Transfer)
     private transferRepository: Repository<Transfer>,
     private readonly dataSource: DataSource,
+    @InjectRepository(Conversion)
+    private conversionRepository: Repository<Conversion>,
   ) {}
 
   private async initializeWalletBalances(wallet: Wallet) {
@@ -1545,5 +1548,108 @@ export class WalletService {
     }
 
     return balance.balance;
+  }
+
+  async getExchangeRate(fromTokenId: string, toTokenId: string): Promise<number> {
+    const fromToken = await this.tokenRepository.findOne({ where: { id: fromTokenId } });
+    const toToken = await this.tokenRepository.findOne({ where: { id: toTokenId } });
+    
+    if (!fromToken || !toToken) {
+      throw new NotFoundException('Token not found');
+    }
+
+    // Calculate exchange rate using current prices
+    return toToken.currentPrice / fromToken.currentPrice;
+  }
+
+  async getConversionFee(tokenId: string, amount: number): Promise<{ type: string; value: string }> {
+    const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
+
+    // Access conversion fee the same way we access regular fee
+    const networkConfig = token.networkConfigs[token.networkVersion][token.metadata.networks[0]];
+    return networkConfig.conversionFee;
+  }
+
+  async convertToken(userId: string, data: {
+    fromTokenId: string;
+    toTokenId: string;
+    amount: number;
+  }): Promise<Conversion> {
+    const { fromTokenId, toTokenId, amount } = data;
+    
+    // Get exchange rate and fee
+    const exchangeRate = await this.getExchangeRate(fromTokenId, toTokenId);
+    const conversionFee = await this.getConversionFee(fromTokenId, amount);
+    
+    // Calculate fee amount based on type
+    let feeAmount = 0;
+    if (conversionFee.type === 'percentage') {
+      feeAmount = (amount * parseFloat(conversionFee.value)) / 100;
+    } else if (conversionFee.type === 'token') {
+      feeAmount = parseFloat(conversionFee.value);
+    } else {
+      // USD fee needs to be converted to token amount
+      const token = await this.tokenRepository.findOne({ where: { id: fromTokenId } });
+      feeAmount = parseFloat(conversionFee.value) / token.currentPrice;
+    }
+
+    // Calculate final amounts
+    const fromAmount = amount;
+    const toAmount = (amount - feeAmount) * exchangeRate;
+
+    // Start transaction
+    return this.dataSource.transaction(async (manager) => {
+      // Get wallet IDs first
+      const fromWallet = await this.walletRepository.findOne({ 
+        where: { 
+          userId,
+          blockchain: (await this.tokenRepository.findOne({ where: { id: fromTokenId } })).blockchain 
+        }
+      });
+      const toWallet = await this.walletRepository.findOne({ 
+        where: { 
+          userId,
+          blockchain: (await this.tokenRepository.findOne({ where: { id: toTokenId } })).blockchain 
+        }
+      });
+
+      // Create conversion record
+      const conversion = manager.create(Conversion, {
+        userId,
+        fromTokenId,
+        toTokenId,
+        fromAmount,
+        toAmount,
+        exchangeRate,
+        feeAmount,
+        feeType: conversionFee.type,
+      });
+
+      // Update balances using the correct parameters
+      await this.updateBalance(userId, fromWallet.id, fromTokenId, (-fromAmount).toString(), 'funding');
+      await this.updateBalance(userId, toWallet.id, toTokenId, toAmount.toString(), 'funding');
+
+      // Save conversion record
+      await manager.save(conversion);
+
+      // Send email notification
+      await this.emailService.sendConversionConfirmation({
+        to: (await this.userRepository.findOne({ where: { id: userId } })).email,
+        data: {
+          fromAmount,
+          fromToken: (await this.tokenRepository.findOne({ where: { id: fromTokenId } })).symbol,
+          toAmount,
+          toToken: (await this.tokenRepository.findOne({ where: { id: toTokenId } })).symbol,
+          fee: feeAmount,
+          feeType: conversionFee.type,
+          date: new Date(),
+        },
+      });
+
+      return conversion;
+    });
   }
 } 

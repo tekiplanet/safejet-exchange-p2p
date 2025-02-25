@@ -318,4 +318,34 @@ export class EmailService {
       html: template,
     });
   }
+
+  async sendConversionConfirmation(params: {
+    to: string;
+    data: {
+      fromAmount: number;
+      fromToken: string;
+      toAmount: number;
+      toToken: string;
+      fee: number;
+      feeType: string;
+      date: Date;
+    };
+  }): Promise<void> {
+    const template = await this.emailTemplatesService.getConversionConfirmationTemplate({
+      fromAmount: params.data.fromAmount.toString(),
+      fromToken: params.data.fromToken,
+      toAmount: params.data.toAmount.toString(),
+      toToken: params.data.toToken,
+      fee: params.data.fee.toString(),
+      feeType: params.data.feeType,
+      date: params.data.date,
+    });
+
+    await this.transporter.sendMail({
+      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      to: params.to,
+      subject: 'Conversion Confirmation',
+      html: template,
+    });
+  }
 }

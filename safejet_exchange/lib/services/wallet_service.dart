@@ -471,6 +471,61 @@ class WalletService {
       rethrow;
     }
   }
+
+  Future<double> getExchangeRate({
+    required String fromTokenId,
+    required String toTokenId,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/wallets/exchange-rate',
+        queryParameters: {
+          'fromTokenId': fromTokenId,
+          'toTokenId': toTokenId,
+        },
+      );
+      return double.parse(response.data['rate'].toString());
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> convertToken({
+    required String fromTokenId,
+    required String toTokenId,
+    required double amount,
+  }) async {
+    try {
+      await _dio.post(
+        '/wallets/convert',
+        data: {
+          'fromTokenId': fromTokenId,
+          'toTokenId': toTokenId,
+          'amount': amount,
+        },
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getConversionFee({
+    required String tokenId,
+    required double amount,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/wallets/conversion-fee',
+        queryParameters: {
+          'tokenId': tokenId,
+          'amount': amount,
+        },
+      );
+      return response.data;
+    } catch (e) {
+      rethrow;
+    }
+  }
 }
 
 class CacheEntry {

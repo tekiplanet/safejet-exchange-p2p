@@ -606,4 +606,37 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  async getConversionConfirmationTemplate(data: {
+    fromAmount: string;
+    fromToken: string;
+    toAmount: string;
+    toToken: string;
+    fee: string;
+    feeType: string;
+    date: Date;
+  }): Promise<string> {
+    const isDark = true;
+    const content = `
+      <h1>Conversion Confirmation ✅</h1>
+      <p>Your conversion has been completed successfully:</p>
+      
+      <div style="margin: 20px 0;">
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">
+            ${data.fromAmount} ${data.fromToken} → ${data.toAmount} ${data.toToken}
+          </h3>
+          <div style="margin-top: 10px;">
+            <p style="margin: 5px 0;">Fee: ${data.fee} ${data.feeType === 'percentage' ? '%' : data.fromToken}</p>
+            <p style="margin: 5px 0; font-size: 0.9em;">Date: ${format(data.date, 'PPpp')}</p>
+          </div>
+        </div>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, true);
+  }
 }

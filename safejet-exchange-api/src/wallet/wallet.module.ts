@@ -31,6 +31,7 @@ import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { Withdrawal } from './entities/withdrawal.entity';
 import { AddressBook } from './entities/address-book.entity';
 import { Transfer } from './entities/transfer.entity';
+import { Conversion } from './entities/conversion.entity';
 
 @Module({
   imports: [
@@ -48,7 +49,8 @@ import { Transfer } from './entities/transfer.entity';
       KYCLevel,
       Withdrawal,
       AddressBook,
-      Transfer
+      Transfer,
+      Conversion
     ]),
     EventEmitterModule.forRoot(),
     ConfigModule,

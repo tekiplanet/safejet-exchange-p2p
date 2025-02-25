@@ -99,9 +99,9 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Saved Addresses',
+              children: [
+                Text(
+                  'Saved Addresses',
                       style: theme.textTheme.headlineMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: isDark ? Colors.white : SafeJetColors.lightText,
@@ -182,8 +182,8 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                                 Text(
                                   'No saved addresses found',
                                   style: theme.textTheme.bodyLarge?.copyWith(
-                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  ),
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
                                 ),
                               ],
                             ),
@@ -227,8 +227,8 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                                           const SizedBox(width: 12),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
                                                 Text(
                                                   address['name'] ?? 'Unnamed Address',
                                                   style: theme.textTheme.titleMedium?.copyWith(
@@ -237,19 +237,19 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                                                   ),
                                                 ),
                                                 const SizedBox(height: 4),
-                                                Text(
-                                                  address['address'],
+                                      Text(
+                                        address['address'],
                                                   style: theme.textTheme.bodySmall?.copyWith(
-                                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                                  ),
+                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                        ),
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
-                                                ),
+                                      ),
                                                 if (address['memo'] != null || address['tag'] != null)
                                                   const SizedBox(height: 4),
                                                 Row(
                                                   children: [
-                                                    if (address['memo'] != null)
+                                      if (address['memo'] != null)
                                                       Container(
                                                         margin: const EdgeInsets.only(right: 8),
                                                         padding: const EdgeInsets.symmetric(
@@ -263,13 +263,13 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                                                           borderRadius: BorderRadius.circular(6),
                                                         ),
                                                         child: Text(
-                                                          'Memo: ${address['memo']}',
+                                          'Memo: ${address['memo']}',
                                                           style: theme.textTheme.bodySmall?.copyWith(
-                                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
                                                           ),
-                                                        ),
-                                                      ),
-                                                    if (address['tag'] != null)
+                                          ),
+                                        ),
+                                      if (address['tag'] != null)
                                                       Container(
                                                         padding: const EdgeInsets.symmetric(
                                                           horizontal: 8,
@@ -282,18 +282,18 @@ class _SavedAddressesModalState extends State<SavedAddressesModal> {
                                                           borderRadius: BorderRadius.circular(6),
                                                         ),
                                                         child: Text(
-                                                          'Tag: ${address['tag']}',
+                                          'Tag: ${address['tag']}',
                                                           style: theme.textTheme.bodySmall?.copyWith(
-                                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
                                                           ),
                                                         ),
                                                       ),
                                                   ],
                                                 ),
                                               ],
-                                            ),
                                           ),
-                                        ],
+                                        ),
+                                    ],
                                       ),
                                     ),
                                   ),

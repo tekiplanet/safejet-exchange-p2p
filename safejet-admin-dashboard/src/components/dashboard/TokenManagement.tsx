@@ -45,11 +45,14 @@ interface NetworkConfig {
         tag: boolean;
         memo: boolean;
     };
-    fee: {  // Make fee required, not optional
+    fee: {
         type: FeeType;
-        value: string;  // Make value required
+        value: string;
     };
-    // Add new message fields
+    conversionFee: {
+        type: FeeType;
+        value: string;
+    };
     withdrawMessage?: string;
     depositMessage?: string;
     minWithdrawal?: string;
@@ -256,6 +259,10 @@ export default function TokenManagement() {
                                 fee: {
                                     type: currentConfig?.fee?.type || 'percentage',
                                     value: currentConfig?.fee?.value || '0'
+                                },
+                                conversionFee: {
+                                    type: currentConfig?.conversionFee?.type || 'percentage',
+                                    value: currentConfig?.conversionFee?.value || '0'
                                 }
                             }
                         ];
@@ -327,6 +334,10 @@ export default function TokenManagement() {
                                 memo: existingConfig?.requiredFields?.memo ?? false
                             },
                             fee: existingConfig?.fee || {  // Add default fee configuration
+                                type: 'percentage',
+                                value: '0'
+                            },
+                            conversionFee: existingConfig?.conversionFee || {
                                 type: 'percentage',
                                 value: '0'
                             }
@@ -852,6 +863,10 @@ export default function TokenManagement() {
                                                             fee: {
                                                                 type: 'percentage',
                                                                 value: '0'
+                                                            },
+                                                            conversionFee: {
+                                                                type: 'percentage',
+                                                                value: '0'
                                                             }
                                                         }
                                                     };
@@ -1267,6 +1282,82 @@ export default function TokenManagement() {
                                             />
                                         </div>
                                     )}
+
+                                    {/* Add Conversion Fee Configuration */}
+                                    <Typography variant="subtitle2" gutterBottom sx={{ mt: 3 }}>
+                                        Conversion Fee Configuration
+                                    </Typography>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormControl fullWidth margin="normal">
+                                            <InputLabel>Conversion Fee Type</InputLabel>
+                                            <Select
+                                                value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.conversionFee?.type || 'percentage'}
+                                                onChange={(e) => {
+                                                    const currentConfigs = editToken?.networkConfigs || {};
+                                                    const currentVersion = editToken?.networkVersion || '';
+                                                    
+                                                    setEditToken({
+                                                        ...editToken,
+                                                        networkConfigs: {
+                                                            ...currentConfigs,
+                                                            [currentVersion]: {
+                                                                ...currentConfigs[currentVersion],
+                                                                [network]: {
+                                                                    ...currentConfigs[currentVersion]?.[network],
+                                                                    conversionFee: {
+                                                                        ...currentConfigs[currentVersion]?.[network]?.conversionFee,
+                                                                        type: e.target.value as FeeType
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }}
+                                                label="Conversion Fee Type"
+                                            >
+                                                <MenuItem value="percentage">Percentage</MenuItem>
+                                                <MenuItem value="usd">USD</MenuItem>
+                                                <MenuItem value="token">Token</MenuItem>
+                                            </Select>
+                                        </FormControl>
+
+                                        <TextField
+                                            fullWidth
+                                            label="Conversion Fee Value"
+                                            value={editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.conversionFee?.value || ''}
+                                            onChange={(e) => {
+                                                const currentConfigs = editToken?.networkConfigs || {};
+                                                const currentVersion = editToken?.networkVersion || '';
+                                                
+                                                setEditToken({
+                                                    ...editToken,
+                                                    networkConfigs: {
+                                                        ...currentConfigs,
+                                                        [currentVersion]: {
+                                                            ...currentConfigs[currentVersion],
+                                                            [network]: {
+                                                                ...currentConfigs[currentVersion]?.[network],
+                                                                conversionFee: {
+                                                                    ...currentConfigs[currentVersion]?.[network]?.conversionFee,
+                                                                    value: e.target.value
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                });
+                                            }}
+                                            margin="normal"
+                                            InputProps={{
+                                                startAdornment: (
+                                                    <InputAdornment position="start">
+                                                        {editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.conversionFee?.type === 'percentage' ? '%' : 
+                                                         editToken?.networkConfigs?.[editToken?.networkVersion || '']?.[network]?.conversionFee?.type === 'usd' ? '$' : 
+                                                         'Token'}
+                                                    </InputAdornment>
+                                                ),
+                                            }}
+                                        />
+                                    </div>
                                 </Box>
                             ))}
                         </Box>
