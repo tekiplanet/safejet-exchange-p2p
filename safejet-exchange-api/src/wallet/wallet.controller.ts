@@ -13,6 +13,7 @@ import { CreateAddressBookDto } from './dto/create-address-book.dto';
 import { AddressBook } from './entities/address-book.entity';
 import { TransferDto } from './dto/transfer.dto';
 import { Transfer } from './entities/transfer.entity';
+import { ConvertTokenDto } from './dto/convert-token.dto';
 
 @Controller('wallets')
 export class WalletController {
@@ -282,5 +283,14 @@ export class WalletController {
     @Query('limit') limit = 10,
   ): Promise<{ transfers: Transfer[]; total: number }> {
     return this.walletService.getTransferHistory(req.user.id, page, limit);
+  }
+
+  @Post('convert')
+  @UseGuards(JwtAuthGuard)
+  async convertToken(
+    @GetUser('id') userId: string,
+    @Body() convertTokenDto: ConvertTokenDto,
+  ) {
+    return this.walletService.convertToken(userId, convertTokenDto);
   }
 } 

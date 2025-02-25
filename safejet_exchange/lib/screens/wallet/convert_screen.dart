@@ -4,6 +4,7 @@ import 'package:shimmer/shimmer.dart';
 import '../../config/theme/colors.dart';
 import '../../services/wallet_service.dart';
 import 'package:intl/intl.dart';
+import 'widgets/token_selector.dart';
 
 class ConvertScreen extends StatefulWidget {
   final Map<String, dynamic> fromAsset; // Initial asset to convert from
@@ -43,7 +44,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
   void initState() {
     super.initState();
     print('Received fromAsset data: ${widget.fromAsset}');
-    _loadBalances();
+    _loadFundingBalance();
     _loadAvailableTokens();
   }
 
@@ -53,29 +54,38 @@ class _ConvertScreenState extends State<ConvertScreen> {
     super.dispose();
   }
 
-  Future<void> _loadBalances() async {
+  Future<void> _loadFundingBalance() async {
     setState(() => _isLoading = true);
     try {
-      final balances = await _walletService.getAllWalletBalances();
-      
-      // Only handle funding balances
+      final data = await _walletService.getBalances(
+        type: 'funding',
+        currency: widget.showInUSD ? 'USD' : widget.userCurrency,
+      );
+
+      if (!mounted) return;
+
+      // Update funding balances map
       _fundingBalances = {};
-      for (var token in balances) {
-        final fundingBalance = double.tryParse(token['funding']?.toString() ?? '0') ?? 0.0;
+      for (var token in data['balances']) {
+        final fundingBalance = double.tryParse(token['balance']?.toString() ?? '0') ?? 0.0;
         if (fundingBalance > 0) {
           _fundingBalances[token['token']['id']] = fundingBalance;
         }
       }
 
-      setState(() {
-        _isLoading = false;
-      });
+      // Find and update the current token's balance
+      final fundingAsset = data['balances'].firstWhere(
+        (b) => b['token']['id'] == widget.fromAsset['token']['id'],
+        orElse: () => widget.fromAsset,
+      );
 
-    } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load balances';
+        widget.fromAsset['balance'] = fundingAsset['balance'];
         _isLoading = false;
       });
+    } catch (e) {
+      print('Error loading funding balance: $e');
+      setState(() => _isLoading = false);
     }
   }
 
@@ -247,9 +257,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
                                 ),
                               ),
                               Text(
-                                'Balance: ${widget.fromAsset['balance']}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                'Available: ${_formatBalance(_getFundingBalance())} ${widget.fromAsset['token']['symbol']}',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white70 : Colors.black54,
                                 ),
                               ),
                             ],
@@ -409,62 +419,72 @@ class _ConvertScreenState extends State<ConvertScreen> {
                               decoration: BoxDecoration(
                                 color: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
                                 borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isDark ? Colors.white12 : Colors.grey[300]!,
+                                ),
                               ),
-                              child: DropdownButtonFormField<Map<String, dynamic>>(
-                                value: _selectedToToken,
-                                isExpanded: true,
-                                icon: Icon(
-                                  Icons.keyboard_arrow_down,
-                                  color: isDark ? Colors.white70 : Colors.black54,
-                                ),
-                                dropdownColor: isDark ? Colors.black87 : Colors.white,
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: Colors.transparent,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide(
-                                      color: isDark 
-                                          ? Colors.white.withOpacity(0.1)
-                                          : Colors.grey[300]!,
-                                    ),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                ),
-                                items: _availableTokens.map((token) {
-                                  return DropdownMenuItem<Map<String, dynamic>>(
-                                    value: token,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      backgroundColor: Colors.transparent,
+                                      isScrollControlled: true,
+                                      builder: (context) => SizedBox(
+                                        height: MediaQuery.of(context).size.height * 0.75,
+                                        child: TokenSelector(
+                                          tokens: _availableTokens,
+                                          selectedToken: _selectedToToken,
+                                          onSelect: (token) {
+                                            setState(() {
+                                              _selectedToToken = token;
+                                            });
+                                            _updateExchangeRate();
+                                          },
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     child: Row(
                                       children: [
-                                        if (token['token']['icon'] != null) ...[
+                                        if (_selectedToToken != null) ...[
                                           Image.network(
-                                            token['token']['icon'],
+                                            _selectedToToken!['token']['icon'] ?? '',
                                             width: 24,
                                             height: 24,
-                                            errorBuilder: (context, error, stackTrace) => 
-                                              Icon(Icons.currency_bitcoin, size: 24),
+                                            errorBuilder: (_, __, ___) => Icon(
+                                              Icons.currency_bitcoin,
+                                              color: isDark ? Colors.white70 : Colors.black54,
+                                            ),
                                           ),
                                           const SizedBox(width: 8),
-                                        ],
-                                        Text(
-                                          token['token']['symbol'],
-                                          style: TextStyle(
-                                            color: isDark ? Colors.white : Colors.black,
-                                            fontWeight: FontWeight.w500,
+                                          Text(
+                                            _selectedToToken!['token']['symbol'],
+                                            style: TextStyle(
+                                              color: isDark ? Colors.white : Colors.black,
+                                              fontWeight: FontWeight.w500,
+                                            ),
                                           ),
-                                        ),
+                                          const Spacer(),
+                                          Icon(
+                                            Icons.keyboard_arrow_down,
+                                            color: isDark ? Colors.white70 : Colors.black54,
+                                          ),
+                                        ] else
+                                          Text(
+                                            'Select Token',
+                                            style: TextStyle(
+                                              color: isDark ? Colors.white60 : Colors.black54,
+                                            ),
+                                          ),
                                       ],
                                     ),
-                                  );
-                                }).toList(),
-                                onChanged: (newValue) {
-                                  if (newValue != null) {
-                                    setState(() {
-                                      _selectedToToken = newValue;
-                                    });
-                                    _updateExchangeRate();
-                                  }
-                                },
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -649,7 +669,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
       return;
     }
 
-    final fundingBalance = _fundingBalances[widget.fromAsset['token']['id']] ?? 0.0;
+    final fundingBalance = _getFundingBalance();
     if (amount > fundingBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -853,5 +873,14 @@ class _ConvertScreenState extends State<ConvertScreen> {
         });
       }
     }
+  }
+
+  double _getFundingBalance() {
+    // First try the funding balance from the map
+    final mapBalance = _fundingBalances[widget.fromAsset['token']['id']] ?? 0.0;
+    if (mapBalance > 0) return mapBalance;
+    
+    // If not found in map, use the passed balance
+    return double.tryParse(widget.fromAsset['balance'].toString()) ?? 0.0;
   }
 } 

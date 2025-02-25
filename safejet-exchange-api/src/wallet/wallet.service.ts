@@ -1623,6 +1623,12 @@ export class WalletService {
   }): Promise<Conversion> {
     const { fromTokenId, toTokenId, amount } = data;
     
+    // First check if user has sufficient balance
+    const currentBalance = await this.getBalance(userId, fromTokenId, 'funding');
+    if (parseFloat(currentBalance) < amount) {
+      throw new BadRequestException('Insufficient balance');
+    }
+
     // Get exchange rate and fee
     const exchangeRate = await this.getExchangeRate(fromTokenId, toTokenId);
     const conversionFee = await this.getConversionFee(fromTokenId, amount);
