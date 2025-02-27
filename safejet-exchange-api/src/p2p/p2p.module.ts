@@ -6,9 +6,10 @@ import { P2POffer } from './entities/p2p-offer.entity';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 import { PaymentMethodType } from '../payment-methods/entities/payment-method-type.entity';
 import { P2PTraderSettings } from '../p2p-settings/entities/p2p-trader-settings.entity';
-import { WalletModule } from '../wallet/wallet.module';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
 import { Token } from '../wallet/entities/token.entity';
+import { ExchangeRate } from '../exchange/exchange-rate.entity';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { Token } from '../wallet/entities/token.entity';
       P2PTraderSettings,
       WalletBalance,
       Token,
+      ExchangeRate,
     ]),
     WalletModule,
   ],

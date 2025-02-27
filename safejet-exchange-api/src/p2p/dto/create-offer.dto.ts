@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsArray, IsIn, IsNotEmpty, ValidateNested, Min } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsIn, IsNotEmpty, ValidateNested, Min, ArrayMinSize, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PaymentMethodDto {
@@ -33,5 +33,9 @@ export class CreateOfferDto {
   paymentMethods: PaymentMethodDto[];
 
   @IsString()
+  @IsNotEmpty()
   terms: string;
+
+  @IsBoolean()
+  isBuyOffer: boolean;
 } 

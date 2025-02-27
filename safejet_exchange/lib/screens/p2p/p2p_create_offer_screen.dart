@@ -6,6 +6,7 @@ import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../services/p2p_service.dart';
+import '../../widgets/token_selector.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
   const P2PCreateOfferScreen({super.key});
@@ -26,8 +27,14 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   final TextEditingController _termsController = TextEditingController();
   
   final List<Map<String, dynamic>> _selectedPaymentMethods = [];
+  String _userCurrency = 'NGN';
+  double? _marketPrice;
+  bool _isPriceLoading = false;
 
-  final List<Map<String, dynamic>> _availablePaymentMethods = [
+  List<Map<String, dynamic>> _availablePaymentMethods = [];
+  bool _isLoadingPaymentMethods = false;
+
+  final List<Map<String, dynamic>> _availablePaymentMethodsList = [
     {
       'name': 'Bank Transfer',
       'icon': Icons.account_balance,
@@ -61,7 +68,34 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAssets();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() => _isLoading = true);
+    try {
+      // Load trader settings
+      final settings = await _p2pService.getTraderSettings();
+      _userCurrency = settings['currency'];
+
+      // Load available assets
+      await _loadAssets();
+
+      // Load market price
+      await _updateMarketPrice();
+
+      // Load payment methods
+      await _loadPaymentMethods();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadAssets() async {
@@ -83,6 +117,41 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateMarketPrice() async {
+    if (_selectedCrypto.isEmpty) return;
+
+    setState(() => _isPriceLoading = true);
+    try {
+      final price = await _p2pService.getMarketPrice(_selectedCrypto, _userCurrency);
+      setState(() {
+        _marketPrice = price;
+        // Pre-fill price with market price
+        _priceController.text = price.toString();
+      });
+    } catch (e) {
+      print('Error loading market price: $e');
+    } finally {
+      setState(() => _isPriceLoading = false);
+    }
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    setState(() => _isLoadingPaymentMethods = true);
+    try {
+      final methods = await _p2pService.getPaymentMethods(_isBuyOffer);
+      setState(() => _availablePaymentMethods = methods);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      setState(() => _isLoadingPaymentMethods = false);
     }
   }
 
@@ -149,7 +218,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
         children: [
           Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _isBuyOffer = true),
+              onTap: () => _toggleOfferType(),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
@@ -173,7 +242,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           ),
           Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _isBuyOffer = false),
+              onTap: () => _toggleOfferType(),
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
@@ -200,7 +269,27 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     );
   }
 
+  void _toggleOfferType() {
+    setState(() {
+      _isBuyOffer = !_isBuyOffer;
+      _selectedPaymentMethods.clear();  // Clear selected methods
+    });
+    _loadAssets();
+    _loadPaymentMethods();
+  }
+
   Widget _buildCryptoSelector(bool isDark) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    final selectedAsset = _availableAssets.firstWhere(
+      (asset) => asset['symbol'] == _selectedCrypto,
+      orElse: () => _availableAssets.first,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -211,54 +300,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        InkWell(
+        TokenSelector(
+          token: selectedAsset,
           onTap: () => _showCryptoSelector(isDark),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.black.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _selectedCrypto,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _cryptoOptions.firstWhere(
-                        (c) => c['symbol'] == _selectedCrypto)['name']!,
-                      style: TextStyle(
-                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     );
@@ -267,46 +311,68 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   void _showCryptoSelector(bool isDark) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: isDark ? SafeJetColors.darkGradientStart : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => Container(
         padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Select Asset',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Select Asset',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(
+                    Icons.close,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
-                itemCount: _cryptoOptions.length,
+                itemCount: _availableAssets.length,
                 itemBuilder: (context, index) {
-                  final crypto = _cryptoOptions[index];
-                  final isSelected = crypto['symbol'] == _selectedCrypto;
+                  final asset = _availableAssets[index];
+                  final isSelected = asset['symbol'] == _selectedCrypto;
                   
                   return ListTile(
                     onTap: () {
-                      setState(() => _selectedCrypto = crypto['symbol']!);
+                      setState(() => _selectedCrypto = asset['symbol']);
                       Navigator.pop(context);
                     },
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        crypto['symbol']!,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                    leading: Image.network(
+                      asset['metadata']['icon'],
+                      width: 32,
+                      height: 32,
+                      errorBuilder: (_, __, ___) => const Icon(Icons.error),
+                    ),
+                    title: Text(
+                      asset['name'],
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    title: Text(crypto['name']!),
+                    subtitle: Text(
+                      asset['symbol'],
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
                     trailing: isSelected
                         ? Icon(
                             Icons.check_circle,
@@ -379,8 +445,10 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           ],
           decoration: InputDecoration(
             hintText: '0.00',
-            prefixText: '₦',
-            suffixText: '/ $_selectedCrypto',
+            suffixText: _userCurrency,
+            helperText: _marketPrice != null 
+              ? 'Market Price: ${_marketPrice!.toStringAsFixed(2)} $_userCurrency'
+              : _isPriceLoading ? 'Loading market price...' : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -392,29 +460,15 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
             contentPadding: const EdgeInsets.all(16),
           ),
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Icon(
-              Icons.info_outline,
-              size: 16,
-              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Market price: ₦750.00',
-              style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
 
   Widget _buildPaymentMethods(bool isDark) {
+    if (_isLoadingPaymentMethods) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -425,59 +479,80 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _availablePaymentMethods.map((method) {
-            final isSelected = _selectedPaymentMethods.contains(method);
-            return GestureDetector(
-              onTap: () {
-                setState(() {
-                  if (isSelected) {
-                    _selectedPaymentMethods.remove(method);
-                  } else {
-                    _selectedPaymentMethods.add(method);
-                  }
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? (_isBuyOffer ? SafeJetColors.success : SafeJetColors.error)
-                      : (isDark
-                          ? Colors.white.withOpacity(0.05)
-                          : Colors.black.withOpacity(0.05)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      method['icon'] as IconData,
-                      size: 16,
-                      color: isSelected
-                          ? Colors.white
-                          : (isDark ? Colors.white : Colors.black),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      method['name'] as String,
-                      style: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : (isDark ? Colors.white : Colors.black),
-                      ),
-                    ),
-                  ],
+        if (_availablePaymentMethods.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                _isBuyOffer 
+                  ? 'No payment methods configured. Please add payment methods in your profile.'
+                  : 'No payment methods available.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _availablePaymentMethods.map((method) {
+              final isSelected = _selectedPaymentMethods.contains(method);
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    if (isSelected) {
+                      _selectedPaymentMethods.remove(method);
+                    } else {
+                      _selectedPaymentMethods.add(method);
+                    }
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? (_isBuyOffer ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.1)
+                        : isDark
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.black.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected
+                          ? (_isBuyOffer ? SafeJetColors.success : SafeJetColors.error)
+                          : Colors.transparent,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isBuyOffer 
+                            ? (method['type']['icon'] ?? Icons.payment)  // For buy offers
+                            : (method['icon'] ?? Icons.payment),         // For sell offers
+                        size: 20,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isBuyOffer 
+                            ? method['details']['name'] ?? ''  // For buy offers
+                            : method['name'] ?? '',           // For sell offers
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
       ],
     );
   }
