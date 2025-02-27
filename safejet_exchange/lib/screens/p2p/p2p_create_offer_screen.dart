@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:get_it/get_it.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
+import '../../services/p2p_service.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
   const P2PCreateOfferScreen({super.key});
@@ -13,6 +15,9 @@ class P2PCreateOfferScreen extends StatefulWidget {
 }
 
 class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
+  final _p2pService = GetIt.I<P2PService>();
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _availableAssets = [];
   bool _isBuyOffer = true;
   String _selectedCrypto = 'USDT';
   String _selectedCurrency = 'NGN';
@@ -52,6 +57,34 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     {'symbol': 'BUSD', 'name': 'Binance USD'},
     {'symbol': 'USDC', 'name': 'USD Coin'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAssets();
+  }
+
+  Future<void> _loadAssets() async {
+    setState(() => _isLoading = true);
+    try {
+      final assets = await _p2pService.getAvailableAssets(_isBuyOffer);
+      setState(() {
+        _availableAssets = assets;
+        if (assets.isNotEmpty) {
+          _selectedCrypto = assets[0]['symbol'];
+        }
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {

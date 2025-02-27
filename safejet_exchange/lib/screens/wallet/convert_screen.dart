@@ -185,10 +185,10 @@ class _ConvertScreenState extends State<ConvertScreen> {
         child: _isLoading 
             ? _buildShimmerLoading()
             : SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                     if (_errorMessage != null)
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -210,17 +210,17 @@ class _ConvertScreenState extends State<ConvertScreen> {
                         ),
                       ),
                     const SizedBox(height: 24),
-                    // From Asset Section
-                    Text(
-                      'From',
+                // From Asset Section
+                Text(
+                  'From',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: isDark 
                               ? [
@@ -234,52 +234,52 @@ class _ConvertScreenState extends State<ConvertScreen> {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
                           color: isDark 
                               ? Colors.white.withOpacity(0.1)
                               : Colors.grey[300]!,
-                        ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Image.network(
+                        token['metadata']['icon'],
+                        width: 32,
+                        height: 32,
                       ),
-                      child: Row(
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Image.network(
-                            token['metadata']['icon'],
-                            width: 32,
-                            height: 32,
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                token['symbol'],
+                          Text(
+                            token['symbol'],
                                 style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: isDark ? Colors.white : Colors.black,
                                 ),
-                              ),
-                              Text(
+                          ),
+                          Text(
                                 'Available: ${_formatBalance(_getFundingBalance())} ${widget.fromAsset['token']['symbol']}',
                                 style: TextStyle(
                                   color: isDark ? Colors.white70 : Colors.black54,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
+                  ),
+                ),
 
-                    // Amount Input Section
-                    const SizedBox(height: 24),
+                // Amount Input Section
+                const SizedBox(height: 24),
                     Card(
                       elevation: 4,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Container(
-                        decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: isDark 
                                 ? [
@@ -293,43 +293,43 @@ class _ConvertScreenState extends State<ConvertScreen> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                    borderRadius: BorderRadius.circular(12),
+                    ),
                         padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Amount',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: _setMaxAmount,
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                    backgroundColor: isDark 
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Amount',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _setMaxAmount,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              backgroundColor: isDark 
                                         ? Colors.black.withOpacity(0.3)
                                         : Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'MAX',
-                                    style: TextStyle(
-                                      color: SafeJetColors.warning,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
-                            const SizedBox(height: 8),
+                            child: Text(
+                              'MAX',
+                              style: TextStyle(
+                                color: SafeJetColors.warning,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
@@ -337,60 +337,60 @@ class _ConvertScreenState extends State<ConvertScreen> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _amountController,
-                                      keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                      style: theme.textTheme.titleLarge?.copyWith(
-                                        fontWeight: FontWeight.bold,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _amountController,
+                              keyboardType: TextInputType.numberWithOptions(decimal: true),
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
                                         color: isDark ? Colors.white : Colors.black,
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: '0.00',
-                                        border: InputBorder.none,
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                      ),
-                                      onChanged: (value) {
-                                        setState(() {});
-                                      },
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: isDark 
+                              ),
+                              decoration: InputDecoration(
+                                hintText: '0.00',
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                              onChanged: (value) {
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isDark 
                                           ? Colors.black.withOpacity(0.2)
-                                          : Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      token['symbol'],
-                                      style: theme.textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.white : Colors.black,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  : Colors.grey[200],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              token['symbol'],
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
+                              ),
                       ),
-                    ),
+                    ],
+                        ),
+                  ),
+                ),
 
-                    // To Token Selection
-                    const SizedBox(height: 24),
+                // To Token Selection
+                const SizedBox(height: 24),
                     Card(
                       elevation: 4,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Container(
-                        decoration: BoxDecoration(
+                  decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: isDark 
                                 ? [
@@ -404,24 +404,24 @@ class _ConvertScreenState extends State<ConvertScreen> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                    borderRadius: BorderRadius.circular(12),
+                    ),
                         padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'To',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'To',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: isDark ? Colors.white : Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                             Container(
                               decoration: BoxDecoration(
                                 color: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
-                                borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isDark ? Colors.white12 : Colors.grey[300]!,
                                 ),
@@ -452,13 +452,13 @@ class _ConvertScreenState extends State<ConvertScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    child: Row(
-                                      children: [
+                            child: Row(
+                              children: [
                                         if (_selectedToToken != null) ...[
-                                          Image.network(
+                                Image.network(
                                             _selectedToToken!['token']['icon'] ?? '',
-                                            width: 24,
-                                            height: 24,
+                                  width: 24,
+                                  height: 24,
                                             errorBuilder: (_, __, ___) => Icon(
                                               Icons.currency_bitcoin,
                                               color: isDark ? Colors.white70 : Colors.black54,
@@ -492,82 +492,82 @@ class _ConvertScreenState extends State<ConvertScreen> {
                             ),
                           ],
                         ),
+                  ),
+                ),
+
+                // Conversion Details
+                if (_selectedToToken != null && _amountController.text.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark 
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.grey[300]!,
                       ),
                     ),
-
-                    // Conversion Details
-                    if (_selectedToToken != null && _amountController.text.isNotEmpty)
-                      Container(
-                        margin: const EdgeInsets.symmetric(vertical: 24),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDark 
-                                ? Colors.white.withOpacity(0.1)
-                                : Colors.grey[300]!,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Conversion Details',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            _buildDetailRow(
-                              'Exchange Rate',
-                              '1 ${token['symbol']} = ${_formatBalance(_exchangeRate)} ${_selectedToToken!['token']['symbol']}',
-                              theme,
-                              isDark,
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDetailRow(
-                              'Conversion Fee',
-                              '${_conversionFee} ${_feeType == 'percentage' ? '%' : (_feeType == 'usd' ? 'USD' : token['symbol'])}',
-                              theme,
-                              isDark,
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDetailRow(
-                              'You Will Receive',
-                              '${_formatBalance(_calculateAmountToReceive())} ${_selectedToToken!['token']['symbol']}',
-                              theme,
-                              isDark,
-                              isHighlighted: true,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // Convert Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _showConfirmationDialog,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: SafeJetColors.warning,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          _isLoading ? 'Processing...' : 'Convert',
-                          style: const TextStyle(
-                            fontSize: 16,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Conversion Details',
+                          style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        _buildDetailRow(
+                          'Exchange Rate',
+                          '1 ${token['symbol']} = ${_formatBalance(_exchangeRate)} ${_selectedToToken!['token']['symbol']}',
+                          theme,
+                          isDark,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildDetailRow(
+                          'Conversion Fee',
+                          '${_conversionFee} ${_feeType == 'percentage' ? '%' : (_feeType == 'usd' ? 'USD' : token['symbol'])}',
+                          theme,
+                          isDark,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildDetailRow(
+                          'You Will Receive',
+                          '${_formatBalance(_calculateAmountToReceive())} ${_selectedToToken!['token']['symbol']}',
+                          theme,
+                          isDark,
+                          isHighlighted: true,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Convert Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                        onPressed: _isLoading ? null : _showConfirmationDialog,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SafeJetColors.warning,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                  ],
+                    child: Text(
+                      _isLoading ? 'Processing...' : 'Convert',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
+          ),
+        ),
       ),
     );
   }
@@ -867,28 +867,28 @@ class _ConvertScreenState extends State<ConvertScreen> {
       );
       return;
     }
+                                    
+                                    try {
+                                      await _walletService.convertToken(
+                                        fromTokenId: widget.fromAsset['token']['id'],
+                                        toTokenId: _selectedToToken!['token']['id'],
+                                        amount: amount,
+                                      );
 
-    try {
-      await _walletService.convertToken(
-        fromTokenId: widget.fromAsset['token']['id'],
-        toTokenId: _selectedToToken!['token']['id'],
-        amount: amount,
-      );
-      
       // Add success message
-      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Successfully converted ${amount} ${widget.fromAsset['token']['symbol']} to ${_selectedToToken!['token']['symbol']}'),
-          backgroundColor: SafeJetColors.success,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: SafeJetColors.error,
-        ),
-      );
+                                          backgroundColor: SafeJetColors.success,
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(e.toString()),
+                                          backgroundColor: SafeJetColors.error,
+                                        ),
+                                      );
       rethrow;
     }
   }
