@@ -40,6 +40,9 @@ class _ConvertScreenState extends State<ConvertScreen> {
   double _conversionFee = 0.0;
   String _feeType = '';
 
+  // Add loading state
+  bool _isConfirming = false;
+
   @override
   void initState() {
     super.initState();
@@ -545,7 +548,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleConvert,
+                        onPressed: _isLoading ? null : _showConfirmationDialog,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: SafeJetColors.warning,
                           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -647,7 +650,192 @@ class _ConvertScreenState extends State<ConvertScreen> {
     return amountAfterFee * _exchangeRate;
   }
 
-  Future<void> _handleConvert() async {
+  void _showConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        
+        return AlertDialog(
+          backgroundColor: isDark 
+              ? SafeJetColors.darkGradientStart  // Use the same gradient start color
+              : SafeJetColors.lightGradientStart,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Confirm Conversion',
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SingleChildScrollView(  // Added to handle overflow
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoRow(
+                  'From',
+                  '${_formatAmount(_amountController.text)} ${widget.fromAsset['token']['symbol']}',
+                ),
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  'To',
+                  '${_formatAmount(_getToAmount().toString())} ${_selectedToToken?['token']['symbol'] ?? ''}',
+                ),
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  'Exchange Rate',
+                  '1 ${widget.fromAsset['token']['symbol']} = ${_formatAmount(_exchangeRate.toString())} ${_selectedToToken?['token']['symbol'] ?? ''}',
+                  isWrapped: true,  // Allow wrapping for long text
+                ),
+                const SizedBox(height: 12),
+                _buildInfoRow(
+                  'Fee',
+                  '${_formatAmount(_conversionFee.toString())} ${widget.fromAsset['token']['symbol']}',
+                ),
+                const Divider(color: Colors.grey),
+                const SizedBox(height: 8),
+                Text(
+                  'Please confirm the conversion details above.',
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Cancel',
+                style: TextStyle(
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            StatefulBuilder(
+              builder: (context, setState) {
+                return ElevatedButton(
+                  onPressed: _isConfirming ? null : () async {
+                    setState(() => _isConfirming = true);
+                    try {
+                      await _handleConversion();
+                      if (mounted) {
+                        Navigator.pop(context);
+                        Navigator.pop(context);
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(e.toString())),
+                        );
+                        Navigator.pop(context);
+                      }
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isConfirming = false);
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SafeJetColors.warning,  // Changed to warning (yellow) color
+                    disabledBackgroundColor: SafeJetColors.warning.withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: _isConfirming
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),  // Changed to black for yellow button
+                        ),
+                      )
+                    : Text(
+                        'Confirm',
+                        style: TextStyle(
+                          color: Colors.black,  // Changed to black for yellow button
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isWrapped = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: isWrapped ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).brightness == Brightness.dark 
+              ? Colors.grey[400] 
+              : Colors.grey[600],
+            fontSize: 14,
+          ),
+        ),
+        if (isWrapped)
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark 
+                  ? Colors.white 
+                  : Colors.black,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          )
+        else
+          Text(
+            value,
+            style: TextStyle(
+              color: Theme.of(context).brightness == Brightness.dark 
+                ? Colors.white 
+                : Colors.black,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _formatAmount(String amount) {
+    try {
+      final value = double.parse(amount);
+      if (value == value.roundToDouble()) {
+        return value.toStringAsFixed(0);
+      }
+      return value.toStringAsFixed(8).replaceAll(RegExp(r'0*$'), '').replaceAll(RegExp(r'\.$'), '');
+    } catch (e) {
+      return amount;
+    }
+  }
+
+  Future<void> _handleConversion() async {
     if (_amountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -680,161 +868,29 @@ class _ConvertScreenState extends State<ConvertScreen> {
       return;
     }
 
-    // Show confirmation dialog
-    showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            bool isModalLoading = false;
-
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: Theme.of(context).brightness == Brightness.dark 
-                        ? [SafeJetColors.darkGradientStart, SafeJetColors.darkGradientEnd]
-                        : [SafeJetColors.lightGradientStart, SafeJetColors.lightGradientEnd],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: Theme.of(context).brightness == Brightness.dark 
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.grey[300]!,
-                  ),
-                ),
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Confirm Conversion',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Amount and conversion details
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark 
-                            ? Colors.black.withOpacity(0.3)
-                            : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Theme.of(context).brightness == Brightness.dark 
-                              ? Colors.white.withOpacity(0.1)
-                              : Colors.grey[300]!,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            '${_formatBalance(amount)} ${widget.fromAsset['token']['symbol']}',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: SafeJetColors.warning,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildDetailRow(
-                            'You Will Receive',
-                            '${_formatBalance(_calculateAmountToReceive())} ${_selectedToToken!['token']['symbol']}',
-                            Theme.of(context),
-                            Theme.of(context).brightness == Brightness.dark,
-                            isHighlighted: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: isModalLoading ? null : () => Navigator.of(dialogContext).pop(),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: Text('Cancel'),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: isModalLoading
-                                ? null
-                                : () async {
-                                    setModalState(() => isModalLoading = true);
-                                    
-                                    try {
-                                      await _walletService.convertToken(
-                                        fromTokenId: widget.fromAsset['token']['id'],
-                                        toTokenId: _selectedToToken!['token']['id'],
-                                        amount: amount,
-                                      );
-
-                                      Navigator.of(dialogContext).pop();
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Conversion successful'),
-                                          backgroundColor: SafeJetColors.success,
-                                        ),
-                                      );
-                                      Navigator.pop(context);
-                                    } catch (e) {
-                                      Navigator.of(dialogContext).pop();
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(e.toString()),
-                                          backgroundColor: SafeJetColors.error,
-                                        ),
-                                      );
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: SafeJetColors.warning,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: isModalLoading
-                                ? SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Theme.of(context).brightness == Brightness.dark 
-                                            ? Colors.white 
-                                            : Colors.black,
-                                      ),
-                                    ),
-                                  )
-                                : const Text(
-                                    'Confirm',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+    try {
+      await _walletService.convertToken(
+        fromTokenId: widget.fromAsset['token']['id'],
+        toTokenId: _selectedToToken!['token']['id'],
+        amount: amount,
+      );
+      
+      // Add success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully converted ${amount} ${widget.fromAsset['token']['symbol']} to ${_selectedToToken!['token']['symbol']}'),
+          backgroundColor: SafeJetColors.success,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      rethrow;
+    }
   }
 
   Future<void> _loadAvailableTokens() async {
@@ -882,5 +938,10 @@ class _ConvertScreenState extends State<ConvertScreen> {
     
     // If not found in map, use the passed balance
     return double.tryParse(widget.fromAsset['balance'].toString()) ?? 0.0;
+  }
+
+  double _getToAmount() {
+    if (_selectedToToken == null) return 0;
+    return _calculateAmountToReceive();
   }
 } 
