@@ -27,6 +27,14 @@ export class CreateOfferDto {
   @Min(0)
   price: number;
 
+  @IsString()
+  @IsNotEmpty()
+  currency: string;
+
+  @IsNumber()
+  @Min(0)
+  priceUSD: number;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PaymentMethodDto)

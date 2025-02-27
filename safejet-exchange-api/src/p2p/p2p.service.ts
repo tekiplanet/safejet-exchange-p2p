@@ -135,62 +135,21 @@ export class P2PService {
   }
 
   async createOffer(userId: string, createOfferDto: CreateOfferDto) {
-    // For sell offers, check and lock funds
-    if (!createOfferDto.isBuyOffer) {
-      const fundingBalance = await this.walletBalanceRepository.findOne({
-        where: { 
-          userId,
-          type: 'funding',
-        },
-      });
-
-      if (!fundingBalance) {
-        throw new BadRequestException('No funding wallet found');
-      }
-
-      // Check if token exists in networks metadata
-      const hasToken = Object.values(fundingBalance.metadata?.networks || {}).some(
-        network => network.tokenId === createOfferDto.tokenId
-      );
-
-      if (!hasToken || parseFloat(fundingBalance.balance) < createOfferDto.amount) {
-        throw new BadRequestException('Insufficient balance');
-      }
-    }
-
     // Create the offer
     const offer = this.p2pOfferRepository.create({
       userId,
       tokenId: createOfferDto.tokenId,
-      amount: createOfferDto.amount.toString(),
-      price: createOfferDto.price.toString(),
+      amount: createOfferDto.amount,
+      price: createOfferDto.price,
+      currency: createOfferDto.currency,
+      priceUSD: createOfferDto.priceUSD,
       type: createOfferDto.isBuyOffer ? 'buy' : 'sell',
       terms: createOfferDto.terms,
       status: 'active',
       paymentMethods: createOfferDto.paymentMethods,
     });
 
-    // Save the offer
-    const savedOffer = await this.p2pOfferRepository.save(offer);
-
-    // For sell offers, lock the funds
-    if (!createOfferDto.isBuyOffer) {
-      await this.walletBalanceRepository.update(
-        { 
-          userId,
-          type: 'funding',
-          // Find balance where tokenId exists in networks metadata
-          metadata: Raw(metadata => 
-            `jsonb_path_exists(${metadata}, '$.networks[*] ? (@.tokenId == "${createOfferDto.tokenId}")')`
-          )
-        },
-        {
-          balance: () => `balance - ${createOfferDto.amount}`,
-          lockedBalance: () => `locked_balance + ${createOfferDto.amount}`,
-        }
-      );
-    }
-
-    return savedOffer;
+    // Save and return the offer
+    return this.p2pOfferRepository.save(offer);
   }
 } 
