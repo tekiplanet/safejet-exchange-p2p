@@ -30,44 +30,75 @@ export class P2PService {
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
-    if (isBuyOffer) {
-      // For buy offers, get all unique tokens from wallet balances metadata
-      const balances = await this.walletBalanceRepository.find({
-        where: { userId },
-      });
+    try {
+      // Get all active tokens first
+      const allTokens = await this.tokenRepository
+        .createQueryBuilder('token')
+        .where('token.isActive = :isActive', { isActive: true })
+        .getMany();
 
-      const tokenIds = new Set<string>();
-      balances.forEach(balance => {
-        if (balance.metadata?.networks) {
-          Object.values(balance.metadata.networks).forEach(network => {
-            tokenIds.add(network.tokenId);
-          });
+      // Group tokens by their base symbol
+      const groupedTokens = allTokens.reduce((acc, token) => {
+        const baseSymbol = token.symbol; // e.g., 'USDT' for both TRC20 and ERC20
+        const metadata = token.metadata;
+        const networks = metadata.networks || [];
+        
+        if (!acc[baseSymbol]) {
+          // Use the first occurrence as the base token
+          acc[baseSymbol] = {
+            ...token,
+            // Clean up name to remove network information
+            name: token.name.split('(')[0].trim(), // e.g., "USDC Coin" instead of "USDC Coin (ERC20)"
+            networks,
+            fundingBalance: 0
+          };
+        } else {
+          // Add networks to existing token's networks array
+          acc[baseSymbol].networks = [...new Set([...acc[baseSymbol].networks, ...networks])];
         }
-      });
+        return acc;
+      }, {} as Record<string, any>);
 
-      return this.tokenRepository.findByIds([...tokenIds]);
+      if (!isBuyOffer) {
+        // For sell offers, get and sum funding balances
+        const balances = await this.walletBalanceRepository
+          .createQueryBuilder('balance')
+          .where({ 
+            userId,
+            type: 'funding'
+          })
+          .getMany();
 
-    } else {
-      // For sell offers, only get tokens with non-zero funding balance
-      const balances = await this.walletBalanceRepository.find({
-        where: { 
-          userId,
-          type: 'funding'
+        // Sum balances for each token symbol
+        for (const balance of balances) {
+          if (balance.metadata?.networks) {
+            const tokenId = Object.values(balance.metadata.networks)[0].tokenId;
+            const token = allTokens.find(t => t.id === tokenId);
+            
+            if (token) {
+              const baseSymbol = token.symbol;
+              if (groupedTokens[baseSymbol]) {
+                groupedTokens[baseSymbol].fundingBalance += parseFloat(balance.balance);
+              }
+            }
+          }
         }
-      });
 
-      const nonZeroBalances = balances.filter(b => parseFloat(b.balance) > 0);
-      
-      const tokenIds = new Set<string>();
-      nonZeroBalances.forEach(balance => {
-        if (balance.metadata?.networks) {
-          Object.values(balance.metadata.networks).forEach(network => {
-            tokenIds.add(network.tokenId);
-          });
-        }
-      });
+        // Filter out tokens with zero balance for sell offers
+        let result = Object.values(groupedTokens).filter(token => token.fundingBalance > 0);
 
-      return this.tokenRepository.findByIds([...tokenIds]);
+        // Sort alphabetically by symbol
+        return result.sort((a, b) => a.symbol.localeCompare(b.symbol));
+      }
+
+      // For buy offers, return all unified tokens
+      let result = Object.values(groupedTokens);
+
+      // Sort alphabetically by symbol
+      return result.sort((a, b) => a.symbol.localeCompare(b.symbol));
+    } catch (error) {
+      console.error('Error in getAvailableAssets:', error);
+      throw error;
     }
   }
 

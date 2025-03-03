@@ -440,17 +440,20 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    subtitle: Text(
-                      asset['symbol'],
-                      style: TextStyle(
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
-                    ),
+                    subtitle: !_isBuyOffer && asset['fundingBalance'] != null
+                        ? Text(
+                            'Balance: ${asset['fundingBalance'].toStringAsFixed(6)} ${asset['symbol']}',
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          )
+                        : null,
                     trailing: isSelected
                         ? Icon(
                             Icons.check_circle,
-                            color: _isBuyOffer
-                                ? SafeJetColors.success
+                            color: _isBuyOffer 
+                                ? SafeJetColors.success 
                                 : SafeJetColors.error,
                           )
                         : null,
