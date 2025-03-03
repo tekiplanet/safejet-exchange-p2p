@@ -817,7 +817,14 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                       const SizedBox(height: 16),
                       _buildDetailCard(
                         title: 'Payment Methods',
-                        value: _selectedPaymentMethods.join(', '),
+                        value: _selectedPaymentMethods
+                            .map((id) => _availablePaymentMethods
+                                .firstWhere(
+                                  (method) => method['id'].toString() == id,
+                                  orElse: () => {'name': 'Unknown Method'}
+                                )['name']
+                            )
+                            .join(', '),
                         icon: Icons.payment,
                         isDark: isDark,
                       ),
