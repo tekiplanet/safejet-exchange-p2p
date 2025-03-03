@@ -471,6 +471,14 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   }
 
   Widget _buildAmountInput(bool isDark) {
+    // Get balance for the selected crypto
+    final selectedAsset = _availableAssets.firstWhere(
+      (asset) => asset['symbol'] == _selectedCrypto,
+      orElse: () => {'fundingBalance': '0'},
+    );
+    final balance = !_isBuyOffer ? 
+      double.tryParse(selectedAsset['fundingBalance']?.toString() ?? '0') ?? 0 : 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -485,10 +493,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
             if (!_isBuyOffer) ...[
               const SizedBox(width: 8),
               Text(
-                'Available: ${_availableAssets.firstWhere(
-                  (asset) => asset['symbol'] == _selectedCrypto,
-                  orElse: () => {'fundingBalance': '0'},
-                )['fundingBalance'] ?? '0'} $_selectedCrypto',
+                'Available: ${selectedAsset['fundingBalance']?.toString() ?? '0'} $_selectedCrypto',
                 style: TextStyle(
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
                   fontSize: 12,
@@ -507,6 +512,10 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           decoration: InputDecoration(
             hintText: 'Enter amount',
             suffixText: _selectedCrypto,
+            errorText: !_isBuyOffer && _amountController.text.isNotEmpty && 
+                (double.tryParse(_amountController.text) ?? 0) > (double.tryParse(selectedAsset['fundingBalance']?.toString() ?? '0') ?? 0)
+                ? 'Insufficient balance'
+                : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -519,32 +528,17 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           ),
           onChanged: (value) {
             if (!_isBuyOffer && value.isNotEmpty) {
-              try {
-                final balance = double.tryParse(
-                  _availableAssets.firstWhere(
-                    (asset) => asset['symbol'] == _selectedCrypto,
-                    orElse: () => {'fundingBalance': '0'},
-                  )['fundingBalance'] ?? '0'
-                ) ?? 0;
-                
-                final amount = double.tryParse(value) ?? 0;
-                if (amount > balance) {
-                  final formattedBalance = balance.toStringAsFixed(8);
-                  _amountController.value = TextEditingValue(
-                    text: formattedBalance,
-                    selection: TextSelection.collapsed(offset: formattedBalance.length),
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Amount cannot exceed available balance'),
-                      backgroundColor: SafeJetColors.error,
-                    ),
-                  );
-                }
-              } catch (e) {
-                print('Error validating amount: $e');
+              final amount = double.tryParse(value) ?? 0;
+              if (amount > (double.tryParse(selectedAsset['fundingBalance']?.toString() ?? '0') ?? 0)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Amount cannot exceed available balance'),
+                    backgroundColor: SafeJetColors.error,
+                  ),
+                );
               }
             }
+            setState(() {}); // Trigger rebuild to update error text
           },
         ),
       ],
@@ -781,6 +775,26 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
         ),
       );
       return;
+    }
+
+    // Check balance for sell offers
+    if (!_isBuyOffer) {
+      final selectedAsset = _availableAssets.firstWhere(
+        (asset) => asset['symbol'] == _selectedCrypto,
+        orElse: () => {'fundingBalance': '0'},
+      );
+      final balance = double.tryParse(selectedAsset['fundingBalance']?.toString() ?? '0') ?? 0;
+      
+      final amount = double.tryParse(_amountController.text) ?? 0;
+      if (amount > balance) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Insufficient balance'),
+            backgroundColor: SafeJetColors.error,
+          ),
+        );
+        return;
+      }
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
