@@ -474,21 +474,38 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Amount',
-          style: TextStyle(
-            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-          ),
+        Row(
+          children: [
+            Text(
+              'Amount',
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              ),
+            ),
+            if (!_isBuyOffer) ...[
+              const SizedBox(width: 8),
+              Text(
+                'Available: ${_availableAssets.firstWhere(
+                  (asset) => asset['symbol'] == _selectedCrypto,
+                  orElse: () => {'fundingBalance': '0'},
+                )['fundingBalance'] ?? '0'} $_selectedCrypto',
+                style: TextStyle(
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _amountController,
-          keyboardType: TextInputType.number,
+          keyboardType: TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
           ],
           decoration: InputDecoration(
-            hintText: '0.00',
+            hintText: 'Enter amount',
             suffixText: _selectedCrypto,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -500,6 +517,35 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                 : Colors.black.withOpacity(0.05),
             contentPadding: const EdgeInsets.all(16),
           ),
+          onChanged: (value) {
+            if (!_isBuyOffer && value.isNotEmpty) {
+              try {
+                final balance = double.tryParse(
+                  _availableAssets.firstWhere(
+                    (asset) => asset['symbol'] == _selectedCrypto,
+                    orElse: () => {'fundingBalance': '0'},
+                  )['fundingBalance'] ?? '0'
+                ) ?? 0;
+                
+                final amount = double.tryParse(value) ?? 0;
+                if (amount > balance) {
+                  final formattedBalance = balance.toStringAsFixed(8);
+                  _amountController.value = TextEditingValue(
+                    text: formattedBalance,
+                    selection: TextSelection.collapsed(offset: formattedBalance.length),
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Amount cannot exceed available balance'),
+                      backgroundColor: SafeJetColors.error,
+                    ),
+                  );
+                }
+              } catch (e) {
+                print('Error validating amount: $e');
+              }
+            }
+          },
         ),
       ],
     );
