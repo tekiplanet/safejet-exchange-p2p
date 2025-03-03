@@ -10,6 +10,7 @@ import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
 import { Token } from '../wallet/entities/token.entity';
 import { ExchangeRate } from '../exchange/exchange-rate.entity';
 import { WalletModule } from '../wallet/wallet.module';
+import { P2PSettingsModule } from '../p2p-settings/p2p-settings.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { WalletModule } from '../wallet/wallet.module';
       ExchangeRate,
     ]),
     WalletModule,
+    P2PSettingsModule,
   ],
   controllers: [P2PController],
   providers: [P2PService],

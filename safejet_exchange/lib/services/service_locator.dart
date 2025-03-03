@@ -7,6 +7,7 @@ import '../providers/auth_provider.dart';
 import 'api_client.dart';
 import 'wallet_service.dart';
 import 'auth_service.dart';
+import './p2p_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -21,6 +22,9 @@ Future<void> setupServices() async {
     responseBody: true,
     error: true,
   ));
+
+  // Register Dio with GetIt
+  getIt.registerSingleton<Dio>(dio);
 
   // Register AuthProvider
   getIt.registerSingleton<AuthProvider>(AuthProvider());
@@ -46,4 +50,7 @@ Future<void> setupServices() async {
 
   // Register WalletService
   getIt.registerLazySingleton<WalletService>(() => WalletService());
+
+  // Register P2PService
+  getIt.registerSingleton<P2PService>(P2PService());
 } 

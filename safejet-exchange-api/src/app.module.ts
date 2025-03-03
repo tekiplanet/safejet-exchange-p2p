@@ -20,6 +20,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ExchangeModule } from './exchange/exchange.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TokenManagementModule } from './tokens/token-management.module';
+import { P2PModule } from './p2p/p2p.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { TokenManagementModule } from './tokens/token-management.module';
     SeedersModule,
     CurrenciesModule,
     P2PSettingsModule,
+    P2PModule,
     WalletModule,
     EventEmitterModule.forRoot(),
     ExchangeModule,

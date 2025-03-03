@@ -6,7 +6,6 @@ import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../services/p2p_service.dart';
-import '../../widgets/token_selector.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
   const P2PCreateOfferScreen({super.key});
@@ -74,8 +73,12 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
+      print('Starting to load initial data...');
+      
       // Load trader settings
+      print('Fetching trader settings...');
       final settings = await _p2pService.getTraderSettings();
+      print('Trader settings received: $settings');
       _userCurrency = settings['currency'];
 
       // Load available assets
@@ -87,6 +90,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       // Load payment methods
       await _loadPaymentMethods();
     } catch (e) {
+      print('Error in _loadInitialData: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString()),
@@ -285,6 +289,17 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       );
     }
 
+    if (_availableAssets.isEmpty) {
+      return Center(
+        child: Text(
+          'No assets available',
+          style: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+        ),
+      );
+    }
+
     final selectedAsset = _availableAssets.firstWhere(
       (asset) => asset['symbol'] == _selectedCrypto,
       orElse: () => _availableAssets.first,
@@ -300,9 +315,33 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        TokenSelector(
-          token: selectedAsset,
+        GestureDetector(
           onTap: () => _showCryptoSelector(isDark),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark 
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  selectedAsset['symbol'],
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  Icons.keyboard_arrow_down,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -464,6 +503,21 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     );
   }
 
+  IconData _getIconForName(String iconName) {
+    switch (iconName) {
+      case 'bank':
+        return Icons.account_balance;
+      case 'mobile':
+        return Icons.phone_android;
+      case 'qr_code':
+        return Icons.qr_code;
+      case 'payment':
+        return Icons.payment;
+      default:
+        return Icons.payment; // Default icon
+    }
+  }
+
   Widget _buildPaymentMethods(bool isDark) {
     if (_isLoadingPaymentMethods) {
       return const Center(child: CircularProgressIndicator());
@@ -499,14 +553,14 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
             spacing: 8,
             runSpacing: 8,
             children: _availablePaymentMethods.map((method) {
-              final isSelected = _selectedPaymentMethods.contains(method);
+              final isSelected = _selectedPaymentMethods.contains(method['id']);
               return GestureDetector(
                 onTap: () {
                   setState(() {
                     if (isSelected) {
-                      _selectedPaymentMethods.remove(method);
+                      _selectedPaymentMethods.remove(method['id']);
                     } else {
-                      _selectedPaymentMethods.add(method);
+                      _selectedPaymentMethods.add(method['id']);
                     }
                   });
                 },
@@ -532,17 +586,13 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _isBuyOffer 
-                            ? (method['type']['icon'] ?? Icons.payment)  // For buy offers
-                            : (method['icon'] ?? Icons.payment),         // For sell offers
+                        _getIconForName(method['icon']),
                         size: 20,
                         color: isDark ? Colors.white : Colors.black,
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _isBuyOffer 
-                            ? method['details']['name'] ?? ''  // For buy offers
-                            : method['name'] ?? '',           // For sell offers
+                        method['name'],
                         style: TextStyle(
                           color: isDark ? Colors.white : Colors.black,
                         ),

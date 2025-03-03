@@ -120,17 +120,28 @@ export class P2PService {
   }
 
   async getPaymentMethods(userId: string, isBuyOffer: boolean) {
-    if (isBuyOffer) {
-      // For buy offers, get user's configured payment methods
-      return this.paymentMethodRepository.find({
-        where: { userId, isVerified: true },
-        relations: ['type'],
-      });
-    } else {
-      // For sell offers, get all active payment method types
-      return this.paymentMethodTypeRepository.find({
-        where: { isActive: true },
-      });
+    try {
+      console.log('Getting payment methods with:', { userId, isBuyOffer });
+      
+      if (isBuyOffer) {
+        // For buy offers, get all active payment method types
+        const types = await this.paymentMethodTypeRepository.find({
+          where: { isActive: true },
+        });
+        console.log('Found payment method types:', types);
+        return types;
+      } else {
+        // For sell offers, get user's configured payment methods
+        const methods = await this.paymentMethodRepository.find({
+          where: { userId, isVerified: true },
+          relations: ['paymentMethodType'],
+        });
+        console.log('Found payment methods:', methods);
+        return methods;
+      }
+    } catch (error) {
+      console.error('Error in getPaymentMethods:', error);
+      throw error;
     }
   }
 

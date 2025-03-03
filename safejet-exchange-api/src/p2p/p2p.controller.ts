@@ -6,7 +6,9 @@ import { CreateOfferDto } from './dto/create-offer.dto';
 
 @Controller('p2p')
 export class P2PController {
-  constructor(private readonly p2pService: P2PService) {}
+  constructor(private readonly p2pService: P2PService) {
+    console.log('P2P Controller initialized');
+  }
 
   @Get('available-assets')
   @UseGuards(JwtAuthGuard)
@@ -20,6 +22,7 @@ export class P2PController {
   @Get('trader-settings')
   @UseGuards(JwtAuthGuard)
   async getTraderSettings(@GetUser('id') userId: string) {
+    console.log('Trader settings endpoint hit', { userId });
     return this.p2pService.getTraderSettings(userId);
   }
 
@@ -37,7 +40,15 @@ export class P2PController {
     @GetUser('id') userId: string,
     @Query('type') type: 'buy' | 'sell'
   ) {
-    return this.p2pService.getPaymentMethods(userId, type === 'buy');
+    try {
+      console.log('Getting payment methods for user:', userId, 'type:', type);
+      const result = await this.p2pService.getPaymentMethods(userId, type === 'buy');
+      console.log('Payment methods result:', result);
+      return result;
+    } catch (error) {
+      console.error('Error getting payment methods:', error);
+      throw error;
+    }
   }
 
   @Post('offers')

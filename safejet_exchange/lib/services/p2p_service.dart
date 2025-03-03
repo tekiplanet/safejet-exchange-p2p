@@ -1,9 +1,60 @@
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
-import '../config/constants.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../services/auth_service.dart';
+import 'api_client.dart';
 
 class P2PService {
-  final Dio _dio = GetIt.I<Dio>();
+  late final Dio _dio;
+  final AuthService _authService = GetIt.I<AuthService>();
+  final storage = const FlutterSecureStorage();
+
+  P2PService() {
+    final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
+    print('P2P Service initialized with base URL: $baseUrl');
+    print('AuthService instance: $_authService');
+    
+    _dio = Dio(BaseOptions(
+      baseUrl: baseUrl,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
+    ));
+    _setupInterceptors();
+  }
+
+  void _setupInterceptors() {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          print('Making request to: ${options.baseUrl}${options.path}');
+          print('Headers: ${options.headers}');
+          
+          final token = await storage.read(key: 'accessToken');
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+            print('Token added to request: $token');
+          } else {
+            print('No token found!');
+          }
+          return handler.next(options);
+        },
+        onError: (DioException error, handler) async {
+          print('Full error details:');
+          print('Base URL: ${error.requestOptions.baseUrl}');
+          print('Path: ${error.requestOptions.path}');
+          print('Error Response: ${error.response?.data}');
+          print('Error Status Code: ${error.response?.statusCode}');
+          print('Headers sent: ${error.requestOptions.headers}');
+          return handler.next(error);
+        },
+      ),
+    );
+  }
 
   Future<List<Map<String, dynamic>>> getAvailableAssets(bool isBuy) async {
     try {
@@ -23,13 +74,16 @@ class P2PService {
 
   Future<Map<String, dynamic>> getTraderSettings() async {
     try {
+      print('Attempting to get trader settings...');
       final response = await _dio.get('/p2p/trader-settings');
+      print('Response received: ${response.data}');
       
       if (response.statusCode == 200) {
         return Map<String, dynamic>.from(response.data);
       }
       throw Exception('Failed to load trader settings');
     } catch (e) {
+      print('Error in getTraderSettings: $e');
       throw Exception('Failed to load trader settings: $e');
     }
   }
