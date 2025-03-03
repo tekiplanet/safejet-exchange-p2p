@@ -749,137 +749,192 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Preview Offer',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildPreviewItem('Type', _isBuyOffer ? 'Buy' : 'Sell', isDark),
-                _buildPreviewItem(
-                  'Asset',
-                  '${_cryptoOptions.firstWhere((c) => c['symbol'] == _selectedCrypto)['name']} ($_selectedCrypto)',
-                  isDark,
-                ),
-                _buildPreviewItem(
-                  'Amount',
-                  '${_amountController.text} $_selectedCrypto',
-                  isDark,
-                ),
-                _buildPreviewItem(
-                  'Price',
-                  '₦${_priceController.text}/$_selectedCrypto',
-                  isDark,
-                ),
-                _buildPreviewItem(
-                  'Payment Methods',
-                  _selectedPaymentMethods.join(', '),
-                  isDark,
-                ),
-                const Divider(height: 32),
-                Text(
-                  'Terms & Instructions',
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _termsController.text.isEmpty ? 'None' : _termsController.text,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.close,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Preview Offer',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Please confirm your offer details:',
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          fontSize: 16,
                         ),
-                        child: Text(
-                          'Edit',
+                      ),
+                      const SizedBox(height: 32),
+                      _buildDetailCard(
+                        title: 'Type',
+                        value: _isBuyOffer ? 'Buy' : 'Sell',
+                        icon: _isBuyOffer ? Icons.add_circle : Icons.remove_circle,
+                        isDark: isDark,
+                        highlight: true,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'Asset',
+                        value: '${_cryptoOptions.firstWhere((c) => c['symbol'] == _selectedCrypto)['name']} ($_selectedCrypto)',
+                        icon: Icons.currency_bitcoin,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'Amount',
+                        value: '${_amountController.text} $_selectedCrypto',
+                        icon: Icons.account_balance_wallet,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'Price',
+                        value: '₦${_priceController.text}/$_selectedCrypto',
+                        icon: Icons.payments,
+                        isDark: isDark,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildDetailCard(
+                        title: 'Payment Methods',
+                        value: _selectedPaymentMethods.join(', '),
+                        icon: Icons.payment,
+                        isDark: isDark,
+                      ),
+                      if (_termsController.text.isNotEmpty) ...[
+                        const SizedBox(height: 32),
+                        Text(
+                          'Terms & Instructions',
                           style: TextStyle(
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: 14,
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Offer created successfully'),
-                              backgroundColor: SafeJetColors.success,
-                            ),
-                          );
-                        },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          foregroundColor: _isBuyOffer ? SafeJetColors.success : SafeJetColors.error,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                        const SizedBox(height: 8),
+                        Text(
+                          _termsController.text,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        child: const Text(
-                          'Confirm',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Offer created successfully'),
+                          backgroundColor: SafeJetColors.success,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SafeJetColors.secondaryHighlight,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Confirm',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPreviewItem(String label, String value, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildDetailCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required bool isDark,
+    bool highlight = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: highlight 
+            ? (isDark ? SafeJetColors.secondaryHighlight.withOpacity(0.1) : SafeJetColors.secondaryHighlight.withOpacity(0.05))
+            : (isDark ? Colors.black.withOpacity(0.3) : Colors.white),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-              fontSize: 14,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: highlight
+                  ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
+                  : (isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: highlight
+                  ? SafeJetColors.secondaryHighlight
+                  : (isDark ? Colors.grey[400] : Colors.grey[600]),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 16,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
