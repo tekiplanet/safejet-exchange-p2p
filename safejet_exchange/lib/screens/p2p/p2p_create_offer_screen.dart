@@ -56,14 +56,6 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     },
   ];
 
-  final List<Map<String, String>> _cryptoOptions = [
-    {'symbol': 'USDT', 'name': 'Tether'},
-    {'symbol': 'BTC', 'name': 'Bitcoin'},
-    {'symbol': 'ETH', 'name': 'Ethereum'},
-    {'symbol': 'BUSD', 'name': 'Binance USD'},
-    {'symbol': 'USDC', 'name': 'USD Coin'},
-  ];
-
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _filteredAssets = [];
 
@@ -746,6 +738,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    bool isSubmitting = false;
     
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -796,7 +789,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                       const SizedBox(height: 16),
                       _buildDetailCard(
                         title: 'Asset',
-                        value: '${_cryptoOptions.firstWhere((c) => c['symbol'] == _selectedCrypto)['name']} ($_selectedCrypto)',
+                        value: '${_availableAssets.firstWhere((a) => a['symbol'] == _selectedCrypto)['name']} ($_selectedCrypto)',
                         icon: Icons.currency_bitcoin,
                         isDark: isDark,
                       ),
@@ -853,21 +846,79 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                 padding: const EdgeInsets.all(24),
                 child: SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: SafeJetColors.secondaryHighlight,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  child: StatefulBuilder(
+                    builder: (context, setState) => ElevatedButton(
+                      onPressed: isSubmitting ? null : () async {
+                        setState(() => isSubmitting = true);
+                        try {
+                          // Get the selected asset details
+                          final selectedAsset = _availableAssets.firstWhere(
+                            (asset) => asset['symbol'] == _selectedCrypto,
+                          );
+
+                          // Debug log
+                          print('Selected asset: $selectedAsset');
+                          print('Token details: ${selectedAsset['token']}');
+
+                          // Safely get token ID
+                          final tokenId = selectedAsset['id'] ?? selectedAsset['token']?['id'];
+                          if (tokenId == null) {
+                            throw Exception('Could not determine token ID');
+                          }
+
+                          // Create the offer
+                          await _p2pService.createOffer({
+                            'tokenId': tokenId,
+                            'amount': double.parse(_amountController.text),
+                            'price': double.parse(_priceController.text.replaceAll(',', '')),
+                            'priceUSD': _marketPrice ?? 0,
+                            'currency': _userCurrency,
+                            'isBuyOffer': _isBuyOffer,
+                            'terms': _termsController.text,
+                            'paymentMethods': _selectedPaymentMethods.map((id) => ({
+                              'typeId': id,
+                              'methodId': _isBuyOffer ? null : id,
+                            })).toList(),
+                          });
+
+                          Navigator.pop(context, true);  // Close dialog after successful creation
+                        } catch (e) {
+                          print('Error creating offer: $e');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(e.toString().replaceAll('Exception: ', '')),
+                              backgroundColor: SafeJetColors.error,
+                            ),
+                          );
+                        } finally {
+                          if (mounted) {
+                            setState(() => isSubmitting = false);
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.secondaryHighlight,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    ),
-                    child: const Text(
-                      'Confirm',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      child: isSubmitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                            ),
+                          )
+                        : const Text(
+                            'Confirm',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                     ),
                   ),
                 ),
@@ -879,57 +930,13 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     );
 
     if (confirmed == true) {
-      try {
-        // Get the selected asset details
-        final selectedAsset = _availableAssets.firstWhere(
-          (asset) => asset['symbol'] == _selectedCrypto,
-        );
-
-        // Debug log
-        print('Selected asset: $selectedAsset');
-        print('Token details: ${selectedAsset['token']}');
-
-        // Safely get token ID
-        final tokenId = selectedAsset['id'] ?? selectedAsset['token']?['id'];
-        if (tokenId == null) {
-          throw Exception('Could not determine token ID');
-        }
-
-        // Create the offer
-        await _p2pService.createOffer({
-          'tokenId': tokenId,
-          'amount': double.parse(_amountController.text),
-          'price': double.parse(_priceController.text.replaceAll(',', '')),
-          'priceUSD': _marketPrice ?? 0,
-          'currency': _userCurrency,
-          'isBuyOffer': _isBuyOffer,
-          'terms': _termsController.text,
-          'paymentMethods': _selectedPaymentMethods.map((id) => ({
-            'typeId': id,
-            'methodId': _isBuyOffer ? null : id,
-          })).toList(),
-        });
-
-        if (mounted) {
-          Navigator.pop(context);  // Close the create offer screen
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Offer created successfully'),
-              backgroundColor: SafeJetColors.success,
-            ),
-          );
-        }
-      } catch (e) {
-        print('Error creating offer: $e');  // Add debug log
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.toString().replaceAll('Exception: ', '')),
-              backgroundColor: SafeJetColors.error,
-            ),
-          );
-        }
-      }
+      Navigator.pop(context);  // Close the create offer screen
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Offer created successfully'),
+          backgroundColor: SafeJetColors.success,
+        ),
+      );
     }
   }
 
