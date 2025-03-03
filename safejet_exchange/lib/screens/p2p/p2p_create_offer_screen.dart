@@ -64,6 +64,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     {'symbol': 'USDC', 'name': 'USD Coin'},
   ];
 
+  final TextEditingController _searchController = TextEditingController();
+  List<Map<String, dynamic>> _filteredAssets = [];
+
   @override
   void initState() {
     super.initState();
@@ -164,6 +167,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     _amountController.dispose();
     _priceController.dispose();
     _termsController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -348,6 +352,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   }
 
   void _showCryptoSelector(bool isDark) {
+    _filteredAssets = _availableAssets;
+    _searchController.clear();
+    
     showModalBottomSheet(
       context: context,
       backgroundColor: isDark ? SafeJetColors.darkGradientStart : Colors.white,
@@ -381,11 +388,38 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search assets...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.black.withOpacity(0.05),
+                contentPadding: const EdgeInsets.all(16),
+              ),
+              onChanged: (query) {
+                setState(() {
+                  _filteredAssets = _availableAssets.where((asset) {
+                    final symbol = asset['symbol'].toString().toLowerCase();
+                    final name = asset['name'].toString().toLowerCase();
+                    return symbol.contains(query.toLowerCase()) || 
+                           name.contains(query.toLowerCase());
+                  }).toList();
+                });
+              },
+            ),
+            const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
-                itemCount: _availableAssets.length,
+                itemCount: _filteredAssets.length,
                 itemBuilder: (context, index) {
-                  final asset = _availableAssets[index];
+                  final asset = _filteredAssets[index];
                   final isSelected = asset['symbol'] == _selectedCrypto;
                   
                   return ListTile(
