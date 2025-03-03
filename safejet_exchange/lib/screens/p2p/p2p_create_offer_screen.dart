@@ -113,7 +113,11 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       setState(() {
         _availableAssets = assets;
         if (assets.isNotEmpty) {
-          _selectedCrypto = assets[0]['symbol'];
+          final newSelectedCrypto = assets[0]['symbol'];
+          if (_selectedCrypto != newSelectedCrypto) {
+            _selectedCrypto = assets[0]['symbol'];
+            _updateMarketPrice();  // Update market price for the new asset
+          }
         }
       });
     } catch (e) {
@@ -138,8 +142,11 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       print('Received market price: $price');
       setState(() {
         _marketPrice = price;
-        // Pre-fill price with market price
-        _priceController.text = price.toString();
+        // Format price with commas and proper decimals
+        _priceController.text = price.toStringAsFixed(2).replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},'
+        );
       });
     } catch (e) {
       print('Error loading market price: $e');
@@ -285,8 +292,8 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       _isBuyOffer = !_isBuyOffer;
       _selectedPaymentMethods.clear();  // Clear selected methods
     });
-    _loadAssets();
-    _loadPaymentMethods();
+    _loadAssets();  // Keep these outside setState
+    _loadPaymentMethods();  // Keep these outside setState
   }
 
   Widget _buildCryptoSelector(bool isDark) {
@@ -527,7 +534,10 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
             hintText: '0.00',
             suffixText: _userCurrency,
             helperText: _marketPrice != null 
-              ? 'Market Price: ${_marketPrice!.toStringAsFixed(2)} $_userCurrency'
+              ? 'Market Price: ${_marketPrice!.toStringAsFixed(2).replaceAllMapped(
+                RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+                (Match m) => '${m[1]},'
+              )}'
               : _isPriceLoading ? 'Loading market price...' : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
