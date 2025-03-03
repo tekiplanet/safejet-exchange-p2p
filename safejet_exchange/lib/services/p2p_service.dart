@@ -125,4 +125,19 @@ class P2PService {
       throw Exception('Failed to load payment methods: $e');
     }
   }
+
+  Future<void> createOffer(Map<String, dynamic> offerData) async {
+    try {
+      final response = await _dio.post(
+        '/p2p/offers',
+        data: offerData,
+      );
+      
+      if (response.statusCode != 201) {
+        throw Exception('Failed to create offer');
+      }
+    } catch (e) {
+      throw Exception('Failed to create offer: $e');
+    }
+  }
 } 

@@ -734,7 +734,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     );
   }
 
-  void _handleCreateOffer() {
+  void _handleCreateOffer() async {
     if (_selectedPaymentMethods.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -747,7 +747,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    showDialog(
+    final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => Dialog.fullscreen(
         child: Scaffold(
@@ -854,16 +854,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Offer created successfully'),
-                          backgroundColor: SafeJetColors.success,
-                        ),
-                      );
-                    },
+                    onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: SafeJetColors.secondaryHighlight,
                       foregroundColor: Colors.black,
@@ -886,6 +877,56 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
         ),
       ),
     );
+
+    if (confirmed == true) {
+      try {
+        // Get the selected asset details
+        final selectedAsset = _availableAssets.firstWhere(
+          (asset) => asset['symbol'] == _selectedCrypto,
+        );
+
+        // Debug log
+        print('Selected asset: $selectedAsset');
+        print('Token details: ${selectedAsset['token']}');
+
+        // Safely get token ID
+        final tokenId = selectedAsset['id'] ?? selectedAsset['token']?['id'];
+        if (tokenId == null) {
+          throw Exception('Could not determine token ID');
+        }
+
+        // Create the offer
+        await _p2pService.createOffer({
+          'tokenId': tokenId,
+          'amount': _amountController.text,
+          'price': _priceController.text.replaceAll(',', ''),  // Remove commas
+          'currency': _userCurrency,
+          'isBuyOffer': _isBuyOffer,
+          'terms': _termsController.text,
+          'paymentMethods': _selectedPaymentMethods,
+        });
+
+        if (mounted) {
+          Navigator.pop(context);  // Close the create offer screen
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Offer created successfully'),
+              backgroundColor: SafeJetColors.success,
+            ),
+          );
+        }
+      } catch (e) {
+        print('Error creating offer: $e');  // Add debug log
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString().replaceAll('Exception: ', '')),
+              backgroundColor: SafeJetColors.error,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildDetailCard({
