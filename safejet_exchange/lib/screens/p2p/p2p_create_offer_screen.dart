@@ -738,8 +738,8 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    bool isSubmitting = false;
     
+    bool isSubmitting = false;
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => Dialog.fullscreen(
@@ -763,91 +763,91 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
               ),
             ),
           ),
-          body: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Please confirm your offer details:',
-                        style: TextStyle(
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      _buildDetailCard(
-                        title: 'Type',
-                        value: _isBuyOffer ? 'Buy' : 'Sell',
-                        icon: _isBuyOffer ? Icons.add_circle : Icons.remove_circle,
-                        isDark: isDark,
-                        highlight: true,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'Asset',
-                        value: '${_availableAssets.firstWhere((a) => a['symbol'] == _selectedCrypto)['name']} ($_selectedCrypto)',
-                        icon: Icons.currency_bitcoin,
-                        isDark: isDark,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'Amount',
-                        value: '${_amountController.text} $_selectedCrypto',
-                        icon: Icons.account_balance_wallet,
-                        isDark: isDark,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'Price',
-                        value: '₦${_priceController.text}/$_selectedCrypto',
-                        icon: Icons.payments,
-                        isDark: isDark,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDetailCard(
-                        title: 'Payment Methods',
-                        value: _selectedPaymentMethods
-                            .map((id) => _availablePaymentMethods
-                                .firstWhere(
-                                  (method) => method['id'].toString() == id,
-                                  orElse: () => {'name': 'Unknown Method'}
-                                )['name']
-                            )
-                            .join(', '),
-                        icon: Icons.payment,
-                        isDark: isDark,
-                      ),
-                      if (_termsController.text.isNotEmpty) ...[
-                        const SizedBox(height: 32),
+          body: StatefulBuilder(
+            builder: (context, setState) => Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          'Terms & Instructions',
+                          'Please confirm your offer details:',
                           style: TextStyle(
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
-                            fontSize: 14,
+                            fontSize: 16,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _termsController.text,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                          ),
+                        const SizedBox(height: 32),
+                        _buildDetailCard(
+                          title: 'Type',
+                          value: _isBuyOffer ? 'Buy' : 'Sell',
+                          icon: _isBuyOffer ? Icons.add_circle : Icons.remove_circle,
+                          isDark: isDark,
+                          highlight: true,
                         ),
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'Asset',
+                          value: '${_availableAssets.firstWhere((a) => a['symbol'] == _selectedCrypto)['name']} ($_selectedCrypto)',
+                          icon: Icons.currency_bitcoin,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'Amount',
+                          value: '${_amountController.text} $_selectedCrypto',
+                          icon: Icons.account_balance_wallet,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'Price',
+                          value: '₦${_priceController.text}/$_selectedCrypto',
+                          icon: Icons.payments,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDetailCard(
+                          title: 'Payment Methods',
+                          value: _selectedPaymentMethods
+                              .map((id) => _availablePaymentMethods
+                                  .firstWhere(
+                                    (method) => method['id'].toString() == id,
+                                    orElse: () => {'name': 'Unknown Method'}
+                                  )['name']
+                              )
+                              .join(', '),
+                          icon: Icons.payment,
+                          isDark: isDark,
+                        ),
+                        if (_termsController.text.isNotEmpty) ...[
+                          const SizedBox(height: 32),
+                          Text(
+                            'Terms & Instructions',
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _termsController.text,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: StatefulBuilder(
-                    builder: (context, setState) => ElevatedButton(
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
                       onPressed: isSubmitting ? null : () async {
                         setState(() => isSubmitting = true);
                         try {
@@ -855,12 +855,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                           final selectedAsset = _availableAssets.firstWhere(
                             (asset) => asset['symbol'] == _selectedCrypto,
                           );
-
-                          // Debug log
-                          print('Selected asset: $selectedAsset');
-                          print('Token details: ${selectedAsset['token']}');
-
-                          // Safely get token ID
+                          
                           final tokenId = selectedAsset['id'] ?? selectedAsset['token']?['id'];
                           if (tokenId == null) {
                             throw Exception('Could not determine token ID');
@@ -881,19 +876,15 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                             })).toList(),
                           });
 
-                          Navigator.pop(context, true);  // Close dialog after successful creation
+                          Navigator.pop(context, true);
                         } catch (e) {
-                          print('Error creating offer: $e');
+                          setState(() => isSubmitting = false);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(e.toString().replaceAll('Exception: ', '')),
                               backgroundColor: SafeJetColors.error,
                             ),
                           );
-                        } finally {
-                          if (mounted) {
-                            setState(() => isSubmitting = false);
-                          }
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -922,21 +913,23 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
 
     if (confirmed == true) {
-      Navigator.pop(context);  // Close the create offer screen
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Offer created successfully'),
-          backgroundColor: SafeJetColors.success,
-        ),
-      );
+      if (mounted) {
+        Navigator.pop(context);  // Close the create offer screen
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Offer created successfully'),
+            backgroundColor: SafeJetColors.success,
+          ),
+        );
+      }
     }
   }
 
