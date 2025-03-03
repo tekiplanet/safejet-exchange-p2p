@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsArray, IsIn, IsNotEmpty, ValidateNested, Min, ArrayMinSize, IsBoolean } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsIn, IsNotEmpty, ValidateNested, Min, ArrayMinSize, IsBoolean, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PaymentMethodDto {
@@ -7,14 +7,11 @@ class PaymentMethodDto {
   typeId: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   methodId?: string;
 }
 
 export class CreateOfferDto {
-  @IsIn(['buy', 'sell'])
-  type: 'buy' | 'sell';
-
   @IsString()
   @IsNotEmpty()
   tokenId: string;
@@ -41,8 +38,8 @@ export class CreateOfferDto {
   paymentMethods: PaymentMethodDto[];
 
   @IsString()
-  @IsNotEmpty()
-  terms: string;
+  @IsOptional()
+  terms?: string;
 
   @IsBoolean()
   isBuyOffer: boolean;

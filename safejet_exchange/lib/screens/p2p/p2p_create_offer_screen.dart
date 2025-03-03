@@ -898,12 +898,16 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
         // Create the offer
         await _p2pService.createOffer({
           'tokenId': tokenId,
-          'amount': _amountController.text,
-          'price': _priceController.text.replaceAll(',', ''),  // Remove commas
+          'amount': double.parse(_amountController.text),
+          'price': double.parse(_priceController.text.replaceAll(',', '')),
+          'priceUSD': _marketPrice ?? 0,
           'currency': _userCurrency,
           'isBuyOffer': _isBuyOffer,
           'terms': _termsController.text,
-          'paymentMethods': _selectedPaymentMethods,
+          'paymentMethods': _selectedPaymentMethods.map((id) => ({
+            'typeId': id,
+            'methodId': _isBuyOffer ? null : id,
+          })).toList(),
         });
 
         if (mounted) {
