@@ -25,7 +25,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _termsController = TextEditingController();
   
-  final List<Map<String, dynamic>> _selectedPaymentMethods = [];
+  final List<String> _selectedPaymentMethods = [];
   String _userCurrency = 'NGN';
   double? _marketPrice;
   bool _isPriceLoading = false;
@@ -553,14 +553,23 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
             spacing: 8,
             runSpacing: 8,
             children: _availablePaymentMethods.map((method) {
-              final isSelected = _selectedPaymentMethods.contains(method['id']);
+              // Get the correct icon and name based on whether it's a buy or sell offer
+              final String icon = _isBuyOffer 
+                  ? method['icon'] 
+                  : method['paymentMethodType']['icon'];
+              final String name = _isBuyOffer 
+                  ? method['name']
+                  : method['name'];
+              final String id = method['id'];
+
+              final isSelected = _selectedPaymentMethods.contains(id);
               return GestureDetector(
                 onTap: () {
                   setState(() {
                     if (isSelected) {
-                      _selectedPaymentMethods.remove(method['id']);
+                      _selectedPaymentMethods.remove(id);
                     } else {
-                      _selectedPaymentMethods.add(method['id']);
+                      _selectedPaymentMethods.add(id);
                     }
                   });
                 },
@@ -586,13 +595,13 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _getIconForName(method['icon']),
+                        _getIconForName(icon),
                         size: 20,
                         color: isDark ? Colors.white : Colors.black,
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        method['name'],
+                        name,
                         style: TextStyle(
                           color: isDark ? Colors.white : Colors.black,
                         ),
@@ -727,7 +736,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                 ),
                 _buildPreviewItem(
                   'Payment Methods',
-                  _selectedPaymentMethods.map((m) => m['name'] as String).join(', '),
+                  _selectedPaymentMethods.join(', '),
                   isDark,
                 ),
                 const Divider(height: 32),
