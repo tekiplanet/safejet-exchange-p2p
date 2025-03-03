@@ -90,6 +90,7 @@ class P2PService {
 
   Future<double> getMarketPrice(String tokenSymbol, String currency) async {
     try {
+      print('Making request to: ${_dio.options.baseUrl}/p2p/market-price?symbol=$tokenSymbol&currency=$currency');
       final response = await _dio.get(
         '/p2p/market-price',
         queryParameters: {
@@ -99,10 +100,12 @@ class P2PService {
       );
       
       if (response.statusCode == 200) {
+        print('Market price response: ${response.data}');
         return double.parse(response.data['price'].toString());
       }
       throw Exception('Failed to load market price');
     } catch (e) {
+      print('Error getting market price: $e');
       throw Exception('Failed to load market price: $e');
     }
   }

@@ -120,34 +120,56 @@ export class P2PService {
   }
 
   async getMarketPrice(symbol: string, currency: string) {
-    // Get token's USD price from Token table
-    const token = await this.tokenRepository.findOne({
-      where: { symbol }
-    });
+    try {
+      console.log('Getting market price for:', { symbol, currency });
+      
+      // Get token's USD price from Token table
+      const token = await this.tokenRepository.findOne({
+        where: { 
+          symbol,
+          isActive: true 
+        },
+        select: ['currentPrice', 'symbol', 'name']
+      });
 
-    if (!token) {
-      throw new NotFoundException(`Token ${symbol} not found`);
-    }
+      console.log('Found token:', token);
 
-    if (!currency || currency === 'USD') {
-      return {
-        price: token.currentPrice,
-        lastUpdated: new Date(),  // Just use current time since we don't track last update time
+      if (!token) {
+        throw new NotFoundException(`Token ${symbol} not found`);
+      }
+
+      if (!currency || currency === 'USD') {
+        const result = {
+          price: token.currentPrice,
+          lastUpdated: new Date(),
+        };
+        console.log('Returning USD price:', result);
+        return result;
+      }
+
+      // Get currency rate (stored in lowercase)
+      const currencyRate = await this.exchangeRateRepository.findOne({
+        where: {
+          currency: currency.toLowerCase()
+        }
+      });
+
+      console.log('Found exchange rate:', currencyRate);
+
+      if (!currencyRate) {
+        throw new NotFoundException(`Exchange rate for ${currency} not found`);
+      }
+
+      const result = {
+        price: token.currentPrice * currencyRate.rate,
+        lastUpdated: currencyRate.lastUpdated,
       };
+      console.log('Returning final price:', result);
+      return result;
+    } catch (error) {
+      console.error('Error getting market price:', error);
+      throw error;
     }
-
-    // Get USD to target currency rate
-    const usdToCurrencyRate = await this.exchangeRateRepository.findOne({
-      where: {
-        currency: `USD/${currency}`,
-      },
-      order: { createdAt: 'DESC' },
-    });
-
-    return {
-      price: token.currentPrice * (usdToCurrencyRate?.rate ?? 0),
-      lastUpdated: usdToCurrencyRate?.createdAt ?? new Date(),
-    };
   }
 
   async getPaymentMethods(userId: string, isBuyOffer: boolean) {

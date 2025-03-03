@@ -31,7 +31,10 @@ export class P2PController {
     @Query('symbol') symbol: string,
     @Query('currency') currency: string,
   ) {
-    return this.p2pService.getMarketPrice(symbol, currency);
+    console.log('Getting market price for:', { symbol, currency });
+    const result = await this.p2pService.getMarketPrice(symbol, currency);
+    console.log('Market price result:', result);
+    return result;
   }
 
   @Get('payment-methods')

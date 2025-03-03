@@ -88,6 +88,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       await _loadAssets();
 
       // Load market price
+      print('Loading market price for $_selectedCrypto in $_userCurrency');
       await _updateMarketPrice();
 
       // Load payment methods
@@ -130,9 +131,11 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   Future<void> _updateMarketPrice() async {
     if (_selectedCrypto.isEmpty) return;
 
+    print('Updating market price for $_selectedCrypto in $_userCurrency');
     setState(() => _isPriceLoading = true);
     try {
       final price = await _p2pService.getMarketPrice(_selectedCrypto, _userCurrency);
+      print('Received market price: $price');
       setState(() {
         _marketPrice = price;
         // Pre-fill price with market price
@@ -425,6 +428,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                   return ListTile(
                     onTap: () {
                       setState(() => _selectedCrypto = asset['symbol']);
+                      _updateMarketPrice();
                       Navigator.pop(context);
                     },
                     leading: Image.network(
