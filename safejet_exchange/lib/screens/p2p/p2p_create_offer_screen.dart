@@ -559,7 +559,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                   : method['paymentMethodType']['icon'];
               final String name = _isBuyOffer 
                   ? method['name']
-                  : method['name'];
+                  : '${method['name']} (${method['paymentMethodType']['name']})';
               final String id = method['id'];
 
               final isSelected = _selectedPaymentMethods.contains(id);
