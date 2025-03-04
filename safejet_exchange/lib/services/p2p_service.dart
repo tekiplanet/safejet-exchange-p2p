@@ -152,4 +152,22 @@ class P2PService {
       throw Exception('Failed to load KYC level: $e');
     }
   }
+
+  Future<List<Map<String, dynamic>>> getMyOffers(bool isActive) async {
+    try {
+      final response = await _dio.get(
+        '/p2p/my-offers',
+        queryParameters: {
+          'status': isActive ? 'active' : 'completed',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        return List<Map<String, dynamic>>.from(response.data);
+      }
+      throw Exception('Failed to load offers');
+    } catch (e) {
+      throw Exception('Failed to load offers: $e');
+    }
+  }
 } 

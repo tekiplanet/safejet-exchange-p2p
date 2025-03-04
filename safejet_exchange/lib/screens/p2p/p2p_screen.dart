@@ -7,6 +7,8 @@ import '../../widgets/custom_app_bar.dart';
 import 'p2p_offer_details_screen.dart';
 import 'p2p_order_history_screen.dart';
 import 'p2p_create_offer_screen.dart';
+import 'package:flutter_speed_dial/flutter_speed_dial.dart';
+import 'p2p_my_offers_screen.dart';
 
 class P2PScreen extends StatefulWidget {
   const P2PScreen({super.key});
@@ -208,18 +210,46 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const P2PCreateOfferScreen(),
-            ),
-          );
-        },
+      floatingActionButton: SpeedDial(
+        icon: Icons.add,
+        activeIcon: Icons.close,
         backgroundColor: SafeJetColors.secondaryHighlight,
-        label: const Text('Create Offer'),
-        icon: const Icon(Icons.add),
+        foregroundColor: Colors.black,
+        activeBackgroundColor: SafeJetColors.error,
+        activeForegroundColor: Colors.white,
+        spacing: 3,
+        childPadding: const EdgeInsets.all(5),
+        spaceBetweenChildren: 4,
+        children: [
+          SpeedDialChild(
+            child: const Icon(Icons.create),
+            backgroundColor: SafeJetColors.secondaryHighlight,
+            foregroundColor: Colors.black,
+            label: 'Create Offer',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const P2PCreateOfferScreen(),
+                ),
+              );
+            },
+          ),
+          SpeedDialChild(
+            child: const Icon(Icons.list_alt),
+            backgroundColor: SafeJetColors.secondaryHighlight,
+            foregroundColor: Colors.black,
+            label: 'My Offers',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const P2PMyOffersScreen(), // We'll create this screen
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

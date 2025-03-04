@@ -232,4 +232,16 @@ export class P2PService {
 
     return user.kycLevelDetails;
   }
+
+  async getMyOffers(userId: string, status: 'active' | 'completed') {
+    return this.p2pOfferRepository.find({
+      where: {
+        userId,
+        status: status === 'active' ? Raw(alias => `${alias} IN ('active', 'pending')`) : 'completed',
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 } 
