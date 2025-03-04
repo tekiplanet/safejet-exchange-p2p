@@ -231,26 +231,43 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
     final isBuy = offer['type'] == 'buy';
     final paymentMethods = (offer['paymentMethods'] as List?)?.cast<Map<String, dynamic>>() ?? [];
     
-    // Format amount
+    // Format amount and price
     final amount = double.tryParse(offer['amount'].toString()) ?? 0;
     final formattedAmount = amount.toStringAsFixed(2);
-    
-    // Format price
     final price = double.tryParse(offer['price'].toString()) ?? 0;
     final formattedPrice = NumberFormat("#,##0.00").format(price);
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
-        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  SafeJetColors.primaryAccent.withOpacity(0.15),
+                  SafeJetColors.primaryAccent.withOpacity(0.05),
+                ]
+              : [
+                  Colors.white,
+                  Colors.grey[50]!,
+                ],
+        ),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
               ? SafeJetColors.primaryAccent.withOpacity(0.2)
-              : SafeJetColors.lightCardBorder,
+              : SafeJetColors.lightCardBorder.withOpacity(0.5),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.2)
+                : Colors.grey.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -258,7 +275,7 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
           onTap: () {
             // TODO: Navigate to offer details
           },
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -267,12 +284,25 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '$formattedAmount AAVE',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$formattedAmount AAVE',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$formattedPrice ${offer['currency']}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -280,14 +310,33 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: (isBuy ? SafeJetColors.success : SafeJetColors.warning)
-                            .withOpacity(0.2),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: isBuy
+                              ? [
+                                  SafeJetColors.success.withOpacity(0.8),
+                                  SafeJetColors.success,
+                                ]
+                              : [
+                                  SafeJetColors.warning.withOpacity(0.8),
+                                  SafeJetColors.warning,
+                                ],
+                        ),
                         borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isBuy ? SafeJetColors.success : SafeJetColors.warning)
+                                .withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Text(
                         isBuy ? 'BUY' : 'SELL',
-                        style: TextStyle(
-                          color: isBuy ? SafeJetColors.success : SafeJetColors.warning,
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -295,54 +344,49 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Price',
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withOpacity(0.2)
+                        : Colors.grey[100]!,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Status',
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$formattedPrice ${offer['currency']}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Status',
-                          style: TextStyle(
-                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          ),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(offer['status'] ?? '').withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
+                        child: Text(
                           (offer['status'] ?? '').toString().toUpperCase(),
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: _getStatusColor(offer['status'] ?? ''),
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
                 if (paymentMethods.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 8,
                     children: paymentMethods
                         .map((method) => _buildPaymentTag(
                               isDark,
@@ -362,20 +406,37 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
   Widget _buildPaymentTag(bool isDark, String text) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
+        horizontal: 10,
+        vertical: 6,
       ),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.black.withOpacity(0.05),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  Colors.white.withOpacity(0.08),
+                  Colors.white.withOpacity(0.05),
+                ]
+              : [
+                  Colors.grey[200]!,
+                  Colors.grey[100]!,
+                ],
+        ),
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.1)
+              : Colors.grey[300]!,
+          width: 0.5,
+        ),
       ),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 12,
-          color: isDark ? Colors.grey[400] : Colors.grey[600],
+          fontWeight: FontWeight.w500,
+          color: isDark ? Colors.grey[300] : Colors.grey[700],
         ),
       ),
     );
