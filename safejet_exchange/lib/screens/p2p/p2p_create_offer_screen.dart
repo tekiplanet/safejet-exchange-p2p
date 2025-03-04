@@ -7,6 +7,7 @@ import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../services/p2p_service.dart';
 import '../../models/kyc_level.dart';
+import '../../screens/settings/kyc_levels_screen.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
   const P2PCreateOfferScreen({super.key});
@@ -191,8 +192,8 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                       color: isDark ? Colors.white : Colors.black,
                     ),
                     onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.pop(context);
+                      Navigator.pop(context); // Pop dialog
+                      Navigator.pop(context); // Go back to P2P screen
                     },
                   ),
                   title: Text(
@@ -323,8 +324,8 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                           Expanded(
                             child: TextButton(
                               onPressed: () {
-                                Navigator.pop(context);
-                                Navigator.pop(context);
+                                Navigator.pop(context); // Pop dialog
+                                Navigator.pop(context); // Go back to P2P screen
                               },
                               style: TextButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -350,8 +351,13 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                           Expanded(
                             child: ElevatedButton(
                               onPressed: () {
-                                Navigator.pop(context);
-                                Navigator.of(context).pushReplacementNamed('/kyc');
+                                Navigator.pop(context); // Pop dialog
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const KYCLevelsScreen(),
+                                  ),
+                                );
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: SafeJetColors.secondaryHighlight,
@@ -379,11 +385,6 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
             ),
           ),
         );
-        
-        // After dialog is dismissed, navigate back if still on this screen
-        if (mounted) {
-          Navigator.pop(context);
-        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -393,8 +394,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
           backgroundColor: SafeJetColors.error,
         ),
       );
-      // Navigate back on error as well
-      Navigator.pop(context);
+      Navigator.pop(context); // Keep this navigation for error cases
     }
   }
 
