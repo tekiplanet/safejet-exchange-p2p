@@ -36,4 +36,7 @@ class SafeJetColors {
   // Define gradient colors
   static const Color gradientStart = Color(0xFF6A1B9A); // Example color
   static const Color gradientEnd = Color(0xFF8E24AA);   // Example color
+
+  // New color
+  static const darkBackground = Color(0xFF1A1A1A);
 } 

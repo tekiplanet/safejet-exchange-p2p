@@ -20,6 +20,17 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
   bool _isLoading = false;
   List<Map<String, dynamic>> _buyOffers = [];
   List<Map<String, dynamic>> _sellOffers = [];
+  
+  // Add filter states
+  String _searchQuery = '';
+  String _selectedStatus = 'All';
+  String _selectedDateRange = 'All';
+  RangeValues _priceRange = const RangeValues(0, 1000000); // Adjust max as needed
+  List<String> _selectedPaymentMethods = [];
+  
+  // Add filter options
+  final List<String> _statusOptions = ['All', 'Active', 'Pending', 'Completed', 'Cancelled'];
+  final List<String> _dateRangeOptions = ['All', 'Last 7 days', 'Last 30 days', 'Custom'];
 
   @override
   void initState() {
@@ -49,6 +60,248 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
     }
   }
 
+  List<Map<String, dynamic>> _getFilteredOffers(bool isBuy) {
+    final offers = isBuy ? _buyOffers : _sellOffers;
+    
+    return offers.where((offer) {
+      // Search query filter
+      final searchLower = _searchQuery.toLowerCase();
+      if (_searchQuery.isNotEmpty) {
+        final symbol = offer['symbol']?.toString().toLowerCase() ?? '';
+        final price = offer['price']?.toString().toLowerCase() ?? '';
+        if (!symbol.contains(searchLower) && !price.contains(searchLower)) {
+          return false;
+        }
+      }
+
+      // Status filter
+      if (_selectedStatus != 'All' && 
+          offer['status']?.toString().toLowerCase() != _selectedStatus.toLowerCase()) {
+        return false;
+      }
+
+      // Date range filter
+      if (_selectedDateRange != 'All') {
+        final createdAt = DateTime.parse(offer['createdAt'].toString());
+        final now = DateTime.now();
+        switch (_selectedDateRange) {
+          case 'Last 7 days':
+            if (now.difference(createdAt).inDays > 7) return false;
+            break;
+          case 'Last 30 days':
+            if (now.difference(createdAt).inDays > 30) return false;
+            break;
+        }
+      }
+
+      // Price range filter
+      final price = double.tryParse(offer['price'].toString()) ?? 0;
+      if (price < _priceRange.start || price > _priceRange.end) {
+        return false;
+      }
+
+      // Payment methods filter
+      if (_selectedPaymentMethods.isNotEmpty) {
+        final offerMethods = (offer['paymentMethods'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final hasSelectedMethod = offerMethods.any(
+          (method) => _selectedPaymentMethods.contains(method['name'])
+        );
+        if (!hasSelectedMethod) return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  void _showFilterBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildFilterBottomSheet(),
+    );
+  }
+
+  Widget _buildFilterBottomSheet() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  SafeJetColors.primaryBackground,
+                  SafeJetColors.secondaryBackground,
+                ]
+              : [
+                  Colors.white,
+                  Colors.grey[50]!,
+                ],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.all(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              : SafeJetColors.lightCardBorder.withOpacity(0.5),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.grey.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: isDark 
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.grey[300]!.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Title and Reset
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Filter Offers',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedStatus = 'All';
+                      _selectedDateRange = 'All';
+                      _selectedPaymentMethods = [];
+                    });
+                    Navigator.pop(context);
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: SafeJetColors.secondaryHighlight,
+                  ),
+                  child: const Text('Reset'),
+                ),
+              ],
+            ),
+          ),
+          // Subtle separator instead of divider
+          Container(
+            height: 1,
+            color: isDark 
+                ? Colors.white.withOpacity(0.03)
+                : Colors.grey[200]!.withOpacity(0.5),
+          ),
+          // Status filter
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Status',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: isDark 
+                        ? Colors.grey[300]
+                        : Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 12,
+                  children: _statusOptions.map((status) => 
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedStatus = status;
+                        });
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: _selectedStatus == status
+                              ? LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    SafeJetColors.secondaryHighlight.withOpacity(0.8),
+                                    SafeJetColors.secondaryHighlight,
+                                  ],
+                                )
+                              : null,
+                          color: _selectedStatus != status
+                              ? isDark
+                                  ? Colors.white.withOpacity(0.05)
+                                  : Colors.grey[100]
+                              : null,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: _selectedStatus == status
+                                ? SafeJetColors.secondaryHighlight
+                                : isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[300]!.withOpacity(0.5),
+                          ),
+                          boxShadow: _selectedStatus == status
+                              ? [
+                                  BoxShadow(
+                                    color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Text(
+                          status,
+                          style: TextStyle(
+                            color: _selectedStatus == status
+                                ? Colors.white
+                                : isDark
+                                    ? Colors.grey[300]
+                                    : Colors.grey[700],
+                            fontWeight: _selectedStatus == status
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ).toList(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -69,6 +322,41 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
           length: 2,
           child: Column(
             children: [
+              // Search and filter row
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Search field
+                    Expanded(
+                      child: TextField(
+                        onChanged: (value) => setState(() => _searchQuery = value),
+                        decoration: InputDecoration(
+                          hintText: 'Search by token or price...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Filter button
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isDark 
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.filter_list),
+                        onPressed: _showFilterBottomSheet,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 child: Container(
@@ -155,7 +443,7 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
   }
 
   Widget _buildOffersList(bool isDark, {required bool isBuy}) {
-    final offers = isBuy ? _buyOffers : _sellOffers;
+    final offers = _getFilteredOffers(isBuy);
 
     if (_isLoading) {
       return _buildLoadingShimmer(isDark);
