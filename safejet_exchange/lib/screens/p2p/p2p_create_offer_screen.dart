@@ -6,6 +6,7 @@ import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../services/p2p_service.dart';
+import '../../models/kyc_level.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
   const P2PCreateOfferScreen({super.key});
@@ -63,6 +64,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   void initState() {
     super.initState();
     _loadInitialData();
+    _checkKycLevel();
   }
 
   Future<void> _loadInitialData() async {
@@ -161,6 +163,238 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       );
     } finally {
       setState(() => _isLoadingPaymentMethods = false);
+    }
+  }
+
+  Future<void> _checkKycLevel() async {
+    try {
+      final kycData = await _p2pService.getUserKycLevel();
+      if (!(kycData['features']['canUseP2P'] ?? false)) {
+        if (!mounted) return;
+        
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => WillPopScope(
+            onWillPop: () async => false,
+            child: Dialog.fullscreen(
+              child: Scaffold(
+                backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+                appBar: AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  leading: IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.pop(context);
+                    },
+                  ),
+                  title: Text(
+                    'KYC Verification Required',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                body: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.black.withOpacity(0.3) 
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isDark 
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.verified_user,
+                                      color: isDark 
+                                          ? SafeJetColors.secondaryHighlight 
+                                          : SafeJetColors.success,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Current Level',
+                                          style: TextStyle(
+                                            color: isDark 
+                                                ? Colors.grey[400] 
+                                                : Colors.grey[600],
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          kycData['title'] ?? 'Unverified',
+                                          style: TextStyle(
+                                            color: isDark ? Colors.white : Colors.black,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'P2P Trading Access',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'To access P2P trading features, you need to complete your KYC verification. This helps us maintain a secure trading environment for all users.',
+                              style: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                fontSize: 16,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: SafeJetColors.warning.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: SafeJetColors.warning.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: SafeJetColors.warning,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Verification usually takes less than 24 hours to complete.',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                Navigator.pop(context);
+                              },
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: isDark 
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.grey[300]!,
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                'Go Back',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                Navigator.of(context).pushReplacementNamed('/kyc');
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: SafeJetColors.secondaryHighlight,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text(
+                                'Start Verification',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        
+        // After dialog is dismissed, navigate back if still on this screen
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      // Navigate back on error as well
+      Navigator.pop(context);
     }
   }
 

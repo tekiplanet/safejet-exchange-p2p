@@ -9,6 +9,7 @@ import { ExchangeRate } from '../exchange/exchange-rate.entity';
 import { PaymentMethod } from '../payment-methods/entities/payment-method.entity';
 import { PaymentMethodType } from '../payment-methods/entities/payment-method-type.entity';
 import { CreateOfferDto } from './dto/create-offer.dto';
+import { User } from '../auth/entities/user.entity';
 
 @Injectable()
 export class P2PService {
@@ -27,6 +28,8 @@ export class P2PService {
     private readonly paymentMethodRepository: Repository<PaymentMethod>,
     @InjectRepository(PaymentMethodType)
     private readonly paymentMethodTypeRepository: Repository<PaymentMethodType>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -215,5 +218,18 @@ export class P2PService {
 
     // Save and return the offer
     return this.p2pOfferRepository.save(offer);
+  }
+
+  async getUserKycLevel(userId: string) {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['kycLevelDetails'],
+    });
+
+    if (!user || !user.kycLevelDetails) {
+      throw new NotFoundException('KYC level not found');
+    }
+
+    return user.kycLevelDetails;
   }
 } 

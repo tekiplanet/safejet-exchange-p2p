@@ -62,4 +62,10 @@ export class P2PController {
   ) {
     return this.p2pService.createOffer(userId, createOfferDto);
   }
+
+  @Get('user-kyc-level')
+  @UseGuards(JwtAuthGuard)
+  async getUserKycLevel(@GetUser('id') userId: string) {
+    return this.p2pService.getUserKycLevel(userId);
+  }
 } 

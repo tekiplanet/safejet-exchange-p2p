@@ -140,4 +140,16 @@ class P2PService {
       throw Exception('Failed to create offer: $e');
     }
   }
+
+  Future<Map<String, dynamic>> getUserKycLevel() async {
+    try {
+      final response = await _dio.get('/p2p/user-kyc-level');
+      if (response.statusCode == 200) {
+        return Map<String, dynamic>.from(response.data);
+      }
+      throw Exception('Failed to load KYC level');
+    } catch (e) {
+      throw Exception('Failed to load KYC level: $e');
+    }
+  }
 } 
