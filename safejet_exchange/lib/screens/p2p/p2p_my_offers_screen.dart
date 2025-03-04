@@ -69,43 +69,74 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
           length: 2,
           child: Column(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isDark 
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.grey[300]!,
-                    ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isDark 
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ),
-                child: TabBar(
-                  tabs: [
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.shopping_cart_outlined),
-                          const SizedBox(width: 8),
-                          Text('BUY (${_buyOffers.length})'),
-                        ],
+                  child: TabBar(
+                    tabs: [
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.shopping_cart_outlined,
+                              size: 20,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'BUY (${_buyOffers.length})',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.sell_outlined),
-                          const SizedBox(width: 8),
-                          Text('SELL (${_sellOffers.length})'),
-                        ],
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.sell_outlined,
+                              size: 20,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'SELL (${_sellOffers.length})',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                    ],
+                    indicator: BoxDecoration(
+                      color: SafeJetColors.secondaryHighlight,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  ],
-                  labelColor: SafeJetColors.secondaryHighlight,
-                  unselectedLabelColor: isDark ? Colors.grey : SafeJetColors.lightTextSecondary,
-                  indicatorColor: SafeJetColors.secondaryHighlight,
-                  indicatorWeight: 3,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[700],
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                  ),
                 ),
               ),
               Expanded(
