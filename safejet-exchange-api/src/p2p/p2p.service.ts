@@ -233,15 +233,48 @@ export class P2PService {
     return user.kycLevelDetails;
   }
 
-  async getMyOffers(userId: string, status: 'active' | 'completed') {
-    return this.p2pOfferRepository.find({
+  async getMyOffers(userId: string, isBuy: boolean) {
+    const offers = await this.p2pOfferRepository.find({
       where: {
         userId,
-        status: status === 'active' ? Raw(alias => `${alias} IN ('active', 'pending')`) : 'completed',
+        type: isBuy ? 'buy' : 'sell',
       },
       order: {
         createdAt: 'DESC',
       },
+    });
+
+    // Get all payment method types and methods
+    const paymentMethodTypes = await this.paymentMethodTypeRepository.find();
+    const paymentMethods = await this.paymentMethodRepository.find({
+      where: { userId },
+      relations: ['paymentMethodType'],
+    });
+
+    // Map payment methods to their names
+    return offers.map(offer => {
+      const paymentMethodsWithNames = offer.paymentMethods.map(method => {
+        if (offer.type === 'buy') {
+          // For buy offers, just get the payment type name
+          return {
+            ...method,
+            name: paymentMethodTypes.find(type => type.id === method.typeId)?.name || 'Unknown'
+          };
+        } else {
+          // For sell offers, get the specific payment method details
+          const paymentMethod = paymentMethods.find(pm => pm.id === method.methodId);
+          return {
+            ...method,
+            name: paymentMethod?.paymentMethodType?.name || 'Unknown',
+            details: paymentMethod?.details || {}
+          };
+        }
+      });
+
+      return {
+        ...offer,
+        paymentMethods: paymentMethodsWithNames
+      };
     });
   }
 } 

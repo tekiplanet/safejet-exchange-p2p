@@ -73,8 +73,8 @@ export class P2PController {
   @UseGuards(JwtAuthGuard)
   async getMyOffers(
     @GetUser('id') userId: string,
-    @Query('status') status: 'active' | 'completed',
+    @Query('type') type: 'buy' | 'sell',
   ) {
-    return this.p2pService.getMyOffers(userId, status);
+    return this.p2pService.getMyOffers(userId, type === 'buy');
   }
 } 

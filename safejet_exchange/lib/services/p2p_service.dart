@@ -153,12 +153,12 @@ class P2PService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getMyOffers(bool isActive) async {
+  Future<List<Map<String, dynamic>>> getMyOffers(bool isBuy) async {
     try {
       final response = await _dio.get(
         '/p2p/my-offers',
         queryParameters: {
-          'status': isActive ? 'active' : 'completed',
+          'type': isBuy ? 'buy' : 'sell',
         },
       );
       
