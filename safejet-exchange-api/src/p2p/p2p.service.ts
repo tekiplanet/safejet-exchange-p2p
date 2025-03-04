@@ -239,6 +239,7 @@ export class P2PService {
         userId,
         type: isBuy ? 'buy' : 'sell',
       },
+      relations: ['token'],
       order: {
         createdAt: 'DESC',
       },
@@ -255,13 +256,11 @@ export class P2PService {
     return offers.map(offer => {
       const paymentMethodsWithNames = offer.paymentMethods.map(method => {
         if (offer.type === 'buy') {
-          // For buy offers, just get the payment type name
           return {
             ...method,
             name: paymentMethodTypes.find(type => type.id === method.typeId)?.name || 'Unknown'
           };
         } else {
-          // For sell offers, get the specific payment method details
           const paymentMethod = paymentMethods.find(pm => pm.id === method.methodId);
           return {
             ...method,
@@ -273,6 +272,7 @@ export class P2PService {
 
       return {
         ...offer,
+        symbol: offer.token?.symbol,
         paymentMethods: paymentMethodsWithNames
       };
     });

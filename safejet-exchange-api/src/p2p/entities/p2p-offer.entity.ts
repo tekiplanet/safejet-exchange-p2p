@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Token } from '../../wallet/entities/token.entity';
 
 @Entity('p2p_offers')
 export class P2POffer {
@@ -13,6 +14,10 @@ export class P2POffer {
 
   @Column()
   tokenId: string;
+
+  @ManyToOne(() => Token)
+  @JoinColumn({ name: 'tokenId' })
+  token: Token;
 
   @Column('decimal', { precision: 18, scale: 8 })
   amount: number;

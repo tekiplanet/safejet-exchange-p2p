@@ -65,11 +65,17 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
     
     return offers.where((offer) {
       // Search query filter
-      final searchLower = _searchQuery.toLowerCase();
       if (_searchQuery.isNotEmpty) {
+        final searchLower = _searchQuery.toLowerCase();
         final symbol = offer['symbol']?.toString().toLowerCase() ?? '';
+        final amount = offer['amount']?.toString().toLowerCase() ?? '';
         final price = offer['price']?.toString().toLowerCase() ?? '';
-        if (!symbol.contains(searchLower) && !price.contains(searchLower)) {
+        final currency = offer['currency']?.toString().toLowerCase() ?? '';
+        
+        if (!(symbol.contains(searchLower) ||
+            amount.contains(searchLower) ||
+            price.contains(searchLower) ||
+            currency.contains(searchLower))) {
           return false;
         }
       }
