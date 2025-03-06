@@ -416,7 +416,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   Widget _buildOffersList(bool isDark, {required bool isBuy}) {
     return RefreshIndicator(
       onRefresh: () => _loadOffers(refresh: true),
-      child: _isInitialLoading  // Check initial loading first
+      child: _isInitialLoading
           ? ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: 5,
@@ -432,7 +432,10 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                     if (index == _offers.length) {
                       return _buildOfferCardShimmer(isDark);
                     }
-                    return _buildOfferCard(isDark, isBuy, _offers[index]);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _buildOfferCard(isDark, isBuy, _offers[index]),
+                    );
                   },
                 ),
     );
