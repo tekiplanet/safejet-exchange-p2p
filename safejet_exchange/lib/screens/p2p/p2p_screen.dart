@@ -213,15 +213,47 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       body: Column(
         children: [
           // Buy/Sell Tabs
-          TabBar(
-            controller: _tabController,
-            tabs: const [
-              Tab(text: 'BUY'),
-              Tab(text: 'SELL'),
-            ],
-            labelColor: SafeJetColors.secondaryHighlight,
-            unselectedLabelColor: isDark ? Colors.grey : SafeJetColors.lightTextSecondary,
-            indicatorColor: SafeJetColors.secondaryHighlight,
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: BoxDecoration(
+                color: SafeJetColors.secondaryHighlight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorPadding: EdgeInsets.zero,
+              dividerColor: Colors.transparent,
+              labelColor: Colors.black,
+              unselectedLabelColor: isDark ? Colors.white : Colors.black,
+              labelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+              ),
+              tabs: const [
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('BUY'),
+                  ),
+                ),
+                Tab(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Text('SELL'),
+                  ),
+                ),
+              ],
+            ),
           ),
           
           // Quick Filters
