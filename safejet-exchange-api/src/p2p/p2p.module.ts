@@ -12,6 +12,7 @@ import { ExchangeRate } from '../exchange/exchange-rate.entity';
 import { WalletModule } from '../wallet/wallet.module';
 import { P2PSettingsModule } from '../p2p-settings/p2p-settings.module';
 import { User } from '../auth/entities/user.entity';
+import { Currency } from '../currencies/entities/currency.entity';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { User } from '../auth/entities/user.entity';
       Token,
       ExchangeRate,
       User,
+      Currency,
     ]),
     WalletModule,
     P2PSettingsModule,

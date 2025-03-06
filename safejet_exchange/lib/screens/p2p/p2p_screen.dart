@@ -9,6 +9,8 @@ import 'p2p_order_history_screen.dart';
 import 'p2p_create_offer_screen.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'p2p_my_offers_screen.dart';
+import 'package:get_it/get_it.dart';
+import '../../services/p2p_service.dart';
 
 class P2PScreen extends StatefulWidget {
   const P2PScreen({super.key});
@@ -19,24 +21,153 @@ class P2PScreen extends StatefulWidget {
 
 class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedCurrency = 'NGN';
-  String _selectedCrypto = 'USDT';
-  String _selectedPayment = 'All';
+  final _p2pService = GetIt.I<P2PService>();
   
-  final List<String> _fiatCurrencies = ['NGN', 'USD', 'GBP', 'EUR'];
-  final List<String> _cryptoCurrencies = ['USDT', 'BTC', 'ETH', 'BUSD'];
-  final List<String> _paymentMethods = ['All', 'Bank Transfer', 'PayPal', 'Cash'];
+  // State variables
+  String? _selectedCurrency;
+  String? _selectedTokenId;
+  String? _selectedPaymentMethodId;
+  bool _isLoadingOffers = false;
+  bool _isLoadingFilters = false;
+  
+  List<Map<String, dynamic>> _offers = [];
+  List<Map<String, dynamic>> _currencies = [];
+  List<Map<String, dynamic>> _tokens = [];
+  List<Map<String, dynamic>> _paymentMethods = [];
+  
+  // Pagination
+  int _currentPage = 1;
+  int _totalPages = 1;
+  bool _hasMoreData = true;
+  bool _isLoadingMore = false;
+  
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChange);
+    _scrollController.addListener(_handleScroll);
+    _loadInitialData();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() => _isLoadingFilters = true);
+    try {
+      // Load filters in parallel
+      final futures = await Future.wait([
+        _p2pService.getTraderSettings(),
+        _p2pService.getActiveCurrencies(),
+        _p2pService.getAvailableAssets(_tabController.index == 0),
+        _p2pService.getActivePaymentMethodTypes(),
+      ]);
+
+      if (!mounted) return;
+
+      final settings = futures[0] as Map<String, dynamic>;
+      final currencies = futures[1] as List<Map<String, dynamic>>;
+      final tokens = futures[2] as List<Map<String, dynamic>>;
+      final paymentMethods = futures[3] as List<Map<String, dynamic>>;
+
+      setState(() {
+        _selectedCurrency = settings['currency'] ?? 
+            (currencies.isNotEmpty ? currencies[0]['symbol'] : null);
+        _currencies = currencies;
+        _tokens = tokens;
+        _paymentMethods = paymentMethods;
+        if (tokens.isNotEmpty) {
+          _selectedTokenId = tokens[0]['id'];
+        }
+      });
+
+      if (_selectedCurrency != null) {
+        await _loadOffers();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingFilters = false);
+      }
+    }
+  }
+
+  Future<void> _loadOffers({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        _currentPage = 1;
+        _hasMoreData = true;
+      });
+    }
+
+    if (!_hasMoreData) return;
+
+    setState(() => _isLoadingOffers = true);
+    try {
+      final result = await _p2pService.getPublicOffers(
+        isBuy: _tabController.index == 0,
+        currency: _selectedCurrency,
+        tokenId: _selectedTokenId,
+        paymentMethodId: _selectedPaymentMethodId,
+        page: _currentPage,
+      );
+
+      if (!mounted) return;
+
+      final newOffers = (result['offers'] as List).cast<Map<String, dynamic>>();
+      final pagination = result['pagination'] as Map<String, dynamic>;
+
+      setState(() {
+        if (refresh) {
+          _offers = newOffers;
+        } else {
+          _offers.addAll(newOffers);
+        }
+        _totalPages = pagination['pages'] as int;
+        _hasMoreData = _currentPage < _totalPages;
+        _currentPage++;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingOffers = false);
+      }
+    }
+  }
+
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) {
+      _loadOffers(refresh: true);
+    }
+  }
+
+  void _handleScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoadingMore &&
+        _hasMoreData) {
+      _loadOffers();
+    }
   }
 
   @override
@@ -90,9 +221,9 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                   height: 40,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    itemCount: _fiatCurrencies.length,
+                    itemCount: _currencies.length,
                     itemBuilder: (context, index) {
-                      final currency = _fiatCurrencies[index];
+                      final currency = _currencies[index]['code'] as String;
                       final isSelected = currency == _selectedCurrency;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -143,14 +274,14 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                     Expanded(
                       flex: 2,
                       child: _buildFilterButton(
-                        _selectedCrypto,
+                        _selectedTokenId,
                         isDark,
                         onTap: () => _showFilterOptions(
                           context,
                           'Select Crypto',
-                          _cryptoCurrencies,
-                          _selectedCrypto,
-                          (value) => setState(() => _selectedCrypto = value),
+                          _tokens.map((e) => e['id'] as String).toList(),
+                          _selectedTokenId,
+                          (value) => setState(() => _selectedTokenId = value),
                         ),
                       ),
                     ),
@@ -159,14 +290,14 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                     Expanded(
                       flex: 3,
                       child: _buildFilterButton(
-                        _selectedPayment,
+                        _selectedPaymentMethodId,
                         isDark,
                         onTap: () => _showFilterOptions(
                           context,
                           'Payment Method',
-                          _paymentMethods,
-                          _selectedPayment,
-                          (value) => setState(() => _selectedPayment = value),
+                          _paymentMethods.map((e) => e['id'] as String).toList(),
+                          _selectedPaymentMethodId,
+                          (value) => setState(() => _selectedPaymentMethodId = value),
                         ),
                       ),
                     ),
@@ -255,19 +386,53 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildOffersList(bool isDark, {required bool isBuy}) {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: 10, // Dummy count
-      itemBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _buildOfferCard(isDark, isBuy),
-        );
-      },
+    if (_isLoadingOffers && _offers.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _loadOffers(refresh: true),
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16),
+        itemCount: _offers.length + (_hasMoreData ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _offers.length) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          final offer = _offers[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _buildOfferCard(isDark, isBuy, offer),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildOfferCard(bool isDark, bool isBuy) {
+  Widget _buildOfferCard(bool isDark, bool isBuy, Map<String, dynamic> offer) {
+    // Add logging
+    print('Building offer card:');
+    print('Offer type: ${offer['type']}');
+    print('Payment methods: ${offer['paymentMethods']}');
+    
+    final token = _tokens.firstWhere(
+      (t) => t['id'] == offer['tokenId'],
+      orElse: () => {'symbol': 'Unknown'},
+    );
+
+    final paymentMethodsData = offer['paymentMethods'] as List;
+    final paymentMethods = paymentMethodsData.map((pm) {
+      // The name is already provided by the backend
+      return (pm as Map<String, dynamic>)['name'] as String;
+    }).toList();
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -290,7 +455,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
               MaterialPageRoute(
                 builder: (context) => P2POfferDetailsScreen(
                   isBuy: isBuy,
-                  // We'll add more parameters later
+                  offerId: offer['id'],
                 ),
               ),
             );
@@ -308,29 +473,27 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                       children: [
                         CircleAvatar(
                           radius: 16,
-                          backgroundColor: SafeJetColors.secondaryHighlight,
-                          child: const Text('JS'),
+                          backgroundColor: isDark
+                              ? Colors.white.withOpacity(0.1)
+                              : Colors.grey[200],
+                          child: Text(
+                            (offer['user']['name'] as String?)?.isNotEmpty == true 
+                                ? (offer['user']['name'] as String).substring(0, 1).toUpperCase()
+                                : 'U',
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'JohnSeller',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '245 orders • 98.5%',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark
-                                    ? Colors.grey[400]
-                                    : SafeJetColors.lightTextSecondary,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          offer['user']['name'] ?? 'Unknown User',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
                         ),
                       ],
                     ),
@@ -340,19 +503,17 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: isBuy
-                            ? SafeJetColors.success.withOpacity(0.2)
-                            : SafeJetColors.warning.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
+                        color: isDark
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        isBuy ? 'BUYING' : 'SELLING',
+                        token['symbol'] ?? 'Unknown',
                         style: TextStyle(
-                          color: isBuy
-                              ? SafeJetColors.success
-                              : SafeJetColors.warning,
                           fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
+                          color: isDark ? Colors.white : Colors.black,
                         ),
                       ),
                     ),
@@ -360,60 +521,64 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 ),
                 const SizedBox(height: 16),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Price',
-                          style: TextStyle(
-                            color: isDark
-                                ? Colors.grey[400]
-                                : SafeJetColors.lightTextSecondary,
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Price',
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          '₦750.00',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                          const SizedBox(height: 4),
+                          Text(
+                            _formatPrice(offer['price'], offer['currency']),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Available',
-                          style: TextStyle(
-                            color: isDark
-                                ? Colors.grey[400]
-                                : SafeJetColors.lightTextSecondary,
+                    const SizedBox(width: 16),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Available',
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          '1,234.56 USDT',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_formatAmount(offer['amount'])} ${token['symbol']}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    _buildPaymentTag('Bank Transfer', isDark),
-                    _buildPaymentTag('PayPal', isDark),
-                  ],
-                ),
+                if (paymentMethods.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: paymentMethods.map((method) => 
+                      _buildPaymentTag(method, isDark)
+                    ).toList(),
+                  ),
+                ],
               ],
             ),
           ),
@@ -422,7 +587,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildFilterButton(String text, bool isDark, {required VoidCallback onTap}) {
+  Widget _buildFilterButton(String? text, bool isDark, {required VoidCallback onTap}) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -438,11 +603,11 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(
                 child: Text(
-                  text,
+                  text ?? 'Select',
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13,
@@ -494,7 +659,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     BuildContext context,
     String title,
     List<String> options,
-    String selectedValue,
+    String? selectedValue,
     Function(String) onSelect,
   ) {
     showModalBottomSheet(
@@ -530,5 +695,24 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         ),
       ),
     );
+  }
+
+  String _formatPrice(dynamic price, String currency) {
+    if (price == null) return '$currency 0.00';
+    
+    // Convert to double and handle scientific notation
+    final amount = double.tryParse(price.toString()) ?? 0.0;
+    // Format with thousand separators and 2 decimal places
+    final formatted = amount.toStringAsFixed(2)
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+    
+    return '$currency $formatted';
+  }
+
+  String _formatAmount(dynamic amount) {
+    if (amount == null) return '0.00';
+    final value = double.tryParse(amount.toString()) ?? 0.0;
+    return value.toStringAsFixed(2)
+        .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
   }
 } 

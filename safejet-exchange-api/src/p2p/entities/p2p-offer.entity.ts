@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Token } from '../../wallet/entities/token.entity';
+import { User } from '../../auth/entities/user.entity';
 
 @Entity('p2p_offers')
 export class P2POffer {
@@ -8,6 +9,10 @@ export class P2POffer {
 
   @Column()
   userId: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @Column()
   type: 'buy' | 'sell';
@@ -32,10 +37,7 @@ export class P2POffer {
   priceUSD: number;
 
   @Column('jsonb')
-  paymentMethods: {
-    typeId: string;
-    methodId?: string;
-  }[];
+  paymentMethods: { typeId: string; methodId?: string }[];
 
   @Column('text')
   terms: string;

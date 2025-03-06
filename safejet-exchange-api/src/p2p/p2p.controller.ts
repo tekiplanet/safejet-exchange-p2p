@@ -77,4 +77,35 @@ export class P2PController {
   ) {
     return this.p2pService.getMyOffers(userId, type === 'buy');
   }
+
+  @Get('public-offers')
+  @UseGuards(JwtAuthGuard)
+  async getPublicOffers(
+    @GetUser('id') userId: string,
+    @Query('type') type: 'buy' | 'sell',
+    @Query('currency') currency?: string,
+    @Query('tokenId') tokenId?: string,
+    @Query('paymentMethodId') paymentMethodId?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.p2pService.getPublicOffers({
+      type,
+      currency,
+      tokenId,
+      paymentMethodId,
+      page: page ? parseInt(page.toString()) : undefined,
+      limit: limit ? parseInt(limit.toString()) : undefined,
+    }, userId);
+  }
+
+  @Get('currencies')
+  async getActiveCurrencies() {
+    return this.p2pService.getActiveCurrencies();
+  }
+
+  @Get('payment-method-types')
+  async getActivePaymentMethodTypes() {
+    return this.p2pService.getActivePaymentMethodTypes();
+  }
 } 

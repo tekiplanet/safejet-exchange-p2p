@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Raw } from 'typeorm';
+import { Repository, Raw, In } from 'typeorm';
 import { P2POffer } from './entities/p2p-offer.entity';
 import { P2PTraderSettings } from '../p2p-settings/entities/p2p-trader-settings.entity';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
@@ -10,6 +10,7 @@ import { PaymentMethod } from '../payment-methods/entities/payment-method.entity
 import { PaymentMethodType } from '../payment-methods/entities/payment-method-type.entity';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { User } from '../auth/entities/user.entity';
+import { Currency } from '../currencies/entities/currency.entity';
 
 @Injectable()
 export class P2PService {
@@ -30,6 +31,8 @@ export class P2PService {
     private readonly paymentMethodTypeRepository: Repository<PaymentMethodType>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Currency)
+    private readonly currencyRepository: Repository<Currency>,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -276,5 +279,136 @@ export class P2PService {
         paymentMethods: paymentMethodsWithNames
       };
     });
+  }
+
+  async getPublicOffers(
+    filters: {
+      type: 'buy' | 'sell';
+      currency?: string;
+      tokenId?: string;
+      paymentMethodId?: string;
+      page?: number;
+      limit?: number;
+    },
+    currentUserId: string
+  ) {
+    try {
+      const { type, currency, tokenId, paymentMethodId, page = 1, limit = 10 } = filters;
+      
+      const queryBuilder = this.p2pOfferRepository
+        .createQueryBuilder('offer')
+        .leftJoinAndSelect('offer.token', 'token')
+        .leftJoinAndSelect('offer.user', 'user')
+        .where('offer.status = :status', { status: 'active' })
+        .andWhere('offer.type = :type', { type: type === 'buy' ? 'sell' : 'buy' })
+        .andWhere('offer.userId != :currentUserId', { currentUserId });
+
+      // Apply filters
+      if (currency) {
+        queryBuilder.andWhere('offer.currency = :currency', { currency });
+      }
+      if (tokenId) {
+        queryBuilder.andWhere('offer.tokenId = :tokenId', { tokenId });
+      }
+      if (paymentMethodId) {
+        queryBuilder.andWhere(`offer.paymentMethods @> :paymentMethod`, {
+          paymentMethod: JSON.stringify([{ typeId: paymentMethodId }]),
+        });
+      }
+
+      // Add pagination
+      const skip = (page - 1) * limit;
+      queryBuilder
+        .orderBy('offer.createdAt', 'DESC')
+        .skip(skip)
+        .take(limit);
+
+      // Get total count for pagination
+      const [offers, total] = await queryBuilder.getManyAndCount();
+
+      // Get all payment method types
+      const paymentMethodTypes = await this.paymentMethodTypeRepository.find();
+      
+      // For sell offers (shown in buy tab), get the sellers' payment methods
+      const sellerIds = offers.filter(o => o.type === 'sell').map(o => o.userId);
+      const sellersPaymentMethods = await this.paymentMethodRepository.find({
+        where: { userId: In(sellerIds) },
+        relations: ['paymentMethodType'],
+      });
+
+      console.log('Fetched offers:', offers);
+      console.log('Payment method types:', paymentMethodTypes);
+      console.log('Sellers payment methods:', sellersPaymentMethods);
+
+      return {
+        offers: offers.map(offer => {
+          console.log('Processing offer:', offer.id);
+          console.log('Offer payment methods:', offer.paymentMethods);
+          
+          const mappedOffer = {
+            ...offer,
+            paymentMethods: offer.paymentMethods.map(method => {
+              console.log('Processing payment method:', method);
+              if (offer.type === 'buy') {
+                const foundType = paymentMethodTypes.find(type => type.id === method.typeId);
+                console.log('Found payment method type:', foundType);
+                return {
+                  ...method,
+                  name: foundType?.name || 'Unknown'
+                };
+              } else {
+                const paymentMethod = sellersPaymentMethods.find(
+                  pm => pm.id === method.methodId && pm.userId === offer.userId
+                );
+                console.log('Found seller payment method:', paymentMethod);
+                return {
+                  ...method,
+                  name: paymentMethod?.paymentMethodType?.name || 'Unknown'
+                };
+              }
+            }),
+            user: {
+              id: offer.user.id,
+              name: offer.user.fullName,
+            },
+          };
+          console.log('Mapped offer:', mappedOffer);
+          return mappedOffer;
+        }),
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error('Error in getPublicOffers:', error);
+      throw error;
+    }
+  }
+
+  async getActiveCurrencies() {
+    try {
+      return this.currencyRepository.find({
+        where: { isActive: true },
+        order: { symbol: 'ASC' },
+      });
+    } catch (error) {
+      console.error('Error in getActiveCurrencies:', error);
+      throw error;
+    }
+  }
+
+  async getActivePaymentMethodTypes() {
+    try {
+      return this.paymentMethodTypeRepository.find({
+        where: { isActive: true },
+        order: { name: 'ASC' },
+      });
+    } catch (error) {
+      console.error('Error in getActivePaymentMethodTypes:', error);
+      throw error;
+    }
   }
 } 

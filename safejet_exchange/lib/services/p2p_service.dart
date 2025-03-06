@@ -170,4 +170,65 @@ class P2PService {
       throw Exception('Failed to load offers: $e');
     }
   }
+
+  Future<Map<String, dynamic>> getPublicOffers({
+    required bool isBuy,
+    String? currency,
+    String? tokenId,
+    String? paymentMethodId,
+    int page = 1,
+    int limit = 10,
+  }) async {
+    try {
+      final queryParams = {
+        'type': isBuy ? 'buy' : 'sell',
+        'page': page.toString(),
+        'limit': limit.toString(),
+        if (currency != null) 'currency': currency,
+        if (tokenId != null) 'tokenId': tokenId,
+        if (paymentMethodId != null) 'paymentMethodId': paymentMethodId,
+      };
+
+      final response = await _dio.get(
+        '/p2p/public-offers',
+        queryParameters: queryParams,
+      );
+
+      return response.data;
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getActiveCurrencies() async {
+    try {
+      final response = await _dio.get('/p2p/currencies');
+      return List<Map<String, dynamic>>.from(response.data);
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getActivePaymentMethodTypes() async {
+    try {
+      final response = await _dio.get('/p2p/payment-method-types');
+      return List<Map<String, dynamic>>.from(response.data);
+    } catch (e) {
+      throw _handleError(e);
+    }
+  }
+
+  Exception _handleError(dynamic e) {
+    if (e is DioException) {
+      final response = e.response;
+      if (response != null) {
+        final data = response.data;
+        if (data is Map && data.containsKey('message')) {
+          return Exception(data['message']);
+        }
+      }
+      return Exception(e.message ?? 'An error occurred');
+    }
+    return Exception(e.toString());
+  }
 } 

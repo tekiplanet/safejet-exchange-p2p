@@ -10,10 +10,12 @@ import 'p2p_order_confirmation_screen.dart';
 
 class P2POfferDetailsScreen extends StatefulWidget {
   final bool isBuy;
+  final String offerId;
 
   const P2POfferDetailsScreen({
     super.key,
     required this.isBuy,
+    required this.offerId,
   });
 
   @override
