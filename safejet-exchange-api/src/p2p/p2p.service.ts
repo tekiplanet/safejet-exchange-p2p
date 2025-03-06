@@ -287,13 +287,21 @@ export class P2PService {
       currency?: string;
       tokenId?: string;
       paymentMethodId?: string;
+      minPrice?: number;
+      maxPrice?: number;
+      minAmount?: number;
+      maxAmount?: number;
       page?: number;
       limit?: number;
     },
     currentUserId: string
   ) {
     try {
-      const { type, currency, tokenId, paymentMethodId, page = 1, limit = 10 } = filters;
+      const { 
+        type, currency, tokenId, paymentMethodId, 
+        minPrice, maxPrice, minAmount, maxAmount,
+        page = 1, limit = 10 
+      } = filters;
       
       const queryBuilder = this.p2pOfferRepository
         .createQueryBuilder('offer')
@@ -314,6 +322,22 @@ export class P2PService {
         queryBuilder.andWhere(`offer.paymentMethods @> :paymentMethod`, {
           paymentMethod: JSON.stringify([{ typeId: paymentMethodId }]),
         });
+      }
+
+      // Add price range filter
+      if (minPrice !== undefined) {
+        queryBuilder.andWhere('offer.price >= :minPrice', { minPrice });
+      }
+      if (maxPrice !== undefined) {
+        queryBuilder.andWhere('offer.price <= :maxPrice', { maxPrice });
+      }
+
+      // Add amount range filter
+      if (minAmount !== undefined) {
+        queryBuilder.andWhere('offer.amount >= :minAmount', { minAmount });
+      }
+      if (maxAmount !== undefined) {
+        queryBuilder.andWhere('offer.amount <= :maxAmount', { maxAmount });
       }
 
       // Add pagination

@@ -45,6 +45,12 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   
   final ScrollController _scrollController = ScrollController();
 
+  // Add these state variables to _P2PScreenState
+  double? _minPrice;
+  double? _maxPrice;
+  double? _minAmount;
+  double? _maxAmount;
+
   @override
   void initState() {
     super.initState();
@@ -119,8 +125,8 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       setState(() {
         _currentPage = 1;
         _hasMoreData = true;
-        _offers = [];  // Clear existing offers immediately
-        _isLoadingOffers = true;  // Show loading state
+        _offers = [];
+        _isLoadingOffers = true;
       });
     }
 
@@ -136,6 +142,10 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         currency: _selectedCurrency,
         tokenId: _selectedTokenId,
         paymentMethodId: _selectedPaymentMethodId,
+        minPrice: _minPrice,
+        maxPrice: _maxPrice,
+        minAmount: _minAmount,
+        maxAmount: _maxAmount,
         page: _currentPage,
       );
 
@@ -169,9 +179,38 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     }
   }
 
-  void _handleTabChange() {
+  void _handleTabChange() async {
     if (_tabController.indexIsChanging) {
-      _loadOffers(refresh: true);
+      // Clear current tokens and show loading
+      setState(() {
+        _tokens = [];
+        _selectedTokenId = null;
+      });
+      
+      try {
+        // Load new tokens for the selected tab
+        final newTokens = await _p2pService.getAvailableAssets(_tabController.index == 0);
+        
+        if (!mounted) return;
+        
+        setState(() {
+          _tokens = newTokens;
+          if (newTokens.isNotEmpty) {
+            _selectedTokenId = newTokens[0]['id'];
+          }
+        });
+        
+        // Load offers with new filters
+        _loadOffers(refresh: true);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: SafeJetColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -221,7 +260,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
               borderRadius: BorderRadius.circular(12),
             ),
             child: TabBar(
-              controller: _tabController,
+            controller: _tabController,
               indicator: BoxDecoration(
                 color: SafeJetColors.secondaryHighlight,
                 borderRadius: BorderRadius.circular(8),
@@ -239,7 +278,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 fontSize: 14,
                 fontWeight: FontWeight.normal,
               ),
-              tabs: const [
+            tabs: const [
                 Tab(
                   child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
@@ -320,7 +359,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                     Expanded(
                       flex: 2,
                       child: _buildFilterButton(
-                        _tokens.firstWhere(
+                        _tokens.isEmpty ? 'Select' : _tokens.firstWhere(
                           (t) => t['id'] == _selectedTokenId,
                           orElse: () => {'symbol': 'Select'},
                         )['symbol'],
@@ -367,20 +406,23 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                       height: 40,
                       width: 40,
                       decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.black.withOpacity(0.05),
+                        color: (_minPrice != null || _maxPrice != null || _minAmount != null || _maxAmount != null)
+                            ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
+                            : isDark
+                                ? Colors.white.withOpacity(0.05)
+                                : Colors.black.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: IconButton(
                         icon: Icon(
                           Icons.tune_rounded,
-                          color: isDark ? Colors.white : SafeJetColors.lightText,
-                          size: 20,
+                          color: (_minPrice != null || _maxPrice != null || _minAmount != null || _maxAmount != null)
+                              ? SafeJetColors.secondaryHighlight
+                              : isDark
+                                  ? Colors.white
+                                  : SafeJetColors.lightText,
                         ),
-                        onPressed: () {
-                          // TODO: Show advanced filters
-                        },
+                        onPressed: () => _showFilterSheet(context, isDark),
                       ),
                     ),
                   ],
@@ -450,7 +492,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       onRefresh: () => _loadOffers(refresh: true),
       child: _isInitialLoading
           ? ListView.builder(
-              padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
               itemCount: 5,
               itemBuilder: (context, index) => _buildOfferCardShimmer(isDark),
             )
@@ -460,11 +502,11 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
                   itemCount: _offers.length + (_hasMoreData ? 1 : 0),
-                  itemBuilder: (context, index) {
+      itemBuilder: (context, index) {
                     if (index == _offers.length) {
                       return _buildOfferCardShimmer(isDark);
                     }
-                    return Padding(
+        return Padding(
                       padding: const EdgeInsets.only(bottom: 16),
                       child: _buildOfferCard(isDark, isBuy, _offers[index]),
                     );
@@ -495,7 +537,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 builder: (context) => P2POfferDetailsScreen(
                 offerId: offer['id'],
                   isBuy: isBuy,
-              ),
+                ),
               ),
             );
           },
@@ -560,9 +602,9 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                               ),
                             ),
                           ],
-                              ),
-                            ],
-                          ),
+                        ),
+                      ],
+                    ),
                         ),
                       ],
                     ),
@@ -581,7 +623,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                           const SizedBox(width: 4),
                           Text(
                             '98%',  // Completion rate
-                            style: TextStyle(
+                        style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: isDark ? Colors.white : Colors.black,
@@ -670,12 +712,12 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                                   fontWeight: FontWeight.w500,
                                   color: isDark ? Colors.white : Colors.black,
                                 ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
+                  ],
+                ),
                     ),
                   ],
                 ),
@@ -810,7 +852,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
           return Container(
             height: MediaQuery.of(context).size.height * 0.7,
             decoration: BoxDecoration(
-              color: isDark ? SafeJetColors.primaryBackground : Colors.white,
+              color: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF5F5F5),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
         child: Column(
@@ -1260,5 +1302,265 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         ),
       ),
     );
+  }
+
+  // Add this method to show the filter bottom sheet
+  void _showFilterSheet(BuildContext context, bool isDark) {
+    final TextEditingController minPriceController = TextEditingController();
+    final TextEditingController maxPriceController = TextEditingController();
+    final TextEditingController minAmountController = TextEditingController();
+    final TextEditingController maxAmountController = TextEditingController();
+
+    // Set initial values if they exist
+    if (_minPrice != null) minPriceController.text = _minPrice.toString();
+    if (_maxPrice != null) maxPriceController.text = _maxPrice.toString();
+    if (_minAmount != null) minAmountController.text = _minAmount.toString();
+    if (_maxAmount != null) maxAmountController.text = _maxAmount.toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF5F5F5),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: StatefulBuilder(
+          builder: (context, setState) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 16, 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Filter',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        size: 24,
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Filter content
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Price Range
+                    Text(
+                      'Price Range (${_selectedCurrency ?? ""})',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: minPriceController,
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Min',
+                              hintStyle: TextStyle(
+                                color: isDark ? Colors.white38 : Colors.black38,
+                              ),
+                              filled: true,
+                              fillColor: isDark 
+                                  ? Colors.white.withOpacity(0.05) 
+                                  : Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: maxPriceController,
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Max',
+                              hintStyle: TextStyle(
+                                color: isDark ? Colors.white38 : Colors.black38,
+                              ),
+                              filled: true,
+                              fillColor: isDark 
+                                  ? Colors.white.withOpacity(0.05) 
+                                  : Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Amount Range
+                    Text(
+                      'Amount Range (${_tokens.firstWhere((t) => t['id'] == _selectedTokenId, orElse: () => {'symbol': ''})['symbol']})',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: minAmountController,
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Min',
+                              hintStyle: TextStyle(
+                                color: isDark ? Colors.white38 : Colors.black38,
+                              ),
+                              filled: true,
+                              fillColor: isDark 
+                                  ? Colors.white.withOpacity(0.05) 
+                                  : Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: maxAmountController,
+                            keyboardType: TextInputType.number,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Max',
+                              hintStyle: TextStyle(
+                                color: isDark ? Colors.white38 : Colors.black38,
+                              ),
+                              filled: true,
+                              fillColor: isDark 
+                                  ? Colors.white.withOpacity(0.05) 
+                                  : Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Apply button
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SafeJetColors.secondaryHighlight,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _minPrice = double.tryParse(minPriceController.text);
+                        _maxPrice = double.tryParse(maxPriceController.text);
+                        _minAmount = double.tryParse(minAmountController.text);
+                        _maxAmount = double.tryParse(maxAmountController.text);
+                      });
+                      Navigator.pop(context);
+                      _loadOffers(refresh: true);
+                    },
+                    child: const Text(
+                      'Apply Filters',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Add this method to clear filters
+  void _clearFilters() {
+    setState(() {
+      _minPrice = null;
+      _maxPrice = null;
+      _minAmount = null;
+      _maxAmount = null;
+    });
+    _loadOffers(refresh: true);
   }
 } 

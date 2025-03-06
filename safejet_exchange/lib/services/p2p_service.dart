@@ -176,27 +176,30 @@ class P2PService {
     String? currency,
     String? tokenId,
     String? paymentMethodId,
+    double? minPrice,
+    double? maxPrice,
+    double? minAmount,
+    double? maxAmount,
     int page = 1,
-    int limit = 10,
   }) async {
     try {
-      final queryParams = {
-        'type': isBuy ? 'buy' : 'sell',
-        'page': page.toString(),
-        'limit': limit.toString(),
-        if (currency != null) 'currency': currency,
-        if (tokenId != null) 'tokenId': tokenId,
-        if (paymentMethodId != null) 'paymentMethodId': paymentMethodId,
-      };
-
       final response = await _dio.get(
         '/p2p/public-offers',
-        queryParameters: queryParams,
+        queryParameters: {
+          'type': isBuy ? 'buy' : 'sell',
+          if (currency != null) 'currency': currency,
+          if (tokenId != null) 'tokenId': tokenId,
+          if (paymentMethodId != null) 'paymentMethodId': paymentMethodId,
+          if (minPrice != null) 'minPrice': minPrice,
+          if (maxPrice != null) 'maxPrice': maxPrice,
+          if (minAmount != null) 'minAmount': minAmount,
+          if (maxAmount != null) 'maxAmount': maxAmount,
+          'page': page,
+        },
       );
-
       return response.data;
     } catch (e) {
-      throw _handleError(e);
+      rethrow;
     }
   }
 
