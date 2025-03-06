@@ -11,6 +11,7 @@ import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'p2p_my_offers_screen.dart';
 import 'package:get_it/get_it.dart';
 import '../../services/p2p_service.dart';
+import 'package:shimmer/shimmer.dart';
 
 class P2PScreen extends StatefulWidget {
   const P2PScreen({super.key});
@@ -29,6 +30,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   String? _selectedPaymentMethodId;
   bool _isLoadingOffers = false;
   bool _isLoadingFilters = false;
+  bool _isInitialLoading = true;  // Track initial loading state
   
   List<Map<String, dynamic>> _offers = [];
   List<Map<String, dynamic>> _currencies = [];
@@ -60,7 +62,10 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _loadInitialData() async {
-    setState(() => _isLoadingFilters = true);
+    setState(() {
+      _isLoadingFilters = true;
+      _isInitialLoading = true;  // Set initial loading
+    });
     try {
       // Load filters in parallel
       final futures = await Future.wait([
@@ -101,7 +106,10 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       );
     } finally {
       if (mounted) {
-        setState(() => _isLoadingFilters = false);
+        setState(() {
+          _isLoadingFilters = false;
+          _isInitialLoading = false;  // Clear initial loading
+        });
       }
     }
   }
@@ -233,6 +241,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                             onTap: () {
                               if (!isSelected) {
                                 setState(() => _selectedCurrency = currency);
+                                _loadOffers(refresh: true);
                               }
                             },
                             borderRadius: BorderRadius.circular(20),
@@ -274,14 +283,20 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                     Expanded(
                       flex: 2,
                       child: _buildFilterButton(
-                        _selectedTokenId,
+                        _tokens.firstWhere(
+                          (t) => t['id'] == _selectedTokenId,
+                          orElse: () => {'symbol': 'Select'},
+                        )['symbol'],
                         isDark,
                         onTap: () => _showFilterOptions(
                           context,
                           'Select Crypto',
-                          _tokens.map((e) => e['id'] as String).toList(),
+                          _tokens,
                           _selectedTokenId,
-                          (value) => setState(() => _selectedTokenId = value),
+                          (value) {
+                            setState(() => _selectedTokenId = value);
+                            _loadOffers(refresh: true);
+                          },
                         ),
                       ),
                     ),
@@ -290,14 +305,22 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                     Expanded(
                       flex: 3,
                       child: _buildFilterButton(
-                        _selectedPaymentMethodId,
+                        _selectedPaymentMethodId != null
+                            ? _paymentMethods.firstWhere(
+                                (pm) => pm['id'] == _selectedPaymentMethodId,
+                                orElse: () => {'name': 'All Payment'},
+                              )['name']
+                            : 'All Payment',
                         isDark,
                         onTap: () => _showFilterOptions(
                           context,
                           'Payment Method',
-                          _paymentMethods.map((e) => e['id'] as String).toList(),
+                          _paymentMethods,
                           _selectedPaymentMethodId,
-                          (value) => setState(() => _selectedPaymentMethodId = value),
+                          (value) {
+                            setState(() => _selectedPaymentMethodId = value);
+                            _loadOffers(refresh: true);
+                          },
                         ),
                       ),
                     ),
@@ -358,17 +381,17 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
             foregroundColor: Colors.black,
             label: 'Create Offer',
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const P2PCreateOfferScreen(),
-                ),
-              );
-            },
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const P2PCreateOfferScreen(),
+            ),
+          );
+        },
           ),
           SpeedDialChild(
             child: const Icon(Icons.list_alt),
-            backgroundColor: SafeJetColors.secondaryHighlight,
+        backgroundColor: SafeJetColors.secondaryHighlight,
             foregroundColor: Colors.black,
             label: 'My Offers',
             onTap: () {
@@ -386,42 +409,31 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildOffersList(bool isDark, {required bool isBuy}) {
-    if (_isLoadingOffers && _offers.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     return RefreshIndicator(
       onRefresh: () => _loadOffers(refresh: true),
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: _offers.length + (_hasMoreData ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _offers.length) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-
-          final offer = _offers[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _buildOfferCard(isDark, isBuy, offer),
-          );
-        },
-      ),
+      child: _isInitialLoading  // Check initial loading first
+          ? ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 5,
+              itemBuilder: (context, index) => _buildOfferCardShimmer(isDark),
+            )
+          : _offers.isEmpty && !_isLoadingOffers
+              ? _buildEmptyState(isDark)
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _offers.length + (_hasMoreData ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _offers.length) {
+                      return _buildOfferCardShimmer(isDark);
+                    }
+                    return _buildOfferCard(isDark, isBuy, _offers[index]);
+                  },
+                ),
     );
   }
 
   Widget _buildOfferCard(bool isDark, bool isBuy, Map<String, dynamic> offer) {
-    // Add logging
-    print('Building offer card:');
-    print('Offer type: ${offer['type']}');
-    print('Payment methods: ${offer['paymentMethods']}');
-    
     final token = _tokens.firstWhere(
       (t) => t['id'] == offer['tokenId'],
       orElse: () => {'symbol': 'Unknown'},
@@ -429,34 +441,21 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
 
     final paymentMethodsData = offer['paymentMethods'] as List;
     final paymentMethods = paymentMethodsData.map((pm) {
-      // The name is already provided by the backend
       return (pm as Map<String, dynamic>)['name'] as String;
     }).toList();
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
+    return Material(
+      color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-              : SafeJetColors.lightCardBorder,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
         child: InkWell(
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => P2POfferDetailsScreen(
+                offerId: offer['id'],
                   isBuy: isBuy,
-                  offerId: offer['id'],
-                ),
+              ),
               ),
             );
           },
@@ -466,13 +465,15 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+              // Trader Info Row
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
+                  // Avatar and Name
+                  Expanded(
+                    child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 16,
+                          radius: 20,
                           backgroundColor: isDark
                               ? Colors.white.withOpacity(0.1)
                               : Colors.grey[200],
@@ -486,101 +487,169 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          offer['user']['name'] ?? 'Unknown User',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? Colors.white : Colors.black,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                              Text(
+                                offer['user']['name'] ?? 'Unknown User',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: Colors.green,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                            Text(
+                                    'Online',  // or "Last seen 2h ago"
+                              style: TextStyle(
+                                fontSize: 12,
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                  ),
+                  // Trader Stats
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.star_rounded,
+                            size: 16,
+                            color: SafeJetColors.secondaryHighlight,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '98%',  // Completion rate
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                        ],
                       ),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        token['symbol'] ?? 'Unknown',
+                      const SizedBox(height: 4),
+                      Text(
+                        '300+ orders',  // Total orders
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? Colors.white : Colors.black,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
                         ),
                       ),
+                    ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
+              // Price and Amount Row
                 Row(
                   children: [
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Price',
-                            style: TextStyle(
-                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Price',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatPrice(offer['price'], offer['currency']),
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatPrice(offer['price'], offer['currency']),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-                      ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'Available',
-                            style: TextStyle(
-                              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                            ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'Available',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_formatAmount(offer['amount'])} ${token['symbol']}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              _formatAmount(offer['amount']),
+                              style: const TextStyle(
+                                fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-                      ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[200],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                token['symbol'] ?? 'Unknown',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? Colors.white : Colors.black,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                     ),
                   ],
                 ),
-                if (paymentMethods.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: paymentMethods.map((method) => 
-                      _buildPaymentTag(method, isDark)
-                    ).toList(),
-                  ),
-                ],
+              if (paymentMethods.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: paymentMethods.map((method) => 
+                    _buildPaymentTag(method, isDark)
+                  ).toList(),
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),
@@ -658,43 +727,347 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   void _showFilterOptions(
     BuildContext context,
     String title,
-    List<String> options,
+    List<dynamic> options,
     String? selectedValue,
-    Function(String) onSelect,
+    Function(String?) onSelect,
   ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final TextEditingController searchController = TextEditingController();
+    
+    final isPaymentMethods = title.contains('Payment');
+    List<dynamic> mappedOptions = options;
+    
+    if (isPaymentMethods) {
+      mappedOptions = [
+        {
+          'id': null,
+          'name': 'All Payment',
+          'icon': 'payment',
+        },
+        ...mappedOptions,
+      ];
+    }
+
+    List<dynamic> filteredOptions = List.from(mappedOptions);
+
+    print('=== Filter Options Debug ===');
+    print('Title: $title');
+    print('Is Payment Methods: $isPaymentMethods');
+    print('Selected Value: $selectedValue');
+    print('Original Options: $options');
+    print('Mapped Options: $mappedOptions');
+    print('========================');
+
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          print('Building bottom sheet...');
+          print('Filtered Options: $filteredOptions');
+          
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.7,
+            decoration: BoxDecoration(
+              color: isDark ? SafeJetColors.primaryBackground : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+                // Handle bar
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[600] : Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
               title,
-              style: const TextStyle(
+                    style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                ),
+                // Search bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextField(
+                      controller: searchController,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: isPaymentMethods ? 'Search payment methods' : 'Search crypto',
+                        hintStyle: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          filteredOptions = options.where((option) {
+                            if (isPaymentMethods) {
+                              final name = option['name'] as String;
+                              return name.toLowerCase().contains(value.toLowerCase());
+                            } else {
+                              final symbol = option['symbol'] as String;
+                              final name = option['name'] as String;
+                              return symbol.toLowerCase().contains(value.toLowerCase()) ||
+                                     name.toLowerCase().contains(value.toLowerCase());
+                            }
+                          }).toList();
+                        });
+                      },
+                    ),
               ),
             ),
             const SizedBox(height: 16),
-            ...options.map((option) => ListTile(
-              title: Text(option),
-              trailing: option == selectedValue
-                  ? Icon(
-                      Icons.check,
+                // List of options
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: filteredOptions.length,
+                    itemBuilder: (context, index) {
+                      final option = filteredOptions[index];
+                      print('Building item at index $index:');
+                      print('Option data: $option');
+                      
+                      if (isPaymentMethods) {
+                        try {
+                          final name = option['name'] as String;
+                          final icon = option['icon'] as String? ?? 'payment';
+                          final value = option['id'];  // Don't cast to String, can be null for "All Payment"
+                          final isSelected = value == selectedValue;
+
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                onSelect(value);  // Can be null for "All Payment"
+                                Navigator.pop(context);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: isDark 
+                                          ? Colors.white.withOpacity(0.1)
+                                          : Colors.grey[200]!,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Payment method icon
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.white.withOpacity(0.05)
+                                            : Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Icon(
+                                        _getPaymentMethodIcon(icon),
+                                        color: isDark ? Colors.white : Colors.black,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    // Payment method name
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: isDark ? Colors.white : Colors.black,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      Icon(
+                                        Icons.check_circle,
                       color: SafeJetColors.secondaryHighlight,
-                    )
-                  : null,
+                                        size: 24,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        } catch (e) {
+                          print('Error building payment method item: $e');
+                          print('Raw option data: $option');
+                          return const SizedBox.shrink();
+                        }
+                      } else {
+                        try {
+                          final value = option['id'] as String;
+                          final symbol = option['symbol'] as String;
+                          final name = option['name'] as String;
+                          print('Token - Symbol: $symbol, Name: $name, Value: $value');
+                          
+                          final isSelected = value == selectedValue;
+
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
               onTap: () {
-                onSelect(option);
+                                onSelect(value);
                 Navigator.pop(context);
               },
-            )),
-          ],
-        ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: isDark 
+                                          ? Colors.white.withOpacity(0.1)
+                                          : Colors.grey[200]!,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Token icon/letter
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.white.withOpacity(0.05)
+                                            : Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Center(
+                                        child: option['metadata']?['icon'] != null
+                                            ? Image.network(
+                                                option['metadata']['icon'],
+                                                width: 24,
+                                                height: 24,
+                                                errorBuilder: (context, error, stackTrace) => Text(
+                                                  symbol[0].toUpperCase(),
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: isDark ? Colors.white : Colors.black,
+                                                  ),
+                                                ),
+                                              )
+                                            : Text(
+                                                symbol[0].toUpperCase(),
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isDark ? Colors.white : Colors.black,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    // Token details
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            symbol,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: isDark ? Colors.white : Colors.black,
+                                            ),
+                                          ),
+                                          if (name.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    // Selection indicator
+                                    if (isSelected)
+                                      Icon(
+                                        Icons.check_circle,
+                                        color: SafeJetColors.secondaryHighlight,
+                                        size: 24,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        } catch (e) {
+                          print('Error building token item: $e');
+                          print('Raw option data: $option');
+                          return const SizedBox.shrink(); // Return empty widget on error
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
+  }
+
+  IconData _getPaymentMethodIcon(String icon) {
+    switch (icon.toLowerCase()) {  // Make case-insensitive
+      case 'bank':
+        return Icons.account_balance;
+      case 'qr_code':
+        return Icons.qr_code;
+      case 'payment':
+        return Icons.payment;
+      case 'mobile':
+        return Icons.phone_android;
+      case 'money':
+        return Icons.attach_money;
+      case 'card':
+        return Icons.credit_card;
+      default:
+        return Icons.payment;
+    }
   }
 
   String _formatPrice(dynamic price, String currency) {
@@ -714,5 +1087,138 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     final value = double.tryParse(amount.toString()) ?? 0.0;
     return value.toStringAsFixed(2)
         .replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+  }
+
+  // Add this widget to show when there are no offers
+  Widget _buildEmptyState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.receipt_long,
+            size: 64,
+            color: isDark ? Colors.grey[700] : Colors.grey[300],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Offers Available',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try adjusting your filters',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? Colors.grey[500] : Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfferCardShimmer(bool isDark) {
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[900]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // User info row
+            Row(
+              children: [
+                // Avatar placeholder
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Name and stats placeholder
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 80,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Price and amount placeholders
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 100,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                Container(
+                  width: 80,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Payment methods placeholder
+            Row(
+              children: List.generate(3, (index) => 
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Container(
+                    width: 60,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 } 
