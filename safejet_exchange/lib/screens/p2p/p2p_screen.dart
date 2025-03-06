@@ -119,12 +119,17 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       setState(() {
         _currentPage = 1;
         _hasMoreData = true;
+        _offers = [];  // Clear existing offers immediately
+        _isLoadingOffers = true;  // Show loading state
       });
     }
 
     if (!_hasMoreData) return;
 
-    setState(() => _isLoadingOffers = true);
+    if (!refresh) {
+      setState(() => _isLoadingOffers = true);
+    }
+
     try {
       final result = await _p2pService.getPublicOffers(
         isBuy: _tabController.index == 0,
