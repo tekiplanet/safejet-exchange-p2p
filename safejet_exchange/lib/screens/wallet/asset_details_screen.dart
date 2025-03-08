@@ -87,7 +87,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
   }
 
   String _formatExactBalance(double value) {
-    final formatter = NumberFormat('#,##0.00000000'); // Fixed 8 decimal places
+    final formatter = NumberFormat('#,##0.000000'); // Fixed 8 decimal places
     String formatted = formatter.format(value);
     
     // Trim trailing zeros but keep at least 2 decimal places
