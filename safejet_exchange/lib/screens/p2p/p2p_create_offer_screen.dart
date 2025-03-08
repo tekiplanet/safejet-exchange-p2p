@@ -8,6 +8,7 @@ import '../../widgets/p2p_app_bar.dart';
 import '../../services/p2p_service.dart';
 import '../../models/kyc_level.dart';
 import '../../screens/settings/kyc_levels_screen.dart';
+import 'package:shimmer/shimmer.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
   final Map<String, dynamic>? offer;  // This is for editing existing offers
@@ -124,7 +125,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
 
       // Load market price
       await _updateMarketPrice();
-      
+
       // Load payment methods
       await _loadPaymentMethods();
     } catch (e) {
@@ -459,9 +460,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
             themeProvider.toggleTheme();
           },
         ),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: _buildCreateOfferShimmer(isDark),
       );
     }
 
@@ -1688,5 +1687,104 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       default:
         return Icons.payment; // Default icon
     }
+  }
+
+  Widget _buildCreateOfferShimmer(bool isDark) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Shimmer.fromColors(
+        baseColor: isDark ? Colors.grey[900]! : Colors.grey[300]!,
+        highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Buy/Sell toggle shimmer
+            Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Asset selector shimmer
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Amount input shimmer
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Price settings shimmer
+            Container(
+              height: 180,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Min/Max amount shimmer
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Payment methods shimmer
+            Row(
+              children: List.generate(3, (index) => 
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Container(
+                    width: 100,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            
+            // Terms input shimmer
+            Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 } 

@@ -557,7 +557,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                   height: 40,
                   child: _isLoadingFilters
                       ? ListView.builder(
-                          scrollDirection: Axis.horizontal,
+                    scrollDirection: Axis.horizontal,
                           itemCount: _currencies.isEmpty ? _currencies.length : 3,  // Use actual length or minimum if empty
                           itemBuilder: (context, index) => Padding(
                             padding: const EdgeInsets.only(right: 8),
@@ -1189,7 +1189,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 ),
                 // Header
                 Padding(
-                  padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
                   child: Text(
                     title,
                     style: TextStyle(
