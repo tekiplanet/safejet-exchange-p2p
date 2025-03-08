@@ -65,7 +65,8 @@ export class P2PController {
     const existingOffer = await this.p2pService.getActiveOfferByUserAndToken(
       user.id,
       createOfferDto.tokenId,
-      createOfferDto.isBuyOffer ? 'buy' : 'sell'
+      createOfferDto.isBuyOffer ? 'buy' : 'sell',
+      createOfferDto.currency
     );
 
     if (existingOffer) {

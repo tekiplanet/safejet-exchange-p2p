@@ -452,8 +452,8 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     if (_isLoading) {
-      return Scaffold(
-        appBar: P2PAppBar(
+    return Scaffold(
+      appBar: P2PAppBar(
           title: widget.offer != null ? 'Edit Offer' : 'Create Offer',
           hasNotification: false,
           onThemeToggle: () {
