@@ -24,6 +24,9 @@ export class WalletBalance {
   @Column('decimal', { precision: 36, scale: 18, default: '0' })
   balance: string;
 
+  @Column('decimal', { precision: 36, scale: 18, default: '0' })
+  frozen: string;
+
   @Column({ type: 'enum', enum: ['spot', 'funding'] })
   type: 'spot' | 'funding';
 
