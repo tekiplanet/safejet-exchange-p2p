@@ -43,4 +43,14 @@ export class CreateOfferDto {
 
   @IsBoolean()
   isBuyOffer: boolean;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  minAmount?: number;
+
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  maxAmount?: number;
 } 

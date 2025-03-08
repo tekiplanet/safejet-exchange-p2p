@@ -217,6 +217,10 @@ export class P2PService {
       terms: createOfferDto.terms,
       status: 'active',
       paymentMethods: createOfferDto.paymentMethods,
+      metadata: {
+        minAmount: createOfferDto.minAmount,
+        maxAmount: createOfferDto.maxAmount,
+      },
     });
 
     // Save and return the offer
@@ -426,5 +430,41 @@ export class P2PService {
       console.error('Error in getActivePaymentMethodTypes:', error);
       throw error;
     }
+  }
+
+  async getActiveOfferByUserAndToken(userId: string, tokenId: string, type: 'buy' | 'sell') {
+    return this.p2pOfferRepository.findOne({
+      where: {
+        userId,
+        tokenId,
+        type,
+        status: 'active',
+      },
+    });
+  }
+
+  async updateOffer(offerId: string, updateOfferDto: CreateOfferDto) {
+    const offer = await this.p2pOfferRepository.findOne({
+      where: { id: offerId },
+    });
+
+    if (!offer) {
+      throw new NotFoundException('Offer not found');
+    }
+
+    // Update the offer with new data
+    Object.assign(offer, {
+      amount: updateOfferDto.amount,
+      price: updateOfferDto.price,
+      priceUSD: updateOfferDto.priceUSD,
+      terms: updateOfferDto.terms,
+      paymentMethods: updateOfferDto.paymentMethods,
+      metadata: {
+        minAmount: updateOfferDto.minAmount,
+        maxAmount: updateOfferDto.maxAmount,
+      },
+    });
+
+    return this.p2pOfferRepository.save(offer);
   }
 } 

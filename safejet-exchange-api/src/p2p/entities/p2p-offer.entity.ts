@@ -45,6 +45,9 @@ export class P2POffer {
   @Column()
   status: 'active' | 'pending' | 'completed' | 'cancelled';
 
+  @Column('jsonb', { default: {} })
+  metadata: Record<string, any>;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -61,6 +61,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _filteredAssets = [];
 
+  final TextEditingController _minAmountController = TextEditingController();
+  final TextEditingController _maxAmountController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -404,6 +407,8 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     _priceController.dispose();
     _termsController.dispose();
     _searchController.dispose();
+    _minAmountController.dispose();
+    _maxAmountController.dispose();
     super.dispose();
   }
 
@@ -433,6 +438,66 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                   _buildCryptoSelector(isDark),
                   const SizedBox(height: 24),
                   _buildAmountInput(isDark),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextFormField(
+                      controller: _minAmountController,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Minimum Order Amount',
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.transparent,
+                        suffixText: _selectedCrypto,
+                        suffixStyle: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextFormField(
+                      controller: _maxAmountController,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Maximum Order Amount',
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.transparent,
+                        suffixText: _selectedCrypto,
+                        suffixStyle: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   _buildPriceInput(isDark),
                   const SizedBox(height: 24),
@@ -1031,10 +1096,94 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       }
     }
 
+    if (_amountController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter the amount'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    final actualAmount = double.tryParse(_amountController.text);
+    if (actualAmount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid amount'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_minAmountController.text.isEmpty || _maxAmountController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Minimum and maximum amounts are required'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    final minAmount = double.tryParse(_minAmountController.text);
+    final maxAmount = double.tryParse(_maxAmountController.text);
+
+    if (minAmount == null || maxAmount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter valid minimum and maximum amounts'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (minAmount > maxAmount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Minimum amount cannot be greater than maximum amount'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (minAmount > actualAmount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Minimum order amount cannot be greater than total amount'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (maxAmount > actualAmount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Maximum order amount cannot be greater than total amount'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_priceController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter the price'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     bool isSubmitting = false;
-    final bool? confirmed = await showDialog<bool>(
+    final response = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => Dialog.fullscreen(
         child: Scaffold(
@@ -1155,8 +1304,52 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                             throw Exception('Could not determine token ID');
                           }
 
+                          final minAmount = double.tryParse(_minAmountController.text);
+                          final maxAmount = double.tryParse(_maxAmountController.text);
+
+                          if (minAmount != null && maxAmount != null && minAmount > maxAmount) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Minimum amount cannot be greater than maximum amount'),
+                                backgroundColor: SafeJetColors.error,
+                              ),
+                            );
+                            return;
+                          }
+
+                          final actualAmount = double.tryParse(_amountController.text);
+                          if (actualAmount == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter a valid amount'),
+                                backgroundColor: SafeJetColors.error,
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (minAmount! > actualAmount) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Minimum order amount cannot be greater than total amount'),
+                                backgroundColor: SafeJetColors.error,
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (maxAmount! < actualAmount) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Maximum order amount cannot be less than total amount'),
+                                backgroundColor: SafeJetColors.error,
+                              ),
+                            );
+                            return;
+                          }
+
                           // Create the offer
-                          await _p2pService.createOffer({
+                          final response = await _p2pService.createOffer({
                             'tokenId': tokenId,
                             'amount': double.parse(_amountController.text),
                             'price': double.parse(_priceController.text.replaceAll(',', '')),
@@ -1168,9 +1361,20 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                               'typeId': id,
                               'methodId': _isBuyOffer ? null : id,
                             })).toList(),
+                            'minAmount': minAmount,
+                            'maxAmount': maxAmount,
                           });
 
-                          Navigator.pop(context, true);
+                          Navigator.pop(context, response);
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(response['message']),
+                                backgroundColor: SafeJetColors.success,
+                              ),
+                            );
+                          }
                         } catch (e) {
                           setState(() => isSubmitting = false);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -1214,12 +1418,12 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       ),
     );
 
-    if (confirmed == true) {
+    if (response != null) {
       if (mounted) {
         Navigator.pop(context);  // Close the create offer screen
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Offer created successfully'),
+          SnackBar(
+            content: Text(response['message']),
             backgroundColor: SafeJetColors.success,
           ),
         );

@@ -3,6 +3,7 @@ import { P2PService } from './p2p.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { CreateOfferDto } from './dto/create-offer.dto';
+import { User } from '../auth/entities/user.entity';
 
 @Controller('p2p')
 export class P2PController {
@@ -57,10 +58,36 @@ export class P2PController {
   @Post('offers')
   @UseGuards(JwtAuthGuard)
   async createOffer(
-    @GetUser('id') userId: string,
-    @Body() createOfferDto: CreateOfferDto
+    @GetUser() user: User,
+    @Body() createOfferDto: CreateOfferDto,
   ) {
-    return this.p2pService.createOffer(userId, createOfferDto);
+    // Check for existing active offer
+    const existingOffer = await this.p2pService.getActiveOfferByUserAndToken(
+      user.id,
+      createOfferDto.tokenId,
+      createOfferDto.isBuyOffer ? 'buy' : 'sell'
+    );
+
+    if (existingOffer) {
+      // Update existing offer
+      const updatedOffer = await this.p2pService.updateOffer(
+        existingOffer.id,
+        createOfferDto
+      );
+      return {
+        offer: updatedOffer,
+        status: 'updated',
+        message: 'Existing offer updated successfully',
+      };
+    }
+
+    // Create new offer if none exists
+    const newOffer = await this.p2pService.createOffer(user.id, createOfferDto);
+    return {
+      offer: newOffer,
+      status: 'created',
+      message: 'New offer created successfully',
+    };
   }
 
   @Get('user-kyc-level')

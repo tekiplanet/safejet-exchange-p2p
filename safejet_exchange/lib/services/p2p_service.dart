@@ -126,18 +126,20 @@ class P2PService {
     }
   }
 
-  Future<void> createOffer(Map<String, dynamic> offerData) async {
+  Future<Map<String, dynamic>> createOffer(Map<String, dynamic> offerData) async {
     try {
       final response = await _dio.post(
         '/p2p/offers',
         data: offerData,
       );
-      
+
       if (response.statusCode != 201) {
-        throw Exception('Failed to create offer');
+        throw Exception('Failed to process offer');
       }
+
+      return response.data;
     } catch (e) {
-      throw Exception('Failed to create offer: $e');
+      throw Exception('Failed to process offer: $e');
     }
   }
 
