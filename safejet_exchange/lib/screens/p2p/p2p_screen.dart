@@ -783,10 +783,9 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildOfferCard(bool isDark, bool isBuy, Map<String, dynamic> offer) {
-    final token = _tokens.firstWhere(
-      (t) => t['id'] == offer['tokenId'],
-      orElse: () => {'symbol': 'Unknown'},
-    );
+    // Use the token data directly from the offer
+    final token = offer['token'] as Map<String, dynamic>;
+    final symbol = token['symbol'] ?? 'Unknown';
 
     final paymentMethodsData = offer['paymentMethods'] as List;
     final paymentMethods = paymentMethodsData.map((pm) {
@@ -973,7 +972,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                token['symbol'] ?? 'Unknown',
+                                symbol,
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
@@ -1481,91 +1480,6 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // User info row
-            Row(
-              children: [
-                // Avatar placeholder
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Name and stats placeholder
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: 80,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Price and amount placeholders
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  width: 100,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                Container(
-                  width: 80,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // Payment methods placeholder
-            Row(
-              children: List.generate(3, (index) => 
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Container(
-                    width: 60,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
