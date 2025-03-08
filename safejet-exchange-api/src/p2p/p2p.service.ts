@@ -440,14 +440,24 @@ export class P2PService {
   }
 
   async getActiveOfferByUserAndToken(userId: string, tokenId: string, type: 'buy' | 'sell') {
-    return this.p2pOfferRepository.findOne({
-      where: {
-        userId,
-        tokenId,
-        type,
-        status: 'active',
-      },
+    // First get the token to find its baseSymbol
+    const token = await this.tokenRepository.findOne({ 
+      where: { id: tokenId } 
     });
+
+    if (!token) {
+      throw new NotFoundException('Token not found');
+    }
+
+    // Then find any active offer for this user with the same baseSymbol
+    return this.p2pOfferRepository
+      .createQueryBuilder('offer')
+      .leftJoinAndSelect('offer.token', 'token')
+      .where('offer.userId = :userId', { userId })
+      .andWhere('offer.type = :type', { type })
+      .andWhere('offer.status = :status', { status: 'active' })
+      .andWhere('token.baseSymbol = :baseSymbol', { baseSymbol: token.baseSymbol })
+      .getOne();
   }
 
   async updateOffer(offerId: string, updateOfferDto: CreateOfferDto) {
