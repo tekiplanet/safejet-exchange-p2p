@@ -415,12 +415,12 @@ export class WalletService {
           const usdValue = totalBalance.times(currentPrice).toString();
 
           // Log price data for debugging
-          this.logger.debug(`Token ${token?.symbol}: Price = ${currentPrice}, Balance = ${totalBalance}, USD Value = ${usdValue}`);
+          // this.logger.debug(`Token ${token?.symbol}: Price = ${currentPrice}, Balance = ${totalBalance}, USD Value = ${usdValue}`);
 
-          this.logger.debug(`Balance details for ${balance.baseSymbol}:`, {
-            balance: totalBalance.toString(),
-            frozen: balance.frozen,
-          });
+          // this.logger.debug(`Balance details for ${balance.baseSymbol}:`, {
+          //   balance: totalBalance.toString(),
+          //   frozen: balance.frozen,
+          // });
 
           return {
             ...balance,

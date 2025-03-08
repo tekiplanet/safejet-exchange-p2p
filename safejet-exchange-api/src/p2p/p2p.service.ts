@@ -318,7 +318,14 @@ export class P2PService {
         queryBuilder.andWhere('offer.currency = :currency', { currency });
       }
       if (tokenId) {
-        queryBuilder.andWhere('offer.tokenId = :tokenId', { tokenId });
+        // Get the token's baseSymbol first
+        const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
+        if (token) {
+          // Match offers for any token with the same baseSymbol
+          queryBuilder.andWhere('token.baseSymbol = :baseSymbol', { 
+            baseSymbol: token.baseSymbol 
+          });
+        }
       }
       if (paymentMethodId) {
         queryBuilder.andWhere(`offer.paymentMethods @> :paymentMethod`, {
