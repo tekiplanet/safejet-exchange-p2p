@@ -185,6 +185,38 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
 
   void _handleTabChange() async {
     if (_tabController.indexIsChanging) {
+      if (_tabController.index == 1) { // Switching to Sell tab
+        // Check funding balance
+        try {
+          final balances = await _p2pService.getAvailableAssets(false);  // false for sell
+          if (balances.isEmpty) {
+            if (!mounted) return;
+            
+            // Show the no balance dialog
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => _buildNoBalanceDialog(),
+            );
+            
+            // Switch back to buy tab
+            _tabController.animateTo(0);
+            return;
+          }
+        } catch (e) {
+          print('Error checking balances: $e');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.toString()),
+              backgroundColor: SafeJetColors.error,
+            ),
+          );
+          _tabController.animateTo(0);
+          return;
+        }
+      }
+      
       // Clear current tokens and show loading
       setState(() {
         _tokens = [];
@@ -696,7 +728,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          'Available',
+                          _tabController.index == 0 ? 'Available' : 'Amount',
                           style: TextStyle(
                             fontSize: 13,
                             color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
@@ -1480,6 +1512,92 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoBalanceDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: SafeJetColors.warning.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.account_balance_wallet_outlined,
+                color: SafeJetColors.warning,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No Funding Balance',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'You need to have assets in your funding wallet to create sell offers. Add funds to your funding wallet to continue.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black54,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);  // Close dialog
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Buy Instead'),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Close all dialogs and P2P screen
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                      // This will take user back to main screen where they can select Wallets tab
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SafeJetColors.secondaryHighlight,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Add Funds',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
