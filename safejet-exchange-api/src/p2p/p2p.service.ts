@@ -299,15 +299,7 @@ export class P2PService {
         minAmount, page = 1, limit = 10 
       } = filters;
 
-      console.log('Received filters:', {
-        type,
-        currency,
-        tokenId,
-        paymentMethodId,
-        minAmount,
-        page,
-        limit
-      });
+      console.log('Received filters:', { type, currency, tokenId, minAmount });
       
       const queryBuilder = this.p2pOfferRepository
         .createQueryBuilder('offer')
@@ -329,29 +321,26 @@ export class P2PService {
           paymentMethod: JSON.stringify([{ typeId: paymentMethodId }]),
         });
       }
-
-      // Add minimum amount filter with proper numeric comparison
       if (minAmount !== undefined) {
-        console.log('Applying minimum amount filter:', minAmount);
         queryBuilder.andWhere('CAST(offer.amount AS NUMERIC) >= :minAmount', { 
           minAmount: Number(minAmount) 
         });
       }
 
-      // Log the final SQL query
-      const [query, parameters] = queryBuilder.getQueryAndParameters();
-      console.log('Final SQL Query:', query);
-      console.log('Query Parameters:', parameters);
-
-      // Get results
-      const [offers, total] = await queryBuilder
-        .orderBy('offer.createdAt', 'DESC')
+      // Fix the order by clause
+      queryBuilder
+        .orderBy('offer.price', 'ASC')  // Changed from CAST syntax to direct column reference
         .skip((page - 1) * limit)
-        .take(limit)
-        .getManyAndCount();
+        .take(limit);
+
+      const [offers, total] = await queryBuilder.getManyAndCount();
 
       console.log('Found offers:', offers.length);
-      console.log('Sample offer amounts:', offers.map(o => ({ id: o.id, amount: o.amount })));
+      console.log('Sample offer amounts and prices:', offers.map(o => ({
+        id: o.id,
+        amount: o.amount,
+        price: o.price
+      })));
 
       // Get all payment method types
       const paymentMethodTypes = await this.paymentMethodTypeRepository.find();
