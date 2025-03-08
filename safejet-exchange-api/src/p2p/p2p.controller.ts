@@ -86,6 +86,7 @@ export class P2PController {
     @Query('currency') currency?: string,
     @Query('tokenId') tokenId?: string,
     @Query('paymentMethodId') paymentMethodId?: string,
+    @Query('minAmount') minAmount?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
@@ -94,6 +95,7 @@ export class P2PController {
       currency,
       tokenId,
       paymentMethodId,
+      minAmount: minAmount ? parseFloat(minAmount) : undefined,
       page: page ? parseInt(page.toString()) : undefined,
       limit: limit ? parseInt(limit.toString()) : undefined,
     }, userId);

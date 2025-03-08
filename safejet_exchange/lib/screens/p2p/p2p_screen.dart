@@ -46,10 +46,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   final ScrollController _scrollController = ScrollController();
 
   // Add these state variables to _P2PScreenState
-  double? _minPrice;
-  double? _maxPrice;
-  double? _minAmount;
-  double? _maxAmount;
+  double? _minAmount;  // Add this state variable
 
   @override
   void initState() {
@@ -122,6 +119,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
 
   Future<void> _loadOffers({bool refresh = false}) async {
     if (refresh) {
+      print('Loading offers with minAmount: $_minAmount');
       setState(() {
         _currentPage = 1;
         _hasMoreData = true;
@@ -132,22 +130,27 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
 
     if (!_hasMoreData) return;
 
-    if (!refresh) {
-      setState(() => _isLoadingOffers = true);
-    }
-
     try {
+      print('Calling API with params:');
+      print('isBuy: ${_tabController.index == 0}');
+      print('currency: $_selectedCurrency');
+      print('tokenId: $_selectedTokenId');
+      print('paymentMethodId: $_selectedPaymentMethodId');
+      print('minAmount: $_minAmount');
+      print('page: $_currentPage');
+
       final result = await _p2pService.getPublicOffers(
         isBuy: _tabController.index == 0,
         currency: _selectedCurrency,
         tokenId: _selectedTokenId,
         paymentMethodId: _selectedPaymentMethodId,
-        minPrice: _minPrice,
-        maxPrice: _maxPrice,
         minAmount: _minAmount,
-        maxAmount: _maxAmount,
         page: _currentPage,
       );
+
+      print('API Response:');
+      print('Total offers: ${(result['offers'] as List).length}');
+      print('Pagination: ${result['pagination']}');
 
       if (!mounted) return;
 
@@ -165,6 +168,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         _currentPage++;
       });
     } catch (e) {
+      print('Error loading offers: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -406,23 +410,40 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                       height: 40,
                       width: 40,
                       decoration: BoxDecoration(
-                        color: (_minPrice != null || _maxPrice != null || _minAmount != null || _maxAmount != null)
+                        color: (_minAmount != null)
                             ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
                             : isDark
-                                ? Colors.white.withOpacity(0.05)
-                                : Colors.black.withOpacity(0.05),
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.black.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: IconButton(
+                      child: Stack(
+                        children: [
+                          IconButton(
                         icon: Icon(
                           Icons.tune_rounded,
-                          color: (_minPrice != null || _maxPrice != null || _minAmount != null || _maxAmount != null)
-                              ? SafeJetColors.secondaryHighlight
-                              : isDark
-                                  ? Colors.white
-                                  : SafeJetColors.lightText,
-                        ),
-                        onPressed: () => _showFilterSheet(context, isDark),
+                              color: (_minAmount != null)
+                                  ? SafeJetColors.secondaryHighlight
+                                  : isDark
+                                      ? Colors.white
+                                      : SafeJetColors.lightText,
+                            ),
+                            onPressed: () => _showFilterSheet(context, isDark),
+                          ),
+                          if (_minAmount != null)
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: SafeJetColors.secondaryHighlight,
+                                  shape: BoxShape.circle,
+                                ),
+                      ),
+                    ),
+                  ],
                       ),
                     ),
                   ],
@@ -1306,16 +1327,10 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
 
   // Add this method to show the filter bottom sheet
   void _showFilterSheet(BuildContext context, bool isDark) {
-    final TextEditingController minPriceController = TextEditingController();
-    final TextEditingController maxPriceController = TextEditingController();
     final TextEditingController minAmountController = TextEditingController();
-    final TextEditingController maxAmountController = TextEditingController();
 
-    // Set initial values if they exist
-    if (_minPrice != null) minPriceController.text = _minPrice.toString();
-    if (_maxPrice != null) maxPriceController.text = _maxPrice.toString();
+    // Set initial value if it exists
     if (_minAmount != null) minAmountController.text = _minAmount.toString();
-    if (_maxAmount != null) maxAmountController.text = _maxAmount.toString();
 
     showModalBottomSheet(
       context: context,
@@ -1360,15 +1375,14 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 ),
               ),
 
-              // Filter content
+              // Minimum Amount Filter
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Price Range
                     Text(
-                      'Price Range (${_selectedCurrency ?? ""})',
+                      'Minimum Amount (${_tokens.firstWhere((t) => t['id'] == _selectedTokenId, orElse: () => {'symbol': ''})['symbol']})',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
@@ -1376,136 +1390,30 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: minPriceController,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'Min',
-                              hintStyle: TextStyle(
-                                color: isDark ? Colors.white38 : Colors.black38,
-                              ),
-                              filled: true,
-                              fillColor: isDark 
-                                  ? Colors.white.withOpacity(0.05) 
-                                  : Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: maxPriceController,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'Max',
-                              hintStyle: TextStyle(
-                                color: isDark ? Colors.white38 : Colors.black38,
-                              ),
-                              filled: true,
-                              fillColor: isDark 
-                                  ? Colors.white.withOpacity(0.05) 
-                                  : Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Amount Range
-                    Text(
-                      'Amount Range (${_tokens.firstWhere((t) => t['id'] == _selectedTokenId, orElse: () => {'symbol': ''})['symbol']})',
+                    TextField(
+                      controller: minAmountController,
+                      keyboardType: TextInputType.number,
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.white70 : Colors.black87,
+                        color: isDark ? Colors.white : Colors.black,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: minAmountController,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'Min',
-                              hintStyle: TextStyle(
-                                color: isDark ? Colors.white38 : Colors.black38,
-                              ),
-                              filled: true,
-                              fillColor: isDark 
-                                  ? Colors.white.withOpacity(0.05) 
-                                  : Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
+                      decoration: InputDecoration(
+                        hintText: 'Enter minimum amount',
+                        hintStyle: TextStyle(
+                          color: isDark ? Colors.white38 : Colors.black38,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: maxAmountController,
-                            keyboardType: TextInputType.number,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'Max',
-                              hintStyle: TextStyle(
-                                color: isDark ? Colors.white38 : Colors.black38,
-                              ),
-                              filled: true,
-                              fillColor: isDark 
-                                  ? Colors.white.withOpacity(0.05) 
-                                  : Colors.grey[100],
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
+                        filled: true,
+                        fillColor: isDark 
+                            ? Colors.white.withOpacity(0.05) 
+                            : Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
-                      ],
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1526,17 +1434,17 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                       elevation: 0,
                     ),
                     onPressed: () {
+                      final newMinAmount = double.tryParse(minAmountController.text);
+                      print('Setting min amount filter: $newMinAmount');
+                      
                       setState(() {
-                        _minPrice = double.tryParse(minPriceController.text);
-                        _maxPrice = double.tryParse(maxPriceController.text);
-                        _minAmount = double.tryParse(minAmountController.text);
-                        _maxAmount = double.tryParse(maxAmountController.text);
+                        _minAmount = newMinAmount;
                       });
                       Navigator.pop(context);
                       _loadOffers(refresh: true);
                     },
                     child: const Text(
-                      'Apply Filters',
+                      'Apply Filter',
                       style: TextStyle(
                         color: Colors.black,
                         fontSize: 16,
@@ -1551,16 +1459,5 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         ),
       ),
     );
-  }
-
-  // Add this method to clear filters
-  void _clearFilters() {
-    setState(() {
-      _minPrice = null;
-      _maxPrice = null;
-      _minAmount = null;
-      _maxAmount = null;
-    });
-    _loadOffers(refresh: true);
   }
 } 

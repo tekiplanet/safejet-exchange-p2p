@@ -287,10 +287,7 @@ export class P2PService {
       currency?: string;
       tokenId?: string;
       paymentMethodId?: string;
-      minPrice?: number;
-      maxPrice?: number;
       minAmount?: number;
-      maxAmount?: number;
       page?: number;
       limit?: number;
     },
@@ -299,9 +296,18 @@ export class P2PService {
     try {
       const { 
         type, currency, tokenId, paymentMethodId, 
-        minPrice, maxPrice, minAmount, maxAmount,
-        page = 1, limit = 10 
+        minAmount, page = 1, limit = 10 
       } = filters;
+
+      console.log('Received filters:', {
+        type,
+        currency,
+        tokenId,
+        paymentMethodId,
+        minAmount,
+        page,
+        limit
+      });
       
       const queryBuilder = this.p2pOfferRepository
         .createQueryBuilder('offer')
@@ -324,31 +330,28 @@ export class P2PService {
         });
       }
 
-      // Add price range filter
-      if (minPrice !== undefined) {
-        queryBuilder.andWhere('offer.price >= :minPrice', { minPrice });
-      }
-      if (maxPrice !== undefined) {
-        queryBuilder.andWhere('offer.price <= :maxPrice', { maxPrice });
-      }
-
-      // Add amount range filter
+      // Add minimum amount filter with proper numeric comparison
       if (minAmount !== undefined) {
-        queryBuilder.andWhere('offer.amount >= :minAmount', { minAmount });
-      }
-      if (maxAmount !== undefined) {
-        queryBuilder.andWhere('offer.amount <= :maxAmount', { maxAmount });
+        console.log('Applying minimum amount filter:', minAmount);
+        queryBuilder.andWhere('CAST(offer.amount AS NUMERIC) >= :minAmount', { 
+          minAmount: Number(minAmount) 
+        });
       }
 
-      // Add pagination
-      const skip = (page - 1) * limit;
-      queryBuilder
+      // Log the final SQL query
+      const [query, parameters] = queryBuilder.getQueryAndParameters();
+      console.log('Final SQL Query:', query);
+      console.log('Query Parameters:', parameters);
+
+      // Get results
+      const [offers, total] = await queryBuilder
         .orderBy('offer.createdAt', 'DESC')
-        .skip(skip)
-        .take(limit);
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getManyAndCount();
 
-      // Get total count for pagination
-      const [offers, total] = await queryBuilder.getManyAndCount();
+      console.log('Found offers:', offers.length);
+      console.log('Sample offer amounts:', offers.map(o => ({ id: o.id, amount: o.amount })));
 
       // Get all payment method types
       const paymentMethodTypes = await this.paymentMethodTypeRepository.find();
@@ -372,10 +375,10 @@ export class P2PService {
           const mappedOffer = {
             ...offer,
             paymentMethods: offer.paymentMethods.map(method => {
-              console.log('Processing payment method:', method);
+              // console.log('Processing payment method:', method);
               if (offer.type === 'buy') {
                 const foundType = paymentMethodTypes.find(type => type.id === method.typeId);
-                console.log('Found payment method type:', foundType);
+                // console.log('Found payment method type:', foundType);
                 return {
                   ...method,
                   name: foundType?.name || 'Unknown'
