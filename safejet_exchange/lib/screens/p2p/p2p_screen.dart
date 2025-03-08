@@ -1349,7 +1349,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // Header with Clear button
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 16, 16),
                 child: Row(
@@ -1363,13 +1363,37 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                         color: isDark ? Colors.white : Colors.black,
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.close,
-                        color: isDark ? Colors.white70 : Colors.black54,
-                        size: 24,
-                      ),
-                      onPressed: () => Navigator.pop(context),
+                    Row(
+                      children: [
+                        if (_minAmount != null)
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                minAmountController.clear();
+                              });
+                              this.setState(() {
+                                _minAmount = null;
+                              });
+                              Navigator.pop(context);
+                              _loadOffers(refresh: true);
+                            },
+                            child: Text(
+                              'Clear',
+                              style: TextStyle(
+                                color: isDark ? Colors.white70 : Colors.black54,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.close,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                            size: 24,
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
                     ),
                   ],
                 ),
