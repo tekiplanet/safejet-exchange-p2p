@@ -185,59 +185,50 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
 
   void _handleTabChange() async {
     if (_tabController.indexIsChanging) {
-      if (_tabController.index == 1) { // Switching to Sell tab
-        // Check funding balance
-        try {
-          final balances = await _p2pService.getAvailableAssets(false);  // false for sell
-          if (balances.isEmpty) {
-            if (!mounted) return;
-            
-            // Show the no balance dialog
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => _buildNoBalanceDialog(),
-            );
-            
-            // Switch back to buy tab
-            _tabController.animateTo(0);
-            return;
-          }
-        } catch (e) {
-          print('Error checking balances: $e');
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(e.toString()),
-              backgroundColor: SafeJetColors.error,
-            ),
-          );
-          _tabController.animateTo(0);
-          return;
-        }
-      }
-      
-      // Clear current tokens and show loading
+      // Clear current tokens and show loading first
       setState(() {
         _tokens = [];
         _selectedTokenId = null;
+        _isLoadingOffers = true;  // Show loading state
+        _offers = [];  // Clear existing offers
       });
-      
+
       try {
-        // Load new tokens for the selected tab
-        final newTokens = await _p2pService.getAvailableAssets(_tabController.index == 0);
-        
-        if (!mounted) return;
-        
-        setState(() {
-          _tokens = newTokens;
-          if (newTokens.isNotEmpty) {
-            _selectedTokenId = newTokens[0]['id'];
+        if (_tabController.index == 1) { // Switching to Sell tab
+          // Check funding balance first
+          final balances = await _p2pService.getAvailableAssets(false);
+          if (!mounted) return;
+
+          if (balances.isEmpty) {
+            await _showNoBalanceDialog();
+            _tabController.animateTo(0);
+            return;  // Don't load offers for sell tab if no balance
           }
-        });
-        
-        // Load offers with new filters
-        _loadOffers(refresh: true);
+          
+          // If we have balances, continue with loading tokens
+          setState(() {
+            _tokens = balances;
+            if (balances.isNotEmpty) {
+              _selectedTokenId = balances[0]['id'];
+            }
+          });
+        } else {
+          // For buy tab, load tokens normally
+          final newTokens = await _p2pService.getAvailableAssets(true);
+          if (!mounted) return;
+          
+          setState(() {
+            _tokens = newTokens;
+            if (newTokens.isNotEmpty) {
+              _selectedTokenId = newTokens[0]['id'];
+            }
+          });
+        }
+
+        // Only load offers if we have a selected token
+        if (_selectedTokenId != null) {
+          await _loadOffers(refresh: true);
+        }
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -246,6 +237,12 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
             backgroundColor: SafeJetColors.error,
           ),
         );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoadingOffers = false;
+          });
+        }
       }
     }
   }
@@ -924,7 +921,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 ),
                 // Header
                 Padding(
-                  padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
                   child: Text(
               title,
                     style: TextStyle(
@@ -1133,7 +1130,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                                     const SizedBox(width: 12),
                                     // Token details
                                     Expanded(
-                                      child: Column(
+        child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
@@ -1378,16 +1375,16 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         ),
         child: StatefulBuilder(
           builder: (context, setState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header with Clear button
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 16, 16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
+          children: [
+            Text(
                       'Filter',
                       style: TextStyle(
                         fontSize: 20,
@@ -1517,89 +1514,213 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     );
   }
 
-  Widget _buildNoBalanceDialog() {
+  Future<void> _showNoBalanceDialog() async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: SafeJetColors.warning.withOpacity(0.1),
-                shape: BoxShape.circle,
+    // Get funding balances
+    try {
+      final balances = await _p2pService.getAvailableAssets(false);  // false for sell
+      final formattedBalances = balances.map((asset) {
+        final amount = double.tryParse(asset['fundingBalance']?.toString() ?? '0') ?? 0;
+        return '${amount.toStringAsFixed(2)} ${asset['symbol']}';
+      }).join('\n');
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(
+                  Icons.close,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  _tabController.animateTo(0); // Switch back to buy tab
+                },
               ),
-              child: Icon(
-                Icons.account_balance_wallet_outlined,
-                color: SafeJetColors.warning,
-                size: 32,
+              title: Text(
+                'Funding Balance Required',
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            body: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark 
+                                ? Colors.black.withOpacity(0.3) 
+                                : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: isDark 
+                                      ? Colors.white.withOpacity(0.05)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  Icons.account_balance_wallet,
+                                  color: isDark 
+                                      ? SafeJetColors.warning 
+                                      : SafeJetColors.warning,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Funding Balances',
+                                      style: TextStyle(
+                                        color: isDark 
+                                            ? Colors.grey[400] 
+                                            : Colors.grey[600],
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      formattedBalances.isEmpty 
+                                          ? 'No assets in funding wallet'
+                                          : formattedBalances,
+              style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Sell Offer Requirements',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 16),
-            Text(
-              'No Funding Balance',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'You need to have assets in your funding wallet to create sell offers. Add funds to your funding wallet to continue.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.black54,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);  // Close dialog
-                    },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                        Text(
+                          'To create a sell offer, you need to have assets in your funding wallet. This ensures that your offers are backed by actual assets and maintains a secure trading environment.',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: 16,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: SafeJetColors.warning.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: SafeJetColors.warning.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: SafeJetColors.warning,
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Transfer assets to your funding wallet to start selling.',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    child: const Text('Buy Instead'),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Close all dialogs and P2P screen
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                      // This will take user back to main screen where they can select Wallets tab
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: SafeJetColors.secondaryHighlight,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      elevation: 0,
-                    ),
-                    child: const Text(
-                      'Add Funds',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);  // Close dialog
+                          },
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            foregroundColor: isDark ? Colors.grey[300] : Colors.grey[700],  // Lighter text color
+                          ),
+                          child: Text(
+                            'Buy Instead',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w500,  // Slightly less bold
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).popUntil((route) => route.isFirst);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: SafeJetColors.secondaryHighlight,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Add Funds',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ],
         ),
       ),
     );
+    } catch (e) {
+      print('Error loading balances: $e');
+      // Show error snackbar if needed
+    }
   }
 } 
