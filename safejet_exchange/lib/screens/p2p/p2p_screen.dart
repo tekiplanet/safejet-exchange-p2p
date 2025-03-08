@@ -12,6 +12,7 @@ import 'p2p_my_offers_screen.dart';
 import 'package:get_it/get_it.dart';
 import '../../services/p2p_service.dart';
 import 'package:shimmer/shimmer.dart';
+import '../settings/kyc_levels_screen.dart';
 
 class P2PScreen extends StatefulWidget {
   const P2PScreen({super.key});
@@ -54,7 +55,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabChange);
     _scrollController.addListener(_handleScroll);
-    _loadInitialData();
+    _checkKycLevel();  // Add KYC check before loading data
   }
 
   @override
@@ -62,6 +63,218 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     _tabController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkKycLevel() async {
+    try {
+      final kycData = await _p2pService.getUserKycLevel();
+      if (!(kycData['features']['canUseP2P'] ?? false)) {
+        if (!mounted) return;
+        
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => WillPopScope(
+            onWillPop: () async {
+              Navigator.pop(context); // Pop dialog
+              Navigator.pop(context); // Go back to previous screen
+              return false;
+            },
+            child: Dialog.fullscreen(
+              child: Scaffold(
+                backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+                appBar: AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  leading: IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context); // Pop dialog
+                      Navigator.pop(context); // Go back to previous screen
+                    },
+                  ),
+                  title: Text(
+                    'KYC Verification Required',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                body: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.black.withOpacity(0.3) 
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: isDark 
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.verified_user,
+                                      color: isDark 
+                                          ? SafeJetColors.secondaryHighlight 
+                                          : SafeJetColors.success,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Current Level',
+                                          style: TextStyle(
+                                            color: isDark 
+                                                ? Colors.grey[400] 
+                                                : Colors.grey[600],
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          kycData['title'] ?? 'Unverified',
+                                          style: TextStyle(
+                                            color: isDark ? Colors.white : Colors.black,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'P2P Trading Access',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'To access P2P trading features, you need to complete your KYC verification. This helps us maintain a secure trading environment for all users.',
+                              style: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                fontSize: 16,
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: SafeJetColors.warning.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: SafeJetColors.warning.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: SafeJetColors.warning,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Verification usually takes less than 24 hours to complete.',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context); // Pop dialog
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const KYCLevelsScreen(),
+                              ),
+                            ).then((_) {
+                              // Check KYC level again when returning from KYC screen
+                              _checkKycLevel();
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: SafeJetColors.secondaryHighlight,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            'Complete Verification',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        
+        return; // Add return here to prevent loading initial data
+      } else {
+        // Only load initial data if KYC check passes
+        await _loadInitialData();
+      }
+    } catch (e) {
+      print('Error checking KYC level: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      Navigator.pop(context); // Keep this one for error handling
+    }
   }
 
   Future<void> _loadInitialData() async {
@@ -1543,7 +1756,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 ),
                 onPressed: () {
                   Navigator.pop(context); // Close dialog
-                  _tabController.animateTo(0); // Switch back to buy tab
+                  Navigator.pop(context); // Go back to previous screen
                 },
               ),
               title: Text(
