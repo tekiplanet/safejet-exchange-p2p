@@ -30,13 +30,16 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   bool _isLoading = false;
   List<Map<String, dynamic>> _availableAssets = [];
   bool _isBuyOffer = true;
-  String _selectedCrypto = 'USDT';
-  String _selectedCurrency = 'NGN';
+  
+  // Initialize with empty strings instead of using late
+  String _selectedCrypto = '';
+  String _selectedCurrency = '';
+  String _userCurrency = '';
+  
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _termsController = TextEditingController();
   
   List<String> _selectedPaymentMethods = [];
-  String _userCurrency = 'NGN';
   double? _marketPrice;
   bool _isPriceLoading = false;
 
@@ -78,9 +81,12 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   @override
   void initState() {
     super.initState();
+    _isBuyOffer = widget.isBuyOffer;
+    _selectedCrypto = widget.selectedToken?['symbol'] ?? '';
+    
     if (widget.offer != null) {
       _isBuyOffer = widget.offer!['type'] == 'buy';
-      _selectedCrypto = widget.offer!['token']['symbol'] ?? 'USDT';
+      _selectedCrypto = widget.offer!['token']['symbol'] ?? '';
       _amountController.text = widget.offer!['amount'].toString();
       _termsController.text = widget.offer!['terms'] ?? '';
       _selectedPaymentMethods = (widget.offer!['paymentMethods'] as List)
@@ -103,21 +109,22 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
-      print('Starting to load initial data...');
-      
-      // Load trader settings
-      print('Fetching trader settings...');
+      // Load trader settings first to get user currency
       final settings = await _p2pService.getTraderSettings();
-      print('Trader settings received: $settings');
       _userCurrency = settings['currency'];
+      _selectedCurrency = _userCurrency;  // Use user's preferred currency
 
       // Load available assets
       await _loadAssets();
+      
+      // If no crypto was selected, use first available
+      if (_selectedCrypto.isEmpty && _availableAssets.isNotEmpty) {
+        _selectedCrypto = _availableAssets[0]['symbol'];
+      }
 
       // Load market price
-      print('Loading market price for $_selectedCrypto in $_userCurrency');
       await _updateMarketPrice();
-
+      
       // Load payment methods
       await _loadPaymentMethods();
     } catch (e) {
@@ -442,6 +449,21 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
+
+    if (_isLoading) {
+      return Scaffold(
+        appBar: P2PAppBar(
+          title: widget.offer != null ? 'Edit Offer' : 'Create Offer',
+          hasNotification: false,
+          onThemeToggle: () {
+            themeProvider.toggleTheme();
+          },
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: P2PAppBar(

@@ -279,12 +279,14 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   }
 
   Future<void> _loadInitialData() async {
+    print('Setting loading states to true');  // Debug print
     setState(() {
       _isLoadingFilters = true;
-      _isInitialLoading = true;  // Set initial loading
+      _isInitialLoading = true;
     });
+
     try {
-      // Load filters in parallel
+      print('Loading filters in parallel');  // Debug print
       final futures = await Future.wait([
         _p2pService.getTraderSettings(),
         _p2pService.getActiveCurrencies(),
@@ -299,6 +301,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       final tokens = futures[2] as List<Map<String, dynamic>>;
       final paymentMethods = futures[3] as List<Map<String, dynamic>>;
 
+      print('Setting data in state');  // Debug print
       setState(() {
         _selectedCurrency = settings['currency'] ?? 
             (currencies.isNotEmpty ? currencies[0]['symbol'] : null);
@@ -314,6 +317,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         await _loadOffers();
       }
     } catch (e) {
+      print('Error in _loadInitialData: $e');  // Debug print
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -323,9 +327,10 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       );
     } finally {
       if (mounted) {
+        print('Setting loading states to false');  // Debug print
         setState(() {
           _isLoadingFilters = false;
-          _isInitialLoading = false;  // Clear initial loading
+          _isInitialLoading = false;
         });
       }
     }
@@ -550,11 +555,31 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 // Fiat Currency Filter
                 SizedBox(
                   height: 40,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _currencies.length,
+                  child: _isLoadingFilters
+                      ? ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _currencies.isEmpty ? _currencies.length : 3,  // Use actual length or minimum if empty
+                          itemBuilder: (context, index) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Shimmer.fromColors(
+                              baseColor: isDark ? Colors.grey[900]! : Colors.grey[300]!,
+                              highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+                              child: Container(
+                                width: 60,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _currencies.length,
                     itemBuilder: (context, index) {
-                      final currency = _currencies[index]['code'] as String;
+                            final currency = _currencies[index]['code'] as String;
                       final isSelected = currency == _selectedCurrency;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -564,7 +589,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                             onTap: () {
                               if (!isSelected) {
                                 setState(() => _selectedCurrency = currency);
-                                _loadOffers(refresh: true);
+                                      _loadOffers(refresh: true);
                               }
                             },
                             borderRadius: BorderRadius.circular(20),
@@ -801,8 +826,16 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
     final priceDelta = double.tryParse(offer['priceDelta'].toString()) ?? 0.0;
     final priceType = offer['priceType'] as String;
 
+    // For percentage type, show the percentage
+    // For fixed type, show the actual difference
+    final displayDelta = priceType == 'percentage' 
+        ? '$priceDelta%'  // Just show percentage
+        : NumberFormat("#,##0.00").format(priceDelta);  // Show fixed amount
+
     // Calculate the actual price difference
     final priceDifference = (currentPrice - marketPrice).abs();
+
+    print('Calculated difference: $priceDifference');
 
     return Material(
       color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
@@ -1010,9 +1043,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 ),
               ],
               Text(
-                priceType == 'percentage'
-                    ? '${NumberFormat("#,##0.00").format(priceDifference)} ${offer['currency']} ${isBuy ? 'below' : 'above'} market'
-                    : '${NumberFormat("#,##0.00").format(priceDelta)} ${offer['currency']} ${isBuy ? 'below' : 'above'} market',
+                '$displayDelta ${priceType == 'fixed' ? offer['currency'] : ''} ${!isBuy ? 'below' : 'above'} market',
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey,
@@ -1142,8 +1173,8 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
               color: isDark ? const Color(0xFF0C0C0C) : const Color(0xFFF5F5F5),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-        child: Column(
-          children: [
+            child: Column(
+              children: [
                 // Handle bar
                 Center(
                   child: Container(
@@ -1158,12 +1189,12 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                 ),
                 // Header
                 Padding(
-        padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   child: Text(
-              title,
+                    title,
                     style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                       color: isDark ? Colors.white : Colors.black,
                     ),
                   ),
@@ -1212,9 +1243,9 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                         });
                       },
                     ),
-              ),
-            ),
-            const SizedBox(height: 16),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 // List of options
                 Expanded(
                   child: ListView.builder(
@@ -1496,11 +1527,73 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       baseColor: isDark ? Colors.grey[900]! : Colors.grey[300]!,
       highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
           borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Trader info row
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  width: 100,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Price and amount row
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Payment methods
+            Container(
+              width: 120,
+              height: 24,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ],
         ),
       ),
     );

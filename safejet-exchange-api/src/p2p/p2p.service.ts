@@ -210,14 +210,13 @@ export class P2PService {
     priceType: 'percentage' | 'fixed', 
     priceDelta: number,
     type: 'buy' | 'sell'
-  ): Promise<{ price: number; priceUSD: number }> {
+  ): Promise<{ price: number; priceUSD: number; marketPrice: number }> {
     try {
       const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
       if (!token) throw new NotFoundException('Token not found');
 
-      // Get base price in USD - ensure it's a number
+      // Get base price in USD
       const baseUsdPrice = Number(token.currentPrice);
-      console.log('baseUsdPrice:', baseUsdPrice);
       
       // Get currency exchange rate
       const exchangeRate = await this.exchangeRateRepository.findOne({
@@ -225,13 +224,9 @@ export class P2PService {
       });
       if (!exchangeRate) throw new NotFoundException('Exchange rate not found');
 
-      // Calculate market price in target currency - ensure it's a number
+      // Calculate market price in target currency
       const rate = Number(exchangeRate.rate);
       const marketPrice = baseUsdPrice * rate;
-      console.log('marketPrice:', marketPrice);
-      console.log('priceDelta:', priceDelta);
-      console.log('priceType:', priceType);
-      console.log('type:', type);
 
       // Calculate final price based on type and delta
       let finalPrice = 0;
@@ -241,11 +236,11 @@ export class P2PService {
       } else {
         finalPrice = type === 'sell' ? marketPrice + Number(priceDelta) : marketPrice - Number(priceDelta);
       }
-      console.log('finalPrice:', finalPrice);
 
       return {
         price: Number(finalPrice),
-        priceUSD: Number(finalPrice / rate)
+        priceUSD: Number(finalPrice / rate),
+        marketPrice: marketPrice  // Return market price in target currency
       };
     } catch (error) {
       console.error('Error calculating offer price:', error);
@@ -449,7 +444,7 @@ export class P2PService {
           const mappedOffer = {
             ...offer,
             calculatedPrice: calculatedPrice.price,
-            marketPrice: calculatedPrice.priceUSD,
+            marketPrice: calculatedPrice.marketPrice,
             paymentMethods: offer.paymentMethods.map(method => {
               if (offer.type === 'buy') {
                 const foundType = paymentMethodTypes.find(type => type.id === method.typeId);
