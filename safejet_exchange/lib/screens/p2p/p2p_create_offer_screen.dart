@@ -10,7 +10,12 @@ import '../../models/kyc_level.dart';
 import '../../screens/settings/kyc_levels_screen.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
-  const P2PCreateOfferScreen({super.key});
+  final Map<String, dynamic>? offer;
+
+  const P2PCreateOfferScreen({
+    super.key,
+    this.offer,
+  });
 
   @override
   State<P2PCreateOfferScreen> createState() => _P2PCreateOfferScreenState();
@@ -27,7 +32,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _termsController = TextEditingController();
   
-  final List<String> _selectedPaymentMethods = [];
+  List<String> _selectedPaymentMethods = [];
   String _userCurrency = 'NGN';
   double? _marketPrice;
   bool _isPriceLoading = false;
@@ -67,6 +72,24 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.offer != null) {
+      // Populate fields with existing offer data
+      _isBuyOffer = widget.offer!['type'] == 'buy';
+      _selectedCrypto = widget.offer!['token']['symbol'] ?? 'USDT';
+      _amountController.text = widget.offer!['amount'].toString();
+      _priceController.text = widget.offer!['price'].toString();
+      _termsController.text = widget.offer!['terms'] ?? '';
+      _selectedPaymentMethods = (widget.offer!['paymentMethods'] as List)
+          .map((m) => m['typeId'].toString())
+          .toList();
+      
+      // Set min/max amounts from metadata
+      final metadata = widget.offer!['metadata'] as Map<String, dynamic>?;
+      if (metadata != null) {
+        _minAmountController.text = metadata['minAmount']?.toString() ?? '';
+        _maxAmountController.text = metadata['maxAmount']?.toString() ?? '';
+      }
+    }
     _loadInitialData();
     _checkKycLevel();
   }
@@ -419,7 +442,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
 
     return Scaffold(
       appBar: P2PAppBar(
-        title: 'Create Offer',
+        title: widget.offer != null ? 'Edit Offer' : 'Create Offer',
         hasNotification: false,
         onThemeToggle: () {
           themeProvider.toggleTheme();

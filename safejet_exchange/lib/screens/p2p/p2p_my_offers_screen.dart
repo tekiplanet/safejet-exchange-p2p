@@ -8,6 +8,7 @@ import '../../services/p2p_service.dart';
 import '../../screens/settings/kyc_levels_screen.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
+import '../../screens/p2p/p2p_create_offer_screen.dart';
 
 class P2PMyOffersScreen extends StatefulWidget {
   const P2PMyOffersScreen({super.key});
@@ -856,42 +857,65 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: isBuy
-                              ? [
-                                  SafeJetColors.success.withOpacity(0.8),
-                                  SafeJetColors.success,
-                                ]
-                              : [
-                                  SafeJetColors.warning.withOpacity(0.8),
-                                  SafeJetColors.warning,
-                                ],
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (isBuy ? SafeJetColors.success : SafeJetColors.warning)
-                                .withOpacity(0.2),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.edit,
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            size: 20,
                           ),
-                        ],
-                      ),
-                      child: Text(
-                        isBuy ? 'BUY' : 'SELL',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          onPressed: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => P2PCreateOfferScreen(offer: offer),
+                              ),
+                            );
+                            if (result == true) {
+                              _loadOffers(); // Refresh the offers list
+                            }
+                          },
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: isBuy
+                                  ? [
+                                      SafeJetColors.success.withOpacity(0.8),
+                                      SafeJetColors.success,
+                                    ]
+                                  : [
+                                      SafeJetColors.warning.withOpacity(0.8),
+                                      SafeJetColors.warning,
+                                    ],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isBuy ? SafeJetColors.success : SafeJetColors.warning)
+                                    .withOpacity(0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            isBuy ? 'BUY' : 'SELL',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
