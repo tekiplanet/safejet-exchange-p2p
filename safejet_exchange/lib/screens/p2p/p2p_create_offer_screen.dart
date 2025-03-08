@@ -44,6 +44,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   List<Map<String, dynamic>> _availablePaymentMethods = [];
   bool _isLoadingPaymentMethods = false;
 
+  String _selectedPriceType = 'fixed';  // 'fixed' or 'percentage'
+  final _priceDeltaController = TextEditingController();
+
   final List<Map<String, dynamic>> _availablePaymentMethodsList = [
     {
       'name': 'Bank Transfer',
@@ -436,6 +439,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     _searchController.dispose();
     _minAmountController.dispose();
     _maxAmountController.dispose();
+    _priceDeltaController.dispose();
     super.dispose();
   }
 
@@ -465,6 +469,120 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                   _buildCryptoSelector(isDark),
                   const SizedBox(height: 24),
                   _buildAmountInput(isDark),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black.withOpacity(0.3) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Price Setting',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            Icon(
+                              Icons.info_outline,
+                              size: 20,
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: ButtonTheme(
+                              alignedDropdown: true,
+                              child: DropdownButton<String>(
+                                value: _selectedPriceType,
+                                isExpanded: true,
+                                icon: Icon(
+                                  Icons.keyboard_arrow_down,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black,
+                                  fontSize: 16,
+                                ),
+                                dropdownColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+                                items: [
+                                  DropdownMenuItem(
+                                    value: 'fixed',
+                                    child: Text(
+                                      'Fixed Amount',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'percentage',
+                                    child: Text(
+                                      'Percentage',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white : Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  setState(() {
+                                    _selectedPriceType = value!;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: TextFormField(
+                            controller: _priceDeltaController,
+                            keyboardType: TextInputType.numberWithOptions(decimal: true),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                            decoration: InputDecoration(
+                              labelText: _selectedPriceType == 'fixed' ? 'Price Difference' : 'Price Percentage',
+                              labelStyle: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                              suffixText: _selectedPriceType == 'percentage' ? '%' : _selectedCurrency,
+                              suffixStyle: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              filled: true,
+                              fillColor: Colors.transparent,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Container(
                     decoration: BoxDecoration(
@@ -1207,6 +1325,27 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       return;
     }
 
+    final priceDelta = double.tryParse(_priceDeltaController.text);
+    if (priceDelta == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid price difference'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedPriceType == 'percentage' && (priceDelta < -100 || priceDelta > 100)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Price percentage must be between -100% and 100%'),
+          backgroundColor: SafeJetColors.error,
+        ),
+      );
+      return;
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     bool isSubmitting = false;
@@ -1376,7 +1515,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                           }
 
                           // Create the offer
-                          final response = await _p2pService.createOffer({
+                          final offerData = {
                             'tokenId': tokenId,
                             'amount': double.parse(_amountController.text),
                             'price': double.parse(_priceController.text.replaceAll(',', '')),
@@ -1390,7 +1529,11 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                             })).toList(),
                             'minAmount': minAmount,
                             'maxAmount': maxAmount,
-                          });
+                            'priceType': _selectedPriceType,
+                            'priceDelta': double.parse(_priceDeltaController.text),
+                          };
+
+                          final response = await _p2pService.createOffer(offerData);
 
                           Navigator.pop(context, response);
                           if (mounted) {

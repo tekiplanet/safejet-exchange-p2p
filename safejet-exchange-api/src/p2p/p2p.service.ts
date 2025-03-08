@@ -204,13 +204,58 @@ export class P2PService {
     }
   }
 
-  async createOffer(userId: string, createOfferDto: CreateOfferDto) {
-    // Create the offer
+  async calculateOfferPrice(
+    tokenId: string, 
+    currency: string, 
+    priceType: 'percentage' | 'fixed', 
+    priceDelta: number,
+    type: 'buy' | 'sell'
+  ): Promise<number> {
+    try {
+      // Get current market price from exchange rates
+      const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
+      if (!token) throw new NotFoundException('Token not found');
+
+      // Get base price in USD first
+      const basePrice = token.currentPrice;
+      
+      // Get currency exchange rate (stored in lowercase)
+      const exchangeRate = await this.exchangeRateRepository.findOne({
+        where: { currency: currency.toLowerCase() }  // This matches our exchange_rates table structure
+      });
+      if (!exchangeRate) throw new NotFoundException('Exchange rate not found');
+
+      // Calculate market price in target currency
+      const marketPrice = basePrice * exchangeRate.rate;  // Using rate instead of price
+
+      // Calculate final price based on type and delta
+      if (priceType === 'percentage') {
+        const multiplier = type === 'sell' ? (1 + priceDelta/100) : (1 - priceDelta/100);
+        return marketPrice * multiplier;
+      } else {
+        return type === 'sell' ? marketPrice + priceDelta : marketPrice - priceDelta;
+      }
+    } catch (error) {
+      console.error('Error calculating offer price:', error);
+      throw error;
+    }
+  }
+
+  async createOffer(userId: string, createOfferDto: CreateOfferDto): Promise<P2POffer> {
+    try {
+      const calculatedPrice = await this.calculateOfferPrice(
+        createOfferDto.tokenId,
+        createOfferDto.currency,
+        createOfferDto.priceType,
+        createOfferDto.priceDelta,
+        createOfferDto.isBuyOffer ? 'buy' : 'sell'
+      );
+
     const offer = this.p2pOfferRepository.create({
       userId,
       tokenId: createOfferDto.tokenId,
       amount: createOfferDto.amount,
-      price: createOfferDto.price,
+      price: calculatedPrice,
       currency: createOfferDto.currency,
       priceUSD: createOfferDto.priceUSD,
       type: createOfferDto.isBuyOffer ? 'buy' : 'sell',
@@ -221,10 +266,15 @@ export class P2PService {
         minAmount: createOfferDto.minAmount,
         maxAmount: createOfferDto.maxAmount,
       },
+      priceType: createOfferDto.priceType,
+      priceDelta: createOfferDto.priceDelta,
     });
 
-    // Save and return the offer
-    return this.p2pOfferRepository.save(offer);
+      return await this.p2pOfferRepository.save(offer);
+    } catch (error) {
+      console.error('Error creating offer:', error);
+      throw error;
+    }
   }
 
   async getUserKycLevel(userId: string) {

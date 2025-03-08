@@ -30,7 +30,13 @@ export class P2POffer {
   @Column()
   currency: string;
 
-  @Column('decimal', { precision: 18, scale: 8 })
+  @Column({ type: 'varchar', length: 20, nullable: false, default: 'fixed' })
+  priceType: 'percentage' | 'fixed';
+
+  @Column({ type: 'decimal', precision: 36, scale: 18, nullable: false })
+  priceDelta: number;
+
+  @Column({ type: 'decimal', precision: 36, scale: 18, nullable: false })
   price: number;
 
   @Column('decimal', { precision: 18, scale: 8 })
@@ -45,7 +51,7 @@ export class P2POffer {
   @Column()
   status: 'active' | 'pending' | 'completed' | 'cancelled';
 
-  @Column('jsonb', { default: {} })
+  @Column('jsonb', { default: '{}' })
   metadata: Record<string, any>;
 
   @CreateDateColumn()
