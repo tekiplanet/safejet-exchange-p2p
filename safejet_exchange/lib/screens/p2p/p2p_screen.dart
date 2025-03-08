@@ -13,6 +13,7 @@ import 'package:get_it/get_it.dart';
 import '../../services/p2p_service.dart';
 import 'package:shimmer/shimmer.dart';
 import '../settings/kyc_levels_screen.dart';
+import 'package:intl/intl.dart';
 
 class P2PScreen extends StatefulWidget {
   const P2PScreen({super.key});
@@ -783,14 +784,25 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildOfferCard(bool isDark, bool isBuy, Map<String, dynamic> offer) {
-    // Use the token data directly from the offer
+    print('Building offer card with data: ${offer.toString()}');
+    
     final token = offer['token'] as Map<String, dynamic>;
     final symbol = token['symbol'] ?? 'Unknown';
-
+    
+    // Get payment methods
     final paymentMethodsData = offer['paymentMethods'] as List;
     final paymentMethods = paymentMethodsData.map((pm) {
       return (pm as Map<String, dynamic>)['name'] as String;
     }).toList();
+
+    // Get price info
+    final currentPrice = double.tryParse(offer['calculatedPrice']?.toString() ?? '0') ?? 0.0;
+    final marketPrice = double.tryParse(offer['marketPrice']?.toString() ?? '0') ?? 0.0;
+    final priceDelta = double.tryParse(offer['priceDelta'].toString()) ?? 0.0;
+    final priceType = offer['priceType'] as String;
+
+    // Calculate the actual price difference
+    final priceDifference = (currentPrice - marketPrice).abs();
 
     return Material(
       color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
@@ -926,7 +938,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _formatPrice(offer['price'], offer['currency']),
+                          '${NumberFormat("#,##0.00").format(currentPrice)} ${offer['currency']}',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -997,6 +1009,15 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                   ).toList(),
                 ),
               ],
+              Text(
+                priceType == 'percentage'
+                    ? '${NumberFormat("#,##0.00").format(priceDifference)} ${offer['currency']} ${isBuy ? 'below' : 'above'} market'
+                    : '${NumberFormat("#,##0.00").format(priceDelta)} ${offer['currency']} ${isBuy ? 'below' : 'above'} market',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
             ],
           ),
         ),

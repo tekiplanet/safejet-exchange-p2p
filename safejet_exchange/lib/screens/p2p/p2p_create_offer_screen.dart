@@ -140,7 +140,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       setState(() {
         _availableAssets = assets;
         if (widget.offer == null && assets.isNotEmpty) {
-          _selectedCrypto = assets[0]['symbol'];
+            _selectedCrypto = assets[0]['symbol'];
           _updateMarketPrice();
         }
       });

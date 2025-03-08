@@ -215,8 +215,9 @@ export class P2PService {
       const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
       if (!token) throw new NotFoundException('Token not found');
 
-      // Get base price in USD
-      const baseUsdPrice = token.currentPrice;
+      // Get base price in USD - ensure it's a number
+      const baseUsdPrice = Number(token.currentPrice);
+      console.log('baseUsdPrice:', baseUsdPrice);
       
       // Get currency exchange rate
       const exchangeRate = await this.exchangeRateRepository.findOne({
@@ -224,24 +225,27 @@ export class P2PService {
       });
       if (!exchangeRate) throw new NotFoundException('Exchange rate not found');
 
-      // Calculate market price in target currency
-      const marketPrice = baseUsdPrice * exchangeRate.rate;
+      // Calculate market price in target currency - ensure it's a number
+      const rate = Number(exchangeRate.rate);
+      const marketPrice = baseUsdPrice * rate;
+      console.log('marketPrice:', marketPrice);
+      console.log('priceDelta:', priceDelta);
+      console.log('priceType:', priceType);
+      console.log('type:', type);
 
       // Calculate final price based on type and delta
-      let finalPrice: number;
+      let finalPrice = 0;
       if (priceType === 'percentage') {
-        const multiplier = type === 'sell' ? (1 + priceDelta/100) : (1 - priceDelta/100);
+        const multiplier = type === 'sell' ? (1 + Number(priceDelta)/100) : (1 - Number(priceDelta)/100);
         finalPrice = marketPrice * multiplier;
       } else {
-        finalPrice = type === 'sell' ? marketPrice + priceDelta : marketPrice - priceDelta;
+        finalPrice = type === 'sell' ? marketPrice + Number(priceDelta) : marketPrice - Number(priceDelta);
       }
-
-      // Calculate back to USD
-      const finalUsdPrice = finalPrice / exchangeRate.rate;
+      console.log('finalPrice:', finalPrice);
 
       return {
-        price: finalPrice,
-        priceUSD: finalUsdPrice
+        price: Number(finalPrice),
+        priceUSD: Number(finalPrice / rate)
       };
     } catch (error) {
       console.error('Error calculating offer price:', error);
@@ -426,17 +430,29 @@ export class P2PService {
       console.log('Sellers payment methods:', sellersPaymentMethods);
 
       return {
-        offers: offers.map(offer => {
-          console.log('Processing offer:', offer.id);
-          console.log('Offer payment methods:', offer.paymentMethods);
-          
+        offers: await Promise.all(offers.map(async offer => {
+          // Calculate current price using existing calculateOfferPrice method
+          const calculatedPrice = await this.calculateOfferPrice(
+            offer.token.id,
+            offer.currency,
+            offer.priceType,
+            offer.priceDelta,
+            offer.type
+          );
+
+          console.log('Calculated price for offer:', {
+            offerId: offer.id,
+            price: calculatedPrice.price,
+            priceUSD: calculatedPrice.priceUSD
+          });
+
           const mappedOffer = {
             ...offer,
+            calculatedPrice: calculatedPrice.price,
+            marketPrice: calculatedPrice.priceUSD,
             paymentMethods: offer.paymentMethods.map(method => {
-              // console.log('Processing payment method:', method);
               if (offer.type === 'buy') {
                 const foundType = paymentMethodTypes.find(type => type.id === method.typeId);
-                // console.log('Found payment method type:', foundType);
                 return {
                   ...method,
                   name: foundType?.name || 'Unknown'
@@ -457,9 +473,8 @@ export class P2PService {
               name: offer.user.fullName,
             },
           };
-          console.log('Mapped offer:', mappedOffer);
           return mappedOffer;
-        }),
+        })),
         pagination: {
           total,
           page,
