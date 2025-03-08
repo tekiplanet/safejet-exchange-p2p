@@ -33,7 +33,6 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   String _selectedCrypto = 'USDT';
   String _selectedCurrency = 'NGN';
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
   final TextEditingController _termsController = TextEditingController();
   
   List<String> _selectedPaymentMethods = [];
@@ -80,11 +79,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   void initState() {
     super.initState();
     if (widget.offer != null) {
-      // Populate fields with existing offer data
       _isBuyOffer = widget.offer!['type'] == 'buy';
       _selectedCrypto = widget.offer!['token']['symbol'] ?? 'USDT';
       _amountController.text = widget.offer!['amount'].toString();
-      _priceController.text = widget.offer!['price'].toString();
       _termsController.text = widget.offer!['terms'] ?? '';
       _selectedPaymentMethods = (widget.offer!['paymentMethods'] as List)
           .map((m) => m['typeId'].toString())
@@ -96,6 +93,8 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
         _minAmountController.text = metadata['minAmount']?.toString() ?? '';
         _maxAmountController.text = metadata['maxAmount']?.toString() ?? '';
       }
+      _selectedPriceType = widget.offer!['priceType'] ?? 'fixed';
+      _priceDeltaController.text = widget.offer!['priceDelta']?.toString() ?? '';
     }
     _loadInitialData();
     _checkKycLevel();
@@ -140,12 +139,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       final assets = await _p2pService.getAvailableAssets(_isBuyOffer);
       setState(() {
         _availableAssets = assets;
-        if (assets.isNotEmpty) {
-          final newSelectedCrypto = assets[0]['symbol'];
-          if (_selectedCrypto != newSelectedCrypto) {
-            _selectedCrypto = assets[0]['symbol'];
-            _updateMarketPrice();  // Update market price for the new asset
-          }
+        if (widget.offer == null && assets.isNotEmpty) {
+          _selectedCrypto = assets[0]['symbol'];
+          _updateMarketPrice();
         }
       });
     } catch (e) {
@@ -171,10 +167,10 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       setState(() {
         _marketPrice = price;
         // Format price with commas and proper decimals
-        _priceController.text = price.toStringAsFixed(2).replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]},'
-        );
+        // _priceController.text = price.toStringAsFixed(2).replaceAllMapped(
+        //   RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+        //   (Match m) => '${m[1]},'
+        // );
       });
     } catch (e) {
       print('Error loading market price: $e');
@@ -434,7 +430,6 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
   @override
   void dispose() {
     _amountController.dispose();
-    _priceController.dispose();
     _termsController.dispose();
     _searchController.dispose();
     _minAmountController.dispose();
@@ -568,6 +563,15 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                               suffixStyle: TextStyle(
                                 color: isDark ? Colors.grey[400] : Colors.grey[600],
                               ),
+                              helperText: _marketPrice != null 
+                                ? 'Market Price: ${_marketPrice!.toStringAsFixed(2).replaceAllMapped(
+                                    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+                                    (Match m) => '${m[1]},'
+                                  )} $_selectedCurrency'
+                                : _isPriceLoading ? 'Loading market price...' : null,
+                              helperStyle: TextStyle(
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -643,8 +647,6 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  _buildPriceInput(isDark),
                   const SizedBox(height: 24),
                   _buildPaymentMethods(isDark),
                   const SizedBox(height: 24),
@@ -989,62 +991,6 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
     );
   }
 
-  Widget _buildPriceInput(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Price',
-          style: TextStyle(
-            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _priceController,
-          keyboardType: TextInputType.number,
-          inputFormatters: [
-            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-          ],
-          decoration: InputDecoration(
-            hintText: '0.00',
-            suffixText: _userCurrency,
-            helperText: _marketPrice != null 
-              ? 'Market Price: ${_marketPrice!.toStringAsFixed(2).replaceAllMapped(
-                RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-                (Match m) => '${m[1]},'
-              )}'
-              : _isPriceLoading ? 'Loading market price...' : null,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: isDark
-                ? Colors.white.withOpacity(0.05)
-                : Colors.black.withOpacity(0.05),
-            contentPadding: const EdgeInsets.all(16),
-          ),
-        ),
-      ],
-    );
-  }
-
-  IconData _getIconForName(String iconName) {
-    switch (iconName) {
-      case 'bank':
-        return Icons.account_balance;
-      case 'mobile':
-        return Icons.phone_android;
-      case 'qr_code':
-        return Icons.qr_code;
-      case 'payment':
-        return Icons.payment;
-      default:
-        return Icons.payment; // Default icon
-    }
-  }
-
   Widget _buildPaymentMethods(bool isDark) {
     if (_isLoadingPaymentMethods) {
       return const Center(child: CircularProgressIndicator());
@@ -1315,10 +1261,10 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       return;
     }
 
-    if (_priceController.text.isEmpty) {
+    if (_priceDeltaController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter the price'),
+          content: Text('Please enter the price difference'),
           backgroundColor: SafeJetColors.error,
         ),
       );
@@ -1408,13 +1354,6 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                           title: 'Amount',
                           value: '${_amountController.text} $_selectedCrypto',
                           icon: Icons.account_balance_wallet,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDetailCard(
-                          title: 'Price',
-                          value: '₦${_priceController.text}/$_selectedCrypto',
-                          icon: Icons.payments,
                           isDark: isDark,
                         ),
                         const SizedBox(height: 16),
@@ -1514,12 +1453,24 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                             return;
                           }
 
+                          // Add method to calculate price
+                          double calculatePrice(double marketPrice, String priceType, double priceDelta, bool isBuyOffer) {
+                            if (priceType == 'percentage') {
+                              final multiplier = isBuyOffer ? (1 - priceDelta/100) : (1 + priceDelta/100);
+                              return marketPrice * multiplier;
+                            } else {
+                              return isBuyOffer ? marketPrice - priceDelta : marketPrice + priceDelta;
+                            }
+                          }
+
+                          // Calculate price
+                          final marketPrice = _marketPrice!;
+                          final calculatedPrice = calculatePrice(marketPrice, _selectedPriceType, priceDelta, _isBuyOffer);
+
                           // Create the offer
                           final offerData = {
                             'tokenId': tokenId,
                             'amount': double.parse(_amountController.text),
-                            'price': double.parse(_priceController.text.replaceAll(',', '')),
-                            'priceUSD': _marketPrice ?? 0,
                             'currency': _userCurrency,
                             'isBuyOffer': _isBuyOffer,
                             'terms': _termsController.text,
@@ -1530,7 +1481,9 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
                             'minAmount': minAmount,
                             'maxAmount': maxAmount,
                             'priceType': _selectedPriceType,
-                            'priceDelta': double.parse(_priceDeltaController.text),
+                            'priceDelta': priceDelta,
+                            'price': calculatedPrice,  // Add calculated price
+                            'priceUSD': _marketPrice,  // Add market price in USD
                           };
 
                           final response = await _p2pService.createOffer(offerData);
@@ -1698,5 +1651,20 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
         ],
       ),
     );
+  }
+
+  IconData _getIconForName(String iconName) {
+    switch (iconName) {
+      case 'bank':
+        return Icons.account_balance;
+      case 'mobile':
+        return Icons.phone_android;
+      case 'qr_code':
+        return Icons.qr_code;
+      case 'payment':
+        return Icons.payment;
+      default:
+        return Icons.payment; // Default icon
+    }
   }
 } 

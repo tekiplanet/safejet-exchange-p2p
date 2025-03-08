@@ -820,6 +820,9 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
     final price = double.tryParse(offer['price'].toString()) ?? 0;
     final formattedPrice = NumberFormat("#,##0.00").format(price);
     
+    // Get token symbol from offer data
+    final tokenSymbol = offer['token']?['symbol'] ?? 'Unknown';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -871,7 +874,7 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$formattedAmount AAVE',
+                          '$formattedAmount $tokenSymbol',
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,

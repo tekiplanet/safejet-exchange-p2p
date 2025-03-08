@@ -210,31 +210,39 @@ export class P2PService {
     priceType: 'percentage' | 'fixed', 
     priceDelta: number,
     type: 'buy' | 'sell'
-  ): Promise<number> {
+  ): Promise<{ price: number; priceUSD: number }> {
     try {
-      // Get current market price from exchange rates
       const token = await this.tokenRepository.findOne({ where: { id: tokenId } });
       if (!token) throw new NotFoundException('Token not found');
 
-      // Get base price in USD first
-      const basePrice = token.currentPrice;
+      // Get base price in USD
+      const baseUsdPrice = token.currentPrice;
       
-      // Get currency exchange rate (stored in lowercase)
+      // Get currency exchange rate
       const exchangeRate = await this.exchangeRateRepository.findOne({
-        where: { currency: currency.toLowerCase() }  // This matches our exchange_rates table structure
+        where: { currency: currency.toLowerCase() }
       });
       if (!exchangeRate) throw new NotFoundException('Exchange rate not found');
 
       // Calculate market price in target currency
-      const marketPrice = basePrice * exchangeRate.rate;  // Using rate instead of price
+      const marketPrice = baseUsdPrice * exchangeRate.rate;
 
       // Calculate final price based on type and delta
+      let finalPrice: number;
       if (priceType === 'percentage') {
         const multiplier = type === 'sell' ? (1 + priceDelta/100) : (1 - priceDelta/100);
-        return marketPrice * multiplier;
+        finalPrice = marketPrice * multiplier;
       } else {
-        return type === 'sell' ? marketPrice + priceDelta : marketPrice - priceDelta;
+        finalPrice = type === 'sell' ? marketPrice + priceDelta : marketPrice - priceDelta;
       }
+
+      // Calculate back to USD
+      const finalUsdPrice = finalPrice / exchangeRate.rate;
+
+      return {
+        price: finalPrice,
+        priceUSD: finalUsdPrice
+      };
     } catch (error) {
       console.error('Error calculating offer price:', error);
       throw error;
@@ -255,9 +263,9 @@ export class P2PService {
       userId,
       tokenId: createOfferDto.tokenId,
       amount: createOfferDto.amount,
-      price: calculatedPrice,
+      price: calculatedPrice.price,
+      priceUSD: calculatedPrice.priceUSD,
       currency: createOfferDto.currency,
-      priceUSD: createOfferDto.priceUSD,
       type: createOfferDto.isBuyOffer ? 'buy' : 'sell',
       terms: createOfferDto.terms,
       status: 'active',
@@ -519,17 +527,28 @@ export class P2PService {
       throw new NotFoundException('Offer not found');
     }
 
+    // Calculate new price based on price type and delta
+    const calculatedPrice = await this.calculateOfferPrice(
+      offer.tokenId,
+      offer.currency,
+      updateOfferDto.priceType,
+      updateOfferDto.priceDelta,
+      offer.type
+    );
+
     // Update the offer with new data
     Object.assign(offer, {
       amount: updateOfferDto.amount,
-      price: updateOfferDto.price,
-      priceUSD: updateOfferDto.priceUSD,
       terms: updateOfferDto.terms,
       paymentMethods: updateOfferDto.paymentMethods,
       metadata: {
         minAmount: updateOfferDto.minAmount,
         maxAmount: updateOfferDto.maxAmount,
       },
+      priceType: updateOfferDto.priceType,
+      priceDelta: updateOfferDto.priceDelta,
+      price: calculatedPrice.price,
+      priceUSD: calculatedPrice.priceUSD,
     });
 
     return this.p2pOfferRepository.save(offer);

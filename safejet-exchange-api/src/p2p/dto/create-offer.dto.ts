@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsArray, IsIn, IsNotEmpty, ValidateNested, Min, Max, ArrayMinSize, IsBoolean, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsArray, IsIn, IsNotEmpty, ValidateNested, Min, Max, ArrayMinSize, IsBoolean, IsOptional, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class PaymentMethodDto {
@@ -59,7 +59,10 @@ export class CreateOfferDto {
   priceType: 'percentage' | 'fixed';
 
   @IsNumber()
+  @ValidateIf(o => o.priceType === 'percentage')
   @Min(-100)
   @Max(100)
+  @ValidateIf(o => o.priceType === 'fixed')
+  @Min(0)
   priceDelta: number;
 } 
