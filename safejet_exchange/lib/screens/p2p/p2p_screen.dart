@@ -726,7 +726,11 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const P2PCreateOfferScreen(),
+              builder: (context) => P2PCreateOfferScreen(
+                isBuyOffer: _tabController.index == 0,
+                selectedToken: null,
+                offer: null,
+              ),
             ),
           );
         },

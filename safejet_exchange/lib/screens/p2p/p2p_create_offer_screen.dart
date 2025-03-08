@@ -10,11 +10,15 @@ import '../../models/kyc_level.dart';
 import '../../screens/settings/kyc_levels_screen.dart';
 
 class P2PCreateOfferScreen extends StatefulWidget {
-  final Map<String, dynamic>? offer;
+  final Map<String, dynamic>? offer;  // This is for editing existing offers
+  final Map<String, dynamic>? selectedToken;
+  final bool isBuyOffer;
 
   const P2PCreateOfferScreen({
     super.key,
     this.offer,
+    this.selectedToken,
+    required this.isBuyOffer,
   });
 
   @override

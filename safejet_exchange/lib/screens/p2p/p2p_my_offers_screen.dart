@@ -869,11 +869,15 @@ class _P2PMyOffersScreenState extends State<P2PMyOffersScreen> {
                             final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => P2PCreateOfferScreen(offer: offer),
+                                builder: (context) => P2PCreateOfferScreen(
+                                  offer: offer,
+                                  selectedToken: offer['token'],
+                                  isBuyOffer: offer['type'] == 'buy',
+                                ),
                               ),
                             );
                             if (result == true) {
-                              _loadOffers(); // Refresh the offers list
+                              _loadOffers();
                             }
                           },
                         ),
