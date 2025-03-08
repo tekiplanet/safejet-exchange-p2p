@@ -77,6 +77,7 @@ interface ProcessedBalance {
       };
     };
   };
+  frozen: string;
 }
 
 interface BalanceResponse {
@@ -416,10 +417,16 @@ export class WalletService {
           // Log price data for debugging
           this.logger.debug(`Token ${token?.symbol}: Price = ${currentPrice}, Balance = ${totalBalance}, USD Value = ${usdValue}`);
 
+          this.logger.debug(`Balance details for ${balance.baseSymbol}:`, {
+            balance: totalBalance.toString(),
+            frozen: balance.frozen,
+          });
+
           return {
             ...balance,
             networks,
             balance: totalBalance.toString(),
+            frozen: balance.frozen || '0',
             usdValue,
             token: token ? {
               ...token,

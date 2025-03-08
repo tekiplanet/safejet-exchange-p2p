@@ -919,6 +919,7 @@ class _WalletsTabState extends State<WalletsTab> {
 
                 return GestureDetector(
                   onTap: () {
+                    print('Asset being passed to details: $balance');
                     Navigator.push(
                       context,
                       MaterialPageRoute(

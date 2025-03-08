@@ -87,8 +87,15 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
   }
 
   String _formatExactBalance(double value) {
-    final formatter = NumberFormat('#,##0.########'); // 8 decimal places for crypto
-    return formatter.format(value);
+    final formatter = NumberFormat('#,##0.00000000'); // Fixed 8 decimal places
+    String formatted = formatter.format(value);
+    
+    // Trim trailing zeros but keep at least 2 decimal places
+    while (formatted.endsWith('0') && formatted.split('.')[1].length > 2) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
+    
+    return formatted;
   }
 
   String _formatFiatBalance(double value) {
@@ -184,6 +191,9 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('Raw frozen value: ${widget.asset['frozen']}');
+    final frozen = double.tryParse(widget.asset['frozen']?.toString() ?? '0') ?? 0.0;
+    print('Parsed frozen value: $frozen');
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final token = widget.asset['token'] as Map<String, dynamic>;
@@ -372,7 +382,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '0.00000000',
+                                _formatExactBalance(frozen),
                                 style: theme.textTheme.titleLarge?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),

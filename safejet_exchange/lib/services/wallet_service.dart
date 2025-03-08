@@ -104,6 +104,8 @@ class WalletService {
         print('\n=== Token Balance ===');
         print('Symbol: ${token['symbol']}');
         print('Type: ${balance['type']}');
+        print('Available: ${balance['balance']}');
+        print('Frozen: ${balance['frozen']}');
         
         // Process networks with new structure
         if (networks != null) {
