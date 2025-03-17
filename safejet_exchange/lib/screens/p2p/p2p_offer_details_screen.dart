@@ -83,6 +83,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
     
     final offer = offerDetails!;
     final price = double.tryParse(offer['calculatedPrice']?.toString() ?? '0') ?? 0.0;
+    // These are in asset (USDT)
     final minAmount = double.tryParse(offer['metadata']['minAmount']?.toString() ?? '0') ?? 0.0;
     final maxAmount = double.tryParse(offer['metadata']['maxAmount']?.toString() ?? '0') ?? 0.0;
     final availableAmount = double.tryParse(offer['amount']?.toString() ?? '0') ?? 0.0;
@@ -94,31 +95,34 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
     double calculatedCurrency = 0.0;
     
     if (_isCurrencyMode) {
-      // Currency mode - validate currency amount
+      // User entered amount in currency (e.g., NGN)
       calculatedCurrency = amount;
-      calculatedAsset = amount / price;
+      calculatedAsset = amount / price; // Convert to asset
       
-      if (amount < minAmount) {
-        error = 'Minimum amount is ${minAmount.toStringAsFixed(2)} $currency';
-      } else if (amount > maxAmount) {
-        error = 'Maximum amount is ${maxAmount.toStringAsFixed(2)} $currency';
+      // Convert min/max to currency for comparison
+      final minCurrency = minAmount * price;
+      final maxCurrency = maxAmount * price;
+      
+      if (amount < minCurrency) {
+        error = 'Minimum amount is ${minCurrency.toStringAsFixed(2)} $currency';
+      } else if (amount > maxCurrency) {
+        error = 'Maximum amount is ${maxCurrency.toStringAsFixed(2)} $currency';
       } else if (calculatedAsset > availableAmount) {
-        error = 'Exceeds available amount';
+        final availableInCurrency = availableAmount * price;
+        error = 'Exceeds available amount (${availableInCurrency.toStringAsFixed(2)} $currency)';
       }
     } else {
-      // Asset mode - validate asset amount
+      // User entered amount in asset (e.g., USDT)
       calculatedAsset = amount;
-      calculatedCurrency = amount * price;
+      calculatedCurrency = amount * price; // Convert to currency
       
-      final minAsset = minAmount / price;
-      final maxAsset = maxAmount / price;
-      
-      if (amount < minAsset) {
-        error = 'Minimum amount is ${minAsset.toStringAsFixed(6)} $tokenSymbol';
-      } else if (amount > maxAsset) {
-        error = 'Maximum amount is ${maxAsset.toStringAsFixed(6)} $tokenSymbol';
+      // Min/max are already in asset, so direct comparison
+      if (amount < minAmount) {
+        error = 'Minimum amount is ${minAmount.toStringAsFixed(6)} $tokenSymbol';
+      } else if (amount > maxAmount) {
+        error = 'Maximum amount is ${maxAmount.toStringAsFixed(6)} $tokenSymbol';
       } else if (amount > availableAmount) {
-        error = 'Exceeds available amount';
+        error = 'Exceeds available amount (${availableAmount.toStringAsFixed(6)} $tokenSymbol)';
       }
     }
     
@@ -1176,22 +1180,24 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                 onPressed: () {
                   // Set max amount based on available and limits
                   if (offerDetails != null) {
+                    // These are in asset (USDT)
                     final maxAmount = double.tryParse(offerDetails!['metadata']['maxAmount']?.toString() ?? '0') ?? 0.0;
                     final availableAmount = double.tryParse(offerDetails!['amount']?.toString() ?? '0') ?? 0.0;
                     final price = double.tryParse(offerDetails!['calculatedPrice']?.toString() ?? '0') ?? 0.0;
                     
-                    double maxValue;
                     if (_isCurrencyMode) {
-                      // Max in currency
+                      // In currency mode, convert max and available to currency
+                      final maxInCurrency = maxAmount * price;
                       final availableInCurrency = availableAmount * price;
-                      maxValue = maxAmount < availableInCurrency ? maxAmount : availableInCurrency;
+                      
+                      // Use the smaller of max limit or available
+                      final maxValue = maxInCurrency < availableInCurrency ? maxInCurrency : availableInCurrency;
+                      _amountController.text = maxValue.toStringAsFixed(2);
                     } else {
-                      // Max in asset
-                      final maxInAsset = maxAmount / price;
-                      maxValue = maxInAsset < availableAmount ? maxInAsset : availableAmount;
+                      // In asset mode, use the smaller of max limit or available
+                      final maxValue = maxAmount < availableAmount ? maxAmount : availableAmount;
+                      _amountController.text = maxValue.toStringAsFixed(6);
                     }
-                    
-                    _amountController.text = maxValue.toStringAsFixed(_isCurrencyMode ? 2 : 6);
                   }
                 },
                 style: TextButton.styleFrom(
