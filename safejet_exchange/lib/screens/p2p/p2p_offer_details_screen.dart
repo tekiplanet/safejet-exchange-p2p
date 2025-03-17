@@ -1258,9 +1258,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
           Row(
             children: [
               Text(
-                _isCurrencyMode
-                    ? 'You will receive:'
-                    : 'You will pay:',
+                widget.isBuy
+                    ? (_isCurrencyMode ? 'You will pay:' : 'You will receive:')
+                    : (_isCurrencyMode ? 'You will receive:' : 'You will pay:'),
                 style: TextStyle(
                   color: isDark
                       ? Colors.grey[400]
@@ -1269,9 +1269,13 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
               ),
               const Spacer(),
               Text(
-                _isCurrencyMode
-                    ? '${_assetFormatter.format(_calculatedAssetAmount)} $tokenSymbol'
-                    : '${_currencyFormatter.format(_calculatedCurrencyAmount)} $currency',
+                widget.isBuy
+                    ? (_isCurrencyMode
+                        ? '${_assetFormatter.format(_calculatedAssetAmount)} $tokenSymbol'
+                        : '${_currencyFormatter.format(_calculatedCurrencyAmount)} $currency')
+                    : (_isCurrencyMode
+                        ? '${_currencyFormatter.format(_calculatedCurrencyAmount)} $currency'
+                        : '${_assetFormatter.format(_calculatedAssetAmount)} $tokenSymbol'),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
