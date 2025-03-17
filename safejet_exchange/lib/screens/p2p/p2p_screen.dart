@@ -841,17 +841,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => P2POfferDetailsScreen(
-                offerId: offer['id'],
-                  isBuy: isBuy,
-                ),
-              ),
-            );
-          },
+          onTap: () => _onOfferSelected(offer, isBuy),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -1967,5 +1957,18 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       print('Error loading balances: $e');
       // Show error snackbar if needed
     }
+  }
+
+  void _onOfferSelected(Map<String, dynamic> offer, bool isBuyTab) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => P2POfferDetailsScreen(
+          isBuy: isBuyTab,
+          offerId: offer['id'],
+          offerDetails: offer,
+        ),
+      ),
+    );
   }
 } 

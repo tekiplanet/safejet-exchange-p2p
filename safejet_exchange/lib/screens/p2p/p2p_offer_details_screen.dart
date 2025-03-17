@@ -11,11 +11,13 @@ import 'p2p_order_confirmation_screen.dart';
 class P2POfferDetailsScreen extends StatefulWidget {
   final bool isBuy;
   final String offerId;
+  final Map<String, dynamic> offerDetails;
 
   const P2POfferDetailsScreen({
     super.key,
     required this.isBuy,
     required this.offerId,
+    required this.offerDetails,
   });
 
   @override
@@ -38,9 +40,33 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
+    // Extract offer details
+    final offer = widget.offerDetails;
+    final tokenSymbol = offer['token']['symbol'];
+    final availableAmount = double.tryParse(offer['amount'].toString()) ?? 0.0;
+    final currency = offer['currency'];
+    final minAmount = offer['metadata']['minAmount'];
+    final maxAmount = offer['metadata']['maxAmount'];
+    final paymentMethods = offer['paymentMethods'];
+    final terms = offer['terms'];
+
+    // Calculate the price using priceDelta and priceType
+    final marketPrice = double.tryParse(offer['marketPrice'].toString()) ?? 0.0;
+    final priceDelta = double.tryParse(offer['priceDelta'].toString()) ?? 0.0;
+    final priceType = offer['priceType'] as String;
+
+    double calculatedPrice;
+    if (priceType == 'percentage') {
+      calculatedPrice = marketPrice * (1 + priceDelta / 100);
+    } else {
+      calculatedPrice = marketPrice + priceDelta;
+    }
+
+    final price = calculatedPrice.toStringAsFixed(2);
+
     return Scaffold(
       appBar: CustomAppBar(
-        title: widget.isBuy ? 'Buy USDT' : 'Sell USDT',
+        title: widget.isBuy ? 'Buy $tokenSymbol' : 'Sell $tokenSymbol',
         onNotificationTap: () {
           // TODO: Handle notification tap
         },
@@ -67,7 +93,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                   FadeInUp(
                     duration: const Duration(milliseconds: 400),
                     delay: const Duration(milliseconds: 200),
-                    child: _buildPriceSection(isDark),
+                    child: _buildPriceSection(isDark, price, availableAmount, currency, tokenSymbol, minAmount, maxAmount),
                   ),
                   const SizedBox(height: 24),
 
@@ -75,7 +101,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                   FadeInUp(
                     duration: const Duration(milliseconds: 400),
                     delay: const Duration(milliseconds: 400),
-                    child: _buildPaymentSection(isDark),
+                    child: _buildPaymentSection(isDark, paymentMethods),
                   ),
                   const SizedBox(height: 24),
 
@@ -83,14 +109,14 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                   FadeInUp(
                     duration: const Duration(milliseconds: 400),
                     delay: const Duration(milliseconds: 600),
-                    child: _buildTermsSection(isDark),
+                    child: _buildTermsSection(isDark, terms),
                   ),
                 ],
               ),
             ),
           ),
           // Bottom Action Section
-          _buildActionSection(isDark),
+          _buildActionSection(isDark, currency),
         ],
       ),
     );
@@ -201,7 +227,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
     );
   }
 
-  Widget _buildPriceSection(bool isDark) {
+  Widget _buildPriceSection(bool isDark, String price, double availableAmount, String currency, String tokenSymbol, dynamic minAmount, dynamic maxAmount) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -233,9 +259,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    '₦750.00/USDT',
-                    style: TextStyle(
+                  Text(
+                    '$currency $price/$tokenSymbol',
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
@@ -270,8 +296,8 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildInfoItem('Available', '1,234.56 USDT', isDark),
-              _buildInfoItem('Limit', '₦10,000 - ₦1,000,000', isDark),
+              _buildInfoItem('Available', '${availableAmount.toStringAsFixed(2)} $tokenSymbol', isDark),
+              _buildInfoItem('Limit', '${minAmount.toStringAsFixed(2)} - ${maxAmount.toStringAsFixed(2)} $tokenSymbol', isDark),
             ],
           ),
         ],
@@ -279,7 +305,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
     );
   }
 
-  Widget _buildPaymentSection(bool isDark) {
+  Widget _buildPaymentSection(bool isDark, List<dynamic> paymentMethods) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -304,19 +330,12 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildPaymentMethod(
-            'Bank Transfer',
-            'Transfer to merchant\'s bank account',
-            Icons.account_balance_rounded,
+          ...paymentMethods.map((method) => _buildPaymentMethod(
+            method['name'],
+            method['details'] ?? 'No details available',
+            Icons.payment, // You can map this to specific icons based on method type
             isDark,
-          ),
-          const SizedBox(height: 12),
-          _buildPaymentMethod(
-            'PayPal',
-            'Send money via PayPal',
-            Icons.paypal_rounded,
-            isDark,
-          ),
+          )).toList(),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
@@ -423,7 +442,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
     );
   }
 
-  Widget _buildTermsSection(bool isDark) {
+  Widget _buildTermsSection(bool isDark, String terms) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -449,10 +468,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            '1. Payment must be made within 15 minutes\n'
-            '2. Please confirm your payment details before sending\n'
-            '3. Do not include any crypto-related terms in the transfer\n'
-            '4. Mark as paid only after you have made the payment',
+            terms,
             style: TextStyle(
               color: isDark
                   ? Colors.grey[400]
@@ -495,7 +511,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
     );
   }
 
-  Widget _buildActionSection(bool isDark) {
+  Widget _buildActionSection(bool isDark, String currency) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -519,7 +535,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                   controller: _amountController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    hintText: 'Enter amount in NGN',
+                    hintText: 'Enter amount in $currency',
                     hintStyle: TextStyle(
                       color: isDark
                           ? Colors.grey[600]
