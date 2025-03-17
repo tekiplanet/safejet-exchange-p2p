@@ -851,7 +851,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Payment Methods',
+            widget.isBuy ? 'Payment Methods' : 'Select Your Payment Method',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
@@ -859,108 +859,229 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
             ),
           ),
           const SizedBox(height: 16),
-          if (paymentMethods.isEmpty)
-            Text(
-              'No payment methods available',
-              style: TextStyle(
-                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-              ),
-            )
+          if (widget.isBuy) 
+            _buildBuyerPaymentMethods(isDark, paymentMethods)
           else
-            Column(
-              children: List.generate(
-                paymentMethods.length,
-                (index) {
-                  final method = paymentMethods[index];
-                  final isSelected = _selectedPaymentMethod != null && 
-                                    _selectedPaymentMethod!['methodId'] == method['methodId'];
-                  
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedPaymentMethod = isSelected ? null : method;
-                      });
-                    },
-                    child: Container(
-                      margin: EdgeInsets.only(bottom: index < paymentMethods.length - 1 ? 12 : 0),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? (isDark 
-                                ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
-                                : SafeJetColors.secondaryHighlight.withOpacity(0.05))
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? SafeJetColors.secondaryHighlight
-                              : isDark
-                                  ? Colors.grey[800]!
-                                  : Colors.grey[300]!,
-                          width: isSelected ? 1.5 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                                  : SafeJetColors.lightCardBackground,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: isDark
-                                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                    : SafeJetColors.lightCardBorder,
-                              ),
-                            ),
-                            child: Icon(
-                              _getPaymentIcon(method['icon']),
-                              color: isDark ? Colors.white : SafeJetColors.primary,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  method['typeName'] ?? 'Unknown',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white : Colors.black,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  method['description'] ?? 'No description available',
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.grey[400]
-                                        : SafeJetColors.lightTextSecondary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (isSelected)
-                            Icon(
-                              Icons.check_circle,
-                              color: SafeJetColors.secondaryHighlight,
-                              size: 20,
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+            _buildSellerPaymentMethod(isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBuyerPaymentMethods(bool isDark, List<dynamic> paymentMethods) {
+    if (paymentMethods.isEmpty) {
+      return Text(
+        'No payment methods available',
+        style: TextStyle(
+          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+        ),
+      );
+    }
+    
+    return Column(
+      children: List.generate(
+        paymentMethods.length,
+        (index) {
+          final method = paymentMethods[index];
+          final isSelected = _selectedPaymentMethod != null && 
+                            _selectedPaymentMethod!['methodId'] == method['methodId'];
+          
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedPaymentMethod = isSelected ? null : method;
+              });
+            },
+            child: Container(
+              margin: EdgeInsets.only(bottom: index < paymentMethods.length - 1 ? 12 : 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDark 
+                        ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
+                        : SafeJetColors.secondaryHighlight.withOpacity(0.05))
+                    : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: isSelected
+                      ? SafeJetColors.secondaryHighlight
+                      : isDark
+                          ? Colors.grey[800]!
+                          : Colors.grey[300]!,
+                  width: isSelected ? 1.5 : 1,
               ),
             ),
-        ],
+            child: Row(
+              children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                          : SafeJetColors.lightCardBackground,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      ),
+                    ),
+                    child: Icon(
+                      _getPaymentIcon(method['icon']),
+                      color: isDark ? Colors.white : SafeJetColors.primary,
+                  size: 20,
+                    ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          method['typeName'] ?? 'Unknown',
+                    style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+        Text(
+                          method['description'] ?? 'No description available',
+          style: TextStyle(
+            color: isDark
+                ? Colors.grey[400]
+                : SafeJetColors.lightTextSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isSelected)
+                    Icon(
+                      Icons.check_circle,
+                      color: SafeJetColors.secondaryHighlight,
+                      size: 20,
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSellerPaymentMethod(bool isDark) {
+    return GestureDetector(
+      onTap: () {
+        _showPaymentMethodsDialog(context, isDark);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _selectedPaymentMethod != null
+              ? (isDark 
+                  ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
+                  : SafeJetColors.secondaryHighlight.withOpacity(0.05))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _selectedPaymentMethod != null
+                ? SafeJetColors.secondaryHighlight
+                : isDark
+                    ? Colors.grey[800]!
+                    : Colors.grey[300]!,
+            width: _selectedPaymentMethod != null ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+      children: [
+            if (_selectedPaymentMethod != null) ...[
+        Container(
+                width: 40,
+                height: 40,
+          decoration: BoxDecoration(
+            color: isDark
+                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                : SafeJetColors.lightCardBackground,
+                  borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
+          ),
+          child: Icon(
+                  _getPaymentIcon(_selectedPaymentMethod!['icon']),
+                  color: isDark ? Colors.white : SafeJetColors.primary,
+                  size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                      _selectedPaymentMethod!['typeName'] ?? 'Unknown',
+                      style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+                    const SizedBox(height: 4),
+              Text(
+                      _selectedPaymentMethod!['description'] ?? 'No description available',
+                style: TextStyle(
+                  color: isDark
+                      ? Colors.grey[400]
+                      : SafeJetColors.lightTextSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+            ] else ...[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                      : SafeJetColors.lightCardBackground,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                child: Icon(
+                  Icons.add,
+                  color: isDark ? Colors.white : SafeJetColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Select a payment method to receive funds',
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+          ),
+        ),
+      ],
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1309,6 +1430,154 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
         ],
       ),
     );
+  }
+
+  // Add this method to show the payment methods dialog
+  void _showPaymentMethodsDialog(BuildContext context, bool isDark) async {
+    // Fetch user payment methods
+    final userPaymentMethods = await _fetchUserPaymentMethods();
+    
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? SafeJetColors.primaryBackground : Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Select Payment Method',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (userPaymentMethods.isEmpty)
+                Center(
+                  child: Text(
+                    'No payment methods available',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                    ),
+                  ),
+                )
+              else
+                ...userPaymentMethods.map((method) {
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedPaymentMethod = method;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                            : SafeJetColors.lightCardBackground,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark
+                              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                              : SafeJetColors.lightCardBorder,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                  : SafeJetColors.lightCardBackground,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isDark
+                                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                    : SafeJetColors.lightCardBorder,
+                              ),
+                            ),
+                            child: Icon(
+                              _getPaymentIcon(method['icon']),
+                              color: isDark ? Colors.white : SafeJetColors.primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  method['typeName'] ?? 'Unknown',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  method['description'] ?? 'No description available',
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : SafeJetColors.lightTextSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Add this method to fetch user payment methods
+  Future<List<Map<String, dynamic>>> _fetchUserPaymentMethods() async {
+    try {
+      final p2pService = P2PService();
+      // Use the existing getPaymentMethods method with isBuy=false for sell offers
+      final paymentMethods = await p2pService.getPaymentMethods(false);
+      return paymentMethods;
+    } catch (e) {
+      print('Error fetching user payment methods: $e');
+      // Return empty list on error
+      return [];
+    }
   }
 }
 
