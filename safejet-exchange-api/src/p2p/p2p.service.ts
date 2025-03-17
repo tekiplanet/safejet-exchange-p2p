@@ -615,11 +615,11 @@ export class P2PService {
     const marketPrice = marketPriceUSD * parseFloat(exchangeRate.rate.toString());
     let calculatedPrice = marketPrice;
 
-    console.log('Market Price (USD):', marketPriceUSD);
-    console.log('Exchange Rate:', exchangeRate.rate);
-    console.log('Market Price (Converted):', marketPrice);
-    console.log('Price Type:', offer.priceType);
-    console.log('Price Delta:', offer.priceDelta);
+    // console.log('Market Price (USD):', marketPriceUSD);
+    // console.log('Exchange Rate:', exchangeRate.rate);
+    // console.log('Market Price (Converted):', marketPrice);
+    // console.log('Price Type:', offer.priceType);
+    // console.log('Price Delta:', offer.priceDelta);
 
     if (offer.priceType === 'percentage') {
       calculatedPrice *= (1 + parseFloat(offer.priceDelta.toString()) / 100);
@@ -627,7 +627,7 @@ export class P2PService {
       calculatedPrice += parseFloat(offer.priceDelta.toString());
     }
 
-    console.log('Calculated Price:', calculatedPrice);
+    // console.log('Calculated Price:', calculatedPrice);
 
     const response = {
       ...offer,
