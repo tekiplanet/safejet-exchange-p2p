@@ -788,9 +788,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$currency $price/$tokenSymbol',
+                    '$currency ${_currencyFormatter.format(double.tryParse(price) ?? 0.0)}/$tokenSymbol',
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -852,7 +852,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
           },
           child: Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDark
                   ? SafeJetColors.primaryAccent.withOpacity(0.05)
@@ -870,17 +870,17 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                   Container(
                     width: 40,
                     height: 40,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                          : SafeJetColors.lightCardBackground,
+      decoration: BoxDecoration(
+        color: isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      ),
-                    ),
+        border: Border.all(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              : SafeJetColors.lightCardBorder,
+        ),
+      ),
                     child: Icon(
                       _getPaymentIcon(_selectedPaymentMethod!['paymentMethodType']['icon']),
                       color: isDark ? Colors.white : SafeJetColors.primary,
@@ -889,14 +889,14 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
                         Text(
                           _selectedPaymentMethod!['paymentMethodType']['name'] ?? 
                           _selectedPaymentMethod!['name'] ?? 'Unknown',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
                             color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
@@ -918,22 +918,22 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                   ),
                 ] else ...[
                   const Icon(Icons.add, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
                       'Select a payment method to receive funds',
-                      style: TextStyle(
+                    style: TextStyle(
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      ),
                     ),
                   ),
-                ],
+                ),
+              ],
                 Icon(
                   Icons.chevron_right,
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ],
-            ),
+          ),
+        ],
+      ),
           ),
         ),
       ],
