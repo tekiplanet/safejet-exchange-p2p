@@ -834,120 +834,76 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
   }
 
   Widget _buildPaymentSection(bool isDark, List<dynamic> paymentMethods) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.05)
-            : SafeJetColors.lightCardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.1)
-              : SafeJetColors.lightCardBorder,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.isBuy ? 'Payment Methods' : 'Select Your Payment Method',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : Colors.black,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (widget.isBuy) 
-            _buildBuyerPaymentMethods(isDark, paymentMethods)
-          else
-            _buildSellerPaymentMethod(isDark),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBuyerPaymentMethods(bool isDark, List<dynamic> paymentMethods) {
-    if (paymentMethods.isEmpty) {
-      return Text(
-        'No payment methods available',
-        style: TextStyle(
-          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-        ),
-      );
-    }
-    
     return Column(
-      children: List.generate(
-        paymentMethods.length,
-        (index) {
-          final method = paymentMethods[index];
-          final isSelected = _selectedPaymentMethod != null && 
-                            _selectedPaymentMethod!['methodId'] == method['methodId'];
-          
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedPaymentMethod = isSelected ? null : method;
-              });
-            },
-            child: Container(
-              margin: EdgeInsets.only(bottom: index < paymentMethods.length - 1 ? 12 : 0),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? (isDark 
-                        ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
-                        : SafeJetColors.secondaryHighlight.withOpacity(0.05))
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isSelected
-                      ? SafeJetColors.secondaryHighlight
-                      : isDark
-                          ? Colors.grey[800]!
-                          : Colors.grey[300]!,
-                  width: isSelected ? 1.5 : 1,
-                ),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Select Your Payment Method',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black,
+          ),
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: () {
+            _showPaymentMethodsDialog(context, isDark);
+          },
+          child: Container(
+      padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                  : SafeJetColors.lightCardBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark
+                    ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                    : SafeJetColors.lightCardBorder,
               ),
-              child: Row(
-                children: [
+            ),
+            child: Row(
+              children: [
+                if (_selectedPaymentMethod != null) ...[
+                  // Display selected payment method
                   Container(
                     width: 40,
                     height: 40,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                          : SafeJetColors.lightCardBackground,
+      decoration: BoxDecoration(
+        color: isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      ),
-                    ),
+        border: Border.all(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              : SafeJetColors.lightCardBorder,
+        ),
+      ),
                     child: Icon(
-                      _getPaymentIcon(method['icon']),
+                      _getPaymentIcon(_selectedPaymentMethod!['paymentMethodType']['icon']),
                       color: isDark ? Colors.white : SafeJetColors.primary,
                       size: 20,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
                         Text(
-                          method['typeName'] ?? 'Unknown',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
+                          _selectedPaymentMethod!['paymentMethodType']['name'] ?? 
+                          _selectedPaymentMethod!['name'] ?? 'Unknown',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
                             color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
                         const SizedBox(height: 4),
+                        // Build description for selected payment method
                         Text(
-                          method['description'] ?? 'No description available',
+                          _buildPaymentMethodDescription(_selectedPaymentMethod!),
                           style: TextStyle(
                             color: isDark
                                 ? Colors.grey[400]
@@ -958,134 +914,79 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                       ],
                     ),
                   ),
-                  if (isSelected)
-                    Icon(
-                      Icons.check_circle,
-                      color: SafeJetColors.secondaryHighlight,
-                      size: 20,
+                ] else ...[
+                  // Default display when no payment method is selected
+                  const Icon(Icons.add, size: 24),
+                const SizedBox(width: 12),
+                  Text(
+                    'Select a payment method to receive funds',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
+                  ),
                 ],
-              ),
+                const Spacer(),
+                Icon(
+                  Icons.chevron_right,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ],
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildSellerPaymentMethod(bool isDark) {
-    return GestureDetector(
-      onTap: () {
-        _showPaymentMethodsDialog(context, isDark);
-      },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _selectedPaymentMethod != null
-              ? (isDark 
-                  ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
-                  : SafeJetColors.secondaryHighlight.withOpacity(0.05))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _selectedPaymentMethod != null
-                ? SafeJetColors.secondaryHighlight
-                : isDark
-                    ? Colors.grey[800]!
-                    : Colors.grey[300]!,
-            width: _selectedPaymentMethod != null ? 1.5 : 1,
           ),
         ),
-        child: Row(
-          children: [
-            if (_selectedPaymentMethod != null) ...[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                      : SafeJetColors.lightCardBackground,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
-                ),
-                child: Icon(
-                  _getPaymentIcon(_selectedPaymentMethod!['icon']),
-                  color: isDark ? Colors.white : SafeJetColors.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _selectedPaymentMethod!['typeName'] ?? 'Unknown',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _selectedPaymentMethod!['description'] ?? 'No description available',
-                      style: TextStyle(
-                        color: isDark
-                            ? Colors.grey[400]
-                            : SafeJetColors.lightTextSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                      : SafeJetColors.lightCardBackground,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
-                ),
-                child: Icon(
-                  Icons.add,
-                  color: isDark ? Colors.white : SafeJetColors.primary,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Select a payment method to receive funds',
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
-                ),
-              ),
-            ],
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 
+  // Helper method to build payment method description
+  String _buildPaymentMethodDescription(Map<String, dynamic> method) {
+    final details = method['details'] as Map<String, dynamic>?;
+    final paymentMethodType = method['paymentMethodType'] ?? {};
+    final methodName = method['name'] ?? '';
+    
+    // Start with the payment method name
+    String description = methodName;
+    
+    if (details != null) {
+      // Build the details part
+      String detailsText = details.entries.map((entry) {
+        final fieldType = entry.value['fieldType'];
+        final value = entry.value['value'];
+        final fieldName = entry.value['fieldName'];
+
+        if (fieldType == 'date') {
+          return value.toString();
+        } else if (fieldType == 'image') {
+          return '';
+        } else if (fieldName == 'instructions') {
+          // Truncate instructions if too long
+          final text = value.toString();
+          return text.length > 30 ? '${text.substring(0, 30)}...' : text;
+        } else {
+          return value.toString();
+        }
+      }).where((value) => value.isNotEmpty).join(' - ');
+      
+      // Add details if available
+      if (detailsText.isNotEmpty) {
+        if (description.isNotEmpty) {
+          description += ': ';
+        }
+        description += detailsText;
+      }
+    }
+    
+    // Limit overall description length
+    if (description.length > 60) {
+      description = '${description.substring(0, 57)}...';
+    }
+    
+    return description.isNotEmpty 
+        ? description 
+        : paymentMethodType['description'] ?? 'No description available';
+  }
+
+  // Add back the _getPaymentIcon method
   IconData _getPaymentIcon(String? iconName) {
     switch (iconName?.toLowerCase()) {
       case 'bank':
@@ -1093,6 +994,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       case 'card':
         return Icons.credit_card;
       case 'qr_code':
+      case 'qr':
         return Icons.qr_code;
       case 'mobile':
         return Icons.phone_android;
@@ -1486,18 +1388,30 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                 )
               else
                 ...userPaymentMethods.map((method) {
-                  // Get the payment method type data from the relation
                   final paymentMethodType = method['paymentMethodType'] ?? {};
                   final details = method['details'] as Map<String, dynamic>?;
 
-                  // Build description based on the payment method details
+                  // Build description dynamically
                   String description = '';
                   if (details != null) {
-                    if (details['bankName'] != null) {
-                      description = '${details['bankName']['value']} - ${details['accountNumber']['value']}';
-                    } else if (details['email'] != null) {
-                      description = details['email']['value'];
-                    }
+                    description = details.entries.map((entry) {
+                      final fieldType = entry.value['fieldType'];
+                      final value = entry.value['value'];
+                      final fieldName = entry.value['fieldName'];
+
+                      if (fieldType == 'date') {
+                        // Use the date as is, since it's already in the right format
+                        return value.toString();
+                      } else if (fieldType == 'image') {
+                        // Skip image fields entirely
+                        return '';
+                      } else if (fieldName == 'instructions') {
+                        // Show instructions directly
+                        return value.toString();
+                      } else {
+                        return value.toString();
+                      }
+                    }).where((value) => value.isNotEmpty).join(' - ');
                   }
 
                   return GestureDetector(
