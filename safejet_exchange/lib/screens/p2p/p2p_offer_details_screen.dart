@@ -9,6 +9,7 @@ import '../../widgets/custom_app_bar.dart';
 import 'p2p_chat_screen.dart';
 import 'p2p_order_confirmation_screen.dart';
 import '../../services/p2p_service.dart';
+import 'package:intl/intl.dart';
 
 class P2POfferDetailsScreen extends StatefulWidget {
   final bool isBuy;
@@ -39,6 +40,13 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
   String? _amountError;
   double _calculatedAssetAmount = 0.0;
   double _calculatedCurrencyAmount = 0.0;
+
+  // Add these formatters
+  final _currencyFormatter = NumberFormat("#,##0.00", "en_US");
+  final _assetFormatter = NumberFormat("#,##0.######", "en_US");
+
+  // Add selected payment method
+  Map<String, dynamic>? _selectedPaymentMethod;
 
   @override
   void initState() {
@@ -104,12 +112,12 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       final maxCurrency = maxAmount * price;
       
       if (amount < minCurrency) {
-        error = 'Minimum amount is ${minCurrency.toStringAsFixed(2)} $currency';
+        error = 'Minimum amount is ${_currencyFormatter.format(minCurrency)} $currency';
       } else if (amount > maxCurrency) {
-        error = 'Maximum amount is ${maxCurrency.toStringAsFixed(2)} $currency';
+        error = 'Maximum amount is ${_currencyFormatter.format(maxCurrency)} $currency';
       } else if (calculatedAsset > availableAmount) {
         final availableInCurrency = availableAmount * price;
-        error = 'Exceeds available amount (${availableInCurrency.toStringAsFixed(2)} $currency)';
+        error = 'Exceeds available amount (${_currencyFormatter.format(availableInCurrency)} $currency)';
       }
     } else {
       // User entered amount in asset (e.g., USDT)
@@ -118,11 +126,11 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       
       // Min/max are already in asset, so direct comparison
       if (amount < minAmount) {
-        error = 'Minimum amount is ${minAmount.toStringAsFixed(6)} $tokenSymbol';
+        error = 'Minimum amount is ${_assetFormatter.format(minAmount)} $tokenSymbol';
       } else if (amount > maxAmount) {
-        error = 'Maximum amount is ${maxAmount.toStringAsFixed(6)} $tokenSymbol';
+        error = 'Maximum amount is ${_assetFormatter.format(maxAmount)} $tokenSymbol';
       } else if (amount > availableAmount) {
-        error = 'Exceeds available amount (${availableAmount.toStringAsFixed(6)} $tokenSymbol)';
+        error = 'Exceeds available amount (${_assetFormatter.format(availableAmount)} $tokenSymbol)';
       }
     }
     
@@ -830,86 +838,145 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            ? SafeJetColors.primaryAccent.withOpacity(0.05)
             : SafeJetColors.lightCardBackground,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              ? SafeJetColors.primaryAccent.withOpacity(0.1)
               : SafeJetColors.lightCardBorder,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Payment Methods',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : Colors.black,
             ),
           ),
           const SizedBox(height: 16),
-          ...paymentMethods.map((method) {
-            final typeName = method['typeName'] ?? 'Unknown';
-            final description = method['description'] ?? 'No description available';
-            final icon = _getIconForType(method['icon'] ?? 'payment');
-            print('Payment Method: $method');
-            return _buildPaymentMethod(
-              typeName,
-              description,
-              icon,
-              isDark,
-            );
-          }).toList(),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                      : SafeJetColors.lightCardBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
-                ),
-                child: Icon(
-                  Icons.info_outline,
-                  color: isDark ? Colors.white : SafeJetColors.lightText,
-                ),
+          if (paymentMethods.isEmpty)
+            Text(
+              'No payment methods available',
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Please only use the payment methods listed above. Other methods are not protected.',
-                  style: TextStyle(
-                    color: SafeJetColors.warning,
-                    fontSize: 12,
-                  ),
-                ),
+            )
+          else
+            Column(
+              children: List.generate(
+                paymentMethods.length,
+                (index) {
+                  final method = paymentMethods[index];
+                  final isSelected = _selectedPaymentMethod != null && 
+                                    _selectedPaymentMethod!['methodId'] == method['methodId'];
+                  
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedPaymentMethod = isSelected ? null : method;
+                      });
+                    },
+                    child: Container(
+                      margin: EdgeInsets.only(bottom: index < paymentMethods.length - 1 ? 12 : 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                        color: isSelected
+                            ? (isDark 
+                                ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
+                                : SafeJetColors.secondaryHighlight.withOpacity(0.05))
+                            : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                          color: isSelected
+                              ? SafeJetColors.secondaryHighlight
+                              : isDark
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[300]!,
+                          width: isSelected ? 1.5 : 1,
               ),
-            ],
+            ),
+            child: Row(
+              children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                  : SafeJetColors.lightCardBackground,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isDark
+                                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                    : SafeJetColors.lightCardBorder,
+                              ),
+                            ),
+                            child: Icon(
+                              _getPaymentIcon(method['icon']),
+                              color: isDark ? Colors.white : SafeJetColors.primary,
+                  size: 20,
+                            ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  method['typeName'] ?? 'Unknown',
+                    style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  method['methodName'] ?? 'Unknown',
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.grey[400]
+                                        : SafeJetColors.lightTextSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            Icon(
+                              Icons.check_circle,
+                              color: SafeJetColors.secondaryHighlight,
+                              size: 20,
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+            ),
           ),
         ],
       ),
     );
   }
 
-  IconData _getIconForType(String iconName) {
-    switch (iconName) {
+  IconData _getPaymentIcon(String? iconName) {
+    switch (iconName?.toLowerCase()) {
       case 'bank':
         return Icons.account_balance;
-      case 'mobile':
-        return Icons.smartphone;
+      case 'card':
+        return Icons.credit_card;
       case 'qr_code':
         return Icons.qr_code;
-      case 'payment':
-        return Icons.payment;
+      case 'mobile':
+        return Icons.phone_android;
+      case 'wallet':
+        return Icons.account_balance_wallet;
       default:
         return Icons.payment;
     }
@@ -932,54 +999,6 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
           value,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPaymentMethod(String title, String subtitle, IconData icon, bool isDark) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                : SafeJetColors.lightCardBackground,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                  : SafeJetColors.lightCardBorder,
-            ),
-          ),
-          child: Icon(
-            icon,
-            color: isDark ? Colors.white : SafeJetColors.lightText,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: isDark
-                      ? Colors.grey[400]
-                      : SafeJetColors.lightTextSecondary,
-                  fontSize: 12,
-                ),
-              ),
-            ],
           ),
         ),
       ],
@@ -1156,8 +1175,8 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                         color: _amountError != null
                             ? SafeJetColors.error
                             : isDark
-                                ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                : SafeJetColors.lightCardBorder,
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
@@ -1192,11 +1211,13 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                       
                       // Use the smaller of max limit or available
                       final maxValue = maxInCurrency < availableInCurrency ? maxInCurrency : availableInCurrency;
-                      _amountController.text = maxValue.toStringAsFixed(2);
+                      // Use raw number instead of formatted number
+                      _amountController.text = maxValue.toString();
                     } else {
                       // In asset mode, use the smaller of max limit or available
                       final maxValue = maxAmount < availableAmount ? maxAmount : availableAmount;
-                      _amountController.text = maxValue.toStringAsFixed(6);
+                      // Use raw number instead of formatted number
+                      _amountController.text = maxValue.toString();
                     }
                   }
                 },
@@ -1208,55 +1229,57 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
             ],
           ),
           if (_amountError == null && (_calculatedAssetAmount > 0 || _calculatedCurrencyAmount > 0)) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text(
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
                   _isCurrencyMode
                       ? 'You will receive:'
                       : 'You will pay:',
-                  style: TextStyle(
-                    color: isDark
-                        ? Colors.grey[400]
-                        : SafeJetColors.lightTextSecondary,
-                  ),
+                style: TextStyle(
+                  color: isDark
+                      ? Colors.grey[400]
+                      : SafeJetColors.lightTextSecondary,
                 ),
-                const Spacer(),
+              ),
+              const Spacer(),
                 Text(
                   _isCurrencyMode
-                      ? '${_calculatedAssetAmount.toStringAsFixed(6)} $tokenSymbol'
-                      : '${_calculatedCurrencyAmount.toStringAsFixed(2)} $currency',
+                      ? '${_assetFormatter.format(_calculatedAssetAmount)} $tokenSymbol'
+                      : '${_currencyFormatter.format(_calculatedCurrencyAmount)} $currency',
                   style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
           ],
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _termsAccepted && _amountError == null && (_calculatedAssetAmount > 0 || _calculatedCurrencyAmount > 0)
-                  ? () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => P2POrderConfirmationScreen(
-                            isBuy: widget.isBuy,
-                            amount: _isCurrencyMode
-                                ? _calculatedAssetAmount.toStringAsFixed(6)
-                                : _amountController.text,
-                            price: price,
-                            total: _isCurrencyMode
-                                ? _amountController.text
-                                : _calculatedCurrencyAmount.toStringAsFixed(2),
-                          ),
-                        ),
-                      );
-                    }
-                  : null,
+              onPressed: _termsAccepted && _amountError == null && 
+                         (_calculatedAssetAmount > 0 || _calculatedCurrencyAmount > 0) &&
+                         _selectedPaymentMethod != null
+                    ? () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => P2POrderConfirmationScreen(
+                      isBuy: widget.isBuy,
+                      amount: _isCurrencyMode
+                          ? _assetFormatter.format(_calculatedAssetAmount)
+                          : _amountController.text,
+                      price: price,
+                      total: _isCurrencyMode
+                          ? _amountController.text
+                          : _currencyFormatter.format(_calculatedCurrencyAmount),
+                    ),
+                  ),
+                );
+                      }
+                    : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: widget.isBuy
                     ? SafeJetColors.success
