@@ -1350,7 +1350,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
             children: [
               Text(
                 widget.isBuy
-                    ? (_isCurrencyMode ? 'You will pay:' : 'You will receive:')
+                    ? (_isCurrencyMode ? 'You will recieve:' : 'You will pay:')
                     : (_isCurrencyMode ? 'You will receive:' : 'You will pay:'),
                 style: TextStyle(
                   color: isDark
