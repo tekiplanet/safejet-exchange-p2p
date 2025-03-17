@@ -838,7 +838,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Select Your Payment Method',
+          widget.isBuy ? 'Seller\'s Payment Methods' : 'Select Your Payment Method',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -846,96 +846,187 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
           ),
         ),
         const SizedBox(height: 12),
-        GestureDetector(
-          onTap: () {
-            _showPaymentMethodsDialog(context, isDark);
-          },
-          child: Container(
-            width: double.infinity,
-      padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.05)
-                  : SafeJetColors.lightCardBackground,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark
-                    ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                    : SafeJetColors.lightCardBorder,
-              ),
-            ),
-            child: Row(
-              children: [
-                if (_selectedPaymentMethod != null) ...[
-                  Container(
-                    width: 40,
-                    height: 40,
-      decoration: BoxDecoration(
-        color: isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
-                      borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-              : SafeJetColors.lightCardBorder,
-        ),
-      ),
-                    child: Icon(
-                      _getPaymentIcon(_selectedPaymentMethod!['paymentMethodType']['icon']),
-                      color: isDark ? Colors.white : SafeJetColors.primary,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-                        Text(
-                          _selectedPaymentMethod!['paymentMethodType']['name'] ?? 
-                          _selectedPaymentMethod!['name'] ?? 'Unknown',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _buildPaymentMethodDescription(_selectedPaymentMethod!),
-                          style: TextStyle(
-                            color: isDark
-                                ? Colors.grey[400]
-                                : SafeJetColors.lightTextSecondary,
-                            fontSize: 12,
-                          ),
-                          softWrap: true,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ] else ...[
-                  const Icon(Icons.add, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                      'Select a payment method to receive funds',
-                    style: TextStyle(
-                        color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
+        if (widget.isBuy) ...[
+          // Display seller's payment methods
+          ...paymentMethods.map((method) {
+            final methodName = method['typeName'] ?? 'Unknown';
+            final description = method['description'] ?? 'No description available';
+            final isSelected = _selectedPaymentMethod != null && _selectedPaymentMethod!['methodId'] == method['methodId'];
+
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPaymentMethod = method;
+                });
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? (isDark ? SafeJetColors.secondaryHighlight.withOpacity(0.1) : SafeJetColors.secondaryHighlight.withOpacity(0.05))
+                      : (isDark ? SafeJetColors.primaryAccent.withOpacity(0.05) : SafeJetColors.lightCardBackground),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? SafeJetColors.secondaryHighlight
+                        : (isDark ? SafeJetColors.primaryAccent.withOpacity(0.1) : SafeJetColors.lightCardBorder),
                   ),
                 ),
-              ],
-                Icon(
-                  Icons.chevron_right,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                            : SafeJetColors.lightCardBackground,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDark
+                              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                              : SafeJetColors.lightCardBorder,
+                        ),
+                      ),
+                      child: Icon(
+                        _getPaymentIcon(method['icon']),
+                        color: isDark ? Colors.white : SafeJetColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            methodName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            description,
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : SafeJetColors.lightTextSecondary,
+                              fontSize: 12,
+                            ),
+                            softWrap: true,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isSelected)
+                      Icon(
+                        Icons.check_circle,
+                        color: SafeJetColors.secondaryHighlight,
+                        size: 20,
+                      ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ] else ...[
+          // Allow seller to select their payment method
+          GestureDetector(
+            onTap: () {
+              _showPaymentMethodsDialog(context, isDark);
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? SafeJetColors.primaryAccent.withOpacity(0.05)
+                    : SafeJetColors.lightCardBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark
+                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                      : SafeJetColors.lightCardBorder,
+                ),
+              ),
+              child: Row(
+                children: [
+                  if (_selectedPaymentMethod != null) ...[
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                            : SafeJetColors.lightCardBackground,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isDark
+                              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                              : SafeJetColors.lightCardBorder,
+                        ),
+                      ),
+                      child: Icon(
+                        _getPaymentIcon(_selectedPaymentMethod!['paymentMethodType']['icon']),
+                        color: isDark ? Colors.white : SafeJetColors.primary,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedPaymentMethod!['paymentMethodType']['name'] ?? 
+                            _selectedPaymentMethod!['name'] ?? 'Unknown',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _buildPaymentMethodDescription(_selectedPaymentMethod!),
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : SafeJetColors.lightTextSecondary,
+                              fontSize: 12,
+                            ),
+                            softWrap: true,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    const Icon(Icons.add, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Select a payment method to receive funds',
+                        style: TextStyle(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ],
+                  Icon(
+                    Icons.chevron_right,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
-      ),
-          ),
-        ),
       ],
     );
   }
@@ -1452,7 +1543,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                                       ),
                                     ),
                                     child: Icon(
-                                      _getPaymentIcon(paymentMethodType['icon']),
+                                      _getPaymentIcon(method['icon']),
                                       color: isDark ? Colors.white : SafeJetColors.primary,
                                       size: 20,
                                     ),
@@ -1463,7 +1554,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          paymentMethodType['name'] ?? methodName ?? 'Unknown',
+                                          methodName,
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: isDark ? Colors.white : Colors.black,
