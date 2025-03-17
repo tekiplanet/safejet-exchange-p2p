@@ -596,12 +596,38 @@ export class P2PService {
     });
 
     const paymentMethodTypes = await this.paymentMethodTypeRepository.find();
-    console.log('Payment Method Types:', paymentMethodTypes);
-
     const paymentMethods = await this.paymentMethodRepository.find({
       where: { id: In(offer.paymentMethods.map(pm => pm.methodId)) },
     });
-    console.log('Payment Methods:', paymentMethods);
+
+    // Fetch the exchange rate
+    const exchangeRate = await this.exchangeRateRepository.findOne({
+      where: { currency: offer.currency.toLowerCase() },
+    });
+
+    if (!exchangeRate) {
+      console.error(`Exchange rate for currency ${offer.currency} not found.`);
+      throw new NotFoundException(`Exchange rate for currency ${offer.currency} not found.`);
+    }
+
+    // Convert market price to offer currency
+    const marketPriceUSD = parseFloat(offer.token.currentPrice.toString());
+    const marketPrice = marketPriceUSD * parseFloat(exchangeRate.rate.toString());
+    let calculatedPrice = marketPrice;
+
+    console.log('Market Price (USD):', marketPriceUSD);
+    console.log('Exchange Rate:', exchangeRate.rate);
+    console.log('Market Price (Converted):', marketPrice);
+    console.log('Price Type:', offer.priceType);
+    console.log('Price Delta:', offer.priceDelta);
+
+    if (offer.priceType === 'percentage') {
+      calculatedPrice *= (1 + parseFloat(offer.priceDelta.toString()) / 100);
+    } else {
+      calculatedPrice += parseFloat(offer.priceDelta.toString());
+    }
+
+    console.log('Calculated Price:', calculatedPrice);
 
     const response = {
       ...offer,
@@ -609,10 +635,10 @@ export class P2PService {
         ...user,
         kycLevel: kycLevel?.title || 'Unverified',
       },
+      calculatedPrice: calculatedPrice.toFixed(2), // Include calculated price
       paymentMethods: offer.paymentMethods.map(method => {
         const paymentMethod = paymentMethods.find(pm => pm.id === method.methodId);
         const type = paymentMethodTypes.find(t => t.id === paymentMethod?.paymentMethodTypeId);
-        console.log('Mapping:', { method, type, paymentMethod });
         return {
           ...method,
           typeName: type?.name || 'Unknown',

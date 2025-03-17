@@ -83,19 +83,8 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
 
     print('User details: Name: $userName, KYC Level: $kycLevel');
 
-    // Calculate the price using priceDelta and priceType
-    final marketPrice = double.tryParse(offer['marketPrice'].toString()) ?? 0.0;
-    final priceDelta = double.tryParse(offer['priceDelta'].toString()) ?? 0.0;
-    final priceType = offer['priceType'] as String;
-
-    double calculatedPrice;
-    if (priceType == 'percentage') {
-      calculatedPrice = marketPrice * (1 + priceDelta / 100);
-    } else {
-      calculatedPrice = marketPrice + priceDelta;
-    }
-
-    final price = calculatedPrice.toStringAsFixed(2);
+    // Use the calculated price from the backend
+    final price = offer['calculatedPrice'] ?? '0.00';
 
     return Scaffold(
       appBar: CustomAppBar(
