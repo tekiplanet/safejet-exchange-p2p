@@ -7,6 +7,7 @@ import '../../config/theme/theme_provider.dart';
 import '../../widgets/custom_app_bar.dart';
 import 'p2p_chat_screen.dart';
 import 'p2p_order_confirmation_screen.dart';
+import '../../services/p2p_service.dart';
 
 class P2POfferDetailsScreen extends StatefulWidget {
   final bool isBuy;
@@ -27,6 +28,25 @@ class P2POfferDetailsScreen extends StatefulWidget {
 class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
   final _amountController = TextEditingController();
   bool _termsAccepted = false;
+  Map<String, dynamic>? offerDetails;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOfferDetails();
+  }
+
+  Future<void> _fetchOfferDetails() async {
+    try {
+      final p2pService = P2PService();
+      final details = await p2pService.getOfferDetails(widget.offerId);
+      setState(() {
+        offerDetails = details;
+      });
+    } catch (e) {
+      print('Error fetching offer details: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -36,19 +56,32 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (offerDetails == null) {
+      return Center(child: CircularProgressIndicator());
+    }
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     // Extract offer details
-    final offer = widget.offerDetails;
-    final tokenSymbol = offer['token']['symbol'];
+    final offer = offerDetails!;
+    final token = offer['token'] ?? {};
+    final tokenSymbol = token['symbol'] ?? 'Unknown';
     final availableAmount = double.tryParse(offer['amount'].toString()) ?? 0.0;
-    final currency = offer['currency'];
-    final minAmount = offer['metadata']['minAmount'];
-    final maxAmount = offer['metadata']['maxAmount'];
-    final paymentMethods = offer['paymentMethods'];
-    final terms = offer['terms'];
+    final currency = offer['currency'] ?? 'Unknown';
+    final minAmount = offer['metadata']['minAmount'] ?? 0;
+    final maxAmount = offer['metadata']['maxAmount'] ?? 0;
+    final paymentMethods = offer['paymentMethods'] ?? [];
+    final terms = offer['terms'] ?? 'No terms provided';
+
+    // Extract user details
+    final user = offer['user'] ?? {};
+    final userName = user['fullName'] ?? 'Unknown User';
+    final userInitials = userName.isNotEmpty ? userName.substring(0, 1).toUpperCase() : 'U';
+    final kycLevel = user['kycLevel'] ?? 'Unverified';
+
+    print('User details: Name: $userName, KYC Level: $kycLevel');
 
     // Calculate the price using priceDelta and priceType
     final marketPrice = double.tryParse(offer['marketPrice'].toString()) ?? 0.0;
@@ -85,7 +118,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                   // Seller/Buyer Profile Section
                   FadeInUp(
                     duration: const Duration(milliseconds: 400),
-                    child: _buildProfileSection(isDark),
+                    child: _buildProfileSection(isDark, userName, userInitials, kycLevel),
                   ),
                   const SizedBox(height: 24),
 
@@ -122,7 +155,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
     );
   }
 
-  Widget _buildProfileSection(bool isDark) {
+  Widget _buildProfileSection(bool isDark, String userName, String userInitials, String kycLevel) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -141,7 +174,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
           CircleAvatar(
             radius: 24,
             backgroundColor: SafeJetColors.secondaryHighlight,
-            child: const Text('JS'),
+            child: Text(userInitials),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -150,9 +183,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'JohnSeller',
-                      style: TextStyle(
+                    Text(
+                      userName,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -164,7 +197,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: SafeJetColors.success.withOpacity(0.2),
+                        color: kycLevel == 'Verified' ? SafeJetColors.success.withOpacity(0.2) : Colors.grey.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -172,14 +205,14 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                         children: [
                           Icon(
                             Icons.verified_rounded,
-                            color: SafeJetColors.success,
+                            color: kycLevel == 'Verified' ? SafeJetColors.success : Colors.grey,
                             size: 14,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            'Verified',
+                            kycLevel,
                             style: TextStyle(
-                              color: SafeJetColors.success,
+                              color: kycLevel == 'Verified' ? SafeJetColors.success : Colors.grey,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
@@ -330,45 +363,69 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          ...paymentMethods.map((method) => _buildPaymentMethod(
-            method['name'],
-            method['details'] ?? 'No details available',
-            Icons.payment, // You can map this to specific icons based on method type
-            isDark,
-          )).toList(),
+          ...paymentMethods.map((method) {
+            final typeName = method['typeName'] ?? 'Unknown';
+            final description = method['description'] ?? 'No description available';
+            final icon = _getIconForType(method['icon'] ?? 'payment');
+            print('Payment Method: $method');
+            return _buildPaymentMethod(
+              typeName,
+              description,
+              icon,
+              isDark,
+            );
+          }).toList(),
           const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: SafeJetColors.warning.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: SafeJetColors.warning.withOpacity(0.2),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.info_outline_rounded,
-                  color: SafeJetColors.warning,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Please only use the payment methods listed above. Other methods are not protected.',
-                    style: TextStyle(
-                      color: SafeJetColors.warning,
-                      fontSize: 12,
-                    ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                      : SafeJetColors.lightCardBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
                   ),
                 ),
-              ],
-            ),
+                child: Icon(
+                  Icons.info_outline,
+                  color: isDark ? Colors.white : SafeJetColors.lightText,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Please only use the payment methods listed above. Other methods are not protected.',
+                  style: TextStyle(
+                    color: SafeJetColors.warning,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  IconData _getIconForType(String iconName) {
+    switch (iconName) {
+      case 'bank':
+        return Icons.account_balance;
+      case 'mobile':
+        return Icons.smartphone;
+      case 'qr_code':
+        return Icons.qr_code;
+      case 'payment':
+        return Icons.payment;
+      default:
+        return Icons.payment;
+    }
   }
 
   Widget _buildInfoItem(String label, String value, bool isDark) {

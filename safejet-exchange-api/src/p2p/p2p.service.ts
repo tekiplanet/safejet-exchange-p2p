@@ -11,6 +11,7 @@ import { PaymentMethodType } from '../payment-methods/entities/payment-method-ty
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { User } from '../auth/entities/user.entity';
 import { Currency } from '../currencies/entities/currency.entity';
+import { KYCLevel } from '../auth/entities/kyc-level.entity';
 
 @Injectable()
 export class P2PService {
@@ -33,6 +34,8 @@ export class P2PService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Currency)
     private readonly currencyRepository: Repository<Currency>,
+    @InjectRepository(KYCLevel)
+    private readonly kycLevelRepository: Repository<KYCLevel>,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -563,5 +566,63 @@ export class P2PService {
     });
 
     return this.p2pOfferRepository.save(offer);
+  }
+
+  async getKYCLevels() {
+    return this.kycLevelRepository.find();
+  }
+
+  async getOfferDetails(offerId: string) {
+    const offer = await this.p2pOfferRepository.findOne({
+      where: { id: offerId },
+      relations: ['user', 'token'],
+    });
+
+    if (!offer) {
+      throw new NotFoundException('Offer not found');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: offer.userId },
+      select: ['id', 'fullName', 'kycLevel'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const kycLevel = await this.kycLevelRepository.findOne({
+      where: { level: user.kycLevel },
+    });
+
+    const paymentMethodTypes = await this.paymentMethodTypeRepository.find();
+    console.log('Payment Method Types:', paymentMethodTypes);
+
+    const paymentMethods = await this.paymentMethodRepository.find({
+      where: { id: In(offer.paymentMethods.map(pm => pm.methodId)) },
+    });
+    console.log('Payment Methods:', paymentMethods);
+
+    const response = {
+      ...offer,
+      user: {
+        ...user,
+        kycLevel: kycLevel?.title || 'Unverified',
+      },
+      paymentMethods: offer.paymentMethods.map(method => {
+        const paymentMethod = paymentMethods.find(pm => pm.id === method.methodId);
+        const type = paymentMethodTypes.find(t => t.id === paymentMethod?.paymentMethodTypeId);
+        console.log('Mapping:', { method, type, paymentMethod });
+        return {
+          ...method,
+          typeName: type?.name || 'Unknown',
+          methodName: paymentMethod?.name || 'Unknown',
+          description: type?.description || 'No description available',
+          icon: type?.icon || 'payment',
+        };
+      }),
+    };
+
+    return response;
   }
 } 

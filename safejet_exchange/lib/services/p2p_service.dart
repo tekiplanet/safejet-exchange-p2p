@@ -220,6 +220,11 @@ class P2PService {
     }
   }
 
+  Future<Map<String, dynamic>> getOfferDetails(String offerId) async {
+    final response = await _dio.get('/p2p/offer-details', queryParameters: {'offerId': offerId});
+    return response.data;
+  }
+
   Exception _handleError(dynamic e) {
     if (e is DioException) {
       final response = e.response;

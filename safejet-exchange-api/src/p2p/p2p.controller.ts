@@ -138,4 +138,11 @@ export class P2PController {
   async getActivePaymentMethodTypes() {
     return this.p2pService.getActivePaymentMethodTypes();
   }
+
+  @Get('offer-details')
+  @UseGuards(JwtAuthGuard)
+  async getOfferDetails(@Query('offerId') offerId: string) {
+    const offer = await this.p2pService.getOfferDetails(offerId);
+    return offer;
+  }
 } 
