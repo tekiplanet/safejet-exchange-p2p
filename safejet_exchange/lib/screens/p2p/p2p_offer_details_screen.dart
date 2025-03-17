@@ -894,25 +894,25 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
             },
             child: Container(
               margin: EdgeInsets.only(bottom: index < paymentMethods.length - 1 ? 12 : 0),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
                 color: isSelected
                     ? (isDark 
                         ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
                         : SafeJetColors.secondaryHighlight.withOpacity(0.05))
                     : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
                   color: isSelected
                       ? SafeJetColors.secondaryHighlight
                       : isDark
                           ? Colors.grey[800]!
                           : Colors.grey[300]!,
                   width: isSelected ? 1.5 : 1,
+                ),
               ),
-            ),
-            child: Row(
-              children: [
+              child: Row(
+                children: [
                   Container(
                     width: 40,
                     height: 40,
@@ -930,28 +930,28 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                     child: Icon(
                       _getPaymentIcon(method['icon']),
                       color: isDark ? Colors.white : SafeJetColors.primary,
-                  size: 20,
+                      size: 20,
                     ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           method['typeName'] ?? 'Unknown',
-                    style: TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: isDark ? Colors.white : Colors.black,
                           ),
                         ),
                         const SizedBox(height: 4),
-        Text(
+                        Text(
                           method['description'] ?? 'No description available',
-          style: TextStyle(
-            color: isDark
-                ? Colors.grey[400]
-                : SafeJetColors.lightTextSecondary,
+                          style: TextStyle(
+                            color: isDark
+                                ? Colors.grey[400]
+                                : SafeJetColors.lightTextSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -997,53 +997,53 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
           ),
         ),
         child: Row(
-      children: [
+          children: [
             if (_selectedPaymentMethod != null) ...[
-        Container(
+              Container(
                 width: 40,
                 height: 40,
-          decoration: BoxDecoration(
-            color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                : SafeJetColors.lightCardBackground,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                      : SafeJetColors.lightCardBackground,
                   borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                  : SafeJetColors.lightCardBorder,
-            ),
-          ),
-          child: Icon(
+                  border: Border.all(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                child: Icon(
                   _getPaymentIcon(_selectedPaymentMethod!['icon']),
                   color: isDark ? Colors.white : SafeJetColors.primary,
                   size: 20,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                       _selectedPaymentMethod!['typeName'] ?? 'Unknown',
                       style: TextStyle(
-                  fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.bold,
                         color: isDark ? Colors.white : Colors.black,
-                ),
-              ),
+                      ),
+                    ),
                     const SizedBox(height: 4),
-              Text(
+                    Text(
                       _selectedPaymentMethod!['description'] ?? 'No description available',
-                style: TextStyle(
-                  color: isDark
-                      ? Colors.grey[400]
-                      : SafeJetColors.lightTextSecondary,
-                  fontSize: 12,
+                      style: TextStyle(
+                        color: isDark
+                            ? Colors.grey[400]
+                            : SafeJetColors.lightTextSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
             ] else ...[
               Container(
                 width: 40,
@@ -1072,9 +1072,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                   style: TextStyle(
                     color: isDark ? Colors.white : Colors.black,
                   ),
-          ),
-        ),
-      ],
+                ),
+              ),
+            ],
             Icon(
               Icons.arrow_forward_ios,
               size: 16,
@@ -1354,9 +1354,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
           Row(
             children: [
               Text(
-                  _isCurrencyMode
-                      ? 'You will receive:'
-                      : 'You will pay:',
+                _isCurrencyMode
+                    ? 'You will receive:'
+                    : 'You will pay:',
                 style: TextStyle(
                   color: isDark
                       ? Colors.grey[400]
@@ -1364,11 +1364,11 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                 ),
               ),
               const Spacer(),
-                Text(
-                  _isCurrencyMode
-                      ? '${_assetFormatter.format(_calculatedAssetAmount)} $tokenSymbol'
-                      : '${_currencyFormatter.format(_calculatedCurrencyAmount)} $currency',
-                  style: const TextStyle(
+              Text(
+                _isCurrencyMode
+                    ? '${_assetFormatter.format(_calculatedAssetAmount)} $tokenSymbol'
+                    : '${_currencyFormatter.format(_calculatedCurrencyAmount)} $currency',
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1486,6 +1486,20 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                 )
               else
                 ...userPaymentMethods.map((method) {
+                  // Get the payment method type data from the relation
+                  final paymentMethodType = method['paymentMethodType'] ?? {};
+                  final details = method['details'] as Map<String, dynamic>?;
+
+                  // Build description based on the payment method details
+                  String description = '';
+                  if (details != null) {
+                    if (details['bankName'] != null) {
+                      description = '${details['bankName']['value']} - ${details['accountNumber']['value']}';
+                    } else if (details['email'] != null) {
+                      description = details['email']['value'];
+                    }
+                  }
+
                   return GestureDetector(
                     onTap: () {
                       setState(() {
@@ -1524,7 +1538,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                               ),
                             ),
                             child: Icon(
-                              _getPaymentIcon(method['icon']),
+                              _getPaymentIcon(paymentMethodType['icon']),
                               color: isDark ? Colors.white : SafeJetColors.primary,
                               size: 20,
                             ),
@@ -1535,7 +1549,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  method['typeName'] ?? 'Unknown',
+                                  paymentMethodType['name'] ?? method['name'] ?? 'Unknown',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: isDark ? Colors.white : Colors.black,
@@ -1543,7 +1557,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  method['description'] ?? 'No description available',
+                                  description.isNotEmpty 
+                                      ? description 
+                                      : paymentMethodType['description'] ?? 'No description available',
                                   style: TextStyle(
                                     color: isDark
                                         ? Colors.grey[400]
@@ -1572,6 +1588,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       final p2pService = P2PService();
       // Use the existing getPaymentMethods method with isBuy=false for sell offers
       final paymentMethods = await p2pService.getPaymentMethods(false);
+      print('Fetched payment methods: $paymentMethods');
       return paymentMethods;
     } catch (e) {
       print('Error fetching user payment methods: $e');
