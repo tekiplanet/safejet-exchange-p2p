@@ -26,15 +26,107 @@ class P2POfferDetailsScreen extends StatefulWidget {
   State<P2POfferDetailsScreen> createState() => _P2POfferDetailsScreenState();
 }
 
-class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
+class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with SingleTickerProviderStateMixin {
   final _amountController = TextEditingController();
   bool _termsAccepted = false;
   Map<String, dynamic>? offerDetails;
+  
+  // Add tab controller
+  late TabController _tabController;
+  bool _isCurrencyMode = true; // true for currency, false for asset
+  
+  // Add validation state
+  String? _amountError;
+  double _calculatedAssetAmount = 0.0;
+  double _calculatedCurrencyAmount = 0.0;
 
   @override
   void initState() {
     super.initState();
     _fetchOfferDetails();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChange);
+    _amountController.addListener(_validateAmount);
+  }
+
+  void _handleTabChange() {
+    setState(() {
+      _isCurrencyMode = _tabController.index == 0;
+      // Clear input when switching tabs
+      _amountController.clear();
+      _amountError = null;
+      _calculatedAssetAmount = 0.0;
+      _calculatedCurrencyAmount = 0.0;
+    });
+  }
+
+  void _validateAmount() {
+    if (offerDetails == null) return;
+    
+    final text = _amountController.text;
+    if (text.isEmpty) {
+      setState(() {
+        _amountError = null;
+        _calculatedAssetAmount = 0.0;
+        _calculatedCurrencyAmount = 0.0;
+      });
+      return;
+    }
+    
+    final amount = double.tryParse(text);
+    if (amount == null) {
+      setState(() {
+        _amountError = 'Please enter a valid number';
+      });
+      return;
+    }
+    
+    final offer = offerDetails!;
+    final price = double.tryParse(offer['calculatedPrice']?.toString() ?? '0') ?? 0.0;
+    final minAmount = double.tryParse(offer['metadata']['minAmount']?.toString() ?? '0') ?? 0.0;
+    final maxAmount = double.tryParse(offer['metadata']['maxAmount']?.toString() ?? '0') ?? 0.0;
+    final availableAmount = double.tryParse(offer['amount']?.toString() ?? '0') ?? 0.0;
+    final currency = offer['currency'] ?? 'Unknown';
+    final tokenSymbol = offer['token']?['symbol'] ?? 'Unknown';
+    
+    String? error;
+    double calculatedAsset = 0.0;
+    double calculatedCurrency = 0.0;
+    
+    if (_isCurrencyMode) {
+      // Currency mode - validate currency amount
+      calculatedCurrency = amount;
+      calculatedAsset = amount / price;
+      
+      if (amount < minAmount) {
+        error = 'Minimum amount is ${minAmount.toStringAsFixed(2)} $currency';
+      } else if (amount > maxAmount) {
+        error = 'Maximum amount is ${maxAmount.toStringAsFixed(2)} $currency';
+      } else if (calculatedAsset > availableAmount) {
+        error = 'Exceeds available amount';
+      }
+    } else {
+      // Asset mode - validate asset amount
+      calculatedAsset = amount;
+      calculatedCurrency = amount * price;
+      
+      final minAsset = minAmount / price;
+      final maxAsset = maxAmount / price;
+      
+      if (amount < minAsset) {
+        error = 'Minimum amount is ${minAsset.toStringAsFixed(6)} $tokenSymbol';
+      } else if (amount > maxAsset) {
+        error = 'Maximum amount is ${maxAsset.toStringAsFixed(6)} $tokenSymbol';
+      } else if (amount > availableAmount) {
+        error = 'Exceeds available amount';
+      }
+    }
+    
+    setState(() {
+      _amountError = error;
+      _calculatedAssetAmount = calculatedAsset;
+      _calculatedCurrencyAmount = calculatedCurrency;
+    });
   }
 
   Future<void> _fetchOfferDetails() async {
@@ -52,6 +144,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
   @override
   void dispose() {
     _amountController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -959,6 +1052,9 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
   }
 
   Widget _buildActionSection(bool isDark, String currency) {
+    final tokenSymbol = offerDetails?['token']?['symbol'] ?? 'Unknown';
+    final price = offerDetails?['calculatedPrice'] ?? '0.00';
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -975,14 +1071,64 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
       ),
       child: Column(
         children: [
+          // Modern currency/asset selection tabs
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark 
+                  ? Colors.grey[900]
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CurrencyTab(
+                  label: currency,
+                  isSelected: _isCurrencyMode,
+                  onSelected: (selected) {
+                    if (selected && !_isCurrencyMode) {
+                      setState(() {
+                        _isCurrencyMode = true;
+                        _tabController.animateTo(0);
+                        _amountController.clear();
+                        _amountError = null;
+                        _calculatedAssetAmount = 0.0;
+                        _calculatedCurrencyAmount = 0.0;
+                      });
+                    }
+                  },
+                ),
+                _CurrencyTab(
+                  label: tokenSymbol,
+                  isSelected: !_isCurrencyMode,
+                  onSelected: (selected) {
+                    if (selected && _isCurrencyMode) {
+                      setState(() {
+                        _isCurrencyMode = false;
+                        _tabController.animateTo(1);
+                        _amountController.clear();
+                        _amountError = null;
+                        _calculatedAssetAmount = 0.0;
+                        _calculatedCurrencyAmount = 0.0;
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _amountController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
-                    hintText: 'Enter amount in $currency',
+                    hintText: _isCurrencyMode
+                        ? 'Enter amount in $currency'
+                        : 'Enter amount in $tokenSymbol',
                     hintStyle: TextStyle(
                       color: isDark
                           ? Colors.grey[600]
@@ -1003,16 +1149,24 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
+                        color: _amountError != null
+                            ? SafeJetColors.error
+                            : isDark
+                                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                : SafeJetColors.lightCardBorder,
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
-                        color: SafeJetColors.secondaryHighlight,
+                        color: _amountError != null
+                            ? SafeJetColors.error
+                            : SafeJetColors.secondaryHighlight,
                       ),
+                    ),
+                    errorText: _amountError,
+                    errorStyle: TextStyle(
+                      color: SafeJetColors.error,
                     ),
                   ),
                 ),
@@ -1020,7 +1174,25 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
               const SizedBox(width: 12),
               TextButton(
                 onPressed: () {
-                  // TODO: Set max amount
+                  // Set max amount based on available and limits
+                  if (offerDetails != null) {
+                    final maxAmount = double.tryParse(offerDetails!['metadata']['maxAmount']?.toString() ?? '0') ?? 0.0;
+                    final availableAmount = double.tryParse(offerDetails!['amount']?.toString() ?? '0') ?? 0.0;
+                    final price = double.tryParse(offerDetails!['calculatedPrice']?.toString() ?? '0') ?? 0.0;
+                    
+                    double maxValue;
+                    if (_isCurrencyMode) {
+                      // Max in currency
+                      final availableInCurrency = availableAmount * price;
+                      maxValue = maxAmount < availableInCurrency ? maxAmount : availableInCurrency;
+                    } else {
+                      // Max in asset
+                      final maxInAsset = maxAmount / price;
+                      maxValue = maxInAsset < availableAmount ? maxInAsset : availableAmount;
+                    }
+                    
+                    _amountController.text = maxValue.toStringAsFixed(_isCurrencyMode ? 2 : 6);
+                  }
                 },
                 style: TextButton.styleFrom(
                   foregroundColor: SafeJetColors.secondaryHighlight,
@@ -1029,44 +1201,56 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                'You will receive:',
-                style: TextStyle(
-                  color: isDark
-                      ? Colors.grey[400]
-                      : SafeJetColors.lightTextSecondary,
+          if (_amountError == null && (_calculatedAssetAmount > 0 || _calculatedCurrencyAmount > 0)) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  _isCurrencyMode
+                      ? 'You will receive:'
+                      : 'You will pay:',
+                  style: TextStyle(
+                    color: isDark
+                        ? Colors.grey[400]
+                        : SafeJetColors.lightTextSecondary,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              const Text(
-                '0.00 USDT',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                const Spacer(),
+                Text(
+                  _isCurrencyMode
+                      ? '${_calculatedAssetAmount.toStringAsFixed(6)} $tokenSymbol'
+                      : '${_calculatedCurrencyAmount.toStringAsFixed(2)} $currency',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _termsAccepted ? () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => P2POrderConfirmationScreen(
-                      isBuy: widget.isBuy,
-                      amount: '1,234.56',  // Replace with actual amount
-                      price: '750.00',     // Replace with actual price
-                      total: '925,920.00', // Replace with actual total
-                    ),
-                  ),
-                );
-              } : null,
+              onPressed: _termsAccepted && _amountError == null && (_calculatedAssetAmount > 0 || _calculatedCurrencyAmount > 0)
+                  ? () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => P2POrderConfirmationScreen(
+                            isBuy: widget.isBuy,
+                            amount: _isCurrencyMode
+                                ? _calculatedAssetAmount.toStringAsFixed(6)
+                                : _amountController.text,
+                            price: price,
+                            total: _isCurrencyMode
+                                ? _amountController.text
+                                : _calculatedCurrencyAmount.toStringAsFixed(2),
+                          ),
+                        ),
+                      );
+                    }
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: widget.isBuy
                     ? SafeJetColors.success
@@ -1077,9 +1261,15 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 elevation: 0,
+                disabledBackgroundColor: isDark
+                    ? Colors.grey[800]
+                    : Colors.grey[300],
+                disabledForegroundColor: isDark
+                    ? Colors.grey[600]
+                    : Colors.grey[500],
               ),
               child: Text(
-                widget.isBuy ? 'Buy USDT' : 'Sell USDT',
+                widget.isBuy ? 'Buy $tokenSymbol' : 'Sell $tokenSymbol',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -1088,6 +1278,53 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Move the _CurrencyTab class outside of _P2POfferDetailsScreenState
+class _CurrencyTab extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Function(bool) onSelected;
+
+  const _CurrencyTab({
+    required this.label,
+    required this.isSelected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return GestureDetector(
+      onTap: () => onSelected(true),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? (isDark ? SafeJetColors.secondaryHighlight.withOpacity(0.2) : SafeJetColors.secondaryHighlight.withOpacity(0.15))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected 
+              ? Border.all(
+                  color: SafeJetColors.secondaryHighlight.withOpacity(0.3),
+                  width: 1,
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? (isDark ? Colors.white : Colors.black)
+                : (isDark ? Colors.grey[400] : Colors.grey[600]),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }
