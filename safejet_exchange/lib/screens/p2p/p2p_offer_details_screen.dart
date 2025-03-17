@@ -883,25 +883,25 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                     },
                     child: Container(
                       margin: EdgeInsets.only(bottom: index < paymentMethods.length - 1 ? 12 : 0),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
                         color: isSelected
                             ? (isDark 
                                 ? SafeJetColors.secondaryHighlight.withOpacity(0.1)
                                 : SafeJetColors.secondaryHighlight.withOpacity(0.05))
                             : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
                           color: isSelected
                               ? SafeJetColors.secondaryHighlight
                               : isDark
                                   ? Colors.grey[800]!
                                   : Colors.grey[300]!,
                           width: isSelected ? 1.5 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
+                        ),
+                      ),
+                      child: Row(
+                        children: [
                           Container(
                             width: 40,
                             height: 40,
@@ -919,31 +919,31 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                             child: Icon(
                               _getPaymentIcon(method['icon']),
                               color: isDark ? Colors.white : SafeJetColors.primary,
-                  size: 20,
+                              size: 20,
                             ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   method['typeName'] ?? 'Unknown',
-                    style: TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: isDark ? Colors.white : Colors.black,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  method['methodName'] ?? 'Unknown',
+                                  method['description'] ?? 'No description available',
                                   style: TextStyle(
                                     color: isDark
                                         ? Colors.grey[400]
                                         : SafeJetColors.lightTextSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -958,8 +958,8 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                     ),
                   );
                 },
+              ),
             ),
-          ),
         ],
       ),
     );
