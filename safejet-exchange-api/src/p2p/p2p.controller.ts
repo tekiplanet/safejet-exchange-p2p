@@ -4,6 +4,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { User } from '../auth/entities/user.entity';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { Order } from './entities/order.entity';
 
 @Controller('p2p')
 export class P2PController {
@@ -144,5 +146,11 @@ export class P2PController {
   async getOfferDetails(@Query('offerId') offerId: string) {
     const offer = await this.p2pService.getOfferDetails(offerId);
     return offer;
+  }
+
+  @Post('orders')
+  @UseGuards(JwtAuthGuard)
+  async createOrder(@Body() createOrderDto: CreateOrderDto): Promise<Order> {
+    return this.p2pService.createOrder(createOrderDto);
   }
 } 

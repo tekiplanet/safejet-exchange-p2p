@@ -14,6 +14,7 @@ import { P2PSettingsModule } from '../p2p-settings/p2p-settings.module';
 import { User } from '../auth/entities/user.entity';
 import { Currency } from '../currencies/entities/currency.entity';
 import { KYCLevel } from '../auth/entities/kyc-level.entity';
+import { Order } from './entities/order.entity';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { KYCLevel } from '../auth/entities/kyc-level.entity';
       User,
       Currency,
       KYCLevel,
+      Order,
     ]),
     WalletModule,
     P2PSettingsModule,

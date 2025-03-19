@@ -12,6 +12,9 @@ import { CreateOfferDto } from './dto/create-offer.dto';
 import { User } from '../auth/entities/user.entity';
 import { Currency } from '../currencies/entities/currency.entity';
 import { KYCLevel } from '../auth/entities/kyc-level.entity';
+import { Order } from './entities/order.entity';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class P2PService {
@@ -36,6 +39,8 @@ export class P2PService {
     private readonly currencyRepository: Repository<Currency>,
     @InjectRepository(KYCLevel)
     private readonly kycLevelRepository: Repository<KYCLevel>,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -650,5 +655,25 @@ export class P2PService {
     };
 
     return response;
+  }
+
+  async createOrder(createOrderDto: CreateOrderDto): Promise<Order> {
+    // Parse the payment metadata if it's a string
+    let paymentMetadata = createOrderDto.paymentMetadata;
+    if (typeof paymentMetadata === 'string') {
+      try {
+        paymentMetadata = JSON.parse(paymentMetadata);
+      } catch (e) {
+        // If it's not valid JSON, keep it as is
+      }
+    }
+
+    const order = this.orderRepository.create({
+      ...createOrderDto,
+      paymentMetadata, // Use the parsed or original value
+      trackingId: uuidv4(), // Generate a unique tracking ID
+    });
+
+    return this.orderRepository.save(order);
   }
 } 

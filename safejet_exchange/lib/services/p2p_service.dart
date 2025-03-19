@@ -225,6 +225,24 @@ class P2PService {
     return response.data;
   }
 
+  Future<void> submitOrder(Map<String, dynamic> orderData) async {
+    try {
+      final response = await _dio.post(
+        '/p2p/orders',
+        data: orderData,
+      );
+
+      if (response.statusCode == 201) {
+        print('Order submitted successfully');
+      } else {
+        throw Exception('Failed to submit order');
+      }
+    } catch (e) {
+      print('Error submitting order: $e');
+      throw Exception('Error submitting order');
+    }
+  }
+
   Exception _handleError(dynamic e) {
     if (e is DioException) {
       final response = e.response;
