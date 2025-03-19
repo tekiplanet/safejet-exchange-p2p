@@ -15,6 +15,7 @@ import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { Order } from './entities/order.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class P2PService {
@@ -41,6 +42,7 @@ export class P2PService {
     private readonly kycLevelRepository: Repository<KYCLevel>,
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    private readonly emailService: EmailService,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -741,6 +743,60 @@ export class P2PService {
       // confirmationDeadline will be set later when the order is marked as paid
     });
 
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Get the complete offer with relations
+    const offerWithRelations = await this.p2pOfferRepository.findOne({
+      where: { id: offer.id },
+      relations: ['token']  // We only need the token relation
+    });
+
+    if (!offerWithRelations || !offerWithRelations.token) {
+      console.error('Token not found for offer:', offer.id);
+      return savedOrder;
+    }
+
+    // Get the token directly from the relations
+    const token = offerWithRelations.token;
+
+    // Format amounts
+    const assetAmount = createOrderDto.assetAmount.toString();
+    const currencyAmount = `${offer.currency} ${createOrderDto.currencyAmount.toString()}`;
+
+    // Determine who is the actual buyer and seller based on the offer type
+    let actualBuyer, actualSeller;
+
+    if (offer.type === 'sell') {
+      // For a sell offer, the order creator becomes the buyer
+      actualBuyer = createOrderDto.buyerId === buyer.id ? buyer : seller;
+      actualSeller = createOrderDto.sellerId === seller.id ? seller : buyer;
+    } else {
+      // For a buy offer, the order creator becomes the seller
+      actualBuyer = createOrderDto.buyerId === buyer.id ? buyer : seller;
+      actualSeller = createOrderDto.sellerId === seller.id ? seller : buyer;
+    }
+
+    // Send email to the actual buyer
+    this.emailService.sendP2POrderCreatedBuyerEmail(
+      actualBuyer.email,
+      actualBuyer.fullName,
+      trackingId,
+      assetAmount,
+      currencyAmount,
+      token.symbol,
+      paymentDeadline
+    );
+
+    // Send email to the actual seller
+    this.emailService.sendP2POrderCreatedSellerEmail(
+      actualSeller.email,
+      actualSeller.fullName,
+      trackingId,
+      assetAmount,
+      token.symbol,
+      paymentDeadline
+    );
+
+    return savedOrder;
   }
 } 

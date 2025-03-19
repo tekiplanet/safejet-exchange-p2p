@@ -15,6 +15,7 @@ import { User } from '../auth/entities/user.entity';
 import { Currency } from '../currencies/entities/currency.entity';
 import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { Order } from './entities/order.entity';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { Order } from './entities/order.entity';
     ]),
     WalletModule,
     P2PSettingsModule,
+    EmailModule,
   ],
   controllers: [P2PController],
   providers: [P2PService],

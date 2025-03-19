@@ -639,4 +639,94 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, true);
   }
+
+  p2pOrderCreatedForBuyerEmail(
+    userName: string, 
+    trackingId: string, 
+    amount: string, 
+    currency: string, 
+    tokenSymbol: string,
+    paymentDeadline: Date,
+    isDark = true
+  ): string {
+    const deadlineFormatted = paymentDeadline.toLocaleString();
+    
+    const content = `
+      <h1>P2P Order Created - Buy ${tokenSymbol} 🔄</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>Your P2P buy order has been created successfully:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total: ${currency}</p>
+          <p style="margin: 5px 0; font-size: 0.9em; color: ${isDark ? '#ff9800' : '#e65100'};">
+            Payment Deadline: ${deadlineFormatted}
+          </p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Next Steps 🚀</h2>
+        <ol>
+          <li>Make the payment using the seller's payment details</li>
+          <li>Mark the order as "Paid" on the platform</li>
+          <li>Wait for the seller to confirm receipt of payment</li>
+        </ol>
+        <p style="color: ${isDark ? '#ff9800' : '#e65100'}; font-weight: bold;">
+          Important: You must complete payment before the deadline or the order may be cancelled.
+        </p>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  p2pOrderCreatedForSellerEmail(
+    userName: string, 
+    trackingId: string, 
+    amount: string, 
+    tokenSymbol: string,
+    paymentDeadline: Date,
+    isDark = true
+  ): string {
+    const deadlineFormatted = paymentDeadline.toLocaleString();
+    
+    const content = `
+      <h1>P2P Order Created - Sell ${tokenSymbol} 🔄</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A buyer has placed an order for your P2P offer:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0; font-size: 0.9em; color: ${isDark ? '#ff9800' : '#e65100'};">
+            Payment Deadline: ${deadlineFormatted}
+          </p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Next Steps 🚀</h2>
+        <ol>
+          <li>The buyer will make payment using your payment details</li>
+          <li>Once the buyer marks the order as "Paid", check your payment account</li>
+          <li>Confirm receipt of payment to release the ${tokenSymbol}</li>
+        </ol>
+        <p style="color: ${isDark ? '#ff9800' : '#e65100'}; font-weight: bold;">
+          Important: The buyer must complete payment before the deadline.
+        </p>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }

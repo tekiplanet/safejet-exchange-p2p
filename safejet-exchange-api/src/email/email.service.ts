@@ -348,4 +348,58 @@ export class EmailService {
       html: template,
     });
   }
+
+  async sendP2POrderCreatedBuyerEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    currency: string,
+    tokenSymbol: string,
+    paymentDeadline: Date
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Created - Buy ${tokenSymbol}`,
+        html: this.emailTemplatesService.p2pOrderCreatedForBuyerEmail(
+          userName,
+          trackingId,
+          amount,
+          currency,
+          tokenSymbol,
+          paymentDeadline
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order created buyer email error:', error);
+    }
+  }
+
+  async sendP2POrderCreatedSellerEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    paymentDeadline: Date
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Created - Sell ${tokenSymbol}`,
+        html: this.emailTemplatesService.p2pOrderCreatedForSellerEmail(
+          userName,
+          trackingId,
+          amount,
+          tokenSymbol,
+          paymentDeadline
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order created seller email error:', error);
+    }
+  }
 }
