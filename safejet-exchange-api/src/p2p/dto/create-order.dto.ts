@@ -1,4 +1,4 @@
-import { IsUUID, IsNotEmpty, IsNumber, IsEnum, IsString } from 'class-validator';
+import { IsUUID, IsNotEmpty, IsNumber, IsEnum, IsString, IsOptional, IsDate } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class CreateOrderDto {
@@ -39,4 +39,12 @@ export class CreateOrderDto {
 
   @IsEnum(['pending', 'confirmed', 'disputed', 'completed', 'cancelled'])
   sellerStatus: string;
+
+  @IsOptional()
+  @IsDate()
+  paymentDeadline?: Date;
+
+  @IsOptional()
+  @IsDate()
+  confirmationDeadline?: Date;
 } 

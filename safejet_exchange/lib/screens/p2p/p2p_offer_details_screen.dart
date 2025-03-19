@@ -1420,11 +1420,11 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                     )
                   : Text(
                       widget.isBuy ? 'Buy $tokenSymbol' : 'Sell $tokenSymbol',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ],
@@ -1714,6 +1714,22 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
         'buyerStatus': 'pending',
         'sellerStatus': 'pending',
       };
+
+      print('Order data being sent: $orderData');
+
+      // Make sure widget.offerId is not null or empty
+      if (widget.offerId == null || widget.offerId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid offer ID. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
 
       final p2pService = P2PService();
       await p2pService.submitOrder(orderData);

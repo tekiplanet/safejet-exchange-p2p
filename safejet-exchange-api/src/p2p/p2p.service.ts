@@ -658,6 +658,46 @@ export class P2PService {
   }
 
   async createOrder(createOrderDto: CreateOrderDto): Promise<Order> {
+    // Check if required fields are provided
+    if (!createOrderDto.offerId) {
+      throw new BadRequestException('Offer ID is required');
+    }
+    
+    if (!createOrderDto.buyerId) {
+      throw new BadRequestException('Buyer ID is required');
+    }
+    
+    if (!createOrderDto.sellerId) {
+      throw new BadRequestException('Seller ID is required');
+    }
+
+    // Check if the offer exists
+    const offer = await this.p2pOfferRepository.findOne({
+      where: { id: createOrderDto.offerId }
+    });
+
+    if (!offer) {
+      throw new NotFoundException(`Offer with ID ${createOrderDto.offerId} not found`);
+    }
+
+    // Check if the buyer exists
+    const buyer = await this.userRepository.findOne({
+      where: { id: createOrderDto.buyerId }
+    });
+
+    if (!buyer) {
+      throw new NotFoundException(`Buyer with ID ${createOrderDto.buyerId} not found`);
+    }
+
+    // Check if the seller exists
+    const seller = await this.userRepository.findOne({
+      where: { id: createOrderDto.sellerId }
+    });
+
+    if (!seller) {
+      throw new NotFoundException(`Seller with ID ${createOrderDto.sellerId} not found`);
+    }
+
     // Parse the payment metadata if it's a string
     let paymentMetadata = createOrderDto.paymentMetadata;
     if (typeof paymentMetadata === 'string') {
@@ -668,10 +708,37 @@ export class P2PService {
       }
     }
 
+    // Calculate payment deadline (30 minutes from now)
+    const now = new Date();
+    const paymentDeadline = new Date(now);
+    paymentDeadline.setMinutes(paymentDeadline.getMinutes() + 15);
+    
+    // Generate a user-friendly tracking ID (10 characters alphanumeric)
+    const generateTrackingId = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let result = '';
+      for (let i = 0; i < 10; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    };
+
+    // Ensure the tracking ID is unique
+    let trackingId = generateTrackingId();
+    let existingOrder = await this.orderRepository.findOne({ where: { trackingId } });
+    
+    // If a collision occurs, regenerate until we get a unique ID
+    while (existingOrder) {
+      trackingId = generateTrackingId();
+      existingOrder = await this.orderRepository.findOne({ where: { trackingId } });
+    }
+
     const order = this.orderRepository.create({
       ...createOrderDto,
-      paymentMetadata, // Use the parsed or original value
-      trackingId: uuidv4(), // Generate a unique tracking ID
+      paymentMetadata,
+      trackingId,
+      paymentDeadline,
+      // confirmationDeadline will be set later when the order is marked as paid
     });
 
     return this.orderRepository.save(order);

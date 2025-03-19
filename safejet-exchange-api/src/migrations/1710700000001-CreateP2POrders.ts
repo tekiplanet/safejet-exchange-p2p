@@ -16,6 +16,7 @@ export class CreateP2POrders1710700000001 implements MigrationInterface {
           {
             name: 'offerId',
             type: 'uuid',
+            isNullable: false,
           },
           {
             name: 'buyerId',

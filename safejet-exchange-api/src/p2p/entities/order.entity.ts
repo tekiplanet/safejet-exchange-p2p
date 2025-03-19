@@ -7,13 +7,22 @@ export class Order {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => P2POffer)
+  @Column('uuid')
+  offerId: string;
+
+  @ManyToOne(() => P2POffer, { eager: true })
   @JoinColumn({ name: 'offerId' })
   offer: P2POffer;
+
+  @Column('uuid')
+  buyerId: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'buyerId' })
   buyer: User;
+
+  @Column('uuid')
+  sellerId: string;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'sellerId' })
@@ -59,4 +68,10 @@ export class Order {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
   updatedAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  paymentDeadline: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  confirmationDeadline: Date;
 } 
