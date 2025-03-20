@@ -759,43 +759,76 @@ export class P2PService {
     // Get the token directly from the relations
     const token = offerWithRelations.token;
 
+    // Format amounts with proper comma separation
+    const formatAmount = (amount: number | string): string => {
+      // Convert to number if it's a string
+      const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      
+      // Format with commas for thousands
+      return numAmount.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 8
+      });
+    };
+
     // Format amounts
-    const assetAmount = createOrderDto.assetAmount.toString();
-    const currencyAmount = `${offer.currency} ${createOrderDto.currencyAmount.toString()}`;
+    const assetAmount = formatAmount(createOrderDto.assetAmount);
+    const currencyAmount = `${offer.currency} ${formatAmount(createOrderDto.currencyAmount)}`;
 
-    // Determine who is the actual buyer and seller based on the offer type
-    let actualBuyer, actualSeller;
-
+    // Send appropriate emails based on the offer type and user roles
     if (offer.type === 'sell') {
-      // For a sell offer, the order creator becomes the buyer
-      actualBuyer = createOrderDto.buyerId === buyer.id ? buyer : seller;
-      actualSeller = createOrderDto.sellerId === seller.id ? seller : buyer;
+      // Frontend displays this as a buy offer:
+      // - The offer creator is the seller
+      // - The order creator is the buyer
+      
+      // Send buyer email to the order creator (buyer)
+      this.emailService.sendP2POrderCreatedBuyerEmail(
+        buyer.email,
+        buyer.fullName,
+        trackingId,
+        assetAmount,
+        currencyAmount,
+        token.symbol,
+        paymentDeadline
+      );
+      
+      // Send seller email to the offer creator (seller)
+      this.emailService.sendP2POrderReceivedSellerEmail(
+        seller.email,
+        seller.fullName,
+        trackingId,
+        assetAmount,
+        token.symbol,
+        currencyAmount,
+        paymentDeadline
+      );
     } else {
-      // For a buy offer, the order creator becomes the seller
-      actualBuyer = createOrderDto.buyerId === buyer.id ? buyer : seller;
-      actualSeller = createOrderDto.sellerId === seller.id ? seller : buyer;
+      // Frontend displays this as a sell offer:
+      // - The offer creator is the buyer
+      // - The order creator is the seller
+      
+      // Send seller email to the order creator (seller)
+      this.emailService.sendP2POrderCreatedSellerEmail(
+        seller.email,
+        seller.fullName,
+        trackingId,
+        assetAmount,
+        token.symbol,
+        currencyAmount,
+        paymentDeadline
+      );
+      
+      // Send buyer email to the offer creator (buyer)
+      this.emailService.sendP2POrderReceivedBuyerEmail(
+        buyer.email,
+        buyer.fullName,
+        trackingId,
+        assetAmount,
+        currencyAmount,
+        token.symbol,
+        paymentDeadline
+      );
     }
-
-    // Send email to the actual buyer
-    this.emailService.sendP2POrderCreatedBuyerEmail(
-      actualBuyer.email,
-      actualBuyer.fullName,
-      trackingId,
-      assetAmount,
-      currencyAmount,
-      token.symbol,
-      paymentDeadline
-    );
-
-    // Send email to the actual seller
-    this.emailService.sendP2POrderCreatedSellerEmail(
-      actualSeller.email,
-      actualSeller.fullName,
-      trackingId,
-      assetAmount,
-      token.symbol,
-      paymentDeadline
-    );
 
     return savedOrder;
   }

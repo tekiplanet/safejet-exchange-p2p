@@ -363,7 +363,7 @@ export class EmailService {
         from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Created - Buy ${tokenSymbol}`,
-        html: this.emailTemplatesService.p2pOrderCreatedForBuyerEmail(
+        html: this.emailTemplatesService.p2pOrderCreatedBuyerEmail(
           userName,
           trackingId,
           amount,
@@ -383,6 +383,7 @@ export class EmailService {
     trackingId: string,
     amount: string,
     tokenSymbol: string,
+    currency: string,
     paymentDeadline: Date
   ): Promise<void> {
     try {
@@ -390,16 +391,73 @@ export class EmailService {
         from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Created - Sell ${tokenSymbol}`,
-        html: this.emailTemplatesService.p2pOrderCreatedForSellerEmail(
+        html: this.emailTemplatesService.p2pOrderCreatedSellerEmail(
           userName,
           trackingId,
           amount,
           tokenSymbol,
+          currency,
           paymentDeadline
         ),
       });
     } catch (error) {
       console.error('P2P order created seller email error:', error);
+    }
+  }
+
+  async sendP2POrderReceivedBuyerEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    currency: string,
+    tokenSymbol: string,
+    paymentDeadline: Date
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Received - Buy ${tokenSymbol}`,
+        html: this.emailTemplatesService.p2pOrderReceivedBuyerEmail(
+          userName,
+          trackingId,
+          amount,
+          currency,
+          tokenSymbol,
+          paymentDeadline
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order received buyer email error:', error);
+    }
+  }
+
+  async sendP2POrderReceivedSellerEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    paymentDeadline: Date
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Received - Sell ${tokenSymbol}`,
+        html: this.emailTemplatesService.p2pOrderReceivedSellerEmail(
+          userName,
+          trackingId,
+          amount,
+          tokenSymbol,
+          currency,
+          paymentDeadline
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order received seller email error:', error);
     }
   }
 }
