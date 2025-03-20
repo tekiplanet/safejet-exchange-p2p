@@ -748,7 +748,7 @@ export class P2PService {
     // Get the complete offer with relations
     const offerWithRelations = await this.p2pOfferRepository.findOne({
       where: { id: offer.id },
-      relations: ['token']  // We only need the token relation
+      relations: ['token']
     });
 
     if (!offerWithRelations || !offerWithRelations.token) {
@@ -774,6 +774,38 @@ export class P2PService {
     // Format amounts
     const assetAmount = formatAmount(createOrderDto.assetAmount);
     const currencyAmount = `${offer.currency} ${formatAmount(createOrderDto.currencyAmount)}`;
+
+    // Find the seller's funding wallet balance for this token
+    const sellerWalletBalance = await this.walletBalanceRepository.findOne({
+      where: {
+        userId: seller.id,
+        type: 'funding',
+        baseSymbol: token.symbol
+      }
+    });
+
+    if (!sellerWalletBalance) {
+      console.error(`Seller does not have a funding wallet balance for ${token.symbol}`);
+    } else {
+      // Update the seller's wallet balance - move funds from available to frozen
+      const currentBalance = parseFloat(sellerWalletBalance.balance.toString());
+      const orderAmount = parseFloat(createOrderDto.assetAmount.toString());
+      const currentFrozen = parseFloat(sellerWalletBalance.frozen?.toString() || '0');
+      
+      // Ensure seller has enough balance
+      if (currentBalance < orderAmount) {
+        throw new BadRequestException(`Seller does not have enough ${token.symbol} balance`);
+      }
+      
+      // Update the balance - convert numbers to strings
+      sellerWalletBalance.balance = (currentBalance - orderAmount).toString();
+      sellerWalletBalance.frozen = (currentFrozen + orderAmount).toString();
+      
+      // Save the updated balance
+      await this.walletBalanceRepository.save(sellerWalletBalance);
+      
+      console.log(`Updated seller's wallet balance: ${orderAmount} ${token.symbol} moved to frozen`);
+    }
 
     // Send appropriate emails based on the offer type and user roles
     if (offer.type === 'sell') {
