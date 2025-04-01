@@ -676,10 +676,140 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       return Text('Unsupported payment data type: ${paymentData.runtimeType}');
     }
     
-    // Check if we have completePaymentDetails
+    // Check if we have completePaymentDetails from the API
     final completeDetails = _orderDetails?['completePaymentDetails'];
-    if (completeDetails != null) {
-      // Use the complete payment details
+    
+    // Check if this is a sell order (we are the seller)
+    final isSeller = _userId == _orderDetails?['sellerId'];
+    
+    // For sell orders, the payment metadata might contain the complete payment details
+    if (paymentMap.containsKey('details') || paymentMap.containsKey('paymentMethodType')) {
+      // This is a complete payment method object (usually for sell orders)
+      final paymentMethodType = paymentMap['paymentMethodType'] ?? {};
+      final String typeName = paymentMethodType['name'] ?? 'Payment Method';
+      final String typeIcon = paymentMethodType['icon'] ?? 'payment';
+      final String accountOwner = paymentMap['name'] ?? '';
+      
+      // Extract the details field which contains the actual payment information
+      final details = paymentMap['details'] ?? {};
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Payment method type header
+          Row(
+            children: [
+              Icon(_getIconForPaymentType(typeIcon), size: 20),
+              const SizedBox(width: 8),
+              Text(
+                typeName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Account owner
+          if (accountOwner.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Account Owner: $accountOwner',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
+          // Display each payment field based on its type
+          if (details is Map && details.isNotEmpty)
+            ...details.entries.map<Widget>((entry) {
+              final fieldName = entry.key;
+              final fieldData = entry.value is Map ? entry.value as Map<String, dynamic> : {'value': entry.value, 'fieldType': 'text'};
+              final fieldType = fieldData['fieldType'] as String? ?? 'text';
+              final fieldValue = fieldData['value'];
+              
+              return _buildPaymentField(
+                fieldName: fieldName,
+                fieldLabel: _toTitleCase(fieldName),
+                fieldType: fieldType,
+                fieldValue: fieldValue,
+                isDark: isDark,
+              );
+            }).toList(),
+            
+          // Add a message based on whether user is buyer or seller
+          Container(
+            margin: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: SafeJetColors.info.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: SafeJetColors.info, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      isSeller ? 'Waiting for Payment' : 'Payment Instructions',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: SafeJetColors.info,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  isSeller 
+                    ? 'The buyer will send payment to your account. You will be notified when payment is made.'
+                    : 'Please make the payment using the details above and click "I have paid" when done.',
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Navigate to chat screen with the correct parameters
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => P2PChatScreen(
+                          orderId: _orderDetails?['trackingId'] ?? '',
+                          userName: isSeller 
+                            ? _orderDetails?['buyer']?['fullName'] ?? 'Buyer'
+                            : _orderDetails?['seller']?['fullName'] ?? 'Seller',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.chat_outlined, size: 16),
+                  label: const Text('Open Chat'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SafeJetColors.info,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    minimumSize: const Size(120, 36),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    } else if (completeDetails != null) {
+      // Use the complete payment details from the API (usually for buy orders)
       final paymentMethodType = completeDetails['paymentMethodType'] ?? {};
       final String typeName = paymentMethodType['name'] ?? 'Payment Method';
       final String typeIcon = paymentMethodType['icon'] ?? 'payment';
@@ -741,10 +871,66 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 isDark: isDark,
               );
             }).toList(),
+            
+          // Add a message for the buyer
+          Container(
+            margin: const EdgeInsets.only(top: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: SafeJetColors.info.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: SafeJetColors.info, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Payment Instructions',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: SafeJetColors.info,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Please make the payment using the details above and click "I have paid" when done.',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Navigate to chat screen with the correct parameters
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => P2PChatScreen(
+                          orderId: _orderDetails?['trackingId'] ?? '',
+                          userName: _orderDetails?['seller']?['fullName'] ?? 'Seller',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.chat_outlined, size: 16),
+                  label: const Text('Open Chat'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SafeJetColors.info,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    minimumSize: const Size(120, 36),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       );
     } else {
-      // Use the basic payment metadata
+      // Use the basic payment metadata (fallback)
       final String typeName = paymentMap['typeName'] ?? 'Payment Method';
       final String typeIcon = paymentMap['icon'] ?? 'payment';
       final String methodName = paymentMap['methodName'] ?? '';
