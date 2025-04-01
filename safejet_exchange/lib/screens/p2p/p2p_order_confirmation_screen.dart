@@ -16,6 +16,7 @@ import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Move AnimatedDialog outside the state class
 class AnimatedDialog extends StatelessWidget {
@@ -1065,63 +1066,134 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     }
   }
 
-  Widget _buildImageField(String label, String imageUrl, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.grey[300] : Colors.grey[700],
+  Widget _buildImageField(String label, String imageValue, bool isDark) {
+    // Get the base URL from environment variables
+    final baseUrl = dotenv.get('API_URL', fallback: 'http://ctradesglobal.com');
+    
+    // Try different URL formats since we're getting 404 errors
+    // Format 1: Direct URL if the value already contains http
+    final String imageUrl = imageValue.startsWith('http') 
+        ? imageValue 
+        : '$baseUrl/uploads/$imageValue';
+    
+    print('Attempting to load image from: $imageUrl');
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: isDark
+                  ? Colors.grey[400]
+                  : SafeJetColors.lightTextSecondary,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          height: 200,
-          decoration: BoxDecoration(
-            color: isDark ? Colors.grey[800] : Colors.grey[200],
-            borderRadius: BorderRadius.circular(8),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            height: 200,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey[800] : Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: imageValue.isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        print('Error loading image: $error');
+                        
+                        // Try an alternative URL format as fallback
+                        final alternativeUrl = '$baseUrl/uploads/payment-methods/$imageValue';
+                        print('Trying alternative URL: $alternativeUrl');
+                        
+                        return Image.network(
+                          alternativeUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('Error loading alternative image: $error');
+                            return Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline, color: SafeJetColors.error),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Failed to load image',
+                                    style: TextStyle(color: SafeJetColors.error),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    imageValue,
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 12,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  )
+                : const Center(child: Text('No image available')),
           ),
-          child: imageUrl.isNotEmpty
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    'http://ctradesglobal.com/uploads/$imageUrl',
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
-                        ),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline, color: SafeJetColors.error),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Failed to load image',
-                              style: TextStyle(color: SafeJetColors.error),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+          const SizedBox(height: 4),
+          // Add a copy button for the image URL
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: imageUrl));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$label URL copied to clipboard'),
+                  backgroundColor: SafeJetColors.success,
+                  duration: const Duration(seconds: 1),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Copy Image URL',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                      fontSize: 12,
+                    ),
                   ),
-                )
-              : const Center(child: Text('No image available')),
-        ),
-        const SizedBox(height: 16),
-      ],
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.copy_rounded,
+                    size: 14,
+                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
