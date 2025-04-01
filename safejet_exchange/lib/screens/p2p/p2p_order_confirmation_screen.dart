@@ -1070,13 +1070,13 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     // Get the base URL from environment variables
     final baseUrl = dotenv.get('API_URL', fallback: 'http://ctradesglobal.com');
     
-    // Try different URL formats since we're getting 404 errors
-    // Format 1: Direct URL if the value already contains http
+    // Based on our testing, the working URL format is:
     final String imageUrl = imageValue.startsWith('http') 
         ? imageValue 
-        : '$baseUrl/uploads/$imageValue';
+        : '$baseUrl/uploads/payment-methods/$imageValue';
     
-    print('Attempting to load image from: $imageUrl');
+    // Only log once during development
+    // print('Loading image from: $imageUrl');
     
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -1102,96 +1102,56 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             child: imageValue.isNotEmpty
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      imageUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        print('Error loading image: $error');
-                        
-                        // Try an alternative URL format as fallback
-                        final alternativeUrl = '$baseUrl/uploads/payment-methods/$imageValue';
-                        print('Trying alternative URL: $alternativeUrl');
-                        
-                        return Image.network(
-                          alternativeUrl,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            print('Error loading alternative image: $error');
-                            return Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.error_outline, color: SafeJetColors.error),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Failed to load image',
-                                    style: TextStyle(color: SafeJetColors.error),
+                    // Use a cached network image or add a key to prevent rebuilding
+                    child: RepaintBoundary(
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.contain,
+                        // Add a key based on the URL to prevent unnecessary reloading
+                        key: ValueKey(imageUrl),
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          // Only log errors once
+                          // print('Error loading image: $error');
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error_outline, color: SafeJetColors.error),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Failed to load image',
+                                  style: TextStyle(color: SafeJetColors.error),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  imageValue,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                    fontSize: 12,
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    imageValue,
-                                    style: TextStyle(
-                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                      },
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   )
                 : const Center(child: Text('No image available')),
           ),
           const SizedBox(height: 4),
-          // Add a copy button for the image URL
-          InkWell(
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: imageUrl));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$label URL copied to clipboard'),
-                  backgroundColor: SafeJetColors.success,
-                  duration: const Duration(seconds: 1),
-                ),
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Copy Image URL',
-                    style: TextStyle(
-                      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.copy_rounded,
-                    size: 14,
-                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );
