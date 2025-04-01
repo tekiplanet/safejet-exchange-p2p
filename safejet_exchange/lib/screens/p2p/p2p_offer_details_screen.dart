@@ -1706,11 +1706,11 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
 
       final orderData = {
         'offerId': widget.offerId,
-        'buyerId': widget.isBuy ? currentUserId : offerDetails!['user']['id'],
-        'sellerId': widget.isBuy ? offerDetails!['user']['id'] : currentUserId,
-        'paymentMetadata': jsonEncode(_selectedPaymentMethod),
-        'assetAmount': _calculatedAssetAmount,
-        'currencyAmount': _calculatedCurrencyAmount,
+        'buyerId': widget.isBuy ? currentUserId : offerDetails!['userId'],
+        'sellerId': widget.isBuy ? offerDetails!['userId'] : currentUserId,
+        'paymentMetadata': _selectedPaymentMethod,
+        'assetAmount': _isCurrencyMode ? _calculatedAssetAmount : double.parse(_amountController.text),
+        'currencyAmount': _isCurrencyMode ? double.parse(_amountController.text) : _calculatedCurrencyAmount,
         'buyerStatus': 'pending',
         'sellerStatus': 'pending',
       };
@@ -1732,32 +1732,19 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       }
 
       final p2pService = P2PService();
-      await p2pService.submitOrder(orderData);
-
-      // Order created successfully
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order submitted successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      final response = await p2pService.submitOrder(orderData);
       
-      // Navigate to order confirmation screen
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => P2POrderConfirmationScreen(
-            isBuy: widget.isBuy,
-            amount: _isCurrencyMode
-                ? _assetFormatter.format(_calculatedAssetAmount)
-                : _amountController.text,
-            price: offerDetails!['calculatedPrice'] ?? '0',
-            total: _isCurrencyMode
-                ? _amountController.text
-                : _currencyFormatter.format(_calculatedCurrencyAmount),
+      // Navigate to confirmation screen with the tracking ID from the response
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => P2POrderConfirmationScreen(
+              trackingId: response['trackingId'] ?? '',
+            ),
           ),
-        ),
-      );
+        );
+      }
     } catch (e) {
       // Handle error
       ScaffoldMessenger.of(context).showSnackBar(

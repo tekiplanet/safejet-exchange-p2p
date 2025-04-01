@@ -228,10 +228,7 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
               context,
               MaterialPageRoute(
                 builder: (context) => P2POrderConfirmationScreen(
-                  isBuy: isBuy,
-                  amount: order['amount'],
-                  price: order['price'],
-                  total: order['total'],
+                  trackingId: order['id'],
                 ),
               ),
             );

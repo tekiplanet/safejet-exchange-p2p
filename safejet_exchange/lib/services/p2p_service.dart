@@ -225,7 +225,7 @@ class P2PService {
     return response.data;
   }
 
-  Future<void> submitOrder(Map<String, dynamic> orderData) async {
+  Future<Map<String, dynamic>> submitOrder(Map<String, dynamic> orderData) async {
     try {
       final response = await _dio.post(
         '/p2p/orders',
@@ -234,12 +234,33 @@ class P2PService {
 
       if (response.statusCode == 201) {
         print('Order submitted successfully');
+        return response.data;
       } else {
         throw Exception('Failed to submit order');
       }
     } catch (e) {
       print('Error submitting order: $e');
       throw Exception('Error submitting order');
+    }
+  }
+
+  Future<Map<String, dynamic>> getOrderDetails(String trackingId) async {
+    try {
+      final token = await storage.read(key: 'accessToken');
+      final headers = token != null ? <String, dynamic>{'Authorization': 'Bearer $token'} : <String, dynamic>{};
+      
+      final response = await _dio.get(
+        '/p2p/orders/$trackingId',
+        options: Options(headers: headers),
+      );
+      
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        throw Exception('Failed to load order details');
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 

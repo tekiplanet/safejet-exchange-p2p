@@ -864,4 +864,42 @@ export class P2PService {
 
     return savedOrder;
   }
+
+  async getOrderByTrackingId(trackingId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { trackingId },
+      relations: ['offer', 'offer.token', 'buyer', 'seller'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with tracking ID ${trackingId} not found`);
+    }
+
+    // Format the payment metadata
+    let paymentMetadata;
+    try {
+      paymentMetadata = typeof order.paymentMetadata === 'string' 
+        ? JSON.parse(order.paymentMetadata) 
+        : order.paymentMetadata;
+    } catch (e) {
+      paymentMetadata = order.paymentMetadata;
+    }
+
+    // Calculate time remaining
+    const now = new Date();
+    const paymentDeadline = order.paymentDeadline;
+    const timeRemainingMs = paymentDeadline ? paymentDeadline.getTime() - now.getTime() : 0;
+    const timeRemainingMinutes = Math.max(0, Math.floor(timeRemainingMs / (1000 * 60)));
+    const timeRemainingSeconds = Math.max(0, Math.floor((timeRemainingMs % (1000 * 60)) / 1000));
+    
+    return {
+      ...order,
+      paymentMetadata,
+      timeRemaining: {
+        minutes: timeRemainingMinutes,
+        seconds: timeRemainingSeconds,
+        total: timeRemainingMs
+      }
+    };
+  }
 } 

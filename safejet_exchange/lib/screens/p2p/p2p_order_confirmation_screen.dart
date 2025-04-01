@@ -11,6 +11,9 @@ import 'p2p_dispute_screen.dart';
 import 'p2p_order_history_screen.dart';
 import 'p2p_dispute_history_screen.dart';
 import 'p2p_dispute_details_screen.dart';
+import '../../services/p2p_service.dart';
+import 'dart:async';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 // Move AnimatedDialog outside the state class
 class AnimatedDialog extends StatelessWidget {
@@ -62,17 +65,11 @@ class CustomPageRoute extends PageRouteBuilder {
 }
 
 class P2POrderConfirmationScreen extends StatefulWidget {
-  final bool isBuy;
-  final String amount;
-  final String price;
-  final String total;
+  final String trackingId;
 
   const P2POrderConfirmationScreen({
     super.key,
-    required this.isBuy,
-    required this.amount,
-    required this.price,
-    required this.total,
+    required this.trackingId,
   });
 
   @override
@@ -81,6 +78,73 @@ class P2POrderConfirmationScreen extends StatefulWidget {
 
 class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen> {
   bool _isPaymentConfirmed = false;
+  bool _isLoading = true;
+  Map<String, dynamic>? _orderDetails;
+  String _errorMessage = '';
+  Timer? _timer;
+  int _remainingMinutes = 0;
+  int _remainingSeconds = 0;
+  String? _userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchOrderDetails();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchOrderDetails() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      // Create a P2P service instance directly instead of using Provider
+      final p2pService = P2PService();
+      final orderDetails = await p2pService.getOrderDetails(widget.trackingId);
+      
+      // Get the user ID from secure storage
+      final storage = const FlutterSecureStorage();
+      final userId = await storage.read(key: 'userId');
+      
+      setState(() {
+        _orderDetails = orderDetails;
+        _userId = userId;
+        _remainingMinutes = orderDetails['timeRemaining']['minutes'];
+        _remainingSeconds = orderDetails['timeRemaining']['seconds'];
+        _isLoading = false;
+      });
+      
+      // Start timer to update countdown
+      _startTimer();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load order details: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_remainingSeconds > 0) {
+          _remainingSeconds--;
+        } else if (_remainingMinutes > 0) {
+          _remainingMinutes--;
+          _remainingSeconds = 59;
+        } else {
+          _timer?.cancel();
+        }
+      });
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,8 +170,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   context,
                   CustomPageRoute(
                     child: P2PChatScreen(
-                      userName: 'JohnSeller',
-                      orderId: 'P2P123456789',
+                      userName: _orderDetails?['isBuyer'] ? _orderDetails?['seller']?['fullName'] : _orderDetails?['buyer']?['fullName'] ?? 'Trader',
+                      orderId: _orderDetails?['trackingId'] ?? '',
                     ),
                   ),
                 );
@@ -130,8 +194,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                         context,
                         CustomPageRoute(
                           child: P2PDisputeScreen(
-                            orderId: 'P2P123456789',
-                            isBuyer: widget.isBuy,
+                            orderId: _orderDetails?['trackingId'] ?? '',
+                            isBuyer: _orderDetails?['buyerId'] == _userId,
                           ),
                         ),
                       );
@@ -184,7 +248,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 PopupMenuItem<String>(
                   value: 'copy',
                   onTap: () {
-                    Clipboard.setData(ClipboardData(text: 'P2P123456789'));
+                    final trackingId = _orderDetails?['trackingId'] ?? '';
+                    Clipboard.setData(ClipboardData(text: trackingId));
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Order ID copied to clipboard'),
@@ -224,7 +289,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                                   ),
                                 ),
                                 Text(
-                                  '#P2P123456789',
+                                  '#${_orderDetails?['trackingId'] ?? ''}',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
@@ -368,7 +433,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 ),
               ),
               Text(
-                '14:59',
+                '${_remainingMinutes.toString().padLeft(2, '0')}:${_remainingSeconds.toString().padLeft(2, '0')}',
                 style: TextStyle(
                   color: SafeJetColors.warning,
                   fontSize: 20,
@@ -383,6 +448,20 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }
 
   Widget _buildOrderDetails(bool isDark) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    if (_errorMessage.isNotEmpty) {
+      return Center(child: Text(_errorMessage, style: TextStyle(color: SafeJetColors.error)));
+    }
+    
+    final tokenSymbol = _orderDetails?['offer']?['token']?['symbol'] ?? 'USDT';
+    final currency = _orderDetails?['offer']?['currency'] ?? '₦';
+    final formattedCreatedAt = _orderDetails?['createdAt'] != null 
+      ? DateTime.parse(_orderDetails!['createdAt']).toLocal().toString().substring(0, 16)
+      : 'Today, 12:30 PM';
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -407,11 +486,11 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             ),
           ),
           const SizedBox(height: 16),
-          _buildDetailRow('Amount:', '${widget.amount} USDT', isDark),
-          _buildDetailRow('Price:', '₦${widget.price}/USDT', isDark),
-          _buildDetailRow('Total:', '₦${widget.total}', isDark),
-          _buildDetailRow('Order Number:', '#P2P123456789', isDark),
-          _buildDetailRow('Created:', 'Today, 12:30 PM', isDark),
+          _buildDetailRow('Amount:', '${_orderDetails?['assetAmount'] ?? ''} $tokenSymbol', isDark),
+          _buildDetailRow('Price:', '$currency${_orderDetails?['offer']?['price'] ?? ''}/$tokenSymbol', isDark),
+          _buildDetailRow('Total:', '$currency${_orderDetails?['currencyAmount'] ?? ''}', isDark),
+          _buildDetailRow('Order Number:', '#${_orderDetails?['trackingId'] ?? ''}', isDark),
+          _buildDetailRow('Created:', formattedCreatedAt, isDark),
         ],
       ),
     );
@@ -467,6 +546,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }
 
   Widget _buildPaymentInstructions(bool isDark) {
+    if (_isLoading || _orderDetails == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    final paymentDetails = _orderDetails?['paymentMetadata'] ?? {};
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -491,7 +576,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             ),
           ),
           const SizedBox(height: 16),
-          _buildBankDetails(isDark),
+          _buildPaymentDetails(paymentDetails, isDark),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
@@ -524,14 +609,20 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     );
   }
 
-  Widget _buildBankDetails(bool isDark) {
-    return Column(
-      children: [
-        _buildDetailRow('Bank:', 'First Bank', isDark),
-        _buildDetailRow('Account Number:', '0123456789', isDark),
-        _buildDetailRow('Account Name:', 'JOHN DOE', isDark),
-      ],
-    );
+  Widget _buildPaymentDetails(Map<String, dynamic> paymentDetails, bool isDark) {
+    final List<Widget> details = [];
+    
+    paymentDetails.forEach((key, value) {
+      if (value != null && value.toString().isNotEmpty) {
+        details.add(_buildDetailRow(key, value.toString(), isDark));
+      }
+    });
+    
+    if (details.isEmpty) {
+      return const Text('No payment details available');
+    }
+    
+    return Column(children: details);
   }
 
   Widget _buildBottomActions(bool isDark) {
