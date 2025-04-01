@@ -158,4 +158,9 @@ export class P2PController {
   async getOrderByTrackingId(@Param('trackingId') trackingId: string) {
     return this.p2pService.getOrderByTrackingId(trackingId);
   }
+
+  @Get('payment-methods/:id')
+  async getPaymentMethodById(@Param('id') id: string) {
+    return this.p2pService.getPaymentMethodById(id);
+  }
 } 

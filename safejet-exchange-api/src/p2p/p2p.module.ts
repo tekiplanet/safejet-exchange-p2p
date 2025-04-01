@@ -16,6 +16,7 @@ import { Currency } from '../currencies/entities/currency.entity';
 import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { Order } from './entities/order.entity';
 import { EmailModule } from '../email/email.module';
+import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { EmailModule } from '../email/email.module';
       Currency,
       KYCLevel,
       Order,
+      PaymentMethodField,
     ]),
     WalletModule,
     P2PSettingsModule,

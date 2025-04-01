@@ -14,6 +14,8 @@ import 'p2p_dispute_details_screen.dart';
 import '../../services/p2p_service.dart';
 import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:intl/intl.dart';
+import 'dart:convert';
 
 // Move AnimatedDialog outside the state class
 class AnimatedDialog extends StatelessWidget {
@@ -105,9 +107,28 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     });
 
     try {
-      // Create a P2P service instance directly instead of using Provider
       final p2pService = P2PService();
       final orderDetails = await p2pService.getOrderDetails(widget.trackingId);
+      
+      print('Order details received: $orderDetails');
+      
+      // Get the payment method ID from the metadata
+      final paymentMetadata = orderDetails['paymentMetadata'] ?? {};
+      final methodId = paymentMetadata['methodId'];
+      
+      // Fetch the complete payment method details if methodId is available
+      if (methodId != null) {
+        try {
+          final paymentMethodDetails = await p2pService.getPaymentMethodDetails(methodId);
+          print('Payment method details: $paymentMethodDetails');
+          
+          // Merge the payment method details with the order details
+          orderDetails['completePaymentDetails'] = paymentMethodDetails;
+        } catch (e) {
+          print('Error fetching payment method details: $e');
+          // Continue even if payment details fetch fails
+        }
+      }
       
       // Get the user ID from secure storage
       final storage = const FlutterSecureStorage();
@@ -116,14 +137,15 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       setState(() {
         _orderDetails = orderDetails;
         _userId = userId;
-        _remainingMinutes = orderDetails['timeRemaining']['minutes'];
-        _remainingSeconds = orderDetails['timeRemaining']['seconds'];
+        _remainingMinutes = orderDetails['timeRemaining']['minutes'] ?? 15;
+        _remainingSeconds = orderDetails['timeRemaining']['seconds'] ?? 0;
         _isLoading = false;
       });
       
       // Start timer to update countdown
       _startTimer();
     } catch (e) {
+      print('Error in _fetchOrderDetails: $e');
       setState(() {
         _errorMessage = 'Failed to load order details: ${e.toString()}';
         _isLoading = false;
@@ -458,6 +480,27 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     
     final tokenSymbol = _orderDetails?['offer']?['token']?['symbol'] ?? 'USDT';
     final currency = _orderDetails?['offer']?['currency'] ?? '₦';
+    
+    // Format the numbers properly
+    final assetAmount = _orderDetails?['assetAmount'];
+    final price = _orderDetails?['offer']?['price'];
+    final currencyAmount = _orderDetails?['currencyAmount'];
+    
+    // Format asset amount (crypto) - up to 8 decimal places, no trailing zeros
+    final formattedAssetAmount = assetAmount != null 
+        ? _formatCryptoAmount(double.tryParse(assetAmount.toString()) ?? 0)
+        : '';
+    
+    // Format price - with thousand separators
+    final formattedPrice = price != null 
+        ? _formatFiatAmount(double.tryParse(price.toString()) ?? 0)
+        : '';
+    
+    // Format total amount - with thousand separators
+    final formattedTotal = currencyAmount != null 
+        ? _formatFiatAmount(double.tryParse(currencyAmount.toString()) ?? 0)
+        : '';
+    
     final formattedCreatedAt = _orderDetails?['createdAt'] != null 
       ? DateTime.parse(_orderDetails!['createdAt']).toLocal().toString().substring(0, 16)
       : 'Today, 12:30 PM';
@@ -486,9 +529,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             ),
           ),
           const SizedBox(height: 16),
-          _buildDetailRow('Amount:', '${_orderDetails?['assetAmount'] ?? ''} $tokenSymbol', isDark),
-          _buildDetailRow('Price:', '$currency${_orderDetails?['offer']?['price'] ?? ''}/$tokenSymbol', isDark),
-          _buildDetailRow('Total:', '$currency${_orderDetails?['currencyAmount'] ?? ''}', isDark),
+          _buildDetailRow('Amount:', '$formattedAssetAmount $tokenSymbol', isDark),
+          _buildDetailRow('Price:', '$currency$formattedPrice/$tokenSymbol', isDark),
+          _buildDetailRow('Total:', '$currency$formattedTotal', isDark),
           _buildDetailRow('Order Number:', '#${_orderDetails?['trackingId'] ?? ''}', isDark),
           _buildDetailRow('Created:', formattedCreatedAt, isDark),
         ],
@@ -550,7 +593,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       return const Center(child: CircularProgressIndicator());
     }
     
-    final paymentDetails = _orderDetails?['paymentMetadata'] ?? {};
+    // Get the payment data from the order details
+    final paymentMetadata = _orderDetails?['paymentMetadata'] ?? {};
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -576,7 +620,10 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             ),
           ),
           const SizedBox(height: 16),
-          _buildPaymentDetails(paymentDetails, isDark),
+          
+          // Use the payment metadata we have
+          _buildPaymentDetails(paymentMetadata, isDark),
+          
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
@@ -609,20 +656,319 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     );
   }
 
-  Widget _buildPaymentDetails(Map<String, dynamic> paymentDetails, bool isDark) {
-    final List<Widget> details = [];
-    
-    paymentDetails.forEach((key, value) {
-      if (value != null && value.toString().isNotEmpty) {
-        details.add(_buildDetailRow(key, value.toString(), isDark));
-      }
-    });
-    
-    if (details.isEmpty) {
+  Widget _buildPaymentDetails(dynamic paymentData, bool isDark) {
+    if (paymentData == null || (paymentData is Map && paymentData.isEmpty)) {
       return const Text('No payment details available');
     }
     
-    return Column(children: details);
+    // If paymentData is a string, try to parse it as JSON
+    Map<String, dynamic> paymentMap;
+    if (paymentData is String) {
+      try {
+        paymentMap = json.decode(paymentData);
+      } catch (e) {
+        print('Error parsing payment data: $e');
+        return Text('Invalid payment data: $paymentData');
+      }
+    } else if (paymentData is Map) {
+      paymentMap = Map<String, dynamic>.from(paymentData);
+    } else {
+      return Text('Unsupported payment data type: ${paymentData.runtimeType}');
+    }
+    
+    // Check if we have completePaymentDetails
+    final completeDetails = _orderDetails?['completePaymentDetails'];
+    if (completeDetails != null) {
+      // Use the complete payment details
+      final paymentMethodType = completeDetails['paymentMethodType'] ?? {};
+      final String typeName = paymentMethodType['name'] ?? 'Payment Method';
+      final String typeIcon = paymentMethodType['icon'] ?? 'payment';
+      final String accountOwner = completeDetails['name'] ?? '';
+      
+      // Extract the details field which contains the actual payment information
+      final details = completeDetails['details'] ?? {};
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Payment method type header
+          Row(
+            children: [
+              Icon(_getIconForPaymentType(typeIcon), size: 20),
+              const SizedBox(width: 8),
+              Text(
+                typeName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Account owner
+          if (accountOwner.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Account Owner: $accountOwner',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
+          // Display each payment field based on its type
+          if (details is Map && details.isNotEmpty)
+            ...details.entries.map<Widget>((entry) {
+              final fieldName = entry.key;
+              final fieldData = entry.value is Map ? entry.value as Map<String, dynamic> : {'value': entry.value, 'fieldType': 'text'};
+              final fieldType = fieldData['fieldType'] as String? ?? 'text';
+              final fieldValue = fieldData['value'];
+              
+              return _buildPaymentField(
+                fieldName: fieldName,
+                fieldLabel: _toTitleCase(fieldName),
+                fieldType: fieldType,
+                fieldValue: fieldValue,
+                isDark: isDark,
+              );
+            }).toList(),
+        ],
+      );
+    } else {
+      // Use the basic payment metadata
+      final String typeName = paymentMap['typeName'] ?? 'Payment Method';
+      final String typeIcon = paymentMap['icon'] ?? 'payment';
+      final String methodName = paymentMap['methodName'] ?? '';
+      
+      // For bank transfers, we need to display bank details
+      final bool isBankTransfer = typeName.toLowerCase().contains('bank');
+      
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Payment method type header
+          Row(
+            children: [
+              Icon(_getIconForPaymentType(typeIcon), size: 20),
+              const SizedBox(width: 8),
+              Text(
+                typeName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Account owner
+          if (methodName.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Account Owner: $methodName',
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[300] : Colors.grey[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
+          // For bank transfers, show a message to contact the seller
+          if (isBankTransfer)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: SafeJetColors.info.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: SafeJetColors.info, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Bank Account Details',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: SafeJetColors.info,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Please contact the seller through chat to get the bank account details for payment.',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      // Navigate to chat screen with the correct parameters
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => P2PChatScreen(
+                            orderId: _orderDetails?['trackingId'] ?? '',
+                            userName: methodName,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.chat_outlined, size: 16),
+                    label: const Text('Open Chat'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SafeJetColors.info,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      minimumSize: const Size(120, 36),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          
+          // Display other payment method details if available
+          ...paymentMap.entries
+              .where((e) => !['paymentMethodType', 'name', 'methodName', 'icon', 'typeName', 'typeId', 'methodId', 'description'].contains(e.key))
+              .map<Widget>((entry) => _buildDetailRow(_toTitleCase(entry.key), entry.value.toString(), isDark))
+              .toList(),
+        ],
+      );
+    }
+  }
+
+  Widget _buildPaymentField({
+    required String fieldName,
+    required String fieldLabel,
+    required String fieldType,
+    required dynamic fieldValue,
+    required bool isDark,
+  }) {
+    switch (fieldType) {
+      case 'image':
+        return _buildImageField(fieldLabel, fieldValue.toString(), isDark);
+      case 'date':
+        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+      case 'email':
+        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+      case 'phone':
+        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+      case 'select':
+        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+      case 'text':
+      default:
+        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+    }
+  }
+
+  Widget _buildImageField(String label, String imageUrl, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.grey[300] : Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          height: 200,
+          decoration: BoxDecoration(
+            color: isDark ? Colors.grey[800] : Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: imageUrl.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    'http://ctradesglobal.com/uploads/$imageUrl',
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, color: SafeJetColors.error),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Failed to load image',
+                              style: TextStyle(color: SafeJetColors.error),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                )
+              : const Center(child: Text('No image available')),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  // Helper method to convert snake_case or camelCase to Title Case
+  String _toTitleCase(String text) {
+    if (text.isEmpty) return '';
+    
+    // Replace underscores and camelCase with spaces
+    final spacedText = text
+        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (match) => '${match[1]} ${match[2]}')
+        .replaceAll('_', ' ');
+    
+    // Capitalize first letter of each word
+    return spacedText.split(' ').map((word) {
+      if (word.isEmpty) return '';
+      return word[0].toUpperCase() + word.substring(1);
+    }).join(' ');
+  }
+
+  // Helper method to get icon for payment type
+  IconData _getIconForPaymentType(String iconName) {
+    switch (iconName) {
+      case 'bank':
+        return Icons.account_balance_outlined;
+      case 'qr_code':
+        return Icons.qr_code;
+      case 'mobile':
+        return Icons.phone_android_outlined;
+      case 'payment':
+        return Icons.payment_outlined;
+      default:
+        return Icons.payment_outlined;
+    }
   }
 
   Widget _buildBottomActions(bool isDark) {
@@ -742,5 +1088,32 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
         ),
       ),
     );
+  }
+
+  // Helper method to format crypto amounts (up to 8 decimal places, no trailing zeros)
+  String _formatCryptoAmount(double amount) {
+    if (amount == 0) return '0';
+    
+    // Format with up to 8 decimal places
+    String formatted = amount.toStringAsFixed(8);
+    
+    // Remove trailing zeros
+    while (formatted.endsWith('0')) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
+    
+    // Remove decimal point if it's the last character
+    if (formatted.endsWith('.')) {
+      formatted = formatted.substring(0, formatted.length - 1);
+    }
+    
+    return formatted;
+  }
+
+  // Helper method to format fiat amounts (with thousand separators, 2 decimal places)
+  String _formatFiatAmount(double amount) {
+    // Use NumberFormat for proper thousand separators
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    return formatter.format(amount);
   }
 } 

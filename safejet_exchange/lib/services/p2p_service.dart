@@ -255,11 +255,35 @@ class P2PService {
       );
       
       if (response.statusCode == 200) {
+        print('Order details fetched successfully: ${response.data}');
         return response.data;
       } else {
         throw Exception('Failed to load order details');
       }
     } catch (e) {
+      print('Error fetching order details: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getPaymentMethodDetails(String methodId) async {
+    try {
+      final token = await storage.read(key: 'accessToken');
+      final headers = token != null ? <String, dynamic>{'Authorization': 'Bearer $token'} : <String, dynamic>{};
+      
+      final response = await _dio.get(
+        '/p2p/payment-methods/$methodId',
+        options: Options(headers: headers),
+      );
+      
+      if (response.statusCode == 200) {
+        print('Payment method details fetched successfully: ${response.data}');
+        return response.data;
+      } else {
+        throw Exception('Failed to load payment method details');
+      }
+    } catch (e) {
+      print('Error fetching payment method details: $e');
       rethrow;
     }
   }

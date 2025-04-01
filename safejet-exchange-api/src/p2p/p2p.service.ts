@@ -16,6 +16,7 @@ import { Order } from './entities/order.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { EmailService } from '../email/email.service';
+import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
 
 @Injectable()
 export class P2PService {
@@ -43,6 +44,8 @@ export class P2PService {
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
     private readonly emailService: EmailService,
+    @InjectRepository(PaymentMethodField)
+    private readonly paymentMethodFieldRepository: Repository<PaymentMethodField>,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -875,31 +878,94 @@ export class P2PService {
       throw new NotFoundException(`Order with tracking ID ${trackingId} not found`);
     }
 
-    // Format the payment metadata
-    let paymentMetadata;
-    try {
-      paymentMetadata = typeof order.paymentMetadata === 'string' 
-        ? JSON.parse(order.paymentMetadata) 
-        : order.paymentMetadata;
-    } catch (e) {
-      paymentMetadata = order.paymentMetadata;
-    }
-
-    // Calculate time remaining
+    // Calculate time remaining first so we can use these variables
     const now = new Date();
     const paymentDeadline = order.paymentDeadline;
     const timeRemainingMs = paymentDeadline ? paymentDeadline.getTime() - now.getTime() : 0;
     const timeRemainingMinutes = Math.max(0, Math.floor(timeRemainingMs / (1000 * 60)));
     const timeRemainingSeconds = Math.max(0, Math.floor((timeRemainingMs % (1000 * 60)) / 1000));
+
+    // If this is a buy order, we need to fetch the complete payment method details
+    if (order.buyerId === order.buyerId) {
+      try {
+        // Parse the payment metadata
+        const paymentMetadata = typeof order.paymentMetadata === 'string' 
+          ? JSON.parse(order.paymentMetadata) 
+          : order.paymentMetadata;
+        
+        // Get the method ID
+        const methodId = paymentMetadata?.methodId;
+        
+        if (methodId) {
+          // Fetch the complete payment method
+          const paymentMethod = await this.paymentMethodRepository.findOne({
+            where: { id: methodId },
+            relations: ['paymentMethodType'],
+          });
+          
+          if (paymentMethod) {
+            // Add the complete payment details to the order response, not directly to the order
+            const orderResponse = {
+              ...order,
+              completePaymentDetails: paymentMethod,
+              timeRemaining: {
+                minutes: timeRemainingMinutes,
+                seconds: timeRemainingSeconds,
+                total: timeRemainingMs
+              }
+            };
+            
+            return orderResponse;
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching payment method details:', error);
+        // Continue without the payment details
+      }
+    }
     
+    // If we didn't return early with payment details, return the standard response
     return {
       ...order,
-      paymentMetadata,
       timeRemaining: {
         minutes: timeRemainingMinutes,
         seconds: timeRemainingSeconds,
         total: timeRemainingMs
       }
+    };
+  }
+
+  async getPaymentMethodById(id: string) {
+    const paymentMethod = await this.paymentMethodRepository.findOne({
+      where: { id },
+      relations: ['paymentMethodType'],
+    });
+
+    if (!paymentMethod) {
+      throw new NotFoundException(`Payment method with ID ${id} not found`);
+    }
+
+    // Get the payment method fields for this payment method type
+    const paymentMethodFields = await this.paymentMethodFieldRepository.find({
+      where: { paymentMethodTypeId: paymentMethod.paymentMethodTypeId },
+      order: { order: 'ASC' },
+    });
+
+    // Parse the details JSON
+    let details = {};
+    try {
+      details = typeof paymentMethod.details === 'string' 
+        ? JSON.parse(paymentMethod.details) 
+        : paymentMethod.details;
+    } catch (error) {
+      console.error('Error parsing payment method details:', error);
+    }
+
+    // Return the complete payment method with fields and details
+    return {
+      ...paymentMethod,
+      details,
+      fields: paymentMethodFields,
     };
   }
 } 
