@@ -92,13 +92,42 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   @override
   void initState() {
     super.initState();
-    _fetchOrderDetails();
+    _loadUserIdAndFetchOrderDetails();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadUserIdAndFetchOrderDetails() async {
+    try {
+      // Get the user ID from the stored user object
+      final storage = const FlutterSecureStorage();
+      final userJson = await storage.read(key: 'user');
+      
+      if (userJson != null) {
+        final userData = json.decode(userJson);
+        final userId = userData['id'];
+        
+        print('Loaded user ID from storage: $userId');
+        
+        // Set the user ID
+        setState(() {
+          _userId = userId;
+        });
+      } else {
+        print('No user data found in storage');
+      }
+      
+      // Then fetch order details
+      await _fetchOrderDetails();
+    } catch (e) {
+      print('Error loading user ID: $e');
+      // Still try to fetch order details even if user ID loading fails
+      _fetchOrderDetails();
+    }
   }
 
   Future<void> _fetchOrderDetails() async {
@@ -131,13 +160,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
         }
       }
       
-      // Get the user ID from secure storage
-      final storage = const FlutterSecureStorage();
-      final userId = await storage.read(key: 'userId');
-      
       setState(() {
         _orderDetails = orderDetails;
-        _userId = userId;
         _remainingMinutes = orderDetails['timeRemaining']['minutes'] ?? 15;
         _remainingSeconds = orderDetails['timeRemaining']['seconds'] ?? 0;
         _isLoading = false;
@@ -411,6 +435,59 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   ),
                   const SizedBox(height: 24),
 
+                  // Buyer Information (new section)
+                  if (_isCurrentUserSeller() && _orderDetails?['buyer'] != null)
+                    FadeInDown(
+                      duration: const Duration(milliseconds: 400),
+                      delay: const Duration(milliseconds: 300),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: SafeJetColors.success.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.person_outline, color: SafeJetColors.success, size: 16),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Buyer Information',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: SafeJetColors.success,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            _buildPaymentDetailRow(
+                              'Buyer Name',
+                              _orderDetails?['buyer']?['fullName'] ?? 'Unknown',
+                              isDark,
+                            ),
+                            if (_orderDetails?['buyer']?['email'] != null)
+                              _buildPaymentDetailRow(
+                                'Email',
+                                _orderDetails!['buyer']['email'],
+                                isDark,
+                              ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'The buyer will send payment using the details you provided.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+
                   // Payment Instructions
                   FadeInDown(
                     duration: const Duration(milliseconds: 400),
@@ -642,7 +719,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Please make sure to complete the payment within the time limit',
+                    _isCurrentUserSeller()
+                      ? 'The buyer must complete the payment within the time limit'
+                      : 'Please make sure to complete the payment within the time limit',
                     style: TextStyle(
                       color: SafeJetColors.warning,
                       fontSize: 12,
@@ -658,6 +737,13 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }
 
   Widget _buildPaymentDetails(dynamic paymentData, bool isDark) {
+    // Add debug prints to understand the issue
+    // print('Current user ID: $_userId');
+    // print('Seller ID from order: ${_orderDetails?['sellerId']}');
+    // print('Buyer ID from order: ${_orderDetails?['buyerId']}');
+    // print('Is current user the seller? ${_userId == _orderDetails?['sellerId']}');
+    // print('Full order details: $_orderDetails');
+    
     if (paymentData == null || (paymentData is Map && paymentData.isEmpty)) {
       return const Text('No payment details available');
     }
@@ -764,7 +850,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     Icon(Icons.info_outline, color: SafeJetColors.info, size: 16),
                     const SizedBox(width: 8),
                     Text(
-                      isSeller ? 'Waiting for Payment' : 'Payment Instructions',
+                      _isCurrentUserSeller() ? 'Payment Status' : 'Payment Instructions',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: SafeJetColors.info,
@@ -774,7 +860,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isSeller 
+                  _isCurrentUserSeller()
                     ? 'The buyer will send payment to your account. You will be notified when payment is made.'
                     : 'Please make the payment using the details above and click "I have paid" when done.',
                   style: const TextStyle(fontSize: 14),
@@ -788,7 +874,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       MaterialPageRoute(
                         builder: (context) => P2PChatScreen(
                           orderId: _orderDetails?['trackingId'] ?? '',
-                          userName: isSeller 
+                          userName: _isCurrentUserSeller() 
                             ? _orderDetails?['buyer']?['fullName'] ?? 'Buyer'
                             : _orderDetails?['seller']?['fullName'] ?? 'Seller',
                         ),
@@ -898,9 +984,11 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   ],
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Please make the payment using the details above and click "I have paid" when done.',
-                  style: TextStyle(fontSize: 14),
+                Text(
+                  _isCurrentUserSeller()
+                    ? 'The buyer will send payment to your account. You will be notified when payment is made.'
+                    : 'Please make the payment using the details above and click "I have paid" when done.',
+                  style: const TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
@@ -911,7 +999,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       MaterialPageRoute(
                         builder: (context) => P2PChatScreen(
                           orderId: _orderDetails?['trackingId'] ?? '',
-                          userName: _orderDetails?['seller']?['fullName'] ?? 'Seller',
+                          userName: _isCurrentUserSeller() 
+                            ? _orderDetails?['buyer']?['fullName'] ?? 'Buyer'
+                            : _orderDetails?['seller']?['fullName'] ?? 'Seller',
                         ),
                       ),
                     );
@@ -992,7 +1082,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       Icon(Icons.info_outline, color: SafeJetColors.info, size: 16),
                       const SizedBox(width: 8),
                       Text(
-                        'Bank Account Details',
+                        _isCurrentUserSeller() ? 'Payment Status' : 'Bank Account Details',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: SafeJetColors.info,
@@ -1001,9 +1091,11 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Please contact the seller through chat to get the bank account details for payment.',
-                    style: TextStyle(fontSize: 14),
+                  Text(
+                    _isCurrentUserSeller()
+                      ? 'The buyer will send payment to your account. You will be notified when payment is made.'
+                      : 'Please contact the seller through chat to get the bank account details for payment.',
+                    style: const TextStyle(fontSize: 14),
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
@@ -1014,7 +1106,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                         MaterialPageRoute(
                           builder: (context) => P2PChatScreen(
                             orderId: _orderDetails?['trackingId'] ?? '',
-                            userName: methodName,
+                            userName: _isCurrentUserSeller()
+                              ? _orderDetails?['buyer']?['fullName'] ?? 'Buyer'
+                              : _orderDetails?['seller']?['fullName'] ?? 'Seller',
                           ),
                         ),
                       );
@@ -1392,5 +1486,23 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     // Use NumberFormat for proper thousand separators
     final formatter = NumberFormat('#,##0.00', 'en_US');
     return formatter.format(amount);
+  }
+
+  // Helper method to determine if current user is the seller
+  bool _isCurrentUserSeller() {
+    // First check if we have the user ID
+    if (_userId != null && _orderDetails != null) {
+      return _userId == _orderDetails!['sellerId'];
+    }
+    
+    // Fallback: Check if the payment metadata's userId matches the seller ID
+    final paymentMetadata = _orderDetails?['paymentMetadata'];
+    if (paymentMetadata != null && _orderDetails != null) {
+      final metadataUserId = paymentMetadata['userId'];
+      return metadataUserId == _orderDetails!['sellerId'];
+    }
+    
+    // Default to false if we can't determine
+    return false;
   }
 } 
