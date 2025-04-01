@@ -693,9 +693,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       // Extract the details field which contains the actual payment information
       final details = paymentMap['details'] ?? {};
       
-      return Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      children: [
           // Payment method type header
           Row(
             children: [
@@ -1052,16 +1052,16 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       case 'image':
         return _buildImageField(fieldLabel, fieldValue.toString(), isDark);
       case 'date':
-        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+        return _buildPaymentDetailRow(fieldLabel, fieldValue.toString(), isDark);
       case 'email':
-        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+        return _buildPaymentDetailRow(fieldLabel, fieldValue.toString(), isDark);
       case 'phone':
-        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+        return _buildPaymentDetailRow(fieldLabel, fieldValue.toString(), isDark);
       case 'select':
-        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+        return _buildPaymentDetailRow(fieldLabel, fieldValue.toString(), isDark);
       case 'text':
       default:
-        return _buildDetailRow(fieldLabel, fieldValue.toString(), isDark);
+        return _buildPaymentDetailRow(fieldLabel, fieldValue.toString(), isDark);
     }
   }
 
@@ -1122,6 +1122,65 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  // New method specifically for payment details that handles long text
+  Widget _buildPaymentDetailRow(String label, String value, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: isDark
+                  ? Colors.grey[400]
+                  : SafeJetColors.lightTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$label copied to clipboard'),
+                  backgroundColor: SafeJetColors.success,
+                  duration: const Duration(seconds: 1),
+                ),
+              );
+            },
+            child: Container(
+              width: double.infinity,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      value,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      softWrap: true,
+                      overflow: TextOverflow.visible,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.copy_rounded,
+                    size: 16,
+                    color: isDark
+                        ? Colors.grey[400]
+                        : SafeJetColors.lightTextSecondary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
