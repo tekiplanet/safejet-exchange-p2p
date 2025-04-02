@@ -968,4 +968,105 @@ export class P2PService {
       fields: paymentMethodFields,
     };
   }
+
+  async getOrders({
+    userId,
+    type,
+    status,
+    search,
+    page = 1,
+    limit = 10,
+  }: {
+    userId: string;
+    type?: 'buy' | 'sell';
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    try {
+      // Ensure page and limit are numbers
+      const skip = (Number(page) - 1) * Number(limit);
+      const take = Number(limit);
+
+      const query = this.orderRepository.createQueryBuilder('order')
+        .leftJoinAndSelect('order.offer', 'offer')
+        .leftJoinAndSelect('offer.token', 'token')
+        .leftJoinAndSelect('order.buyer', 'buyer')
+        .leftJoinAndSelect('order.seller', 'seller')
+        .where('order.buyerId = :userId OR order.sellerId = :userId', { userId });
+
+      // Apply type filter
+      if (type === 'buy') {
+        query.andWhere('order.buyerId = :userId', { userId });
+      } else if (type === 'sell') {
+        query.andWhere('order.sellerId = :userId', { userId });
+      }
+
+      // Apply status filter
+      if (status) {
+        query.andWhere('(order.buyerStatus = :status OR order.sellerStatus = :status)', { status });
+      }
+
+      // Apply search filter
+      if (search) {
+        query.andWhere(
+          '(order.trackingId ILIKE :search OR buyer.fullName ILIKE :search OR seller.fullName ILIKE :search)',
+          { search: `%${search}%` }
+        );
+      }
+
+      // Update pagination
+      query.skip(skip).take(take);
+
+      // Order by most recent first
+      query.orderBy('order.createdAt', 'DESC');
+
+      // Get total count for pagination
+      const [orders, total] = await query.getManyAndCount();
+
+      // Transform the data
+      const transformedOrders = orders.map(order => {
+        let paymentMetadata;
+        try {
+          paymentMetadata = typeof order.paymentMetadata === 'string' 
+            ? JSON.parse(order.paymentMetadata)
+            : order.paymentMetadata;
+        } catch (error) {
+          paymentMetadata = {};
+        }
+
+        // Format the numbers to max 8 decimal places
+        const amount = Number(order.assetAmount).toFixed(8).replace(/\.?0+$/, '');
+        const price = Number(order.currencyAmount / order.assetAmount).toFixed(2);
+        
+        return {
+          id: order.trackingId,
+          type: order.buyerId === userId ? 'BUY' : 'SELL',
+          amount,
+          crypto: order.offer.token.symbol,
+          price,
+          total: Number(order.currencyAmount).toFixed(2),
+          status: userId === order.buyerId ? order.buyerStatus : order.sellerStatus,
+          date: order.createdAt,
+          counterparty: userId === order.buyerId ? order.seller.fullName : order.buyer.fullName,
+          counterpartyId: userId === order.buyerId ? order.seller.id : order.buyer.id,
+          paymentMethod: paymentMetadata.methodName || 'Unknown',
+          timeLeft: order.paymentDeadline ? new Date(order.paymentDeadline).getTime() - new Date().getTime() : null,
+        };
+      });
+
+      return {
+        orders: transformedOrders,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+        }
+      };
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      throw new Error('Failed to fetch orders');
+    }
+  }
 } 

@@ -163,4 +163,28 @@ export class P2PController {
   async getPaymentMethodById(@Param('id') id: string) {
     return this.p2pService.getPaymentMethodById(id);
   }
+
+  @Get('orders')
+  @UseGuards(JwtAuthGuard)
+  async getOrders(
+    @GetUser('id') userId: string,
+    @Query('type') type?: 'buy' | 'sell',
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    // Convert string parameters to numbers
+    const pageNumber = page ? parseInt(page, 10) : 1;
+    const limitNumber = limit ? parseInt(limit, 10) : 10;
+
+    return this.p2pService.getOrders({
+      userId,
+      type,
+      status,
+      search,
+      page: pageNumber,
+      limit: limitNumber,
+    });
+  }
 } 

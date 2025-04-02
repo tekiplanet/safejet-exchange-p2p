@@ -7,6 +7,9 @@ import '../../widgets/p2p_app_bar.dart';
 import 'p2p_order_confirmation_screen.dart';
 import 'p2p_dispute_history_screen.dart';
 import 'p2p_chat_screen.dart';
+import 'package:get_it/get_it.dart';
+import '../../services/p2p_service.dart';
+import 'package:intl/intl.dart';
 
 class P2POrderHistoryScreen extends StatefulWidget {
   const P2POrderHistoryScreen({super.key});
@@ -17,40 +20,109 @@ class P2POrderHistoryScreen extends StatefulWidget {
 
 class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String _selectedStatus = 'All';
+  final _p2pService = GetIt.I<P2PService>();
   final TextEditingController _searchController = TextEditingController();
   
-  final List<String> _statusFilters = ['All', 'Pending', 'Completed', 'Cancelled', 'Disputed'];
+  String _selectedStatus = 'All';
+  bool _isLoading = false;
+  bool _hasError = false;
+  String? _errorMessage;
+  
+  List<Map<String, dynamic>> _orders = [];
+  int _currentPage = 1;
+  int _totalPages = 1;
+  bool _hasMoreData = true;
+  
+  final ScrollController _scrollController = ScrollController();
 
-  // Dummy data for now
-  final List<Map<String, dynamic>> _orders = [
-    {
-      'id': 'P2P123456789',
-      'type': 'BUY',
-      'amount': '1,234.56',
-      'crypto': 'USDT',
-      'price': '750.00',
-      'total': '925,920.00',
-      'status': 'Pending',
-      'date': 'Today, 12:30 PM',
-      'counterparty': 'JohnSeller',
-      'paymentMethod': 'Bank Transfer',
-      'timeLeft': '15:00',
-    },
-    // Add more dummy orders...
-  ];
+  final List<String> _statusFilters = ['All', 'Pending', 'Completed', 'Cancelled', 'Disputed'];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChange);
+    _scrollController.addListener(_handleScroll);
+    _loadOrders();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) {
+      setState(() {
+        _orders = [];
+        _currentPage = 1;
+        _hasMoreData = true;
+      });
+      _loadOrders();
+    }
+  }
+
+  void _handleScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8 &&
+        !_isLoading &&
+        _hasMoreData) {
+      _loadMoreOrders();
+    }
+  }
+
+  Future<void> _loadOrders({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        _orders = [];
+        _currentPage = 1;
+        _hasMoreData = true;
+      });
+    }
+
+    if (_isLoading || (!_hasMoreData && !refresh)) return;
+
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await _p2pService.getOrders(
+        isBuy: _tabController.index == 0,
+        status: _selectedStatus == 'All' ? null : _selectedStatus,
+        searchQuery: _searchController.text,
+        page: _currentPage,
+      );
+
+      setState(() {
+        if (refresh || _currentPage == 1) {
+          _orders = List<Map<String, dynamic>>.from(result['orders']);
+        } else {
+          _orders.addAll(List<Map<String, dynamic>>.from(result['orders']));
+        }
+        
+        _totalPages = result['pagination']['totalPages'];
+        _hasMoreData = _currentPage < _totalPages;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = 'Failed to load orders. Please try again.';
+      });
+    }
+  }
+
+  Future<void> _loadMoreOrders() async {
+    if (_currentPage < _totalPages) {
+      setState(() => _currentPage++);
+      await _loadOrders();
+    }
   }
 
   @override
@@ -240,6 +312,41 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
   }
 
   Widget _buildOrdersList(bool isDark, {required bool isBuy}) {
+    if (_isLoading && _orders.isEmpty) {
+      return Center(
+        child: CircularProgressIndicator(
+          color: SafeJetColors.secondaryHighlight,
+        ),
+      );
+    }
+
+    if (_hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: SafeJetColors.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? 'An error occurred',
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => _loadOrders(refresh: true),
+              child: const Text('Try Again'),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_orders.isEmpty) {
       return Center(
         child: Column(
@@ -264,9 +371,21 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     }
 
     return ListView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: _orders.length,
+      itemCount: _orders.length + (_hasMoreData ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == _orders.length) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: CircularProgressIndicator(
+                color: SafeJetColors.secondaryHighlight,
+              ),
+            ),
+          );
+        }
+
         return FadeInUp(
           duration: const Duration(milliseconds: 400),
           delay: Duration(milliseconds: index * 100),
@@ -277,6 +396,24 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
   }
 
   Widget _buildOrderCard(Map<String, dynamic> order, bool isDark) {
+    // Format the date
+    final orderDate = DateTime.parse(order['date']);
+    final now = DateTime.now();
+    final difference = now.difference(orderDate);
+    
+    String formattedDate;
+    if (difference.inDays == 0) {
+      if (difference.inHours == 0) {
+        formattedDate = '${difference.inMinutes}m ago';
+      } else {
+        formattedDate = '${difference.inHours}h ago';
+      }
+    } else if (difference.inDays < 7) {
+      formattedDate = '${difference.inDays}d ago';
+    } else {
+      formattedDate = DateFormat('MMM d, y').format(orderDate);
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -362,17 +499,43 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Counterparty',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          order['counterparty'] ?? 'Unknown',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                     Text(
-                      order['date'],
+                      formattedDate,
                       style: TextStyle(
                         fontSize: 12,
                         color: isDark ? Colors.grey[400] : Colors.grey[600],
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                     if (order['status'] == 'Pending')
                       Row(
                         children: [

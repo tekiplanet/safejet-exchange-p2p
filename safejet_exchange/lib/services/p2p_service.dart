@@ -288,6 +288,33 @@ class P2PService {
     }
   }
 
+  Future<Map<String, dynamic>> getOrders({
+    bool? isBuy,
+    String? status,
+    String? searchQuery,
+    int page = 1,
+  }) async {
+    try {
+      final queryParams = {
+        if (isBuy != null) 'type': isBuy ? 'buy' : 'sell',
+        if (status != null && status.toLowerCase() != 'all') 'status': status.toLowerCase(),
+        if (searchQuery != null && searchQuery.isNotEmpty) 'search': searchQuery,
+        'page': page.toString(),
+      };
+
+      final response = await _dio.get(
+        '/p2p/orders',
+        queryParameters: queryParams,
+        options: Options(headers: await _getAuthHeaders()),
+      );
+
+      return response.data;
+    } catch (e) {
+      _handleError(e);
+      rethrow;
+    }
+  }
+
   Exception _handleError(dynamic e) {
     if (e is DioException) {
       final response = e.response;
@@ -300,5 +327,10 @@ class P2PService {
       return Exception(e.message ?? 'An error occurred');
     }
     return Exception(e.toString());
+  }
+
+  Future<Map<String, dynamic>> _getAuthHeaders() async {
+    final token = await storage.read(key: 'accessToken');
+    return token != null ? <String, dynamic>{'Authorization': 'Bearer $token'} : <String, dynamic>{};
   }
 } 
