@@ -297,8 +297,10 @@ class P2PService {
     try {
       final queryParams = {
         if (isBuy != null) 'type': isBuy ? 'buy' : 'sell',
-        if (status != null && status.toLowerCase() != 'all') 'status': status.toLowerCase(),
-        if (searchQuery != null && searchQuery.isNotEmpty) 'search': searchQuery,
+        if (status != null && status.toLowerCase() != 'all') 
+          'status': status.toLowerCase(),
+        if (searchQuery != null && searchQuery.isNotEmpty) 
+          'search': searchQuery,
         'page': page.toString(),
       };
 

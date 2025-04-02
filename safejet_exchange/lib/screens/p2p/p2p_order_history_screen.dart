@@ -236,8 +236,11 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                   ),
                 ),
                 onChanged: (value) {
-                  // Implement search functionality
-                  setState(() {});
+                  setState(() {
+                    _currentPage = 1;
+                    _orders = [];
+                  });
+                  _loadOrders(refresh: true);
                 },
               ),
             ),
@@ -281,7 +284,14 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => setState(() => _selectedStatus = status),
+                onTap: () {
+                  setState(() {
+                    _selectedStatus = status;
+                    _currentPage = 1;  // Reset to first page
+                    _orders = [];      // Clear current orders
+                  });
+                  _loadOrders(refresh: true);  // Reload with new status
+                },
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
