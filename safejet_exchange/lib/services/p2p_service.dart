@@ -3,11 +3,15 @@ import 'package:get_it/get_it.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import 'api_client.dart';
+import 'dart:convert';
+import 'dart:async';
 
 class P2PService {
   late final Dio _dio;
   final AuthService _authService = GetIt.I<AuthService>();
   final storage = const FlutterSecureStorage();
+  Timer? _pollTimer;
+  final _orderUpdateController = StreamController<Map<String, dynamic>>.broadcast();
 
   P2PService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
@@ -20,6 +24,9 @@ class P2PService {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
+      validateStatus: (status) {
+        return status! < 500; // Accept all status codes less than 500
+      },
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
       sendTimeout: const Duration(seconds: 30),
@@ -31,15 +38,15 @@ class P2PService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          print('Making request to: ${options.baseUrl}${options.path}');
-          print('Headers: ${options.headers}');
+          // print('Making request to: ${options.baseUrl}${options.path}');
+          // print('Headers: ${options.headers}');
           
           final token = await storage.read(key: 'accessToken');
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
-            print('Token added to request: $token');
+            // print('Token added to request: $token');
           } else {
-            print('No token found!');
+            // print('No token found!');
           }
           return handler.next(options);
         },
@@ -324,7 +331,7 @@ class P2PService {
   Future<void> confirmOrderPayment(String trackingId) async {
     try {
       final response = await _dio.post(
-        '/p2p/orders/$trackingId/confirm-payment',
+        '/p2p/orders/by-tracking-id/$trackingId/confirm-payment',
         options: Options(headers: await _getAuthHeaders()),
       );
       print('Payment confirmation response: ${response.data}');
@@ -396,4 +403,34 @@ class P2PService {
     final token = await storage.read(key: 'accessToken');
     return token != null ? <String, dynamic>{'Authorization': 'Bearer $token'} : <String, dynamic>{};
   }
+
+  void startOrderUpdates(String orderId) {
+    stopOrderUpdates();
+    _fetchOrderDetails(orderId);
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _fetchOrderDetails(orderId);
+    });
+  }
+
+  Future<void> _fetchOrderDetails(String orderId) async {
+    try {
+      final response = await _dio.get(
+        '/p2p/orders/$orderId',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      
+      if (response.statusCode == 200) {
+        _orderUpdateController.add(response.data);
+      }
+    } catch (e) {
+      print('Error fetching order details: $e');
+    }
+  }
+
+  void stopOrderUpdates() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Stream<Map<String, dynamic>> get orderUpdates => _orderUpdateController.stream;
 } 

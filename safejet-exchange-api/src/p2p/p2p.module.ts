@@ -18,6 +18,8 @@ import { Order } from './entities/order.entity';
 import { EmailModule } from '../email/email.module';
 import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
 import { Dispute } from './entities/dispute.entity';
+import { P2POrderGateway } from './gateways/p2p-order.gateway';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   imports: [
@@ -39,9 +41,13 @@ import { Dispute } from './entities/dispute.entity';
     WalletModule,
     P2PSettingsModule,
     EmailModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: { expiresIn: '1h' },
+    }),
   ],
   controllers: [P2PController],
-  providers: [P2PService],
+  providers: [P2PService, P2POrderGateway],
   exports: [P2PService],
 })
 export class P2PModule {} 

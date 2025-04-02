@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Post, Body, Param, Request } from '@nestjs/common';
 import { P2PService } from './p2p.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
@@ -188,7 +188,7 @@ export class P2PController {
     });
   }
 
-  @Post('orders/:trackingId/confirm-payment')
+  @Post('orders/by-tracking-id/:trackingId/confirm-payment')
   @UseGuards(JwtAuthGuard)
   async confirmOrderPayment(
     @Param('trackingId') trackingId: string,

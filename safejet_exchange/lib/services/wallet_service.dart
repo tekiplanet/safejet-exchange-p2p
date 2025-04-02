@@ -88,8 +88,8 @@ class WalletService {
         },
       );
 
-      print('\n=== Raw Response Data ===');
-      print(response.data);
+      // print('\n=== Raw Response Data ===');
+      // print(response.data);
       
       final balances = response.data['balances'] as List<dynamic>;
       balances.forEach((balance) {
@@ -101,11 +101,11 @@ class WalletService {
         
         final networks = balance['networks'] as List<dynamic>?;
         
-        print('\n=== Token Balance ===');
-        print('Symbol: ${token['symbol']}');
-        print('Type: ${balance['type']}');
-        print('Available: ${balance['balance']}');
-        print('Frozen: ${balance['frozen']}');
+        // print('\n=== Token Balance ===');
+        // print('Symbol: ${token['symbol']}');
+        // print('Type: ${balance['type']}');
+        // print('Available: ${balance['balance']}');
+        // print('Frozen: ${balance['frozen']}');
         
         // Process networks with new structure
         if (networks != null) {

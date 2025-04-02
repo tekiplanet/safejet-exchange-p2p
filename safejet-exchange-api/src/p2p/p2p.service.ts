@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw, In, Brackets } from 'typeorm';
 import { P2POffer } from './entities/p2p-offer.entity';
@@ -18,6 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EmailService } from '../email/email.service';
 import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
 import { Dispute } from './entities/dispute.entity';
+import { P2POrderGateway } from './gateways/p2p-order.gateway';
 
 @Injectable()
 export class P2PService {
@@ -49,6 +50,7 @@ export class P2PService {
     private readonly emailService: EmailService,
     @InjectRepository(PaymentMethodField)
     private readonly paymentMethodFieldRepository: Repository<PaymentMethodField>,
+    private readonly orderGateway: P2POrderGateway,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -1072,36 +1074,66 @@ export class P2PService {
     }
   }
 
-  async confirmOrderPayment(trackingId: string, userId: string) {
-    const order = await this.orderRepository.findOne({
-      where: { trackingId },
-      relations: ['buyer', 'seller', 'offer'],
-    });
+  async confirmOrderPayment(trackingId: string, userId: string): Promise<Order> {
+    try {
+      // Add debug logs
+      console.log('Confirming payment for order:', trackingId);
+      console.log('User ID:', userId);
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
+      const order = await this.orderRepository.findOne({
+        where: { trackingId },
+        relations: ['buyer', 'seller', 'offer'],
+      });
+
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
+      // Add debug logs
+      console.log('Found order:', {
+        orderId: order.id,
+        buyerId: order.buyerId,
+        userId: userId,
+        buyerStatus: order.buyerStatus
+      });
+
+      // Verify user is the buyer
+      if (order.buyerId !== userId) {
+        console.log('Buyer check failed:', {
+          orderBuyerId: order.buyerId,
+          requestUserId: userId,
+          areEqual: order.buyerId === userId
+        });
+        throw new ForbiddenException('Only the buyer can confirm payment');
+      }
+
+      // Verify order is in correct state
+      if (order.buyerStatus !== 'pending') {
+        throw new BadRequestException('Order is not in pending state');
+      }
+
+      // Update order status
+      order.buyerStatus = 'paid';
+      order.paidAt = new Date();
+      // Set 30 minutes deadline for seller to confirm
+      order.confirmationDeadline = new Date(Date.now() + 30 * 60 * 1000);
+      const updatedOrder = await this.orderRepository.save(order);
+
+      // Log successful update
+      console.log('Order updated successfully:', {
+        orderId: order.id,
+        newStatus: order.buyerStatus,
+        paidAt: order.paidAt
+      });
+
+      return updatedOrder;
+    } catch (error) {
+      console.error('Error in confirmOrderPayment:', error);
+      throw error;
     }
-
-    // Verify user is the buyer
-    if (order.buyerId !== userId) {
-      throw new BadRequestException('Only the buyer can confirm payment');
-    }
-
-    // Verify order is in correct state
-    if (order.buyerStatus !== 'pending') {
-      throw new BadRequestException('Order is not in pending state');
-    }
-
-    // Update order status
-    order.buyerStatus = 'paid';
-    await this.orderRepository.save(order);
-
-    // TODO: Send notification to seller
-
-    return { message: 'Payment confirmed successfully' };
   }
 
-  async releaseOrder(trackingId: string, userId: string) {
+  async releaseOrder(trackingId: string, userId: string): Promise<Order> {
     const order = await this.orderRepository.findOne({
       where: { trackingId },
       relations: ['buyer', 'seller', 'offer', 'offer.token'],
@@ -1128,11 +1160,17 @@ export class P2PService {
     // Transfer funds from escrow to buyer
     await this.transferFundsFromEscrow(order);
 
-    await this.orderRepository.save(order);
+    const updatedOrder = await this.orderRepository.save(order);
 
-    // TODO: Send notification to buyer
+    // Emit update
+    await this.orderGateway.emitOrderUpdate(
+      trackingId,
+      order.buyer.id,
+      order.seller.id,
+      updatedOrder
+    );
 
-    return { message: 'Funds released successfully' };
+    return updatedOrder;
   }
 
   async cancelOrder(trackingId: string, userId: string) {

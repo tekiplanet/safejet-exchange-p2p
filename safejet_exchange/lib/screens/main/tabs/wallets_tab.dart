@@ -162,7 +162,7 @@ class _WalletsTabState extends State<WalletsTab> {
       }
 
       // Debug logging
-      print('Received balance data: $data');
+      // print('Received balance data: $data');
 
       if (!mounted) return;
 
