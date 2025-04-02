@@ -1480,7 +1480,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
         child: Row(
           children: [
             Expanded(
-              child: OutlinedButton(
+              child: ElevatedButton(
                 onPressed: () async {
                   try {
                     await _p2pService.cancelOrder(widget.trackingId);
@@ -1492,13 +1492,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     }
                   }
                 },
-                style: OutlinedButton.styleFrom(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.warning,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: BorderSide(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
