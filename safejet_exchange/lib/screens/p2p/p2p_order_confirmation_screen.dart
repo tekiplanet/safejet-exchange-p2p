@@ -1403,10 +1403,10 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     final isBuyer = _orderDetails!['buyerId'] == currentUserId;
     final buyerStatus = _orderDetails!['buyerStatus']?.toLowerCase() ?? '';
 
-    print('Current user ID: $currentUserId');
-    print('Buyer ID: ${_orderDetails!['buyerId']}');
-    print('Is Buyer: $isBuyer');
-    print('Buyer Status: $buyerStatus');
+    // print('Current user ID: $currentUserId');
+    // print('Buyer ID: ${_orderDetails!['buyerId']}');
+    // print('Is Buyer: $isBuyer');
+    // print('Buyer Status: $buyerStatus');
 
     // For completed orders
     if (buyerStatus == 'completed') {
@@ -1844,6 +1844,57 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 style: TextButton.styleFrom(
                   foregroundColor: SafeJetColors.warning,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Raise Dispute'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // For seller with pending status
+    if (!isBuyer && buyerStatus == 'pending') {
+      final isPaymentDeadlinePassed = _orderDetails != null && 
+        DateTime.now().isAfter(DateTime.parse(_orderDetails!['paymentDeadline']));
+
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: null, // Always disabled when pending
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Release Coins'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: isPaymentDeadlinePassed ? () => _showDisputeDialog() : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.error,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: const Text('Raise Dispute'),
               ),
