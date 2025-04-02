@@ -1554,29 +1554,30 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
         child: Row(
           children: [
             Expanded(
-              child: OutlinedButton(
-                onPressed: () async {
-                  try {
-                    await _p2pService.cancelOrder(_orderDetails!['id']);
-                    _refreshOrder();
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
-                  }
-                },
-                style: OutlinedButton.styleFrom(
+              child: ElevatedButton(
+                onPressed: null, // Always disabled in pending state
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.success,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: BorderSide(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Cancel Order'),
+                child: const Text('Release Coin'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextButton(
+                // Enable only if payment time has expired
+                onPressed: _isPaymentTimeExpired ? () {
+                  _showDisputeDialog();
+                } : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: SafeJetColors.warning,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Raise Dispute'),
               ),
             ),
           ],
@@ -1673,5 +1674,14 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     // Use NumberFormat for proper thousand separators
     final formatter = NumberFormat('#,##0.00', 'en_US');
     return formatter.format(amount);
+  }
+
+  bool get _isPaymentTimeExpired {
+    if (_orderDetails == null) return false;
+    
+    final createdAt = DateTime.parse(_orderDetails!['createdAt']);
+    final paymentTimeLimit = Duration(minutes: 30); // Or whatever your time limit is
+    
+    return DateTime.now().difference(createdAt) > paymentTimeLimit;
   }
 } 
