@@ -508,7 +508,11 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                         ),
                       ],
                     ),
-                    _buildStatusTag(order['status'], isDark),
+                    _buildStatusTag(
+                      order['buyerStatus'] ?? order['status'] ?? 'pending',
+                      isDark,
+                      order
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -627,11 +631,30 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     );
   }
 
-  Widget _buildStatusTag(String status, bool isDark) {
+  Widget _buildStatusTag(
+    String? status, 
+    bool isDark, 
+    Map<String, dynamic> order
+  ) {
     Color color;
-    switch (status.toLowerCase()) {
+    String displayStatus = order['type'] == 'SELL' 
+      ? (order['buyerStatus']?.toLowerCase() ?? 'pending')
+      : (status?.toLowerCase() ?? 'pending');
+    
+    // If this is a sell order and status is 'paid', show as 'Awaiting Release'
+    if (order['type'] == 'SELL' && displayStatus == 'paid') {
+      displayStatus = 'Awaiting Release';
+    }
+
+    switch (displayStatus.toLowerCase()) {
       case 'pending':
         color = SafeJetColors.warning;
+        break;
+      case 'awaiting release':
+        color = SafeJetColors.warning;
+        break;
+      case 'paid':
+        color = order['type'] == 'SELL' ? SafeJetColors.warning : SafeJetColors.success;
         break;
       case 'completed':
         color = SafeJetColors.success;
@@ -653,7 +676,7 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        status.toUpperCase(),
+        displayStatus.toUpperCase(),
         style: TextStyle(
           color: color,
           fontSize: 12,

@@ -99,12 +99,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     _loadUserIdAndFetchOrderDetails();
     _p2pService.startOrderUpdates(widget.trackingId);
     _orderUpdateSubscription = _p2pService.orderUpdates.listen(
-      (update) {
+        (update) {
         // print('Received order update: $update');
-        if (!mounted) return;
-        _handleOrderUpdate(update);
-      },
-      onError: (error) {
+          if (!mounted) return;
+          _handleOrderUpdate(update);
+        },
+        onError: (error) {
         print('Order update error: $error');
       },
     );
@@ -229,7 +229,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
+    if (!mounted) return;
       
       setState(() {
         final now = DateTime.now();
@@ -543,7 +543,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                           ],
                         ),
                       ),
-                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // Payment Instructions
@@ -833,9 +833,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       // Extract the details field which contains the actual payment information
       final details = paymentMap['details'] ?? {};
       
-      return Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      children: [
           // Payment method type header
           Row(
             children: [
@@ -1486,9 +1486,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     await _p2pService.cancelOrder(widget.trackingId);
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.toString())),
-                      );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
                     }
                   }
                 },
@@ -1677,12 +1677,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                                                       const SnackBar(content: Text('Payment confirmed successfully')),
                                                     );
                                                   }
-                                                } catch (e) {
+                  } catch (e) {
                                                   setState(() => isSubmitting = false);
                                                   if (mounted) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(content: Text(e.toString())),
-                                                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
                                                   }
                                                 }
                                               },
@@ -1762,9 +1762,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     await _p2pService.cancelOrder(widget.trackingId);
                   } catch (e) {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.toString())),
-                      );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
                     }
                   }
                 },
@@ -1899,9 +1899,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 children: [
                   Expanded(
                     child: TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1920,7 +1920,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                             reasonController.text.trim(),
                           );
                           if (mounted) {
-                            Navigator.pop(context);
+              Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Dispute raised successfully')),
                             );
@@ -1936,10 +1936,10 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: SafeJetColors.error,
                       ),
-                      child: const Text('Submit'),
+            child: const Text('Submit'),
                     ),
-                  ),
-                ],
+          ),
+        ],
               ),
             ],
           ),
