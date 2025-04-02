@@ -485,7 +485,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                           ],
                         ),
                       ),
-                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // Payment Instructions

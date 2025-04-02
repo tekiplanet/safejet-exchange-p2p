@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:animate_do/animate_do.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
@@ -17,9 +18,11 @@ class P2POrderHistoryScreen extends StatefulWidget {
 class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _selectedStatus = 'All';
-
+  final TextEditingController _searchController = TextEditingController();
+  
   final List<String> _statusFilters = ['All', 'Pending', 'Completed', 'Cancelled', 'Disputed'];
 
+  // Dummy data for now
   final List<Map<String, dynamic>> _orders = [
     {
       'id': 'P2P123456789',
@@ -33,13 +36,9 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
       'counterparty': 'JohnSeller',
       'paymentMethod': 'Bank Transfer',
       'timeLeft': '15:00',
-      'disputeReason': null,
     },
     // Add more dummy orders...
   ];
-
-  // Add search controller
-  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -50,20 +49,21 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
+      backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
       appBar: P2PAppBar(
         title: 'Order History',
         onNotificationTap: () {
-          // TODO: Handle notification tap
+          // Handle notification tap
         },
         onThemeToggle: () {
           themeProvider.toggleTheme();
@@ -78,79 +78,105 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
             );
           },
           icon: const Icon(Icons.gavel_rounded),
+          tooltip: 'Dispute History',
         ),
       ),
       body: Column(
         children: [
-          // Buy/Sell Tabs with improved design
-          Container(
-            margin: const EdgeInsets.all(16),
-            height: 48,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                  : SafeJetColors.lightCardBackground,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isDark
-                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                    : SafeJetColors.lightCardBorder,
+          // Buy/Sell Tabs
+          FadeInDown(
+            duration: const Duration(milliseconds: 400),
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
               ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: UnderlineTabIndicator(
-                borderSide: BorderSide(
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
                   color: SafeJetColors.secondaryHighlight,
-                  width: 3,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                insets: const EdgeInsets.symmetric(horizontal: 40),
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorPadding: EdgeInsets.zero,
+                dividerColor: Colors.transparent,
+                labelColor: Colors.black,
+                unselectedLabelColor: isDark ? Colors.white : Colors.black,
+                labelStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                ),
+                tabs: const [
+                  Tab(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('BUY'),
+                    ),
+                  ),
+                  Tab(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('SELL'),
+                    ),
+                  ),
+                ],
               ),
-              labelColor: isDark ? Colors.white : SafeJetColors.lightText,
-              unselectedLabelColor: isDark ? Colors.grey : SafeJetColors.lightTextSecondary,
-              labelStyle: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontWeight: FontWeight.normal,
-                fontSize: 14,
-              ),
-              tabs: const [
-                Tab(text: 'BUY'),
-                Tab(text: 'SELL'),
-              ],
             ),
           ),
 
-          // Add search widget between tabs and filters
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search by Order ID or Counterparty',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+          // Search Bar
+          FadeInDown(
+            duration: const Duration(milliseconds: 400),
+            delay: const Duration(milliseconds: 100),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _searchController,
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black,
                 ),
-                filled: true,
-                fillColor: isDark
-                    ? Colors.white.withOpacity(0.05)
-                    : Colors.black.withOpacity(0.05),
+                decoration: InputDecoration(
+                  hintText: 'Search by Order ID or Counterparty',
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  filled: true,
+                  fillColor: isDark 
+                      ? Colors.white.withOpacity(0.05) 
+                      : Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                onChanged: (value) {
+                  // Implement search functionality
+                  setState(() {});
+                },
               ),
-              onChanged: (value) {
-                setState(() {
-                  // Filter orders based on search
-                });
-              },
             ),
           ),
 
-          // Status Filter with new design
-          _buildStatusFilters(isDark),
-          const SizedBox(height: 8),
+          // Status Filters
+          FadeInDown(
+            duration: const Duration(milliseconds: 400),
+            delay: const Duration(milliseconds: 200),
+            child: _buildStatusFilters(isDark),
+          ),
 
           // Orders List
           Expanded(
@@ -167,72 +193,112 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     );
   }
 
-  Widget _buildOrdersList(bool isDark, {required bool isBuy}) {
-    final groupedOrders = <String, List<Map<String, dynamic>>>{};
-    
-    for (var order in _orders) {
-      final date = order['date'].toString().split(',')[0]; // Get just the day
-      if (!groupedOrders.containsKey(date)) {
-        groupedOrders[date] = [];
-      }
-      groupedOrders[date]!.add(order);
-    }
-
-    return ListView.builder(
-      itemCount: groupedOrders.length,
-      itemBuilder: (context, index) {
-        final date = groupedOrders.keys.elementAt(index);
-        final dateOrders = groupedOrders[date]!;
-        
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                date,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+  Widget _buildStatusFilters(bool isDark) {
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _statusFilters.length,
+        itemBuilder: (context, index) {
+          final status = _statusFilters[index];
+          final isSelected = status == _selectedStatus;
+          
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => setState(() => _selectedStatus = status),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? SafeJetColors.secondaryHighlight 
+                        : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100]),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      color: isSelected 
+                          ? Colors.black 
+                          : (isDark ? Colors.white : Colors.black),
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
                 ),
               ),
             ),
-            ...dateOrders.map((order) => _buildOrderCard(order, isDark)),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOrdersList(bool isDark, {required bool isBuy}) {
+    if (_orders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.history,
+              size: 64,
+              color: isDark ? Colors.grey[700] : Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No orders found',
+              style: TextStyle(
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                fontSize: 16,
+              ),
+            ),
           ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _orders.length,
+      itemBuilder: (context, index) {
+        return FadeInUp(
+          duration: const Duration(milliseconds: 400),
+          delay: Duration(milliseconds: index * 100),
+          child: _buildOrderCard(_orders[index], isDark),
         );
       },
     );
   }
 
   Widget _buildOrderCard(Map<String, dynamic> order, bool isDark) {
-    final isBuy = order['type'] == 'BUY';
-
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-              : SafeJetColors.lightCardBorder,
+          color: isDark 
+              ? Colors.white.withOpacity(0.1) 
+              : Colors.grey[200]!,
         ),
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => P2POrderConfirmationScreen(
-                  trackingId: order['id'],
-                ),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => P2POrderConfirmationScreen(
+                trackingId: order['id'],
               ),
-            );
-          },
+            ),
+          ),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -242,11 +308,39 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '#${order['id']}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: order['type'] == 'BUY'
+                                ? SafeJetColors.success.withOpacity(0.1)
+                                : SafeJetColors.error.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            order['type'],
+                            style: TextStyle(
+                              color: order['type'] == 'BUY'
+                                  ? SafeJetColors.success
+                                  : SafeJetColors.error,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '#${order['id']}',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                     _buildStatusTag(order['status'], isDark),
                   ],
@@ -255,47 +349,16 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Amount',
-                          style: TextStyle(
-                            color: isDark
-                                ? Colors.grey[400]
-                                : SafeJetColors.lightTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${order['amount']} ${order['crypto']}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    _buildInfoColumn(
+                      'Amount',
+                      '${order['amount']} ${order['crypto']}',
+                      isDark,
                     ),
-                    Column(
+                    _buildInfoColumn(
+                      'Price',
+                      '₦${order['price']}',
+                      isDark,
                       crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          'Total',
-                          style: TextStyle(
-                            color: isDark
-                                ? Colors.grey[400]
-                                : SafeJetColors.lightTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₦${order['total']}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -307,41 +370,32 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                       order['date'],
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? Colors.grey[400]
-                            : SafeJetColors.lightTextSecondary,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
                       ),
                     ),
-                    Text(
-                      order['counterparty'],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? Colors.grey[400]
-                            : SafeJetColors.lightTextSecondary,
+                    if (order['status'] == 'Pending')
+                      Row(
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => _openChat(order),
+                            icon: const Icon(Icons.chat_outlined, size: 18),
+                            label: const Text('Chat'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: isDark ? Colors.white : Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _cancelOrder(order),
+                            icon: const Icon(Icons.close, size: 18),
+                            label: const Text('Cancel'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: SafeJetColors.error,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (order['status'] == 'Pending') ...[
-                      TextButton.icon(
-                        onPressed: () => _cancelOrder(order),
-                        icon: const Icon(Icons.close),
-                        label: const Text('Cancel'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: SafeJetColors.error,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: () => _openChat(order),
-                        icon: const Icon(Icons.chat_outlined),
-                        label: const Text('Chat'),
-                      ),
-                    ],
                   ],
                 ),
               ],
@@ -352,19 +406,48 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     );
   }
 
+  Widget _buildInfoColumn(
+    String label,
+    String value,
+    bool isDark, {
+    CrossAxisAlignment crossAxisAlignment = CrossAxisAlignment.start,
+  }) {
+    return Column(
+      crossAxisAlignment: crossAxisAlignment,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStatusTag(String status, bool isDark) {
     Color color;
-    switch (status) {
-      case 'Pending':
+    switch (status.toLowerCase()) {
+      case 'pending':
         color = SafeJetColors.warning;
         break;
-      case 'Completed':
+      case 'completed':
         color = SafeJetColors.success;
         break;
-      case 'Cancelled':
-        color = isDark ? Colors.grey : SafeJetColors.lightTextSecondary;
+      case 'cancelled':
+        color = isDark ? Colors.grey : Colors.grey[600]!;
         break;
-      case 'Disputed':
+      case 'disputed':
         color = SafeJetColors.error;
         break;
       default:
@@ -372,13 +455,10 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         status.toUpperCase(),
@@ -391,82 +471,8 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     );
   }
 
-  Widget _buildStatusFilters(bool isDark) {
-    return Container(
-      height: 40,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _statusFilters.length,
-        itemBuilder: (context, index) {
-          final status = _statusFilters[index];
-          final isSelected = status == _selectedStatus;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: InkWell(
-              onTap: () => setState(() => _selectedStatus = status),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: isSelected 
-                      ? SafeJetColors.secondaryHighlight 
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    color: isSelected 
-                        ? Colors.black
-                        : (isDark ? Colors.white : SafeJetColors.lightText),
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   void _cancelOrder(Map<String, dynamic> order) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Cancel Order'),
-        content: const Text(
-          'Are you sure you want to cancel this order? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('No'),
-          ),
-          TextButton(
-            onPressed: () {
-              // TODO: Implement order cancellation
-              setState(() {
-                order['status'] = 'Cancelled';
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order cancelled successfully'),
-                  backgroundColor: SafeJetColors.success,
-                ),
-              );
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: SafeJetColors.error,
-            ),
-            child: const Text('Yes, Cancel'),
-          ),
-        ],
-      ),
-    );
+    // Implement cancel order
   }
 
   void _openChat(Map<String, dynamic> order) {
@@ -474,8 +480,8 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
       context,
       MaterialPageRoute(
         builder: (context) => P2PChatScreen(
-          userName: order['counterparty'],
           orderId: order['id'],
+          userName: order['counterparty'],
         ),
       ),
     );
