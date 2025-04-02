@@ -985,27 +985,16 @@ export class P2PService {
     limit?: number;
   }) {
     try {
-      // Ensure page and limit are numbers
-      const skip = (Number(page) - 1) * Number(limit);
-      const take = Number(limit);
-
       const query = this.orderRepository.createQueryBuilder('order')
         .leftJoinAndSelect('order.offer', 'offer')
         .leftJoinAndSelect('offer.token', 'token')
         .leftJoinAndSelect('order.buyer', 'buyer')
         .leftJoinAndSelect('order.seller', 'seller')
-        .where('order.buyerId = :userId OR order.sellerId = :userId', { userId });
-
-      // Apply type filter
-      if (type === 'buy') {
-        query.andWhere('order.buyerId = :userId', { userId });
-      } else if (type === 'sell') {
-        query.andWhere('order.sellerId = :userId', { userId });
-      }
+        .where(type === 'buy' ? 'order.buyerId = :userId' : 'order.sellerId = :userId', { userId });
 
       // Apply status filter
       if (status) {
-        query.andWhere('(order.buyerStatus = :status OR order.sellerStatus = :status)', { status });
+        query.andWhere(type === 'buy' ? 'order.buyerStatus = :status' : 'order.sellerStatus = :status', { status });
       }
 
       // Apply search filter
@@ -1015,6 +1004,10 @@ export class P2PService {
           { search: `%${search}%` }
         );
       }
+
+      // Ensure page and limit are numbers
+      const skip = (Number(page) - 1) * Number(limit);
+      const take = Number(limit);
 
       // Update pagination
       query.skip(skip).take(take);

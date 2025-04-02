@@ -312,7 +312,12 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
   }
 
   Widget _buildOrdersList(bool isDark, {required bool isBuy}) {
-    if (_isLoading && _orders.isEmpty) {
+    // Filter orders based on the current tab
+    final filteredOrders = _orders.where((order) => 
+      (isBuy && order['type'] == 'BUY') || (!isBuy && order['type'] == 'SELL')
+    ).toList();
+
+    if (_isLoading && filteredOrders.isEmpty) {
       return Center(
         child: CircularProgressIndicator(
           color: SafeJetColors.secondaryHighlight,
@@ -347,7 +352,7 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
       );
     }
 
-    if (_orders.isEmpty) {
+    if (filteredOrders.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -373,9 +378,9 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.all(16),
-      itemCount: _orders.length + (_hasMoreData ? 1 : 0),
+      itemCount: filteredOrders.length + (_hasMoreData ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == _orders.length) {
+        if (index == filteredOrders.length) {
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -389,7 +394,7 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
         return FadeInUp(
           duration: const Duration(milliseconds: 400),
           delay: Duration(milliseconds: index * 100),
-          child: _buildOrderCard(_orders[index], isDark),
+          child: _buildOrderCard(filteredOrders[index], isDark),
         );
       },
     );
@@ -401,6 +406,15 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     final now = DateTime.now();
     final difference = now.difference(orderDate);
     
+    // Format numbers
+    final numberFormat = NumberFormat("#,##0.00", "en_US");
+    final cryptoFormat = NumberFormat("#,##0.########", "en_US");
+    
+    // Format amount and price
+    final formattedAmount = cryptoFormat.format(double.parse(order['amount'].toString()));
+    final formattedPrice = numberFormat.format(double.parse(order['price'].toString()));
+    
+    // Format date
     String formattedDate;
     if (difference.inDays == 0) {
       if (difference.inHours == 0) {
@@ -488,12 +502,12 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                   children: [
                     _buildInfoColumn(
                       'Amount',
-                      '${order['amount']} ${order['crypto']}',
+                      '$formattedAmount ${order['crypto']}',
                       isDark,
                     ),
                     _buildInfoColumn(
                       'Price',
-                      '₦${order['price']}',
+                      '₦$formattedPrice',
                       isDark,
                       crossAxisAlignment: CrossAxisAlignment.end,
                     ),
