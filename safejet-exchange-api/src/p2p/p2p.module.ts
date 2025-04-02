@@ -17,6 +17,7 @@ import { KYCLevel } from '../auth/entities/kyc-level.entity';
 import { Order } from './entities/order.entity';
 import { EmailModule } from '../email/email.module';
 import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
+import { Dispute } from './entities/dispute.entity';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PaymentMethodField } from '../payment-methods/entities/payment-method-f
       KYCLevel,
       Order,
       PaymentMethodField,
+      Dispute,
     ]),
     WalletModule,
     P2PSettingsModule,

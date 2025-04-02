@@ -809,7 +809,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
   }
 
   Widget _buildOfferCard(bool isDark, bool isBuy, Map<String, dynamic> offer) {
-    print('Building offer card with data: ${offer.toString()}');
+    // print('Building offer card with data: ${offer.toString()}');
     
     final token = offer['token'] as Map<String, dynamic>;
     final symbol = token['symbol'] ?? 'Unknown';

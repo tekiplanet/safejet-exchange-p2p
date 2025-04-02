@@ -187,4 +187,41 @@ export class P2PController {
       limit: limitNumber,
     });
   }
+
+  @Post('orders/:trackingId/confirm-payment')
+  @UseGuards(JwtAuthGuard)
+  async confirmOrderPayment(
+    @Param('trackingId') trackingId: string,
+    @GetUser('id') userId: string,
+  ) {
+    return this.p2pService.confirmOrderPayment(trackingId, userId);
+  }
+
+  @Post('orders/:trackingId/release')
+  @UseGuards(JwtAuthGuard)
+  async releaseOrder(
+    @Param('trackingId') trackingId: string,
+    @GetUser('id') userId: string,
+  ) {
+    return this.p2pService.releaseOrder(trackingId, userId);
+  }
+
+  @Post('orders/:trackingId/cancel')
+  @UseGuards(JwtAuthGuard)
+  async cancelOrder(
+    @Param('trackingId') trackingId: string,
+    @GetUser('id') userId: string,
+  ) {
+    return this.p2pService.cancelOrder(trackingId, userId);
+  }
+
+  @Post('orders/:trackingId/dispute')
+  @UseGuards(JwtAuthGuard)
+  async disputeOrder(
+    @Param('trackingId') trackingId: string,
+    @GetUser('id') userId: string,
+    @Body() disputeData: { reason: string },
+  ) {
+    return this.p2pService.disputeOrder(trackingId, userId, disputeData.reason);
+  }
 } 

@@ -17,6 +17,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { EmailService } from '../email/email.service';
 import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
+import { Dispute } from './entities/dispute.entity';
 
 @Injectable()
 export class P2PService {
@@ -43,6 +44,8 @@ export class P2PService {
     private readonly kycLevelRepository: Repository<KYCLevel>,
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(Dispute)
+    private readonly disputeRepository: Repository<Dispute>,
     private readonly emailService: EmailService,
     @InjectRepository(PaymentMethodField)
     private readonly paymentMethodFieldRepository: Repository<PaymentMethodField>,
@@ -1008,7 +1011,7 @@ export class P2PService {
         }));
 
         // Debug log the generated query
-        console.log('Generated SQL:', query.getSql());
+        // console.log('Generated SQL:', query.getSql());
       }
 
       // Ensure page and limit are numbers
@@ -1067,5 +1070,164 @@ export class P2PService {
       console.error('Error fetching orders:', error);
       throw new Error('Failed to fetch orders');
     }
+  }
+
+  async confirmOrderPayment(trackingId: string, userId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { trackingId },
+      relations: ['buyer', 'seller', 'offer'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Verify user is the buyer
+    if (order.buyerId !== userId) {
+      throw new BadRequestException('Only the buyer can confirm payment');
+    }
+
+    // Verify order is in correct state
+    if (order.buyerStatus !== 'pending') {
+      throw new BadRequestException('Order is not in pending state');
+    }
+
+    // Update order status
+    order.buyerStatus = 'paid';
+    await this.orderRepository.save(order);
+
+    // TODO: Send notification to seller
+
+    return { message: 'Payment confirmed successfully' };
+  }
+
+  async releaseOrder(trackingId: string, userId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { trackingId },
+      relations: ['buyer', 'seller', 'offer', 'offer.token'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Verify user is the seller
+    if (order.sellerId !== userId) {
+      throw new BadRequestException('Only the seller can release funds');
+    }
+
+    // Verify order is in correct state
+    if (order.buyerStatus !== 'paid') {
+      throw new BadRequestException('Buyer has not confirmed payment');
+    }
+
+    // Update order status
+    order.buyerStatus = 'completed';
+    order.sellerStatus = 'completed';
+    
+    // Transfer funds from escrow to buyer
+    await this.transferFundsFromEscrow(order);
+
+    await this.orderRepository.save(order);
+
+    // TODO: Send notification to buyer
+
+    return { message: 'Funds released successfully' };
+  }
+
+  async cancelOrder(trackingId: string, userId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { trackingId },
+      relations: ['buyer', 'seller', 'offer', 'offer.token'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Verify user is either buyer or seller
+    if (order.buyerId !== userId && order.sellerId !== userId) {
+      throw new BadRequestException('Unauthorized to cancel this order');
+    }
+
+    // Verify order is in cancellable state
+    if (order.buyerStatus === 'completed' || order.sellerStatus === 'completed') {
+      throw new BadRequestException('Cannot cancel completed order');
+    }
+
+    if (order.buyerStatus === 'disputed' || order.sellerStatus === 'disputed') {
+      throw new BadRequestException('Cannot cancel disputed order');
+    }
+
+    // Update order status
+    order.buyerStatus = 'cancelled';
+    order.sellerStatus = 'cancelled';
+
+    // If seller cancels or if buyer cancels before payment, return funds to seller
+    if (order.buyerStatus !== 'paid') {
+      await this.returnFundsToSeller(order);
+    }
+
+    await this.orderRepository.save(order);
+
+    // TODO: Send notification to counterparty
+
+    return { message: 'Order cancelled successfully' };
+  }
+
+  async disputeOrder(trackingId: string, userId: string, reason: string) {
+    const order = await this.orderRepository.findOne({
+      where: { trackingId },
+      relations: ['buyer', 'seller', 'offer'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Verify user is either buyer or seller
+    if (order.buyerId !== userId && order.sellerId !== userId) {
+      throw new BadRequestException('Unauthorized to dispute this order');
+    }
+
+    // Verify order is in disputable state
+    if (order.buyerStatus === 'completed' || order.sellerStatus === 'completed') {
+      throw new BadRequestException('Cannot dispute completed order');
+    }
+
+    if (order.buyerStatus === 'cancelled' || order.sellerStatus === 'cancelled') {
+      throw new BadRequestException('Cannot dispute cancelled order');
+    }
+
+    // Update order status
+    if (userId === order.buyerId) {
+      order.buyerStatus = 'disputed';
+    } else {
+      order.sellerStatus = 'disputed';
+    }
+
+    // Save dispute details
+    await this.disputeRepository.save({
+      orderId: order.id,
+      initiatorId: userId,
+      reason,
+      status: 'pending',
+    });
+
+    await this.orderRepository.save(order);
+
+    // TODO: Send notification to admin and counterparty
+
+    return { message: 'Dispute raised successfully' };
+  }
+
+  private async transferFundsFromEscrow(order: Order) {
+    // Implementation for transferring funds from escrow to buyer
+    // This would involve your actual business logic for handling the transfer
+  }
+
+  private async returnFundsToSeller(order: Order) {
+    // Implementation for returning funds from escrow to seller
+    // This would involve your actual business logic for handling the return
   }
 } 

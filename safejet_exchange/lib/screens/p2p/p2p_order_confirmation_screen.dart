@@ -17,6 +17,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'p2p_screen.dart';
 
 // Move AnimatedDialog outside the state class
 class AnimatedDialog extends StatelessWidget {
@@ -88,6 +89,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   int _remainingMinutes = 0;
   int _remainingSeconds = 0;
   String? _userId;
+  final P2PService _p2pService = P2PService();
 
   @override
   void initState() {
@@ -137,8 +139,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     });
 
     try {
-      final p2pService = P2PService();
-      final orderDetails = await p2pService.getOrderDetails(widget.trackingId);
+      final orderDetails = await _p2pService.getOrderDetails(widget.trackingId);
       
       print('Order details received: $orderDetails');
       
@@ -149,7 +150,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       // Fetch the complete payment method details if methodId is available
       if (methodId != null) {
         try {
-          final paymentMethodDetails = await p2pService.getPaymentMethodDetails(methodId);
+          final paymentMethodDetails = await _p2pService.getPaymentMethodDetails(methodId);
           print('Payment method details: $paymentMethodDetails');
           
           // Merge the payment method details with the order details
@@ -494,6 +495,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     delay: const Duration(milliseconds: 400),
                     child: _buildPaymentInstructions(isDark),
                   ),
+
                 ],
               ),
             ),
@@ -1343,122 +1345,307 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }
 
   Widget _buildBottomActions(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark
-            ? SafeJetColors.primaryBackground
-            : SafeJetColors.lightBackground,
-        border: Border(
-          top: BorderSide(
-            color: isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                : SafeJetColors.lightCardBorder,
+    if (_orderDetails == null) return const SizedBox.shrink();
+
+    // Check if current user is the buyer
+    final currentUserId = _userId;
+    final isBuyer = _orderDetails!['buyerId'] == currentUserId;
+    final buyerStatus = _orderDetails!['buyerStatus']?.toLowerCase() ?? '';
+
+    print('Current user ID: $currentUserId');
+    print('Buyer ID: ${_orderDetails!['buyerId']}');
+    print('Is Buyer: $isBuyer');
+    print('Buyer Status: $buyerStatus');
+
+    // For completed orders
+    if (buyerStatus == 'completed') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
           ),
         ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AnimatedDialog(
-                    child: AlertDialog(
-                      title: const Text('Cancel Order'),
-                      content: const Text(
-                        'Are you sure you want to cancel this order? This action cannot be undone.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('No'),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.pop(context); // Close dialog
-                            Navigator.pop(context); // Go back to previous screen
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: SafeJetColors.warning,
-                          ),
-                          child: const Text('Yes, Cancel'),
-                        ),
-                      ],
-                    ),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  // View Transaction Logic
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                side: BorderSide(
-                  color: isDark
-                      ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                      : SafeJetColors.lightCardBorder,
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                child: const Text('View Transaction'),
               ),
-              child: const Text('Cancel Order'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const P2PScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('New Trade'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // For buyer with pending status
+    if (isBuyer && buyerStatus == 'pending') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton(
-              onPressed: _handlePaymentConfirmation,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: SafeJetColors.success,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () async {
+                  try {
+                    await _p2pService.cancelOrder(_orderDetails!['id']);
+                    _refreshOrder();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                },
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                elevation: 0,
+                child: const Text('Cancel Order'),
               ),
-              child: const Text('I have paid'),
             ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await _p2pService.confirmOrderPayment(_orderDetails!['id']);
+                    _refreshOrder();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('I Have Paid'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // For seller with paid status
+    if (!isBuyer && buyerStatus == 'paid') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await _p2pService.releaseOrder(_orderDetails!['id']);
+                    _refreshOrder();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Release Coin'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextButton(
+                onPressed: () {
+                  _showDisputeDialog();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: SafeJetColors.warning,
+                ),
+                child: const Text('Raise Dispute'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // For seller with pending status
+    if (!isBuyer && buyerStatus == 'pending') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () async {
+                  try {
+                    await _p2pService.cancelOrder(_orderDetails!['id']);
+                    _refreshOrder();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                },
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Cancel Order'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink(); // Default case, no buttons
+  }
+
+  void _showDisputeDialog() {
+    // Implement dispute dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Raise Dispute'),
+        content: TextField(
+          decoration: const InputDecoration(
+            hintText: 'Enter reason for dispute',
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Implement dispute submission
+              Navigator.pop(context);
+            },
+            child: const Text('Submit'),
           ),
         ],
       ),
     );
   }
 
-  void _handlePaymentConfirmation() {
-    showDialog(
-      context: context,
-      builder: (context) => AnimatedDialog(
-        child: AlertDialog(
-          title: const Text('Confirm Payment'),
-          content: const Text(
-            'By confirming, you declare that you have completed the payment. False confirmation may result in account restrictions.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context); // Close dialog
-                setState(() => _isPaymentConfirmed = true);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Payment confirmed successfully'),
-                    backgroundColor: SafeJetColors.success,
-                  ),
-                );
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: SafeJetColors.success,
-              ),
-              child: const Text('Yes, I have paid'),
-            ),
-          ],
-        ),
-      ),
-    );
+  // Add refresh order method
+  Future<void> _refreshOrder() async {
+    try {
+      final orderDetails = await _p2pService.getOrderDetails(widget.trackingId);
+      setState(() {
+        _orderDetails = orderDetails;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to refresh order: ${e.toString()}')),
+      );
+    }
+  }
+
+  // Helper method to determine if current user is the seller
+  bool _isCurrentUserSeller() {
+    // First check if we have the user ID
+    if (_userId != null && _orderDetails != null) {
+      return _userId == _orderDetails!['sellerId'];
+    }
+    
+    // Fallback: Check if the payment metadata's userId matches the seller ID
+    final paymentMetadata = _orderDetails?['paymentMetadata'];
+    if (paymentMetadata != null && _orderDetails != null) {
+      final metadataUserId = paymentMetadata['userId'];
+      return metadataUserId == _orderDetails!['sellerId'];
+    }
+    
+    // Default to false if we can't determine
+    return false;
   }
 
   // Helper method to format crypto amounts (up to 8 decimal places, no trailing zeros)
@@ -1486,23 +1673,5 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     // Use NumberFormat for proper thousand separators
     final formatter = NumberFormat('#,##0.00', 'en_US');
     return formatter.format(amount);
-  }
-
-  // Helper method to determine if current user is the seller
-  bool _isCurrentUserSeller() {
-    // First check if we have the user ID
-    if (_userId != null && _orderDetails != null) {
-      return _userId == _orderDetails!['sellerId'];
-    }
-    
-    // Fallback: Check if the payment metadata's userId matches the seller ID
-    final paymentMetadata = _orderDetails?['paymentMetadata'];
-    if (paymentMetadata != null && _orderDetails != null) {
-      final metadataUserId = paymentMetadata['userId'];
-      return metadataUserId == _orderDetails!['sellerId'];
-    }
-    
-    // Default to false if we can't determine
-    return false;
   }
 } 

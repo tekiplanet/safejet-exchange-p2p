@@ -321,6 +321,63 @@ class P2PService {
     }
   }
 
+  Future<void> confirmOrderPayment(String trackingId) async {
+    try {
+      final response = await _dio.post(
+        '/p2p/orders/$trackingId/confirm-payment',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      print('Payment confirmation response: ${response.data}');
+    } catch (e) {
+      print('Error confirming payment: $e');
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  Future<void> releaseOrder(String trackingId) async {
+    try {
+      final response = await _dio.post(
+        '/p2p/orders/$trackingId/release',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      print('Release order response: ${response.data}');
+    } catch (e) {
+      print('Error releasing order: $e');
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  Future<void> cancelOrder(String trackingId) async {
+    try {
+      final response = await _dio.post(
+        '/p2p/orders/$trackingId/cancel',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      print('Cancel order response: ${response.data}');
+    } catch (e) {
+      print('Error cancelling order: $e');
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  Future<void> disputeOrder(String trackingId, String reason) async {
+    try {
+      final response = await _dio.post(
+        '/p2p/orders/$trackingId/dispute',
+        data: {'reason': reason},
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      print('Dispute order response: ${response.data}');
+    } catch (e) {
+      print('Error disputing order: $e');
+      _handleError(e);
+      rethrow;
+    }
+  }
+
   Exception _handleError(dynamic e) {
     if (e is DioException) {
       final response = e.response;
