@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Raw, In } from 'typeorm';
+import { Repository, Raw, In, Brackets } from 'typeorm';
 import { P2POffer } from './entities/p2p-offer.entity';
 import { P2PTraderSettings } from '../p2p-settings/entities/p2p-trader-settings.entity';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
@@ -997,12 +997,18 @@ export class P2PService {
         query.andWhere(type === 'buy' ? 'order.buyerStatus = :status' : 'order.sellerStatus = :status', { status });
       }
 
-      // Apply search filter
+      // Improve search filter to be more precise
       if (search) {
-        query.andWhere(
-          '(order.trackingId ILIKE :search OR buyer.fullName ILIKE :search OR seller.fullName ILIKE :search)',
-          { search: `%${search}%` }
-        );
+        console.log('Searching with:', search); // Debug log
+
+        query.andWhere(new Brackets(qb => {
+          qb.where('order.trackingId ILIKE :searchId', { searchId: `%${search}%` }) // Partial match for ID
+            .orWhere('LOWER(buyer.fullName) ILIKE LOWER(:name)', { name: `%${search}%` })
+            .orWhere('LOWER(seller.fullName) ILIKE LOWER(:name)', { name: `%${search}%` });
+        }));
+
+        // Debug log the generated query
+        console.log('Generated SQL:', query.getSql());
       }
 
       // Ensure page and limit are numbers

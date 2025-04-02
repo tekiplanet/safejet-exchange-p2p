@@ -91,12 +91,16 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     });
 
     try {
+      print('Searching with text: ${_searchController.text}'); // Debug log
+      
       final result = await _p2pService.getOrders(
         isBuy: _tabController.index == 0,
         status: _selectedStatus == 'All' ? null : _selectedStatus,
-        searchQuery: _searchController.text,
+        searchQuery: _searchController.text.trim(),
         page: _currentPage,
       );
+
+      print('Search result: $result'); // Debug log
 
       setState(() {
         if (refresh || _currentPage == 1) {
@@ -110,6 +114,7 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
         _isLoading = false;
       });
     } catch (e) {
+      print('Error loading orders: $e'); // Debug log
       setState(() {
         _isLoading = false;
         _hasError = true;

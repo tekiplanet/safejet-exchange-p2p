@@ -300,9 +300,11 @@ class P2PService {
         if (status != null && status.toLowerCase() != 'all') 
           'status': status.toLowerCase(),
         if (searchQuery != null && searchQuery.isNotEmpty) 
-          'search': searchQuery,
+          'search': searchQuery.trim(),
         'page': page.toString(),
       };
+
+      print('Sending search request with params: $queryParams');
 
       final response = await _dio.get(
         '/p2p/orders',
@@ -310,8 +312,10 @@ class P2PService {
         options: Options(headers: await _getAuthHeaders()),
       );
 
+      print('Search response: ${response.data}');
       return response.data;
     } catch (e) {
+      print('Error in getOrders: $e');
       _handleError(e);
       rethrow;
     }
