@@ -625,7 +625,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     
     // Format the numbers properly
     final assetAmount = _orderDetails?['assetAmount'];
-    final price = _orderDetails?['offer']?['price'];
+    final price = _orderDetails?['price'];  // Use stored order price instead of offer price
     final currencyAmount = _orderDetails?['currencyAmount'];
     
     // Format asset amount (crypto) - up to 8 decimal places, no trailing zeros

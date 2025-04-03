@@ -216,7 +216,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
           ),
           _buildDetailRow(
             'Price:',
-            '${_formatAmount(_orderDetails?['offer']?['price'])} ${_orderDetails?['offer']?['currency'] ?? 'NGN'}',
+            '${_formatAmount(_orderDetails?['price'])} ${_orderDetails?['offer']?['currency'] ?? 'NGN'}',
             isDark
           ),
           _buildDetailRow(

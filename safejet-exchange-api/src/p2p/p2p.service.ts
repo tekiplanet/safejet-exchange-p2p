@@ -926,6 +926,7 @@ export class P2PService {
             const orderResponse = {
               ...order,
               completePaymentDetails: paymentMethod,
+              price: order.price,
               timeRemaining: {
                 minutes: timeRemainingMinutes,
                 seconds: timeRemainingSeconds,
@@ -945,6 +946,7 @@ export class P2PService {
     // If we didn't return early with payment details, return the standard response
     return {
       ...order,
+      price: order.price,
       timeRemaining: {
         minutes: timeRemainingMinutes,
         seconds: timeRemainingSeconds,
@@ -1055,7 +1057,7 @@ export class P2PService {
 
         // Format the numbers to max 8 decimal places
         const amount = Number(order.assetAmount).toFixed(8).replace(/\.?0+$/, '');
-        const price = Number(order.currencyAmount / order.assetAmount).toFixed(2);
+        const price = Number(order.price).toFixed(2);  // Use stored price instead of calculating
         
         return {
           id: order.trackingId,

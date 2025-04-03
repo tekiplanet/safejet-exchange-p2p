@@ -427,7 +427,8 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
     
     // Format amount and price
     final formattedAmount = cryptoFormat.format(double.parse(order['amount'].toString()));
-    final formattedPrice = numberFormat.format(double.parse(order['price'].toString()));
+    final formattedPrice = numberFormat.format(double.parse(order['price']?.toString() ?? '0'));
+    final currency = order['currency'] ?? 'NGN';  // Get currency from order data
     
     // Format date
     String formattedDate;
@@ -526,7 +527,7 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
                     ),
                     _buildInfoColumn(
                       'Price',
-                      '₦$formattedPrice',
+                      '$currency$formattedPrice/${order['crypto']}',
                       isDark,
                       crossAxisAlignment: CrossAxisAlignment.end,
                     ),
