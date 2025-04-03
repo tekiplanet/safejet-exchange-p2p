@@ -5,8 +5,8 @@ import '../services/auth_service.dart';
 import 'api_client.dart';
 import 'dart:convert';
 import 'dart:async';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
-import '../config/api_config.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class P2PService {
   late final Dio _dio;
@@ -14,7 +14,8 @@ class P2PService {
   final storage = const FlutterSecureStorage();
   Timer? _pollTimer;
   final _orderUpdateController = StreamController<Map<String, dynamic>>.broadcast();
-  IO.Socket? _chatSocket;
+  WebSocketChannel? _chatSocket;
+  final _chatUpdateController = StreamController<Map<String, dynamic>>.broadcast();
 
   P2PService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
@@ -443,49 +444,58 @@ class P2PService {
     final token = await storage.read(key: 'token');
     if (token == null) return;
 
-    _chatSocket = IO.io('${ApiConfig.baseUrl}/p2p/chat', 
-      IO.OptionBuilder()
-        .setTransports(['websocket'])
-        .setQuery({'token': token})
-        .setReconnectionDelay(2000)
-        .enableReconnection()
-        .build()
-    );
+    final wsUrl = dotenv.env['WS_URL'] ?? 'ws://localhost:3000';
+    try {
+      _chatSocket = WebSocketChannel.connect(
+        Uri.parse('$wsUrl/p2p/chat?token=$token'),
+      );
 
-    _chatSocket?.onConnect((_) {
-      print('Connected to chat socket');
-    });
-
-    _chatSocket?.onDisconnect((_) {
-      print('Disconnected from chat socket');
-    });
-
-    _chatSocket?.onError((error) {
-      print('Socket error: $error');
-    });
+      _chatSocket?.stream.listen(
+        (message) {
+          final data = jsonDecode(message);
+          _chatUpdateController.add(data);
+        },
+        onError: (error) {
+          print('Chat WebSocket error: $error');
+        },
+        onDone: () {
+          print('Chat WebSocket connection closed');
+          _chatSocket = null;
+        },
+      );
+    } catch (e) {
+      print('Error connecting to chat: $e');
+    }
   }
 
   void joinOrderChat(String orderId) {
-    _chatSocket?.emit('joinOrder', orderId);
+    _chatSocket?.sink.add(jsonEncode({
+      'event': 'joinOrder',
+      'orderId': orderId,
+    }));
   }
 
   void listenToMessages(String orderId, Function(Map<String, dynamic>) onMessage) {
-    _chatSocket?.on('chatUpdate', (data) {
-      if (data['orderId'] == orderId) {
-        onMessage(data);
+    _chatUpdateController.stream.listen((data) {
+      if (data['type'] == 'chatUpdate' && data['orderId'] == orderId) {
+        onMessage(data['message']);
       }
     });
   }
 
   void listenToDeliveryStatus(String orderId, Function(String) onDelivered) {
-    _chatSocket?.on('messageDelivered', (data) {
-      onDelivered(data['messageId']);
+    _chatUpdateController.stream.listen((data) {
+      if (data['type'] == 'messageDelivered' && data['orderId'] == orderId) {
+        onDelivered(data['messageId']);
+      }
     });
   }
 
   void listenToReadStatus(String orderId, Function(String) onRead) {
-    _chatSocket?.on('messageRead', (data) {
-      onRead(data['messageId']);
+    _chatUpdateController.stream.listen((data) {
+      if (data['type'] == 'messageRead' && data['orderId'] == orderId) {
+        onRead(data['messageId']);
+      }
     });
   }
 
@@ -541,7 +551,8 @@ class P2PService {
   }
 
   void disposeChatSocket() {
-    _chatSocket?.dispose();
+    _chatSocket?.sink.close();
     _chatSocket = null;
+    _chatUpdateController.close();
   }
 } 

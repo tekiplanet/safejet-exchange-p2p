@@ -275,8 +275,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   context,
                   CustomPageRoute(
                     child: P2PChatScreen(
-                      userName: _orderDetails?['isBuyer'] ? _orderDetails?['seller']?['fullName'] : _orderDetails?['buyer']?['fullName'] ?? 'Trader',
-                      orderId: _orderDetails?['trackingId'] ?? '',
+                      orderId: _orderDetails?['id'] ?? '',
+                      trackingId: _orderDetails?['trackingId'] ?? '',
+                      isBuyer: _isCurrentUserBuyer(),
+                      userName: _isCurrentUserBuyer()
+                        ? _orderDetails?['seller']?['fullName'] ?? 'Seller'
+                        : _orderDetails?['buyer']?['fullName'] ?? 'Buyer',
                     ),
                   ),
                 );
@@ -926,10 +930,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       context,
                       MaterialPageRoute(
                         builder: (context) => P2PChatScreen(
-                          orderId: _orderDetails?['trackingId'] ?? '',
-                          userName: _isCurrentUserSeller() 
-                            ? _orderDetails?['buyer']?['fullName'] ?? 'Buyer'
-                            : _orderDetails?['seller']?['fullName'] ?? 'Seller',
+                          orderId: _orderDetails?['id'] ?? '',
+                          trackingId: _orderDetails?['trackingId'] ?? '',
+                          isBuyer: _isCurrentUserBuyer(),
+                          userName: _isCurrentUserBuyer()
+                            ? _orderDetails?['seller']?['fullName'] ?? 'Seller'
+                            : _orderDetails?['buyer']?['fullName'] ?? 'Buyer',
                         ),
                       ),
                     );
@@ -1051,10 +1057,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       context,
                       MaterialPageRoute(
                         builder: (context) => P2PChatScreen(
-                          orderId: _orderDetails?['trackingId'] ?? '',
-                          userName: _isCurrentUserSeller() 
-                            ? _orderDetails?['buyer']?['fullName'] ?? 'Buyer'
-                            : _orderDetails?['seller']?['fullName'] ?? 'Seller',
+                          orderId: _orderDetails?['id'] ?? '',
+                          trackingId: _orderDetails?['trackingId'] ?? '',
+                          isBuyer: _isCurrentUserBuyer(),
+                          userName: _isCurrentUserBuyer()
+                            ? _orderDetails?['seller']?['fullName'] ?? 'Seller'
+                            : _orderDetails?['buyer']?['fullName'] ?? 'Buyer',
                         ),
                       ),
                     );
@@ -1158,10 +1166,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                         context,
                         MaterialPageRoute(
                           builder: (context) => P2PChatScreen(
-                            orderId: _orderDetails?['trackingId'] ?? '',
-                            userName: _isCurrentUserSeller()
-                              ? _orderDetails?['buyer']?['fullName'] ?? 'Buyer'
-                              : _orderDetails?['seller']?['fullName'] ?? 'Seller',
+                            orderId: _orderDetails?['id'] ?? '',
+                            trackingId: _orderDetails?['trackingId'] ?? '',
+                            isBuyer: _isCurrentUserBuyer(),
+                            userName: _isCurrentUserBuyer()
+                              ? _orderDetails?['seller']?['fullName'] ?? 'Seller'
+                              : _orderDetails?['buyer']?['fullName'] ?? 'Buyer',
                           ),
                         ),
                       );
@@ -2128,5 +2138,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     }
     
     return wholeNumber;
+  }
+
+  bool _isCurrentUserBuyer() {
+    return _orderDetails?['buyerId'] == _userId;
   }
 } 

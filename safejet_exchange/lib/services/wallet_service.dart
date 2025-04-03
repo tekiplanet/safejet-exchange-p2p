@@ -109,11 +109,11 @@ class WalletService {
         
         // Process networks with new structure
         if (networks != null) {
-          print('\nNetwork Breakdown:');
+          // print('\nNetwork Breakdown:');
           networks.forEach((network) {
             if (network is Map<String, dynamic>) {
-              print('  ${network['blockchain']} (${network['networkVersion']}): '
-                  '${_formatBalance(network['balance'].toString(), token['decimals'] ?? 18)}');
+              // print('  ${network['blockchain']} (${network['networkVersion']}): '
+                  //'${_formatBalance(network['balance'].toString(), token['decimals'] ?? 18)}');
             }
           });
         }
@@ -149,11 +149,11 @@ class WalletService {
       }
       
       String result = '$wholePart.$fractionalStr';
-      print('Formatted result: $result');
+      // print('Formatted result: $result');
       return result;
     } catch (e) {
-      print('Error formatting balance: $balance with decimals: $decimals');
-      print('Error details: $e');
+      // print('Error formatting balance: $balance with decimals: $decimals');
+      // print('Error details: $e');
       return '0.0';
     }
   }

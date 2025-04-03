@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:provider/provider.dart';
 import '../../services/p2p_service.dart';
 import '../../config/theme/colors.dart';
+import '../../config/theme/theme_provider.dart';
+import '../../widgets/p2p_app_bar.dart';
+import 'package:intl/intl.dart';
 
 class P2PChatScreen extends StatefulWidget {
   final String orderId;
+  final String trackingId;
   final bool isBuyer;
+  final String userName;
 
   const P2PChatScreen({
-    Key? key,
+    super.key,
     required this.orderId,
+    required this.trackingId,
     required this.isBuyer,
-  }) : super(key: key);
+    required this.userName,
+  });
 
   @override
   State<P2PChatScreen> createState() => _P2PChatScreenState();
@@ -23,11 +31,14 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> _messages = [];
   bool _isLoading = true;
+  Map<String, dynamic>? _orderDetails;
+  final _numberFormat = NumberFormat("#,##0.00", "en_US");
 
   @override
   void initState() {
     super.initState();
     _initializeChat();
+    _loadOrderDetails();
   }
 
   Future<void> _initializeChat() async {
@@ -35,23 +46,20 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
       await _p2pService.connectToChat();
       _p2pService.joinOrderChat(widget.orderId);
       
-      // Load existing messages
       final messages = await _p2pService.getOrderMessages(widget.orderId);
       setState(() {
         _messages = messages;
         _isLoading = false;
       });
 
-      // Listen for new messages
-      _p2pService.listenToMessages(widget.orderId, (message) {
+      _p2pService.listenToMessages(widget.trackingId, (message) {
         setState(() {
           _messages.add(message);
         });
         _scrollToBottom();
       });
 
-      // Listen for delivery status
-      _p2pService.listenToDeliveryStatus(widget.orderId, (messageId) {
+      _p2pService.listenToDeliveryStatus(widget.trackingId, (messageId) {
         setState(() {
           final index = _messages.indexWhere((m) => m['id'] == messageId);
           if (index != -1) {
@@ -60,8 +68,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
         });
       });
 
-      // Listen for read status
-      _p2pService.listenToReadStatus(widget.orderId, (messageId) {
+      _p2pService.listenToReadStatus(widget.trackingId, (messageId) {
         setState(() {
           final index = _messages.indexWhere((m) => m['id'] == messageId);
           if (index != -1) {
@@ -71,6 +78,35 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
       });
     } catch (e) {
       print('Error initializing chat: $e');
+    }
+  }
+
+  Future<void> _loadOrderDetails() async {
+    try {
+      // print('Attempting to load order details for trackingId: ${widget.trackingId}');
+      // Get order details from the API
+      final orderDetails = await _p2pService.getOrderDetails(widget.trackingId);
+      if (orderDetails != null) {
+        setState(() {
+          _orderDetails = orderDetails;
+        });
+      } else {
+        print('Failed to load order details');
+      }
+    } catch (e) {
+      print('Error loading order details: $e');
+      // For now, let's create a simple order details object so the UI works
+      setState(() {
+        _orderDetails = {
+          'trackingId': widget.trackingId,
+          'status': 'In Progress',
+          'amount': 0.0,
+          'price': 0.0,
+          'total': 0.0,
+          'token': {'symbol': 'USDT'},
+          'currency': {'symbol': 'NGN'},
+        };
+      });
     }
   }
 
@@ -84,125 +120,306 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
     }
   }
 
-  Future<void> _sendMessage() async {
-    final message = _messageController.text.trim();
-    if (message.isEmpty) return;
-
-    try {
-      await _p2pService.sendMessage(widget.orderId, message);
-      _messageController.clear();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send message: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    String getCounterpartyName() {
+      if (_orderDetails == null) return 'Loading...';
+      
+      print('Debug - Order Details: $_orderDetails');
+      print('Debug - Current User is Buyer?: ${widget.isBuyer}');
+      print('Debug - Buyer Name: ${_orderDetails?['buyer']?['fullName']}');
+      print('Debug - Seller Name: ${_orderDetails?['seller']?['fullName']}');
+      print('Debug - Widget Username: ${widget.userName}');
+
+      // Always show the counterparty's name
+      return widget.userName;
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chat'),
-        elevation: 0,
+      appBar: P2PAppBar(
+        title: getCounterpartyName(),
+        onNotificationTap: () {
+          // Handle notification tap
+        },
+        onThemeToggle: () {
+          themeProvider.toggleTheme();
+        },
       ),
       body: Column(
         children: [
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final message = _messages[index];
-                      return _buildMessageBubble(message);
-                    },
-                  ),
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildOrderInfo(isDark),
+                  const SizedBox(height: 24),
+                  if (_isLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    _buildChatMessages(isDark),
+                ],
+              ),
+            ),
           ),
-          _buildMessageInput(),
+          _buildMessageInput(isDark),
         ],
       ),
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message) {
-    final isSystem = message['messageType'] == 'SYSTEM';
-    final isSender = !isSystem && 
-      (widget.isBuyer ? message['messageType'] == 'BUYER' : message['messageType'] == 'SELLER');
-
-    if (isSystem) {
-      return Container(
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              message['message'],
-              style: const TextStyle(
-                color: Colors.black54,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ),
-      );
+  Widget _buildOrderInfo(bool isDark) {
+    if (_orderDetails == null) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return Align(
-      alignment: isSender ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSender ? SafeJetColors.primary : Colors.grey[300],
-          borderRadius: BorderRadius.circular(16),
+    String _formatAmount(dynamic amount) {
+      if (amount == null) return '0.00';
+      final value = double.parse(amount.toString());
+      return _numberFormat.format(value);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              : SafeJetColors.lightCardBorder,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              message['message'],
-              style: TextStyle(
-                color: isSender ? Colors.white : Colors.black,
-              ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Order #${_orderDetails?['trackingId']}',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
-            if (isSender) ...[
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    message['isRead'] 
-                        ? Icons.done_all 
-                        : message['isDelivered'] 
-                            ? Icons.done_all 
-                            : Icons.done,
-                    size: 16,
-                    color: message['isRead'] ? Colors.blue : Colors.white70,
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          _buildDetailRow(
+            'Amount:',
+            '${_formatAmount(_orderDetails?['assetAmount'])} USDT',
+            isDark
+          ),
+          _buildDetailRow(
+            'Price:',
+            '${_formatAmount(_orderDetails?['offer']?['price'])} ${_orderDetails?['offer']?['currency'] ?? 'NGN'}',
+            isDark
+          ),
+          _buildDetailRow(
+            'Total:',
+            '${_formatAmount(_orderDetails?['currencyAmount'])} ${_orderDetails?['offer']?['currency'] ?? 'NGN'}',
+            isDark
+          ),
+          _buildDetailRow(
+            'Status:',
+            widget.isBuyer 
+              ? (_orderDetails?['buyerStatus']?.toString() ?? 'Unknown').toUpperCase()
+              : (_orderDetails?['sellerStatus']?.toString() ?? 'Unknown').toUpperCase(),
+            isDark,
+            statusColor: _getStatusColor(
+              widget.isBuyer
+                ? (_orderDetails?['buyerStatus']?.toString() ?? 'Unknown')
+                : (_orderDetails?['sellerStatus']?.toString() ?? 'Unknown')),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMessageInput() {
+  Widget _buildChatMessages(bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              : SafeJetColors.lightCardBorder,
+        ),
+      ),
+      child: Column(
+        children: _messages.map((message) => _buildMessageBubble(message, isDark)).toList(),
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(Map<String, dynamic> message, bool isDark) {
+    final isSystem = message['messageType'] == 'SYSTEM';
+    final isSender = !isSystem &&
+        (widget.isBuyer
+            ? message['messageType'] == 'BUYER'
+            : message['messageType'] == 'SELLER');
+
+    if (isSystem) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: SafeJetColors.warning.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: SafeJetColors.warning,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message['message'],
+                style: TextStyle(
+                  color: SafeJetColors.warning,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: isSender ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: [
+          if (!isSender) ...[
+            CircleAvatar(
+              backgroundColor: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+              radius: 16,
+              child: Text(
+                widget.userName[0].toUpperCase(),
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isSender
+                    ? SafeJetColors.primary
+                    : isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        : SafeJetColors.lightCardBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: !isSender
+                    ? Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      )
+                    : null,
+              ),
+              child: Column(
+                crossAxisAlignment:
+                    isSender ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message['message'],
+                    style: TextStyle(
+                      color: isSender
+                          ? Colors.white
+                          : isDark
+                              ? Colors.white
+                              : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('HH:mm').format(
+                          DateTime.parse(message['createdAt']),
+                        ),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isSender
+                              ? Colors.white70
+                              : isDark
+                                  ? Colors.grey[400]
+                                  : SafeJetColors.lightTextSecondary,
+                        ),
+                      ),
+                      if (isSender) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          message['isRead']
+                              ? Icons.done_all
+                              : message['isDelivered']
+                                  ? Icons.done_all
+                                  : Icons.done,
+                          size: 12,
+                          color: message['isRead']
+                              ? SafeJetColors.success
+                              : isSender
+                                  ? Colors.white70
+                                  : Colors.grey[400],
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isSender) ...[
+            const SizedBox(width: 8),
+            CircleAvatar(
+              backgroundColor: SafeJetColors.primary,
+              radius: 16,
+              child: Text(
+                'You',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageInput(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? SafeJetColors.primaryBackground
+            : SafeJetColors.lightBackground,
         border: Border(
           top: BorderSide(
-            color: Colors.grey[300]!,
-            width: 1,
+            color: isDark
+                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                : SafeJetColors.lightCardBorder,
           ),
         ),
       ),
@@ -213,28 +430,114 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
               controller: _messageController,
               decoration: InputDecoration(
                 hintText: 'Type a message...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
                 filled: true,
-                fillColor: Colors.grey[100],
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+                fillColor: isDark
+                    ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                    : SafeJetColors.lightCardBackground,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: SafeJetColors.primary,
+                  ),
                 ),
               ),
+              maxLines: null,
+              textCapitalization: TextCapitalization.sentences,
             ),
           ),
           const SizedBox(width: 8),
-          IconButton(
-            onPressed: _sendMessage,
-            icon: const Icon(Icons.send),
-            color: SafeJetColors.primary,
+          Container(
+            decoration: BoxDecoration(
+              color: SafeJetColors.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              onPressed: () async {
+                if (_messageController.text.trim().isNotEmpty) {
+                  await _sendMessage();
+                }
+              },
+              icon: const Icon(Icons.send),
+              color: Colors.white,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildDetailRow(String label, String value, bool isDark, {Color? statusColor}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: isDark
+                  ? Colors.grey[400]
+                  : SafeJetColors.lightTextSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: statusColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _sendMessage() async {
+    try {
+      await _p2pService.sendMessage(
+        widget.trackingId,
+        _messageController.text.trim(),
+      );
+      _messageController.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send message: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return SafeJetColors.warning;
+      case 'completed':
+        return SafeJetColors.success;
+      case 'cancelled':
+        return Colors.red;
+      case 'disputed':
+        return Colors.orange;
+      default:
+        return SafeJetColors.warning;
+    }
   }
 
   @override

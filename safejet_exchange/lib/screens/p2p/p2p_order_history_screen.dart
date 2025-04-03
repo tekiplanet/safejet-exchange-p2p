@@ -696,6 +696,8 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
       MaterialPageRoute(
         builder: (context) => P2PChatScreen(
           orderId: order['id'],
+          trackingId: order['trackingId'],
+          isBuyer: order['isBuyer'],
           userName: order['counterparty'],
         ),
       ),
