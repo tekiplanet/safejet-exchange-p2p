@@ -5,6 +5,8 @@ import '../services/auth_service.dart';
 import 'api_client.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import '../config/api_config.dart';
 
 class P2PService {
   late final Dio _dio;
@@ -12,6 +14,7 @@ class P2PService {
   final storage = const FlutterSecureStorage();
   Timer? _pollTimer;
   final _orderUpdateController = StreamController<Map<String, dynamic>>.broadcast();
+  IO.Socket? _chatSocket;
 
   P2PService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
@@ -433,4 +436,112 @@ class P2PService {
   }
 
   Stream<Map<String, dynamic>> get orderUpdates => _orderUpdateController.stream;
+
+  Future<void> connectToChat() async {
+    if (_chatSocket != null) return;
+
+    final token = await storage.read(key: 'token');
+    if (token == null) return;
+
+    _chatSocket = IO.io('${ApiConfig.baseUrl}/p2p/chat', 
+      IO.OptionBuilder()
+        .setTransports(['websocket'])
+        .setQuery({'token': token})
+        .setReconnectionDelay(2000)
+        .enableReconnection()
+        .build()
+    );
+
+    _chatSocket?.onConnect((_) {
+      print('Connected to chat socket');
+    });
+
+    _chatSocket?.onDisconnect((_) {
+      print('Disconnected from chat socket');
+    });
+
+    _chatSocket?.onError((error) {
+      print('Socket error: $error');
+    });
+  }
+
+  void joinOrderChat(String orderId) {
+    _chatSocket?.emit('joinOrder', orderId);
+  }
+
+  void listenToMessages(String orderId, Function(Map<String, dynamic>) onMessage) {
+    _chatSocket?.on('chatUpdate', (data) {
+      if (data['orderId'] == orderId) {
+        onMessage(data);
+      }
+    });
+  }
+
+  void listenToDeliveryStatus(String orderId, Function(String) onDelivered) {
+    _chatSocket?.on('messageDelivered', (data) {
+      onDelivered(data['messageId']);
+    });
+  }
+
+  void listenToReadStatus(String orderId, Function(String) onRead) {
+    _chatSocket?.on('messageRead', (data) {
+      onRead(data['messageId']);
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getOrderMessages(String orderId) async {
+    try {
+      final response = await _dio.get(
+        '/p2p/chat/$orderId/messages',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      return List<Map<String, dynamic>>.from(response.data);
+    } catch (e) {
+      print('Error getting order messages: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> sendMessage(String orderId, String message) async {
+    try {
+      final response = await _dio.post(
+        '/p2p/chat/$orderId/message',
+        data: {'message': message},
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      return response.data;
+    } catch (e) {
+      print('Error sending message: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> markMessageAsDelivered(String messageId) async {
+    try {
+      await _dio.post(
+        '/p2p/chat/message/$messageId/delivered',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+    } catch (e) {
+      print('Error marking message as delivered: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> markMessageAsRead(String messageId) async {
+    try {
+      await _dio.post(
+        '/p2p/chat/message/$messageId/read',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+    } catch (e) {
+      print('Error marking message as read: $e');
+      rethrow;
+    }
+  }
+
+  void disposeChatSocket() {
+    _chatSocket?.dispose();
+    _chatSocket = null;
+  }
 } 

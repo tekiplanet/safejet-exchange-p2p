@@ -20,6 +20,8 @@ import { PaymentMethodField } from '../payment-methods/entities/payment-method-f
 import { Dispute } from './entities/dispute.entity';
 import { P2POrderGateway } from './gateways/p2p-order.gateway';
 import { JwtModule } from '@nestjs/jwt';
+import { P2PChatMessage } from './entities/p2p-chat-message.entity';
+import { P2PChatGateway } from './gateways/p2p-chat.gateway';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { JwtModule } from '@nestjs/jwt';
       Order,
       PaymentMethodField,
       Dispute,
+      P2PChatMessage,
     ]),
     WalletModule,
     P2PSettingsModule,
@@ -47,7 +50,7 @@ import { JwtModule } from '@nestjs/jwt';
     }),
   ],
   controllers: [P2PController],
-  providers: [P2PService, P2POrderGateway],
+  providers: [P2PService, P2POrderGateway, P2PChatGateway],
   exports: [P2PService],
 })
 export class P2PModule {} 

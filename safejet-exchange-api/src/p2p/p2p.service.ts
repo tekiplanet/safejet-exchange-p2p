@@ -19,6 +19,8 @@ import { EmailService } from '../email/email.service';
 import { PaymentMethodField } from '../payment-methods/entities/payment-method-field.entity';
 import { Dispute } from './entities/dispute.entity';
 import { P2POrderGateway } from './gateways/p2p-order.gateway';
+import { P2PChatMessage, MessageType } from './entities/p2p-chat-message.entity';
+import { P2PChatGateway } from './gateways/p2p-chat.gateway';
 
 @Injectable()
 export class P2PService {
@@ -51,6 +53,9 @@ export class P2PService {
     @InjectRepository(PaymentMethodField)
     private readonly paymentMethodFieldRepository: Repository<PaymentMethodField>,
     private readonly orderGateway: P2POrderGateway,
+    @InjectRepository(P2PChatMessage)
+    private chatMessageRepository: Repository<P2PChatMessage>,
+    private chatGateway: P2PChatGateway,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -870,6 +875,14 @@ export class P2PService {
       );
     }
 
+    // Create initial system message with offer terms
+    if (order) {
+      await this.createSystemMessage(
+        order.id,
+        offer.terms || 'No specific terms provided.'
+      );
+    }
+
     return savedOrder;
   }
 
@@ -1269,5 +1282,72 @@ export class P2PService {
   private async returnFundsToSeller(order: Order) {
     // Implementation for returning funds from escrow to seller
     // This would involve your actual business logic for handling the return
+  }
+
+  // New methods for chat functionality
+  async createSystemMessage(orderId: string, message: string): Promise<P2PChatMessage> {
+    const chatMessage = this.chatMessageRepository.create({
+      orderId,
+      messageType: MessageType.SYSTEM,
+      message,
+      isDelivered: true, // System messages are always delivered
+      isRead: false,
+    });
+
+    const savedMessage = await this.chatMessageRepository.save(chatMessage);
+    await this.chatGateway.emitChatUpdate(orderId, savedMessage);
+    return savedMessage;
+  }
+
+  async createUserMessage(
+    orderId: string,
+    userId: string,
+    message: string,
+    isBuyer: boolean,
+  ): Promise<P2PChatMessage> {
+    const chatMessage = this.chatMessageRepository.create({
+      orderId,
+      senderId: userId,
+      messageType: isBuyer ? MessageType.BUYER : MessageType.SELLER,
+      message,
+      isDelivered: false,
+      isRead: false,
+    });
+
+    const savedMessage = await this.chatMessageRepository.save(chatMessage);
+    await this.chatGateway.emitChatUpdate(orderId, savedMessage);
+    return savedMessage;
+  }
+
+  async getOrderMessages(orderId: string): Promise<P2PChatMessage[]> {
+    return this.chatMessageRepository.find({
+      where: { orderId },
+      order: { createdAt: 'ASC' },
+      relations: ['sender'],
+    });
+  }
+
+  async markMessageAsDelivered(messageId: string): Promise<void> {
+    const message = await this.chatMessageRepository.findOne({
+      where: { id: messageId },
+    });
+    
+    if (message) {
+      message.isDelivered = true;
+      await this.chatMessageRepository.save(message);
+      await this.chatGateway.emitMessageDelivered(message.orderId, messageId);
+    }
+  }
+
+  async markMessageAsRead(messageId: string): Promise<void> {
+    const message = await this.chatMessageRepository.findOne({
+      where: { id: messageId },
+    });
+    
+    if (message) {
+      message.isRead = true;
+      await this.chatMessageRepository.save(message);
+      await this.chatGateway.emitMessageRead(message.orderId, messageId);
+    }
   }
 } 

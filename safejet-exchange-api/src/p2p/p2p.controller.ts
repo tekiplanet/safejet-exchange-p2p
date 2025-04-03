@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Post, Body, Param, Request } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Post, Body, Param, Request, BadRequestException } from '@nestjs/common';
 import { P2PService } from './p2p.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
@@ -223,5 +223,52 @@ export class P2PController {
     @Body() disputeData: { reason: string },
   ) {
     return this.p2pService.disputeOrder(trackingId, userId, disputeData.reason);
+  }
+
+  @Get('chat/:orderId/messages')
+  @UseGuards(JwtAuthGuard)
+  async getOrderMessages(@Param('orderId') orderId: string) {
+    return this.p2pService.getOrderMessages(orderId);
+  }
+
+  @Post('chat/:orderId/message')
+  @UseGuards(JwtAuthGuard)
+  async sendMessage(
+    @GetUser('id') userId: string,
+    @Param('orderId') orderId: string,
+    @Body() body: { message: string },
+  ) {
+    const order = await this.p2pService.getOrderByTrackingId(orderId);
+    if (!order) {
+      throw new BadRequestException('Order not found');
+    }
+
+    const isBuyer = order.buyerId === userId;
+    const isSeller = order.sellerId === userId;
+
+    if (!isBuyer && !isSeller) {
+      throw new BadRequestException('Unauthorized to send message in this order');
+    }
+
+    return this.p2pService.createUserMessage(
+      order.id,
+      userId,
+      body.message,
+      isBuyer,
+    );
+  }
+
+  @Post('chat/message/:messageId/delivered')
+  @UseGuards(JwtAuthGuard)
+  async markAsDelivered(@Param('messageId') messageId: string) {
+    await this.p2pService.markMessageAsDelivered(messageId);
+    return { success: true };
+  }
+
+  @Post('chat/message/:messageId/read')
+  @UseGuards(JwtAuthGuard)
+  async markAsRead(@Param('messageId') messageId: string) {
+    await this.p2pService.markMessageAsRead(messageId);
+    return { success: true };
   }
 } 
