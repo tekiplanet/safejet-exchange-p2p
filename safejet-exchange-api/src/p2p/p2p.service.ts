@@ -753,7 +753,7 @@ export class P2PService {
       paymentMetadata,
       trackingId,
       paymentDeadline,
-      // confirmationDeadline will be set later when the order is marked as paid
+      price: createOrderDto.calculatedPrice, // Store the price user saw and agreed to
     });
 
     const savedOrder = await this.orderRepository.save(order);

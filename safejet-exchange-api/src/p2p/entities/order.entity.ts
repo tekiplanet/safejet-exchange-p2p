@@ -74,4 +74,7 @@ export class Order {
 
   @Column({ type: 'timestamp', nullable: true })
   confirmationDeadline: Date;
+
+  @Column('decimal', { precision: 24, scale: 8, nullable: true })
+  price: number;
 } 

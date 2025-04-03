@@ -1711,6 +1711,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
         'paymentMetadata': _selectedPaymentMethod,
         'assetAmount': _isCurrencyMode ? _calculatedAssetAmount : double.parse(_amountController.text),
         'currencyAmount': _isCurrencyMode ? double.parse(_amountController.text) : _calculatedCurrencyAmount,
+        'calculatedPrice': offerDetails!['calculatedPrice'],
         'buyerStatus': 'pending',
         'sellerStatus': 'pending',
       };

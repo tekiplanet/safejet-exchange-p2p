@@ -34,6 +34,9 @@ export class CreateOrderDto {
   @IsNotEmpty()
   currencyAmount: number;
 
+  @IsNotEmpty()
+  calculatedPrice: number;
+
   @IsEnum(['pending', 'paid', 'disputed', 'completed', 'cancelled'])
   buyerStatus: string;
 
