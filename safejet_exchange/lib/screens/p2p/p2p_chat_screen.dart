@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:convert';
+import '../../widgets/image_viewer.dart';
 
 class P2PChatScreen extends StatefulWidget {
   final String orderId;
@@ -326,33 +327,48 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
                                   margin: EdgeInsets.only(bottom: 8),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
-                                    child: Image.network(
-                                      '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
-                                      width: 200,
-                                      fit: BoxFit.cover,
-                                      loadingBuilder: (context, child, progress) {
-                                        if (progress == null) return child;
-                                        return Container(
-                                          width: 200,
-                                          height: 150,
-                                          child: Center(
-                                            child: CircularProgressIndicator(
-                                              value: progress.expectedTotalBytes != null
-                                                  ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                                  : null,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ImageViewer(
+                                              imageUrl: '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
                                             ),
                                           ),
                                         );
                                       },
-                                      errorBuilder: (context, error, stackTrace) {
-                                        print('Error loading image: $error');
-                                        return Container(
+                                      child: Hero(
+                                        tag: message['attachmentUrl'],
+                                        child: Image.network(
+                                          '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
                                           width: 200,
-                                          height: 150,
-                                          color: Colors.grey[300],
-                                          child: Icon(Icons.error),
-                                        );
-                                      },
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (context, child, progress) {
+                                            if (progress == null) return child;
+                                            return Container(
+                                              width: 200,
+                                              height: 150,
+                                              child: Center(
+                                                child: CircularProgressIndicator(
+                                                  value: progress.expectedTotalBytes != null
+                                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                                      : null,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          errorBuilder: (context, error, stackTrace) {
+                                            print('Error loading image: $error');
+                                            return Container(
+                                              width: 200,
+                                              height: 150,
+                                              color: Colors.grey[300],
+                                              child: Icon(Icons.error),
+                                            );
+                                          },
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
