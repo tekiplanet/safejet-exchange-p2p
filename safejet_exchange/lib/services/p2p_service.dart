@@ -380,18 +380,24 @@ class P2PService {
     }
   }
 
-  Future<void> disputeOrder(String trackingId, String reason) async {
+  Future<void> disputeOrder(String trackingId, String reasonType, String reason) async {
     try {
       final response = await _dio.post(
         '/p2p/orders/$trackingId/dispute',
-        data: {'reason': reason},
+        data: {
+          'reasonType': reasonType,
+          'reason': reason,
+        },
         options: Options(headers: await _getAuthHeaders()),
       );
       print('Dispute order response: ${response.data}');
+      
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Failed to dispute order');
+      }
     } catch (e) {
       print('Error disputing order: $e');
-      _handleError(e);
-      rethrow;
+      throw Exception('Failed to dispute order: $e');
     }
   }
 

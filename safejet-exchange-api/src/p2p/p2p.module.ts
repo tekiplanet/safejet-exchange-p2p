@@ -24,6 +24,9 @@ import { P2PChatMessage } from './entities/p2p-chat-message.entity';
 import { P2PChatGateway } from './gateways/p2p-chat.gateway';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { FileService } from '../common/services/file.service';
+import { P2PDispute } from './entities/p2p-dispute.entity';
+import { P2PDisputeMessage } from './entities/p2p-dispute-message.entity';
+import { P2PDisputeGateway } from './gateways/p2p-dispute.gateway';
 
 @Module({
   imports: [
@@ -42,6 +45,8 @@ import { FileService } from '../common/services/file.service';
       PaymentMethodField,
       Dispute,
       P2PChatMessage,
+      P2PDispute,
+      P2PDisputeMessage,
     ]),
     WalletModule,
     P2PSettingsModule,
@@ -62,6 +67,7 @@ import { FileService } from '../common/services/file.service';
     P2POrderGateway,
     P2PChatGateway,
     FileService,
+    P2PDisputeGateway,
   ],
   exports: [P2PService],
 })

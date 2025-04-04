@@ -15,9 +15,23 @@ import '../../services/p2p_service.dart';
 import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'p2p_screen.dart';
+import 'dart:convert';
+
+// Add this enum at the top of the file after the imports
+enum DisputeReasonType {
+  PAYMENT_ISSUE('payment_issue'),
+  FRAUD('fraud'),
+  TECHNICAL_ISSUE('technical_issue'),
+  BUYER_NOT_PAID('buyer_not_paid'),
+  SELLER_NOT_RELEASED('seller_not_released'),
+  WRONG_AMOUNT('wrong_amount'),
+  OTHER('other');
+
+  final String value;
+  const DisputeReasonType(this.value);
+}
 
 // Move AnimatedDialog outside the state class
 class AnimatedDialog extends StatelessWidget {
@@ -66,6 +80,300 @@ class CustomPageRoute extends PageRouteBuilder {
             );
           },
         );
+}
+
+// Add this class after the CustomPageRoute class
+class PaymentConfirmationDialog extends StatefulWidget {
+  final String trackingId;
+  final Map<String, dynamic> orderDetails;
+  final bool isDark;
+  final Function formatAmount;
+  final P2PService p2pService;
+
+  const PaymentConfirmationDialog({
+    Key? key,
+    required this.trackingId,
+    required this.orderDetails,
+    required this.isDark,
+    required this.formatAmount,
+    required this.p2pService,
+  }) : super(key: key);
+
+  @override
+  State<PaymentConfirmationDialog> createState() => _PaymentConfirmationDialogState();
+}
+
+class _PaymentConfirmationDialogState extends State<PaymentConfirmationDialog> {
+  bool isSubmitting = false;
+  final hasAgreed = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    hasAgreed.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      child: Scaffold(
+        backgroundColor: widget.isDark ? SafeJetColors.primaryBackground : Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              Icons.close,
+              color: widget.isDark ? Colors.white : Colors.black,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            'Confirm Payment',
+            style: TextStyle(
+              color: widget.isDark ? Colors.white : Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Please confirm your payment details:',
+                      style: TextStyle(
+                        color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    _buildConfirmationDetailCard(
+                      title: 'Amount',
+                      value: '${widget.formatAmount(widget.orderDetails['currencyAmount'])} ${widget.orderDetails['offer']['currency']}',
+                      icon: Icons.account_balance_wallet,
+                      isDark: widget.isDark,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildConfirmationDetailCard(
+                      title: 'Beneficiary',
+                      value: widget.orderDetails['seller']['fullName'],
+                      icon: Icons.person_outline,
+                      isDark: widget.isDark,
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: SafeJetColors.warning.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: SafeJetColors.warning.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: SafeJetColors.warning,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Please ensure you have made the payment before confirming. This action cannot be undone.',
+                              style: TextStyle(
+                                color: widget.isDark ? Colors.white : Colors.black,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: widget.isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: hasAgreed.value,
+                              onChanged: isSubmitting 
+                                ? null 
+                                : (newValue) {
+                                    setState(() {
+                                      hasAgreed.value = newValue ?? false;
+                                    });
+                                  },
+                              activeColor: SafeJetColors.secondaryHighlight,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'I confirm that I have paid the full amount to the beneficiary',
+                              style: TextStyle(
+                                color: widget.isDark ? Colors.white : Colors.black,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: widget.isDark 
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: widget.isDark ? Colors.white : Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: (!hasAgreed.value || isSubmitting) 
+                        ? null 
+                        : () async {
+                            setState(() {
+                              isSubmitting = true;
+                            });
+                            try {
+                              await widget.p2pService.confirmOrderPayment(widget.trackingId);
+                              if (mounted) {
+                                Navigator.of(context).pop(true);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Payment confirmed successfully')),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                setState(() {
+                                  isSubmitting = false;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(e.toString())),
+                                );
+                              }
+                            }
+                          },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.secondaryHighlight,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                            ),
+                          )
+                        : const Text(
+                            'Confirm Payment',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConfirmationDetailCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class P2POrderConfirmationScreen extends StatefulWidget {
@@ -1523,216 +1831,19 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 onPressed: () {
                   showDialog<bool>(
                     context: context,
-                    builder: (context) => Dialog.fullscreen(
-                      child: Scaffold(
-                        backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
-                        appBar: AppBar(
-                          backgroundColor: Colors.transparent,
-                          elevation: 0,
-                          leading: IconButton(
-                            icon: Icon(
-                              Icons.close,
-                              color: isDark ? Colors.white : Colors.black,
-                            ),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          title: Text(
-                            'Confirm Payment',
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        body: StatefulBuilder(
-                          builder: (context, setState) {
-                            return Column(
-                              children: [
-                                Expanded(
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.all(24),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Please confirm your payment details:',
-                                          style: TextStyle(
-                                            color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 32),
-                                        _buildConfirmationDetailCard(
-                                          title: 'Amount',
-                                          value: '${_formatAmount(_orderDetails!['currencyAmount'])} ${_orderDetails!['offer']['currency']}',
-                                          icon: Icons.account_balance_wallet,
-                                          isDark: isDark,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        _buildConfirmationDetailCard(
-                                          title: 'Beneficiary',
-                                          value: _orderDetails!['seller']['fullName'],
-                                          icon: Icons.person_outline,
-                                          isDark: isDark,
-                                        ),
-                                        const SizedBox(height: 24),
-                                        Container(
-                                          padding: const EdgeInsets.all(16),
-                                          decoration: BoxDecoration(
-                                            color: SafeJetColors.warning.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(
-                                              color: SafeJetColors.warning.withOpacity(0.3),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.warning_amber_rounded,
-                                                color: SafeJetColors.warning,
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Text(
-                                                  'Please ensure you have made the payment before confirming. This action cannot be undone.',
-                                                  style: TextStyle(
-                                                    color: isDark ? Colors.white : Colors.black,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(height: 24),
-                                        Container(
-                                          padding: const EdgeInsets.all(16),
-                                          decoration: BoxDecoration(
-                                            color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              SizedBox(
-                                                width: 24,
-                                                height: 24,
-                                                child: Checkbox(
-                                                  value: hasAgreed.value,
-                                                  onChanged: isSubmitting 
-                                                    ? null 
-                                                    : (newValue) {
-                                                        setState(() {
-                                                          hasAgreed.value = newValue ?? false;
-                                                        });
-                                                      },
-                                                  activeColor: SafeJetColors.secondaryHighlight,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Text(
-                                                  'I confirm that I have paid the full amount to the beneficiary',
-                                                  style: TextStyle(
-                                                    color: isDark ? Colors.white : Colors.black,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextButton(
-                                          onPressed: () => Navigator.pop(context),
-                                          style: TextButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(vertical: 16),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                              side: BorderSide(
-                                                color: isDark 
-                                                    ? Colors.white.withOpacity(0.1)
-                                                    : Colors.grey[300]!,
-                                              ),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            'Cancel',
-                                            style: TextStyle(
-                                              color: isDark ? Colors.white : Colors.black,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: ElevatedButton(
-                                          onPressed: (!hasAgreed.value || isSubmitting) 
-                                            ? null 
-                                            : () async {
-                                                setState(() {
-                                                  isSubmitting = true;
-                                                });
-                                                try {
-                                                  await _p2pService.confirmOrderPayment(widget.trackingId);
-                                                  if (mounted) {
-                                                    Navigator.of(context).pop(true);
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Payment confirmed successfully')),
-                                                    );
-                                                  }
-                                                } catch (e) {
-                                                  if (mounted) {
-                                                    setState(() {
-                                                      isSubmitting = false;
-                                                    });
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(content: Text(e.toString())),
-                                                    );
-                                                  }
-                                                }
-                                              },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: SafeJetColors.secondaryHighlight,
-                                            foregroundColor: Colors.black,
-                                            padding: const EdgeInsets.symmetric(vertical: 16),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                          ),
-                                          child: isSubmitting
-                                            ? const SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                                                ),
-                                              )
-                                            : const Text(
-                                                'Confirm Payment',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
+                    builder: (context) => PaymentConfirmationDialog(
+                      trackingId: widget.trackingId,
+                      orderDetails: _orderDetails!,
+                      isDark: isDark,
+                      formatAmount: (amount) {
+                        // Determine if this is a crypto or fiat amount and format accordingly
+                        if (_orderDetails!['offer']['type'] == 'CRYPTO') {
+                          return _formatCryptoAmount(double.parse(amount.toString()));
+                        } else {
+                          return _formatFiatAmount(double.parse(amount.toString()));
+                        }
+                      },
+                      p2pService: _p2pService,
                     ),
                   );
                 },
@@ -1744,7 +1855,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   ),
                 ),
                 child: const Text('I Have Paid'),
-              ),
+              ),              
             ),
           ],
         ),
@@ -1789,18 +1900,19 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 ),
                 child: const Text('Cancel Order'),
               ),
-            ),
+            ),   
             const SizedBox(width: 12),
+
             Expanded(
               child: ElevatedButton(
                 onPressed: () => _showDisputeDialog(),
-                style: ElevatedButton.styleFrom(
+                                              style: ElevatedButton.styleFrom(
                   backgroundColor: SafeJetColors.error,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                              ),
                 child: const Text('Raise Dispute'),
               ),
             ),
@@ -1919,16 +2031,29 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     return const SizedBox.shrink(); // Default case, no buttons
   }
 
- void _showDisputeDialog() {
-  final TextEditingController reasonController = TextEditingController();
-  bool isSubmitting = false;
 
+  void _showDisputeDialog() {
+    final TextEditingController reasonController = TextEditingController();
+  bool isSubmitting = false;
   bool hasConfirmedDispute = false;
+  DisputeReasonType selectedReasonType = DisputeReasonType.OTHER;
+
   final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
   final isDark = themeProvider.isDarkMode;
 
+  // Determine available reasons based on user role
+  List<DisputeReasonType> availableReasons = DisputeReasonType.values.where((reason) {
+    if (_isCurrentUserBuyer() && reason == DisputeReasonType.BUYER_NOT_PAID) {
+      return false;
+    }
+    if (!_isCurrentUserBuyer() && reason == DisputeReasonType.SELLER_NOT_RELEASED) {
+      return false;
+    }
+    return true;
+  }).toList();
+
   showDialog<bool>(
-    context: context,
+      context: context,
     builder: (context) => Dialog.fullscreen(
       child: Scaffold(
         backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
@@ -1956,13 +2081,13 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               children: [
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                         Text(
                           'Please provide details about your dispute:',
-                          style: TextStyle(
+                style: TextStyle(
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
                             fontSize: 16,
                           ),
@@ -1997,6 +2122,82 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                           ),
                         ),
                         const SizedBox(height: 24),
+                        
+                        // Add dropdown for selecting dispute reason type
+                        Text(
+                          'Dispute Reason Type',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: isDark 
+                              ? Colors.black.withOpacity(0.3) 
+                              : Colors.grey[100],
+                            border: Border.all(
+                              color: isDark
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.grey[300]!,
+                            ),
+                          ),
+                          child: DropdownButtonFormField<DisputeReasonType>(
+                            value: selectedReasonType,
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              border: InputBorder.none,
+                            ),
+                            dropdownColor: isDark ? Colors.grey[800] : Colors.white,
+                            items: availableReasons.map((reason) {
+                              String displayText = '';
+                              switch (reason) {
+                                case DisputeReasonType.PAYMENT_ISSUE:
+                                  displayText = 'Payment Issue';
+                                  break;
+                                case DisputeReasonType.FRAUD:
+                                  displayText = 'Fraud';
+                                  break;
+                                case DisputeReasonType.TECHNICAL_ISSUE:
+                                  displayText = 'Technical Issue';
+                                  break;
+                                case DisputeReasonType.BUYER_NOT_PAID:
+                                  displayText = 'Buyer Has Not Paid';
+                                  break;
+                                case DisputeReasonType.SELLER_NOT_RELEASED:
+                                  displayText = 'Seller Has Not Released Coin';
+                                  break;
+                                case DisputeReasonType.WRONG_AMOUNT:
+                                  displayText = 'Wrong Amount';
+                                  break;
+                                case DisputeReasonType.OTHER:
+                                  displayText = 'Other';
+                                  break;
+                              }
+                              
+                              return DropdownMenuItem<DisputeReasonType>(
+                                value: reason,
+                                child: Text(
+                                  displayText,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                selectedReasonType = value!;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Keep existing text field for detailed reason
                         Text(
                           'Dispute Reason',
                           style: TextStyle(
@@ -2006,17 +2207,17 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                           ),
                         ),
                         const SizedBox(height: 12),
-                        TextField(
-                          controller: reasonController,
-                          maxLines: 4,
-                          decoration: InputDecoration(
+              TextField(
+                controller: reasonController,
+                maxLines: 4,
+                decoration: InputDecoration(
                             hintText: 'Explain your issue in detail...',
                             filled: true,
                             fillColor: isDark 
                               ? Colors.black.withOpacity(0.3) 
                               : Colors.grey[100],
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
                                 color: isDark
                                   ? Colors.white.withOpacity(0.1)
@@ -2077,7 +2278,6 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                             ],
                           ),
                         ),
-
                       ],
                     ),
                   ),
@@ -2085,18 +2285,18 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context),
+                children: [
+                  Expanded(
+                    child: TextButton(
+            onPressed: () => Navigator.pop(context),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                               side: BorderSide(
                                 color: isDark 
-                                  ? Colors.white.withOpacity(0.1)
-                                  : Colors.grey[300]!,
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[300]!,
                               ),
                             ),
                           ),
@@ -2110,38 +2310,39 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                         ),
                       ),
                       const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton(
+                  Expanded(
+                    child: ElevatedButton(
                           onPressed: isSubmitting || reasonController.text.trim().isEmpty || !hasConfirmedDispute
                             ? null 
                             : () async {
                                 setState(() {
                                   isSubmitting = true;
                                 });
-                                try {
-                                  await _p2pService.disputeOrder(
-                                    widget.trackingId,
-                                    reasonController.text.trim(),
-                                  );
-                                  if (mounted) {
+                        try {
+                          await _p2pService.disputeOrder(
+                            widget.trackingId,
+                                    selectedReasonType.value,
+                            reasonController.text.trim(),
+                          );
+                          if (mounted) {
                                     Navigator.of(context).pop(true);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Dispute raised successfully')),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Dispute raised successfully')),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
                                     setState(() {
                                       isSubmitting = false;
                                     });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(e.toString())),
-                                    );
-                                  }
-                                }
-                              },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: SafeJetColors.error,
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.error,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -2163,19 +2364,19 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                        ),
-                      ),
-                    ],
+                    ),
+          ),
+        ],
                   ),
-                ),
-              ],
+              ),
+            ],
             );
           },
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // Helper method to determine if current user is the seller
   bool _isCurrentUserSeller() {
@@ -2231,55 +2432,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     return DateTime.now().difference(createdAt) > paymentTimeLimit;
   }
 
-  Widget _buildConfirmationDetailCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  bool _isCurrentUserBuyer() {
+    return _orderDetails?['buyerId'] == _userId;
   }
 
   String _formatAmount(dynamic amount) {
@@ -2306,9 +2460,5 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     }
     
     return wholeNumber;
-  }
-
-  bool _isCurrentUserBuyer() {
-    return _orderDetails?['buyerId'] == _userId;
   }
 } 

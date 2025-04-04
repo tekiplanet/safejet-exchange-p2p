@@ -22,6 +22,9 @@ import { P2POrderGateway } from './gateways/p2p-order.gateway';
 import { P2PChatMessage, MessageType } from './entities/p2p-chat-message.entity';
 import { P2PChatGateway } from './gateways/p2p-chat.gateway';
 import { FileService } from '../common/services/file.service';
+import { P2PDispute, DisputeReasonType, DisputeStatus } from './entities/p2p-dispute.entity';
+import { P2PDisputeMessage, DisputeMessageSenderType } from './entities/p2p-dispute-message.entity';
+import { P2PDisputeGateway } from './gateways/p2p-dispute.gateway';
 
 @Injectable()
 export class P2PService {
@@ -59,6 +62,12 @@ export class P2PService {
     @Inject(forwardRef(() => P2PChatGateway))
     private chatGateway: P2PChatGateway,
     private readonly fileService: FileService,
+    @InjectRepository(P2PDispute)
+    private readonly p2pDisputeRepository: Repository<P2PDispute>,
+    @InjectRepository(P2PDisputeMessage)
+    private readonly disputeMessageRepository: Repository<P2PDisputeMessage>,
+    @Inject(forwardRef(() => P2PDisputeGateway))
+    private disputeGateway: P2PDisputeGateway,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -1466,5 +1475,268 @@ export class P2PService {
     }
 
     return savedMessage;
+  }
+
+  async createDispute(
+    trackingId: string,
+    userId: string,
+    reasonType: string,
+    reason: string,
+    evidence?: any
+  ): Promise<P2PDispute> {
+    const order = await this.orderRepository.findOne({
+      where: { trackingId },
+      relations: ['buyer', 'seller'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Verify user is either buyer or seller
+    if (order.buyerId !== userId && order.sellerId !== userId) {
+      throw new ForbiddenException('Not authorized to dispute this order');
+    }
+
+    // Verify order is in disputable state
+    if (order.buyerStatus === 'completed' || order.sellerStatus === 'completed') {
+      throw new BadRequestException('Cannot dispute completed order');
+    }
+
+    if (order.buyerStatus === 'cancelled' || order.sellerStatus === 'cancelled') {
+      throw new BadRequestException('Cannot dispute cancelled order');
+    }
+
+    // Check if dispute already exists
+    const existingDispute = await this.p2pDisputeRepository.findOne({
+      where: { orderId: order.id },
+    });
+
+    if (existingDispute) {
+      throw new BadRequestException('Dispute already exists for this order');
+    }
+
+    // Update order status
+    if (userId === order.buyerId) {
+      order.buyerStatus = 'disputed';
+    } else {
+      order.sellerStatus = 'disputed';
+    }
+
+    await this.orderRepository.save(order);
+
+    // Create dispute record
+    const dispute = this.p2pDisputeRepository.create({
+      orderId: order.id,
+      initiatorId: userId,
+      respondentId: userId === order.buyerId ? order.sellerId : order.buyerId,
+      reason,
+      reasonType: reasonType as DisputeReasonType,
+      status: DisputeStatus.PENDING,
+      evidence,
+    });
+
+    const savedDispute = await this.p2pDisputeRepository.save(dispute);
+
+    // Create system message
+    await this.createDisputeSystemMessage(
+      savedDispute.id,
+      `Dispute opened by ${userId === order.buyerId ? 'buyer' : 'seller'}: ${reason}`
+    );
+
+    // Emit order update
+    await this.orderGateway.emitOrderUpdate(
+      trackingId,
+      order.buyer.id,
+      order.seller.id,
+      order
+    );
+
+    return savedDispute;
+  }
+
+  async getDisputeByOrderId(orderId: string, userId: string): Promise<P2PDispute> {
+    const dispute = await this.p2pDisputeRepository.findOne({
+      where: { orderId },
+      relations: ['order', 'order.buyer', 'order.seller', 'initiator', 'respondent', 'admin'],
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found for this order');
+    }
+
+    // Check if user is authorized to view this dispute
+    if (
+      dispute.initiatorId !== userId &&
+      dispute.respondentId !== userId &&
+      dispute.adminId !== userId
+    ) {
+      throw new ForbiddenException('Not authorized to view this dispute');
+    }
+
+    return dispute;
+  }
+
+  async getDisputeById(disputeId: string, userId: string): Promise<P2PDispute> {
+    const dispute = await this.p2pDisputeRepository.findOne({
+      where: { id: disputeId },
+      relations: ['order', 'order.buyer', 'order.seller', 'initiator', 'respondent', 'admin'],
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Check if user is authorized to view this dispute
+    if (
+      dispute.initiatorId !== userId &&
+      dispute.respondentId !== userId &&
+      dispute.adminId !== userId
+    ) {
+      throw new ForbiddenException('Not authorized to view this dispute');
+    }
+
+    return dispute;
+  }
+
+  async getDisputeMessages(disputeId: string, userId: string): Promise<P2PDisputeMessage[]> {
+    const dispute = await this.p2pDisputeRepository.findOne({
+      where: { id: disputeId },
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Check if user is authorized to view messages
+    if (
+      dispute.initiatorId !== userId &&
+      dispute.respondentId !== userId &&
+      dispute.adminId !== userId
+    ) {
+      throw new ForbiddenException('Not authorized to view these messages');
+    }
+
+    return this.disputeMessageRepository.find({
+      where: { disputeId },
+      order: { createdAt: 'ASC' },
+      relations: ['sender'],
+    });
+  }
+
+  async sendDisputeMessage(
+    disputeId: string,
+    userId: string,
+    message: string,
+    attachment?: string
+  ): Promise<P2PDisputeMessage> {
+    const dispute = await this.p2pDisputeRepository.findOne({
+      where: { id: disputeId },
+      relations: ['initiator', 'respondent', 'order'],
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Check if user is authorized to send messages
+    if (
+      dispute.initiatorId !== userId &&
+      dispute.respondentId !== userId &&
+      dispute.adminId !== userId
+    ) {
+      throw new ForbiddenException('Not authorized to send messages in this dispute');
+    }
+
+    let attachmentUrl: string | undefined;
+    let attachmentType: string | undefined;
+    
+    if (attachment) {
+      try {
+        // Use the same file service as for chat attachments
+        attachmentUrl = await this.fileService.saveChatImage(attachment);
+        attachmentType = 'image';
+      } catch (error) {
+        console.error('Failed to save attachment:', error);
+        throw new BadRequestException('Invalid attachment');
+      }
+    }
+
+    const senderType = dispute.adminId === userId 
+      ? DisputeMessageSenderType.ADMIN 
+      : DisputeMessageSenderType.USER;
+
+    const disputeMessage = this.disputeMessageRepository.create({
+      disputeId,
+      senderId: userId,
+      senderType,
+      message,
+      attachmentUrl,
+      attachmentType,
+      isDelivered: false,
+      isRead: false,
+    });
+
+    const savedMessage = await this.disputeMessageRepository.save(disputeMessage);
+    
+    // Emit to websocket
+    await this.disputeGateway.emitDisputeMessageUpdate(disputeId, savedMessage);
+
+    return savedMessage;
+  }
+
+  private async createDisputeSystemMessage(
+    disputeId: string,
+    message: string
+  ): Promise<P2PDisputeMessage> {
+    const disputeMessage = this.disputeMessageRepository.create({
+      disputeId,
+      senderType: DisputeMessageSenderType.SYSTEM,
+      message,
+      isDelivered: true,
+      isRead: false,
+    });
+
+    const savedMessage = await this.disputeMessageRepository.save(disputeMessage);
+    await this.disputeGateway.emitDisputeMessageUpdate(disputeId, savedMessage);
+
+    return savedMessage;
+  }
+
+  async markDisputeMessageAsDelivered(messageId: string): Promise<void> {
+    const message = await this.disputeMessageRepository.findOne({
+      where: { id: messageId },
+    });
+    
+    if (message) {
+      message.isDelivered = true;
+      await this.disputeMessageRepository.save(message);
+      await this.disputeGateway.emitDisputeMessageUpdate(message.disputeId, message);
+    }
+  }
+
+  async markDisputeMessageAsRead(messageId: string): Promise<void> {
+    const message = await this.disputeMessageRepository.findOne({
+      where: { id: messageId },
+    });
+    
+    if (message) {
+      message.isRead = true;
+      await this.disputeMessageRepository.save(message);
+      await this.disputeGateway.emitDisputeMessageUpdate(message.disputeId, message);
+    }
+  }
+
+  async getOrdersByUser(userId: string): Promise<Order[]> {
+    return this.orderRepository.find({
+      where: [
+        { buyerId: userId },
+        { sellerId: userId }
+      ],
+      order: {
+        createdAt: 'DESC'
+      },
+      take: 10 // Limit to 10 most recent orders
+    });
   }
 } 

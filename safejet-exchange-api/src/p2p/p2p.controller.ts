@@ -10,6 +10,9 @@ import { Response } from 'express';
 import { createReadStream } from 'fs';
 import * as fs from 'fs';
 import { FileService } from '../common/services/file.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+import { DisputeReasonType } from './entities/p2p-dispute.entity';
 
 @Controller('p2p')
 export class P2PController {
@@ -283,5 +286,130 @@ export class P2PController {
     } catch (error) {
       throw new NotFoundException('Image not found');
     }
+  }
+
+  @Post('disputes/create/:trackingId')
+  @UseGuards(JwtAuthGuard)
+  async createDispute(
+    @Param('trackingId') trackingId: string,
+    @Body() body: { reasonType: string; reason: string; evidence?: any },
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    const { reasonType, reason, evidence } = body;
+
+    // Validate reason type
+    if (!Object.values(DisputeReasonType).includes(reasonType as DisputeReasonType)) {
+      throw new BadRequestException('Invalid reason type');
+    }
+
+    // Validate reason
+    if (!reason || reason.trim().length === 0) {
+      throw new BadRequestException('Reason is required');
+    }
+
+    return this.p2pService.createDispute(
+      trackingId,
+      userId,
+      reasonType,
+      reason,
+      evidence,
+    );
+  }
+
+  @Get('disputes/order/:trackingId')
+  @UseGuards(JwtAuthGuard)
+  async getDisputeByOrderId(
+    @Param('trackingId') trackingId: string,
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    
+    // First get the order ID from tracking ID
+    const order = await this.p2pService.getOrderByTrackingId(trackingId);
+    
+    return this.p2pService.getDisputeByOrderId(order.id, userId);
+  }
+
+  @Get('disputes/:disputeId')
+  @UseGuards(JwtAuthGuard)
+  async getDisputeById(
+    @Param('disputeId') disputeId: string,
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    return this.p2pService.getDisputeById(disputeId, userId);
+  }
+
+  @Get('disputes/:disputeId/messages')
+  @UseGuards(JwtAuthGuard)
+  async getDisputeMessages(
+    @Param('disputeId') disputeId: string,
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    return this.p2pService.getDisputeMessages(disputeId, userId);
+  }
+
+  @Post('disputes/:disputeId/messages')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('attachment'))
+  async sendDisputeMessage(
+    @Param('disputeId') disputeId: string,
+    @Body() body: { message: string },
+    @UploadedFile() attachment,
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    const { message } = body;
+
+    if (!message || message.trim().length === 0) {
+      throw new BadRequestException('Message is required');
+    }
+
+    let attachmentData;
+    if (attachment) {
+      // Convert file buffer to base64 string
+      attachmentData = `data:${attachment.mimetype};base64,${attachment.buffer.toString('base64')}`;
+    }
+
+    return this.p2pService.sendDisputeMessage(
+      disputeId,
+      userId,
+      message,
+      attachmentData,
+    );
+  }
+
+  @Post('disputes/:disputeId/messages/:messageId/delivered')
+  @UseGuards(JwtAuthGuard)
+  async markDisputeMessageAsDelivered(
+    @Param('disputeId') disputeId: string,
+    @Param('messageId') messageId: string,
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    
+    // Verify user has access to this dispute
+    await this.p2pService.getDisputeById(disputeId, userId);
+    
+    await this.p2pService.markDisputeMessageAsDelivered(messageId);
+    return { success: true };
+  }
+
+  @Post('disputes/:disputeId/messages/:messageId/read')
+  @UseGuards(JwtAuthGuard)
+  async markDisputeMessageAsRead(
+    @Param('disputeId') disputeId: string,
+    @Param('messageId') messageId: string,
+    @Request() req,
+  ) {
+    const userId = req.user.id;
+    
+    // Verify user has access to this dispute
+    await this.p2pService.getDisputeById(disputeId, userId);
+    
+    await this.p2pService.markDisputeMessageAsRead(messageId);
+    return { success: true };
   }
 } 
