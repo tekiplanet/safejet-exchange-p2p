@@ -21,6 +21,7 @@ import { Dispute } from './entities/dispute.entity';
 import { P2POrderGateway } from './gateways/p2p-order.gateway';
 import { P2PChatMessage, MessageType } from './entities/p2p-chat-message.entity';
 import { P2PChatGateway } from './gateways/p2p-chat.gateway';
+import { FileService } from '../common/services/file.service';
 
 @Injectable()
 export class P2PService {
@@ -57,6 +58,7 @@ export class P2PService {
     private chatMessageRepository: Repository<P2PChatMessage>,
     @Inject(forwardRef(() => P2PChatGateway))
     private chatGateway: P2PChatGateway,
+    private readonly fileService: FileService,
   ) {}
 
   async getAvailableAssets(userId: string, isBuyOffer: boolean) {
@@ -1380,7 +1382,12 @@ export class P2PService {
     }
   }
 
-  async createMessage(trackingId: string, userId: string, message: string) {
+  async createMessage(
+    trackingId: string, 
+    userId: string, 
+    message: string,
+    attachment?: string
+  ) {
     const order = await this.orderRepository.findOne({
       where: { trackingId },
       relations: ['buyer', 'seller']
@@ -1390,10 +1397,19 @@ export class P2PService {
       throw new NotFoundException('Order not found');
     }
 
-    // Determine if sender is buyer or seller
     const isBuyer = order.buyerId === userId;
     if (!isBuyer && order.sellerId !== userId) {
-      throw new ForbiddenException('Not authorized to send messages in this order');
+      throw new ForbiddenException('Not authorized');
+    }
+
+    let attachmentUrl: string | undefined;
+    if (attachment) {
+      try {
+        attachmentUrl = await this.fileService.saveChatImage(attachment);
+      } catch (error) {
+        console.error('Failed to save attachment:', error);
+        throw new BadRequestException('Invalid attachment');
+      }
     }
 
     const chatMessage = await this.chatMessageRepository.create({
@@ -1401,6 +1417,8 @@ export class P2PService {
       senderId: userId,
       messageType: isBuyer ? MessageType.BUYER : MessageType.SELLER,
       message,
+      attachmentUrl,
+      attachmentType: attachmentUrl ? 'image' : undefined,
       isDelivered: false,
       isRead: false,
     });

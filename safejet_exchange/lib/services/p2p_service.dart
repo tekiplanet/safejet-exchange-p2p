@@ -19,6 +19,10 @@ class P2PService {
   StreamSubscription? _chatSubscription;
   String? _currentOrderId;
 
+  String get apiUrl {
+    return _dio.options.baseUrl;
+  }
+
   P2PService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
     // print('P2P Service initialized with base URL: $baseUrl');
@@ -652,13 +656,14 @@ class P2PService {
     }
   }
 
-  Future<void> sendMessage(String trackingId, String message) async {
+  Future<void> sendMessage(String trackingId, String message, {String? attachment}) async {
     print('=== SENDING MESSAGE ===');
     print('TrackingID for sending: $trackingId');
     print('Current OrderID: $_currentOrderId');
     try {
       final response = await _dio.post('/p2p/orders/$trackingId/messages', data: {
         'message': message,
+        'attachment': attachment,
       });
       
       if (response.statusCode != 201) {

@@ -7,6 +7,9 @@ import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:convert';
 
 class P2PChatScreen extends StatefulWidget {
   final String orderId;
@@ -37,6 +40,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   Map<String, dynamic>? _orderDetails;
   final _numberFormat = NumberFormat("#,##0.00", "en_US");
   List<StreamSubscription> _subscriptions = [];
+  File? _selectedImage;
 
   @override
   void initState() {
@@ -317,6 +321,42 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
                 crossAxisAlignment:
                     isSender ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
+                              if (message['attachmentUrl'] != null) ...[
+                                Container(
+                                  margin: EdgeInsets.only(bottom: 8),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
+                                      width: 200,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (context, child, progress) {
+                                        if (progress == null) return child;
+                                        return Container(
+                                          width: 200,
+                                          height: 150,
+                                          child: Center(
+                                            child: CircularProgressIndicator(
+                                              value: progress.expectedTotalBytes != null
+                                                  ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                                  : null,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder: (context, error, stackTrace) {
+                                        print('Error loading image: $error');
+                                        return Container(
+                                          width: 200,
+                                          height: 150,
+                                          color: Colors.grey[300],
+                                          child: Icon(Icons.error),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
                               Text(
                     message['message'],
               style: TextStyle(
@@ -400,79 +440,127 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
           ),
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                hintText: 'Type a message...',
-                filled: true,
-                fillColor: isDark
-                    ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                    : SafeJetColors.lightCardBackground,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: SafeJetColors.primary,
-                  ),
+          if (_selectedImage != null)
+            Container(
+              height: 100,
+              width: 100,
+              margin: EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                image: DecorationImage(
+                  image: FileImage(_selectedImage!),
+                  fit: BoxFit.cover,
                 ),
               ),
-              maxLines: null,
-              textCapitalization: TextCapitalization.sentences,
+              child: Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.close, color: Colors.white),
+                    onPressed: () {
+                      setState(() {
+                        _selectedImage = null;
+                      });
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: SafeJetColors.primary,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              onPressed: () async {
-                if (_messageController.text.trim().isNotEmpty) {
-                  await _sendMessage();
-                }
-              },
-              icon: const Icon(Icons.send),
-              color: Colors.white,
-            ),
+          Row(
+            children: [
+              IconButton(
+                icon: Icon(Icons.attach_file),
+                onPressed: () async {
+                  final ImagePicker _picker = ImagePicker();
+                  final XFile? image = await _picker.pickImage(
+                    source: ImageSource.gallery,
+                    maxWidth: 800,
+                    maxHeight: 800,
+                  );
+                  
+                  if (image != null) {
+                    setState(() {
+                      _selectedImage = File(image.path);
+                    });
+                  }
+                },
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  decoration: InputDecoration(
+                    hintText: 'Type a message...',
+                    filled: true,
+                    fillColor: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        : SafeJetColors.lightCardBackground,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: SafeJetColors.primary,
+                      ),
+                    ),
+                  ),
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: SafeJetColors.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  onPressed: () async {
+                    if (_messageController.text.trim().isEmpty && _selectedImage == null) {
+                      return;
+                    }
+                    
+                    String? base64Image;
+                    if (_selectedImage != null) {
+                      final bytes = await _selectedImage!.readAsBytes();
+                      base64Image = 'data:image/jpeg;base64,${base64.encode(bytes)}';
+                    }
+                    
+                    await _p2pService.sendMessage(
+                      widget.trackingId,
+                      _messageController.text,
+                      attachment: base64Image,
+                    );
+                    
+                    _messageController.clear();
+                    setState(() {
+                      _selectedImage = null;
+                    });
+                  },
+                  icon: const Icon(Icons.send),
+                  color: Colors.white,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _sendMessage() async {
-    print('=== SENDING MESSAGE ===');
-    try {
-      await _p2pService.sendMessage(
-        widget.trackingId,
-        _messageController.text.trim(),
-      );
-      print('Message sent successfully');
-        _messageController.clear();
-    } catch (e) {
-      print('=== MESSAGE SEND ERROR ===');
-      print('Error sending message: $e');
-      print(StackTrace.current);
-    }
   }
 
   @override

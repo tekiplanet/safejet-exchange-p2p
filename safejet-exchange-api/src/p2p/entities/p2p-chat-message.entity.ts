@@ -42,6 +42,12 @@ export class P2PChatMessage {
   @Column({ default: false })
   isRead: boolean;
 
+  @Column({ nullable: true })
+  attachmentUrl?: string;
+
+  @Column({ nullable: true })
+  attachmentType?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

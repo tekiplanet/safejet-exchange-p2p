@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { P2PController } from './p2p.controller';
 import { P2PService } from './p2p.service';
@@ -23,6 +23,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { P2PChatMessage } from './entities/p2p-chat-message.entity';
 import { P2PChatGateway } from './gateways/p2p-chat.gateway';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { FileService } from '../common/services/file.service';
 
 @Module({
   imports: [
@@ -56,7 +57,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     }),
   ],
   controllers: [P2PController],
-  providers: [P2PService, P2POrderGateway, P2PChatGateway],
+  providers: [
+    P2PService,
+    P2POrderGateway,
+    P2PChatGateway,
+    FileService,
+  ],
   exports: [P2PService],
 })
 export class P2PModule {} 

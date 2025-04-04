@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Post, Body, Param, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Post, Body, Param, Request, BadRequestException, NotFoundException, Res } from '@nestjs/common';
 import { P2PService } from './p2p.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
@@ -6,10 +6,17 @@ import { CreateOfferDto } from './dto/create-offer.dto';
 import { User } from '../auth/entities/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Order } from './entities/order.entity';
+import { Response } from 'express';
+import { createReadStream } from 'fs';
+import * as fs from 'fs';
+import { FileService } from '../common/services/file.service';
 
 @Controller('p2p')
 export class P2PController {
-  constructor(private readonly p2pService: P2PService) {
+  constructor(
+    private readonly p2pService: P2PService,
+    private readonly fileService: FileService,
+  ) {
     console.log('P2P Controller initialized');
   }
 
@@ -249,9 +256,32 @@ export class P2PController {
   @UseGuards(JwtAuthGuard)
   async createMessage(
     @Param('trackingId') trackingId: string,
-    @Body() data: { message: string },
-    @GetUser('id') userId: string
+    @Request() req,
+    @Body() data: { message: string, attachment?: string }
   ) {
-    return this.p2pService.createMessage(trackingId, userId, data.message);
+    const userId = req.user.id;
+    return this.p2pService.createMessage(trackingId, userId, data.message, data.attachment);
+  }
+
+  @Get('chat/images/:filename')
+  async serveChatImage(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    try {
+      const filepath = this.fileService.getChatFilePath(filename);
+      if (!fs.existsSync(filepath)) {
+        throw new NotFoundException('Image not found');
+      }
+
+      const file = createReadStream(filepath);
+      res.set({
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'max-age=3600',
+      });
+      file.pipe(res);
+    } catch (error) {
+      throw new NotFoundException('Image not found');
+    }
   }
 } 
