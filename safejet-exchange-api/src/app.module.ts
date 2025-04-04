@@ -21,6 +21,7 @@ import { ExchangeModule } from './exchange/exchange.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TokenManagementModule } from './tokens/token-management.module';
 import { P2PModule } from './p2p/p2p.module';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   imports: [
@@ -60,6 +61,10 @@ import { P2PModule } from './p2p/p2p.module';
     ExchangeModule,
     ScheduleModule.forRoot(),
     TokenManagementModule,
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: { expiresIn: '60m' },
+    }),
   ],
   controllers: [AppController],
   providers: [

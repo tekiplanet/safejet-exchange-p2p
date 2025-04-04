@@ -4,6 +4,24 @@ import { AppModule } from './app.module';
 import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as path from 'path';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+import { ServerOptions } from 'socket.io';
+
+class CustomIoAdapter extends IoAdapter {
+  createIOServer(port: number, options?: ServerOptions) {
+    const server = super.createIOServer(port, {
+      ...options,
+      cors: {
+        origin: true,
+        methods: ['GET', 'POST'],
+        credentials: true,
+      },
+      allowEIO3: true,
+      transports: ['websocket'],
+    });
+    return server;
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { 
@@ -17,6 +35,9 @@ async function bootstrap() {
       optionsSuccessStatus: 204
     }
   });
+
+  // Use our custom WebSocket adapter
+  app.useWebSocketAdapter(new CustomIoAdapter(app));
 
   // CORS middleware should be first
   app.enableCors({
@@ -82,5 +103,6 @@ async function bootstrap() {
   // Listen on all interfaces
   await app.listen(3000, '0.0.0.0');
   console.log('Application is running on: http://localhost:3000');
+  console.log('WebSocket server is running on port 3000');
 }
 bootstrap();

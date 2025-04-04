@@ -1352,4 +1352,37 @@ export class P2PService {
       await this.chatGateway.emitMessageRead(message.orderId, messageId);
     }
   }
+
+  async createMessage(trackingId: string, userId: string, message: string) {
+    const order = await this.orderRepository.findOne({
+      where: { trackingId },
+      relations: ['buyer', 'seller']
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    // Determine if sender is buyer or seller
+    const isBuyer = order.buyerId === userId;
+    if (!isBuyer && order.sellerId !== userId) {
+      throw new ForbiddenException('Not authorized to send messages in this order');
+    }
+
+    const chatMessage = await this.chatMessageRepository.create({
+      orderId: order.id,
+      senderId: userId,
+      messageType: isBuyer ? MessageType.BUYER : MessageType.SELLER,
+      message,
+      isDelivered: false,
+      isRead: false,
+    });
+
+    const savedMessage = await this.chatMessageRepository.save(chatMessage);
+    
+    // Emit to websocket
+    await this.chatGateway.emitChatUpdate(order.id, savedMessage);
+
+    return savedMessage;
+  }
 } 

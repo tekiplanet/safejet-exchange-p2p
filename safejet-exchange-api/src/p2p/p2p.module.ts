@@ -22,6 +22,7 @@ import { P2POrderGateway } from './gateways/p2p-order.gateway';
 import { JwtModule } from '@nestjs/jwt';
 import { P2PChatMessage } from './entities/p2p-chat-message.entity';
 import { P2PChatGateway } from './gateways/p2p-chat.gateway';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
@@ -44,9 +45,13 @@ import { P2PChatGateway } from './gateways/p2p-chat.gateway';
     WalletModule,
     P2PSettingsModule,
     EmailModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '1h' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get('JWT_SECRET'),
+        signOptions: { expiresIn: '60m' },
+      }),
+      inject: [ConfigService],
     }),
   ],
   controllers: [P2PController],

@@ -909,4 +909,17 @@ class AuthService {
       return null;
     }
   }
+
+  Future<void> _saveToken(String token) async {
+    print('Saving token...');
+    try {
+      await storage.write(key: 'token', value: token);
+      print('Token saved successfully');
+      final savedToken = await storage.read(key: 'token');
+      print('Verified saved token: ${savedToken != null ? 'Yes' : 'No'}');
+    } catch (e) {
+      print('Error saving token: $e');
+      throw Exception('Failed to save authentication token');
+    }
+  }
 } 

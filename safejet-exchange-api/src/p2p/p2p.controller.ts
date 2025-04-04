@@ -231,33 +231,6 @@ export class P2PController {
     return this.p2pService.getOrderMessages(orderId);
   }
 
-  @Post('chat/:orderId/message')
-  @UseGuards(JwtAuthGuard)
-  async sendMessage(
-    @GetUser('id') userId: string,
-    @Param('orderId') orderId: string,
-    @Body() body: { message: string },
-  ) {
-    const order = await this.p2pService.getOrderByTrackingId(orderId);
-    if (!order) {
-      throw new BadRequestException('Order not found');
-    }
-
-    const isBuyer = order.buyerId === userId;
-    const isSeller = order.sellerId === userId;
-
-    if (!isBuyer && !isSeller) {
-      throw new BadRequestException('Unauthorized to send message in this order');
-    }
-
-    return this.p2pService.createUserMessage(
-      order.id,
-      userId,
-      body.message,
-      isBuyer,
-    );
-  }
-
   @Post('chat/message/:messageId/delivered')
   @UseGuards(JwtAuthGuard)
   async markAsDelivered(@Param('messageId') messageId: string) {
@@ -270,5 +243,15 @@ export class P2PController {
   async markAsRead(@Param('messageId') messageId: string) {
     await this.p2pService.markMessageAsRead(messageId);
     return { success: true };
+  }
+
+  @Post('orders/:trackingId/messages')
+  @UseGuards(JwtAuthGuard)
+  async createMessage(
+    @Param('trackingId') trackingId: string,
+    @Body() data: { message: string },
+    @GetUser('id') userId: string
+  ) {
+    return this.p2pService.createMessage(trackingId, userId, data.message);
   }
 } 

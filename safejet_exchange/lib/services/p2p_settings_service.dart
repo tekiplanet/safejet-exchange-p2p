@@ -25,8 +25,8 @@ class P2PSettingsService {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final token = await storage.read(key: 'accessToken');
-          print('Request URL: ${options.baseUrl}${options.path}');
-          print('Request Headers: ${options.headers}');
+          // print('Request URL: ${options.baseUrl}${options.path}');
+          // print('Request Headers: ${options.headers}');
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }

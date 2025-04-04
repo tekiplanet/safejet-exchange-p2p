@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 import '../../services/p2p_service.dart';
 import '../../config/theme/colors.dart';
 import '../../config/theme/theme_provider.dart';
@@ -33,6 +34,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _orderDetails;
   final _numberFormat = NumberFormat("#,##0.00", "en_US");
+  StreamSubscription? _messageSubscription;
 
   @override
   void initState() {
@@ -42,22 +44,50 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   }
 
   Future<void> _initializeChat() async {
+    print('=== INITIALIZING CHAT ===');
+    print('OrderID: ${widget.orderId}');
+    print('TrackingID: ${widget.trackingId}');
     try {
       await _p2pService.connectToChat();
+      print('Connected to chat service');
+
       _p2pService.joinOrderChat(widget.orderId);
+      print('Joined order chat: ${widget.orderId}');
       
       final messages = await _p2pService.getOrderMessages(widget.orderId);
+      print('Fetched initial messages: ${messages.length}');
+
       setState(() {
         _messages = messages;
         _isLoading = false;
       });
+      print('Set initial messages in state');
 
-      _p2pService.listenToMessages(widget.trackingId, (message) {
+      _messageSubscription?.cancel();
+      _messageSubscription = _p2pService.listenToMessages(widget.orderId, (message) {
+        print('=== NEW MESSAGE CALLBACK ===');
+        print('Current OrderID: ${widget.orderId}');
+        print('Current TrackingID: ${widget.trackingId}');
+        print('Message received: $message');
+        print('=== MESSAGE DETAILS ===');
+        print('Current messages count: ${_messages.length}');
+        print('Message ID: ${message['id']}');
+        print('Sender ID: ${message['senderId']}');
         setState(() {
-          _messages.add(message);
+          if (!_messages.any((m) => m['id'] == message['id'])) {
+            _messages.add(message);
+            print('Added new message to state');
+            print('New messages count: ${_messages.length}');
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _scrollToBottom();
+            });
+          } else {
+            print('Message already exists in state');
+            print('Duplicate message ID: ${message['id']}');
+          }
         });
-        _scrollToBottom();
       });
+      print('Message listener set up');
 
       _p2pService.listenToDeliveryStatus(widget.trackingId, (messageId) {
         setState(() {
@@ -77,7 +107,9 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
         });
       });
     } catch (e) {
+      print('=== CHAT INITIALIZATION ERROR ===');
       print('Error initializing chat: $e');
+      print(StackTrace.current);
     }
   }
 
@@ -129,11 +161,11 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
     String getCounterpartyName() {
       if (_orderDetails == null) return 'Loading...';
       
-      print('Debug - Order Details: $_orderDetails');
-      print('Debug - Current User is Buyer?: ${widget.isBuyer}');
-      print('Debug - Buyer Name: ${_orderDetails?['buyer']?['fullName']}');
-      print('Debug - Seller Name: ${_orderDetails?['seller']?['fullName']}');
-      print('Debug - Widget Username: ${widget.userName}');
+      // print('Debug - Order Details: $_orderDetails');
+      // print('Debug - Current User is Buyer?: ${widget.isBuyer}');
+      // print('Debug - Buyer Name: ${_orderDetails?['buyer']?['fullName']}');
+      // print('Debug - Seller Name: ${_orderDetails?['seller']?['fullName']}');
+      // print('Debug - Widget Username: ${widget.userName}');
 
       // Always show the counterparty's name
       return widget.userName;
@@ -320,74 +352,74 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
           ],
           Flexible(
             child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isSender
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isSender
                     ? SafeJetColors.primary
                     : isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
                         : SafeJetColors.lightCardBackground,
                 borderRadius: BorderRadius.circular(12),
-                border: !isSender
-                    ? Border.all(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      )
-                    : null,
-              ),
-              child: Column(
+          border: !isSender
+              ? Border.all(
+                  color: isDark
+                      ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                      : SafeJetColors.lightCardBorder,
+                )
+              : null,
+        ),
+        child: Column(
                 crossAxisAlignment:
                     isSender ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  Text(
+                              Text(
                     message['message'],
-                    style: TextStyle(
-                      color: isSender
+              style: TextStyle(
+                color: isSender
                           ? Colors.white
                           : isDark
                               ? Colors.white
                               : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
                         DateFormat('HH:mm').format(
                           DateTime.parse(message['createdAt']),
                         ),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isSender
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isSender
                               ? Colors.white70
                               : isDark
                                   ? Colors.grey[400]
                                   : SafeJetColors.lightTextSecondary,
-                        ),
-                      ),
-                      if (isSender) ...[
-                        const SizedBox(width: 4),
-                        Icon(
+                  ),
+                ),
+                if (isSender) ...[
+                  const SizedBox(width: 4),
+                  Icon(
                           message['isRead']
                               ? Icons.done_all
                               : message['isDelivered']
-                                  ? Icons.done_all
+                            ? Icons.done_all
                                   : Icons.done,
-                          size: 12,
+                    size: 12,
                           color: message['isRead']
-                              ? SafeJetColors.success
+                        ? SafeJetColors.success
                               : isSender
                                   ? Colors.white70
                                   : Colors.grey[400],
-                        ),
-                      ],
-                    ],
                   ),
                 ],
-              ),
+              ],
             ),
+          ],
+        ),
+      ),
           ),
           if (isSender) ...[
             const SizedBox(width: 8),
@@ -483,7 +515,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   }
 
   Widget _buildDetailRow(String label, String value, bool isDark, {Color? statusColor}) {
-    return Padding(
+          return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -509,19 +541,18 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   }
 
   Future<void> _sendMessage() async {
+    print('=== SENDING MESSAGE ===');
     try {
       await _p2pService.sendMessage(
         widget.trackingId,
         _messageController.text.trim(),
       );
-      _messageController.clear();
+      print('Message sent successfully');
+        _messageController.clear();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to send message: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('=== MESSAGE SEND ERROR ===');
+      print('Error sending message: $e');
+      print(StackTrace.current);
     }
   }
 
@@ -544,6 +575,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _messageSubscription?.cancel();
     _p2pService.disposeChatSocket();
     super.dispose();
   }

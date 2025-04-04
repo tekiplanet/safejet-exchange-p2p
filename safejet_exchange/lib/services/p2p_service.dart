@@ -5,7 +5,7 @@ import '../services/auth_service.dart';
 import 'api_client.dart';
 import 'dart:convert';
 import 'dart:async';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class P2PService {
@@ -14,8 +14,10 @@ class P2PService {
   final storage = const FlutterSecureStorage();
   Timer? _pollTimer;
   final _orderUpdateController = StreamController<Map<String, dynamic>>.broadcast();
-  WebSocketChannel? _chatSocket;
+  IO.Socket? _chatSocket;
   final _chatUpdateController = StreamController<Map<String, dynamic>>.broadcast();
+  StreamSubscription? _chatSubscription;
+  String? _currentOrderId;
 
   P2PService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
@@ -266,7 +268,7 @@ class P2PService {
       );
       
       if (response.statusCode == 200) {
-        print('Order details fetched successfully: ${response.data}');
+        // print('Order details fetched successfully: ${response.data}');
         return response.data;
       } else {
         throw Exception('Failed to load order details');
@@ -323,7 +325,7 @@ class P2PService {
         options: Options(headers: await _getAuthHeaders()),
       );
 
-      print('Search response: ${response.data}');
+      // print('Search response: ${response.data}');
       return response.data;
     } catch (e) {
       print('Error in getOrders: $e');
@@ -438,47 +440,147 @@ class P2PService {
 
   Stream<Map<String, dynamic>> get orderUpdates => _orderUpdateController.stream;
 
-  Future<void> connectToChat() async {
-    if (_chatSocket != null) return;
-
-    final token = await storage.read(key: 'token');
-    if (token == null) return;
-
-    final wsUrl = dotenv.env['WS_URL'] ?? 'ws://localhost:3000';
+  Future<String?> _getAuthToken() async {
     try {
-      _chatSocket = WebSocketChannel.connect(
-        Uri.parse('$wsUrl/p2p/chat?token=$token'),
-      );
-
-      _chatSocket?.stream.listen(
-        (message) {
-          final data = jsonDecode(message);
-          _chatUpdateController.add(data);
-        },
-        onError: (error) {
-          print('Chat WebSocket error: $error');
-        },
-        onDone: () {
-          print('Chat WebSocket connection closed');
-          _chatSocket = null;
-        },
-      );
+      final token = await storage.read(key: 'accessToken');
+      print('Token retrieved: ${token != null ? 'Yes' : 'No'}');
+      return token;
     } catch (e) {
-      print('Error connecting to chat: $e');
+      print('Error getting token: $e');
+      return null;
     }
   }
 
-  void joinOrderChat(String orderId) {
-    _chatSocket?.sink.add(jsonEncode({
-      'event': 'joinOrder',
-      'orderId': orderId,
-    }));
+  Future<void> connectToChat() async {
+    print('=== CHAT CONNECTION START ===');
+    _chatSocket?.disconnect();
+    _chatSocket = null;
+
+    final token = await _getAuthToken();
+    if (token == null) {
+      print('=== ERROR: No token found for socket connection ===');
+      return;
+    }
+
+    final apiUrl = dotenv.env['API_URL'] ?? 'http://localhost:3000';
+    final uri = Uri.parse(apiUrl);
+    final wsUrl = '${uri.scheme}://${uri.host}:3000';
+    print('Connecting to Socket.IO: $wsUrl/p2p/chat');
+
+    _chatSocket = IO.io(
+      '$wsUrl/p2p/chat',
+      <String, dynamic>{
+        'transports': ['websocket'],
+        'autoConnect': false,
+        'path': '/socket.io/',
+        'extraHeaders': {'Authorization': 'Bearer $token'},
+        'query': {
+          'token': token,
+          'EIO': '4'
+        },
+        'reconnection': true,
+        'reconnectionDelay': 1000,
+        'reconnectionAttempts': 5
+      }
+    );
+
+    _chatSocket?.onConnecting((_) {
+      print('=== SOCKET CONNECTING ===');
+      print('Socket ID: ${_chatSocket?.id}');
+      print('Socket namespace: ${_chatSocket?.nsp}');
+    });
+
+    _chatSocket?.onConnect((_) {
+      print('=== SOCKET CONNECTED ===');
+      print('Socket ID: ${_chatSocket?.id}');
+      print('Socket namespace: ${_chatSocket?.nsp}');
+      if (_currentOrderId != null) {
+        print('Rejoining order room: $_currentOrderId');
+        _chatSocket?.emit('joinOrder', {'orderId': _currentOrderId});
+      }
+    });
+
+    _chatSocket?.onReconnect((_) {
+      print('=== SOCKET RECONNECTED ===');
+      print('Socket ID: ${_chatSocket?.id}');
+      if (_currentOrderId != null) {
+        print('Rejoining room after reconnect: $_currentOrderId');
+        _chatSocket?.emit('joinOrder', {'orderId': _currentOrderId});
+      }
+    });
+
+    _chatSocket?.onDisconnect((_) {
+      print('=== SOCKET DISCONNECTED ===');
+      print('Reason: ${_chatSocket?.io?.engine?.transport?.readyState}');
+    });
+
+    _chatSocket?.onConnectError((err) {
+      print('=== SOCKET CONNECT ERROR ===');
+      print('Error details: $err');
+      print('Attempting to connect to: $apiUrl/p2p/chat');
+    });
+    _chatSocket?.onConnectTimeout((_) => print('=== SOCKET CONNECT TIMEOUT ==='));
+
+    _chatSocket?.on('chatUpdate', (data) {
+      print('=== CHAT UPDATE RECEIVED ===');
+      print('Raw socket data: $data');
+      print('Current OrderID: $_currentOrderId');
+      print('Data type: ${data['type']}');
+      print('Data orderId: ${data['orderId']}');
+      print('Message content: ${data['message']}');
+      
+      try {
+        if (!_chatUpdateController.isClosed) {
+          _chatUpdateController.add(data);
+          print('Data added to controller');
+        } else {
+          print('Warning: Attempted to add data to closed controller');
+        }
+      } catch (e) {
+        print('Error adding data to stream: $e');
+      }
+    });
+
+    _chatSocket?.onError((error) {
+      print('=== SOCKET ERROR ===');
+      print(error);
+    });
+
+    _chatSocket?.connect();
+
+    print('=== CONNECTION ATTEMPT COMPLETE ===');
   }
 
-  void listenToMessages(String orderId, Function(Map<String, dynamic>) onMessage) {
-    _chatUpdateController.stream.listen((data) {
-      if (data['type'] == 'chatUpdate' && data['orderId'] == orderId) {
-        onMessage(data['message']);
+  void joinOrderChat(String orderId) {
+    print('Joining order chat room: $orderId');
+    _currentOrderId = orderId;
+    print('Current socket status: ${_chatSocket?.connected}');
+    print('Socket ID: ${_chatSocket?.id}');
+    _chatSocket?.emit('joinOrder', {'orderId': orderId});
+  }
+
+  StreamSubscription listenToMessages(String orderId, Function(Map<String, dynamic>) onMessage) {
+    print('Setting up message listener for order: $orderId');
+    return _chatUpdateController.stream.listen((data) {
+      print('=== STREAM DATA RECEIVED ===');
+      print('Data: $data');
+      print('Expected orderId: $orderId');
+      print('Received orderId: ${data['orderId']}');
+      
+      // Convert data to Map if needed
+      final messageData = data is Map ? 
+        Map<String, dynamic>.from(data) : 
+        jsonDecode(data.toString());
+        
+      if (messageData['type'] == 'chatUpdate' && 
+          messageData['orderId'].toString() == orderId) {
+        print('✓ Message matches current order');
+        print('Message content: ${messageData['message']}');
+        onMessage(messageData['message']);
+      } else {
+        print('✗ Message mismatch:');
+        print('Expected type: chatUpdate, got: ${messageData['type']}');
+        print('Expected orderId: $orderId, got: ${messageData['orderId']}');
       }
     });
   }
@@ -512,17 +614,31 @@ class P2PService {
     }
   }
 
-  Future<Map<String, dynamic>> sendMessage(String orderId, String message) async {
+  Future<void> sendMessage(String trackingId, String message) async {
+    print('=== SENDING MESSAGE ===');
+    print('TrackingID for sending: $trackingId');
+    print('Current OrderID: $_currentOrderId');
     try {
-      final response = await _dio.post(
-        '/p2p/chat/$orderId/message',
-        data: {'message': message},
-        options: Options(headers: await _getAuthHeaders()),
-      );
-      return response.data;
+      final response = await _dio.post('/p2p/orders/$trackingId/messages', data: {
+        'message': message,
+      });
+      
+      if (response.statusCode != 201) {
+        throw Exception('Failed to send message');
+      }
+
+      print('Message sent via HTTP, emitting to WebSocket');
+      print('Response data: ${response.data}');
+      _chatSocket?.emit('sendMessage', {
+        'trackingId': trackingId,
+        'message': message
+      });
+
+      print('Message sent successfully');
     } catch (e) {
+      print('=== MESSAGE SEND ERROR ===');
       print('Error sending message: $e');
-      rethrow;
+      print(StackTrace.current);
     }
   }
 
@@ -551,8 +667,16 @@ class P2PService {
   }
 
   void disposeChatSocket() {
-    _chatSocket?.sink.close();
+    print('=== DISPOSING CHAT SOCKET ===');
+    _chatSocket?.disconnect();
+    _chatSocket = null;
+  }
+
+  void dispose() {
+    print('=== DISPOSING P2P SERVICE ===');
+    _chatSocket?.disconnect();
     _chatSocket = null;
     _chatUpdateController.close();
+    _orderUpdateController.close();
   }
 } 
