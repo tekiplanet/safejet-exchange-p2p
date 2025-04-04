@@ -1102,20 +1102,12 @@ export class P2PService {
 
       const order = await this.orderRepository.findOne({
         where: { trackingId },
-        relations: ['buyer', 'seller', 'offer'],
+        relations: ['buyer', 'seller', 'offer', 'offer.token'],
       });
 
       if (!order) {
         throw new NotFoundException('Order not found');
       }
-
-      // Add debug logs
-      console.log('Found order:', {
-        orderId: order.id,
-        buyerId: order.buyerId,
-        userId: userId,
-        buyerStatus: order.buyerStatus
-      });
 
       // Verify user is the buyer
       if (order.buyerId !== userId) {
@@ -1138,6 +1130,23 @@ export class P2PService {
       // Set 30 minutes deadline for seller to confirm
       order.confirmationDeadline = new Date(Date.now() + 30 * 60 * 1000);
       const updatedOrder = await this.orderRepository.save(order);
+
+      // Add system message to chat
+      await this.createSystemMessage(
+        order.id,
+        'The buyer has marked the order as paid. Waiting for seller to confirm and release coin.'
+      );
+
+      // Send email notification to seller
+      await this.emailService.sendP2POrderPaidEmail(
+        order.seller.email,
+        order.seller.fullName,
+        order.trackingId,
+        order.assetAmount.toString(),
+        order.offer.token.symbol,
+        `${order.currencyAmount.toString()} ${order.offer.currency}`,
+        order.confirmationDeadline
+      );
 
       // Log successful update
       console.log('Order updated successfully:', {

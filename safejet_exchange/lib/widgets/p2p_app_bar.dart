@@ -75,33 +75,33 @@ class P2PAppBar extends StatelessWidget implements PreferredSizeWidget {
                     trailing!,
                     const SizedBox(width: 8),
                   ],
-                  IconButton(
-                    onPressed: onNotificationTap,
-                    icon: Stack(
-                      children: [
-                        const Icon(Icons.notifications_outlined),
-                        if (hasNotification)
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: SafeJetColors.secondaryHighlight,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: onThemeToggle,
-                    icon: Icon(
-                      isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                    ),
-                  ),
+                  // IconButton(
+                  //   onPressed: onNotificationTap,
+                  //   icon: Stack(
+                  //     children: [
+                  //       const Icon(Icons.notifications_outlined),
+                  //       if (hasNotification)
+                  //         Positioned(
+                  //           right: 0,
+                  //           top: 0,
+                  //           child: Container(
+                  //             width: 8,
+                  //             height: 8,
+                  //             decoration: const BoxDecoration(
+                  //               color: SafeJetColors.secondaryHighlight,
+                  //               shape: BoxShape.circle,
+                  //             ),
+                  //           ),
+                  //         ),
+                  //     ],
+                  //   ),
+                  // ),
+                  // IconButton(
+                  //   onPressed: onThemeToggle,
+                  //   icon: Icon(
+                  //     isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  //   ),
+                  // ),
                 ],
               ),
             ],

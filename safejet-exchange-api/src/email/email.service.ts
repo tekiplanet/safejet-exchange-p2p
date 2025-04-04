@@ -482,4 +482,32 @@ export class EmailService {
       console.error('P2P new message email error:', error);
     }
   }
+
+  async sendP2POrderPaidEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    confirmationDeadline: Date
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Marked as Paid - ${tokenSymbol}`,
+        html: this.emailTemplatesService.p2pOrderPaidEmail(
+          userName,
+          trackingId,
+          amount,
+          tokenSymbol,
+          currency,
+          confirmationDeadline
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order paid email error:', error);
+    }
+  }
 }

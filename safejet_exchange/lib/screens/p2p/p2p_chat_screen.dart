@@ -216,18 +216,18 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
               ? const Center(child: CircularProgressIndicator())
               : ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final message = _messages[index];
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final message = _messages[index];
                   final messageType = message['messageType']?.toString() ?? '';
                   final isSender = !messageType.contains('SYSTEM') && 
                       (widget.isBuyer 
                           ? messageType == 'BUYER'
                           : messageType == 'SELLER');
                   return _buildMessageItem(message, isSender, isDark);
-                },
-              ),
+              },
+            ),
           ),
           _buildMessageInput(isDark),
         ],
@@ -343,21 +343,21 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
                                         child: Image.network(
                                           '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
                                           width: 200,
-                                          fit: BoxFit.cover,
+                            fit: BoxFit.cover,
                                           loadingBuilder: (context, child, progress) {
                                             if (progress == null) return child;
-                                            return Container(
+                              return Container(
                                               width: 200,
                                               height: 150,
-                                              child: Center(
-                                                child: CircularProgressIndicator(
+                                child: Center(
+                                  child: CircularProgressIndicator(
                                                   value: progress.expectedTotalBytes != null
                                                       ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                                      : null,
-                                                ),
-                                              ),
-                                            );
-                                          },
+                                        : null,
+                                  ),
+                                ),
+                              );
+                            },
                                           errorBuilder: (context, error, stackTrace) {
                                             print('Error loading image: $error');
                                             return Container(
@@ -367,13 +367,13 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
                                               child: Icon(Icons.error),
                                             );
                                           },
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              Text(
+                          ),
+                        ),
+                      ),
+                    ),
+              ),
+            ],
+            Text(
                     message['message'],
               style: TextStyle(
                 color: isSender
@@ -472,8 +472,8 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
               ),
               child: Stack(
                 alignment: Alignment.topRight,
-                children: [
-                  IconButton(
+        children: [
+          IconButton(
                     icon: Icon(Icons.close, color: Colors.white),
                     onPressed: () {
                       setState(() {
@@ -502,35 +502,35 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
                     });
                   }
                 },
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    hintText: 'Type a message...',
-                    filled: true,
-                    fillColor: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                        : SafeJetColors.lightCardBackground,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                        color: isDark
-                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                            : SafeJetColors.lightCardBorder,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
+          ),
+          Expanded(
+            child: TextField(
+              controller: _messageController,
+              decoration: InputDecoration(
+                hintText: 'Type a message...',
+                filled: true,
+                fillColor: isDark
+                    ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                    : SafeJetColors.lightCardBackground,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
                         color: SafeJetColors.primary,
                       ),
                     ),

@@ -851,4 +851,50 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  p2pOrderPaidEmail(
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    confirmationDeadline: Date,
+    isDark = true
+  ): string {
+    const deadlineFormatted = confirmationDeadline.toLocaleString();
+    
+    const content = `
+      <h1>P2P Order Marked as Paid 💰</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>The buyer has marked the following order as paid:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total: ${currency}</p>
+          <p style="margin: 5px 0; font-size: 0.9em; color: ${isDark ? '#ff9800' : '#e65100'};">
+            Confirmation Deadline: ${deadlineFormatted}
+          </p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Next Steps 🚀</h2>
+        <ol>
+          <li>Check your payment account for the received payment</li>
+          <li>Confirm receipt of payment to release the ${tokenSymbol}</li>
+          <li>If payment is not received, raise a dispute</li>
+        </ol>
+        <p style="color: ${isDark ? '#ff9800' : '#e65100'}; font-weight: bold;">
+          Important: You must confirm or dispute the payment before the confirmation deadline.
+        </p>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }
