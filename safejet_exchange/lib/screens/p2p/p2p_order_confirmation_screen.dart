@@ -189,7 +189,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     try {
       final orderDetails = await _p2pService.getOrderDetails(widget.trackingId);
       
-      print('Order details received: $orderDetails');
+      // print('Order details received: $orderDetails');
       
       // Get the payment method ID from the metadata
       final paymentMetadata = orderDetails['paymentMetadata'] ?? {};
@@ -199,7 +199,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       if (methodId != null) {
         try {
           final paymentMethodDetails = await _p2pService.getPaymentMethodDetails(methodId);
-          print('Payment method details: $paymentMethodDetails');
+          // print('Payment method details: $paymentMethodDetails');
           
           // Merge the payment method details with the order details
           orderDetails['completePaymentDetails'] = paymentMethodDetails;

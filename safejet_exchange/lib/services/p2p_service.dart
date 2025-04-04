@@ -21,8 +21,8 @@ class P2PService {
 
   P2PService() {
     final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
-    print('P2P Service initialized with base URL: $baseUrl');
-    print('AuthService instance: $_authService');
+    // print('P2P Service initialized with base URL: $baseUrl');
+    // print('AuthService instance: $_authService');
     
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
@@ -576,9 +576,9 @@ class P2PService {
   }
 
   StreamSubscription listenToMessages(String orderId, Function(Map<String, dynamic>) onMessage) {
-    print('Setting up message listener for order: $orderId');
+    // print('Setting up message listener for order: $orderId');
     return _chatUpdateController.stream.listen((data) {
-      print('=== STREAM DATA RECEIVED ===');
+      // print('=== STREAM DATA RECEIVED ===');
       print('Data: $data');
       print('Expected orderId: $orderId');
       print('Received orderId: ${data['orderId']}');
@@ -601,20 +601,40 @@ class P2PService {
     });
   }
 
-  void listenToDeliveryStatus(String orderId, Function(String) onDelivered) {
-    _chatUpdateController.stream.listen((data) {
+  StreamSubscription listenToDeliveryStatus(String orderId, Function(String) onDelivered) {
+    print('=== SETTING UP DELIVERY STATUS LISTENER ===');
+    print('Listening for delivery status on order: $orderId');
+    return _chatUpdateController.stream.listen((data) {
+      print('=== DELIVERY STATUS DATA RECEIVED ===');
+      print('Data type: ${data['type']}');
+      print('Data orderId: ${data['orderId']}');
+      print('Expected orderId: $orderId');
       if (data['type'] == 'messageDelivered' && 
           data['orderId'] == orderId) {
+        print('✓ Delivery status matches current order');
+        print('Message ID: ${data['messageId']}');
         onDelivered(data['messageId']);
+      } else {
+        print('✗ Delivery status mismatch');
       }
     });
   }
 
-  void listenToReadStatus(String orderId, Function(String) onRead) {
-    _chatUpdateController.stream.listen((data) {
+  StreamSubscription listenToReadStatus(String orderId, Function(String) onRead) {
+    print('=== SETTING UP READ STATUS LISTENER ===');
+    print('Listening for read status on order: $orderId');
+    return _chatUpdateController.stream.listen((data) {
+      print('=== READ STATUS DATA RECEIVED ===');
+      print('Data type: ${data['type']}');
+      print('Data orderId: ${data['orderId']}');
+      print('Expected orderId: $orderId');
       if (data['type'] == 'messageRead' && 
           data['orderId'] == orderId) {
+        print('✓ Read status matches current order');
+        print('Message ID: ${data['messageId']}');
         onRead(data['messageId']);
+      } else {
+        print('✗ Read status mismatch');
       }
     });
   }
@@ -673,6 +693,7 @@ class P2PService {
         'messageId': messageId,
         'orderId': _currentOrderId,
       });
+      print('Delivery status emitted for message: $messageId');
     } catch (e) {
       print('Error marking message as delivered: $e');
     }
@@ -691,6 +712,7 @@ class P2PService {
         'messageId': messageId,
         'orderId': _currentOrderId,
       });
+      print('Read status emitted for message: $messageId');
     } catch (e) {
       print('Error marking message as read: $e');
     }

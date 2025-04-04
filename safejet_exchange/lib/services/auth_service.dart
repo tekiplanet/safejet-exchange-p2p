@@ -35,7 +35,7 @@ class AuthService {
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-      print('🔐 Auth Service: Attempting login for $email');
+      // print('🔐 Auth Service: Attempting login for $email');
       final response = await _dio.post(
         '/login',
         data: {
@@ -45,11 +45,11 @@ class AuthService {
       );
 
       final data = response.data;
-      print('✅ Auth Service: Login response received: ${response.statusCode}');
+      // print('✅ Auth Service: Login response received: ${response.statusCode}');
       
       // Handle 2FA requirement (403)
       if (data['requires2FA'] == true) {
-        print('🔒 Auth Service: 2FA required, storing temp token');
+        // print('🔒 Auth Service: 2FA required, storing temp token');
         if (data['tempToken'] == null) {
           throw 'Server error: No temporary token provided';
         }
@@ -57,7 +57,7 @@ class AuthService {
         return {'requires2FA': true, 'email': email};
       }
 
-      print('✅ Auth Service: Login successful, storing tokens');
+      // print('✅ Auth Service: Login successful, storing tokens');
       await storage.write(key: 'accessToken', value: data['accessToken']);
       await storage.write(key: 'refreshToken', value: data['refreshToken']);
       await storage.write(key: 'user', value: json.encode(data['user']));
@@ -96,7 +96,7 @@ class AuthService {
               throw e.response?.data['message'] ?? 'Authentication failed';
             case 403:
               if (e.response?.data['requires2FA'] == true) {
-                print('🔒 Auth Service: 2FA required from error response');
+                // print('🔒 Auth Service: 2FA required from error response');
                 return {
                   'requires2FA': true,
                   'email': email,

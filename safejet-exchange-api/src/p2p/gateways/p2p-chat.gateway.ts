@@ -158,11 +158,19 @@ export class P2PChatGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @MessageBody() data: { messageId: string; orderId: string }
   ) {
     try {
-      this.logger.debug(`Marking message ${data.messageId} as read`);
+      this.logger.debug(`=== HANDLING MESSAGE READ ===`);
+      this.logger.debug(`Message ID: ${data.messageId}`);
+      this.logger.debug(`Order ID: ${data.orderId}`);
+      
       await this.p2pService.markMessageAsRead(data.messageId);
       
-      // Use the emitMessageRead method
-      await this.emitMessageRead(data.orderId, data.messageId);
+      this.logger.debug('Emitting read status to room');
+      this.server.to(`order_${data.orderId}`).emit('messageRead', {
+        type: 'messageRead',
+        orderId: data.orderId,
+        messageId: data.messageId
+      });
+      this.logger.debug('Read status emitted successfully');
     } catch (error) {
       this.logger.error('Error marking message as read:', error);
     }
@@ -190,16 +198,19 @@ export class P2PChatGateway implements OnGatewayConnection, OnGatewayDisconnect 
     @MessageBody() data: { messageId: string; orderId: string }
   ) {
     try {
-      this.logger.debug(`Marking message ${data.messageId} as delivered`);
-      // Update message in database
+      this.logger.debug(`=== HANDLING MESSAGE DELIVERED ===`);
+      this.logger.debug(`Message ID: ${data.messageId}`);
+      this.logger.debug(`Order ID: ${data.orderId}`);
+      
       await this.p2pService.markMessageAsDelivered(data.messageId);
       
-      // Notify room about delivery
+      this.logger.debug('Emitting delivery status to room');
       this.server.to(`order_${data.orderId}`).emit('messageDelivered', {
         type: 'messageDelivered',
         orderId: data.orderId,
         messageId: data.messageId
       });
+      this.logger.debug('Delivery status emitted successfully');
     } catch (error) {
       this.logger.error('Error marking message as delivered:', error);
     }

@@ -36,7 +36,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   bool _isLoading = true;
   Map<String, dynamic>? _orderDetails;
   final _numberFormat = NumberFormat("#,##0.00", "en_US");
-  StreamSubscription? _messageSubscription;
+  List<StreamSubscription> _subscriptions = [];
 
   @override
   void initState() {
@@ -65,30 +65,57 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
       });
       print('Set initial messages in state');
 
-      _messageSubscription?.cancel();
-      _messageSubscription = _p2pService.listenToMessages(widget.orderId, (message) {
-        print('=== NEW MESSAGE CALLBACK ===');
-        print('Current OrderID: ${widget.orderId}');
-        print('Current TrackingID: ${widget.trackingId}');
-        print('Message received: $message');
-        print('=== MESSAGE DETAILS ===');
-        print('Current messages count: ${_messages.length}');
-        print('Message ID: ${message['id']}');
-        print('Sender ID: ${message['senderId']}');
-        setState(() {
-          if (!_messages.any((m) => m['id'] == message['id'])) {
-            _messages.add(message);
-            print('Added new message to state');
-            print('New messages count: ${_messages.length}');
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollToBottom();
-            });
-          } else {
-            print('Message already exists in state');
-            print('Duplicate message ID: ${message['id']}');
-          }
-        });
-      });
+      _subscriptions.clear();
+      _subscriptions.addAll([
+        _p2pService.listenToMessages(widget.orderId, (message) {
+          print('=== NEW MESSAGE CALLBACK ===');
+          print('Current OrderID: ${widget.orderId}');
+          print('Current TrackingID: ${widget.trackingId}');
+          print('Message received: $message');
+          print('=== MESSAGE DETAILS ===');
+          print('Current messages count: ${_messages.length}');
+          print('Message ID: ${message['id']}');
+          print('Sender ID: ${message['senderId']}');
+          setState(() {
+            if (!_messages.any((m) => m['id'] == message['id'])) {
+              _messages.add(message);
+              print('Added new message to state');
+              print('New messages count: ${_messages.length}');
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _scrollToBottom();
+              });
+            } else {
+              print('Message already exists in state');
+              print('Duplicate message ID: ${message['id']}');
+            }
+          });
+        }),
+        _p2pService.listenToDeliveryStatus(widget.orderId, (messageId) {
+          if (!mounted) return;
+          setState(() {
+            final index = _messages.indexWhere((m) => m['id'] == messageId);
+            if (index != -1) {
+              _messages[index] = {
+                ..._messages[index],
+                'isDelivered': true,
+              };
+            }
+          });
+        }),
+        _p2pService.listenToReadStatus(widget.orderId, (messageId) {
+          if (!mounted) return;
+          setState(() {
+            final index = _messages.indexWhere((m) => m['id'] == messageId);
+            if (index != -1) {
+              _messages[index] = {
+                ..._messages[index],
+                'isDelivered': true,
+                'isRead': true,
+              };
+            }
+          });
+        }),
+      ]);
       print('Message listener set up');
     } catch (e) {
       print('=== CHAT INITIALIZATION ERROR ===');
@@ -136,32 +163,29 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
     }
   }
 
+  void _updateMessageStatus(String messageId, bool isDelivered, bool isRead) {
+    setState(() {
+      final index = _messages.indexWhere((m) => m['id'] == messageId);
+      if (index != -1) {
+        _messages[index] = {
+          ..._messages[index],
+          'isDelivered': isDelivered,
+          'isRead': isRead,
+        };
+      }
+    });
+  }
+
   void _setupMessageStatusListeners() {
-    // Listen for delivery status updates
-    _p2pService.listenToDeliveryStatus(widget.orderId, (messageId) {
-      setState(() {
-        _deliveredMessages.add(messageId);
-      });
-    });
+    // _p2pService.listenToDeliveryStatus(widget.orderId, (messageId) {
+    //   print('Message marked as delivered: $messageId');
+    //   _updateMessageStatus(messageId, true, false);
+    // });
 
-    // Listen for read status updates
-    _p2pService.listenToReadStatus(widget.orderId, (messageId) {
-      setState(() {
-        _readMessages.add(messageId);
-      });
-    });
-  }
-
-  void _markMessageAsDelivered(String messageId) {
-    if (!_deliveredMessages.contains(messageId)) {
-      _p2pService.markMessageAsDelivered(messageId);
-    }
-  }
-
-  void _markMessageAsRead(String messageId) {
-    if (!_readMessages.contains(messageId)) {
-      _p2pService.markMessageAsRead(messageId);
-    }
+    // _p2pService.listenToReadStatus(widget.orderId, (messageId) {
+    //   print('Message marked as read: $messageId');
+    //   _updateMessageStatus(messageId, true, true);
+    // });
   }
 
   @override
@@ -208,6 +232,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
 
   Widget _buildMessageItem(Map<String, dynamic> message, bool isSender, bool isDark) {
     final isSystem = message['messageType'] == 'SYSTEM';
+    final messageId = message['id'];
 
     if (isSystem) {
       return Container(
@@ -237,6 +262,16 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
           ],
         ),
       );
+    }
+
+    // Only mark other's messages as delivered/read
+    if (!isSender) {
+      if (!message['isDelivered']) {
+        _p2pService.markMessageAsDelivered(messageId);
+      }
+      if (!message['isRead']) {
+        _p2pService.markMessageAsRead(messageId);
+      }
     }
 
     return Container(
@@ -312,17 +347,17 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
                 if (isSender) ...[
                   const SizedBox(width: 4),
                   Icon(
-                          _readMessages.contains(message['id'])
-                              ? Icons.done_all
-                              : _deliveredMessages.contains(message['id'])
+                        message['isRead']
                             ? Icons.done_all
-                                  : Icons.done,
+                            : message['isDelivered']
+                                ? Icons.done_all
+                                : Icons.done,
                     size: 12,
-                          color: _readMessages.contains(message['id'])
+                    color: message['isRead']
                         ? SafeJetColors.success
-                              : isSender
-                                  ? Colors.white70
-                                  : Colors.grey[400],
+                        : isSender
+                            ? Colors.white70
+                            : Colors.grey[400],
                   ),
                 ],
               ],
@@ -442,10 +477,11 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
 
   @override
   void dispose() {
+    for (var subscription in _subscriptions) {
+      subscription.cancel();
+    }
     _messageController.dispose();
     _scrollController.dispose();
-    _messageSubscription?.cancel();
-    _p2pService.disposeChatSocket();
     super.dispose();
   }
 } 
