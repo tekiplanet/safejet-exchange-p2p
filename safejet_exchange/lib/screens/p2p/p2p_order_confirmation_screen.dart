@@ -2112,7 +2112,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       const SizedBox(width: 16),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: isSubmitting || reasonController.text.trim().isEmpty
+                          onPressed: isSubmitting || reasonController.text.trim().isEmpty || !hasConfirmedDispute
                             ? null 
                             : () async {
                                 setState(() {
