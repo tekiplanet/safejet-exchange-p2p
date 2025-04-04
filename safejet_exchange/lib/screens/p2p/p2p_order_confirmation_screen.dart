@@ -81,6 +81,8 @@ class P2POrderConfirmationScreen extends StatefulWidget {
 }
 
 class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen> {
+  final ValueNotifier<bool> hasAgreed = ValueNotifier<bool>(false);
+  bool isSubmitting = false;
   bool _isPaymentConfirmed = false;
   bool _isLoading = true;
   Map<String, dynamic>? _orderDetails;
@@ -1541,9 +1543,6 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                         ),
                         body: StatefulBuilder(
                           builder: (context, setState) {
-                            ValueNotifier<bool> hasAgreed = ValueNotifier<bool>(false);
-                            bool isSubmitting = false;
-                            
                             return Column(
                               children: [
                                 Expanded(
@@ -1611,21 +1610,20 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                                           ),
                                           child: Row(
                                             children: [
-                                              ValueListenableBuilder<bool>(
-                                                valueListenable: hasAgreed,
-                                                builder: (context, value, child) {
-                                                  return SizedBox(
-                                                    width: 24,
-                                                    height: 24,
-                                                    child: Checkbox(
-                                                      value: value,
-                                                      onChanged: (newValue) {
-                                                        hasAgreed.value = newValue ?? false;
+                                              SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child: Checkbox(
+                                                  value: hasAgreed.value,
+                                                  onChanged: isSubmitting 
+                                                    ? null 
+                                                    : (newValue) {
+                                                        setState(() {
+                                                          hasAgreed.value = newValue ?? false;
+                                                        });
                                                       },
-                                                      activeColor: SafeJetColors.secondaryHighlight,
-                                                    ),
-                                                  );
-                                                },
+                                                  activeColor: SafeJetColors.secondaryHighlight,
+                                                ),
                                               ),
                                               const SizedBox(width: 12),
                                               Expanded(
@@ -1673,54 +1671,55 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                                       ),
                                       const SizedBox(width: 16),
                                       Expanded(
-                                        child: ValueListenableBuilder<bool>(
-                                          valueListenable: hasAgreed,
-                                          builder: (context, agreed, child) {
-                                            return ElevatedButton(
-                                              onPressed: (!agreed || isSubmitting) ? null : () async {
-                                                setState(() => isSubmitting = true);
+                                        child: ElevatedButton(
+                                          onPressed: (!hasAgreed.value || isSubmitting) 
+                                            ? null 
+                                            : () async {
+                                                setState(() {
+                                                  isSubmitting = true;
+                                                });
                                                 try {
                                                   await _p2pService.confirmOrderPayment(widget.trackingId);
-                                                  Navigator.pop(context, true);
                                                   if (mounted) {
+                                                    Navigator.of(context).pop(true);
                                                     ScaffoldMessenger.of(context).showSnackBar(
                                                       const SnackBar(content: Text('Payment confirmed successfully')),
                                                     );
                                                   }
-                  } catch (e) {
-                                                  setState(() => isSubmitting = false);
+                                                } catch (e) {
                                                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
+                                                    setState(() {
+                                                      isSubmitting = false;
+                                                    });
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text(e.toString())),
+                                                    );
                                                   }
                                                 }
                                               },
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: SafeJetColors.secondaryHighlight,
-                                                foregroundColor: Colors.black,
-                                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(12),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: SafeJetColors.secondaryHighlight,
+                                            foregroundColor: Colors.black,
+                                            padding: const EdgeInsets.symmetric(vertical: 16),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                          child: isSubmitting
+                                            ? const SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                                ),
+                                              )
+                                            : const Text(
+                                                'Confirm Payment',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
                                                 ),
                                               ),
-                                              child: isSubmitting
-                                                ? const SizedBox(
-                                                    height: 20,
-                                                    width: 20,
-                                                    child: CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                                                    ),
-                                                  )
-                                                : const Text(
-                                                    'Confirm Payment',
-                                                    style: TextStyle(
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                            );
-                                          },
                                         ),
                                       ),
                                     ],
