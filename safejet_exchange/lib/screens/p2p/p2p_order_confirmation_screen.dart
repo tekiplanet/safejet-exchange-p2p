@@ -94,6 +94,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   final P2PService _p2pService = P2PService();
   StreamSubscription? _orderUpdateSubscription;
   bool _isWebSocketConnected = false;
+  
+  // Add this getter for isDark
+  bool get isDark => Provider.of<ThemeProvider>(context, listen: false).isDarkMode;
 
   @override
   void initState() {
@@ -1916,97 +1919,236 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     return const SizedBox.shrink(); // Default case, no buttons
   }
 
-  void _showDisputeDialog() {
-    final TextEditingController reasonController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Raise Dispute',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Please provide details about your dispute:',
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: reasonController,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: 'Explain your issue...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
+ void _showDisputeDialog() {
+  final TextEditingController reasonController = TextEditingController();
+  bool isSubmitting = false;
+
+  showDialog<bool>(
+    context: context,
+    builder: (context) => Dialog.fullscreen(
+      child: Scaffold(
+        backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              Icons.close,
+              color: isDark ? Colors.white : Colors.black,
+            ),
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        if (reasonController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please provide a reason')),
-                          );
-                          return;
-                        }
-                        
-                        try {
-                          await _p2pService.disputeOrder(
-                            widget.trackingId,
-                            reasonController.text.trim(),
-                          );
-                          if (mounted) {
-              Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Dispute raised successfully')),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.toString())),
-                            );
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: SafeJetColors.error,
-                      ),
-            child: const Text('Submit'),
+          title: Text(
+            'Raise Dispute',
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        body: StatefulBuilder(
+          builder: (context, setState) {
+            return Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Please provide details about your dispute:',
+                          style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        _buildConfirmationDetailCard(
+                          title: 'Amount',
+                          value: '${_formatAmount(_orderDetails!['currencyAmount'])} ${_orderDetails!['offer']['currency']}',
+                          icon: Icons.account_balance_wallet,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildConfirmationDetailCard(
+                          title: 'Counterparty',
+                          value: _isCurrentUserBuyer() 
+                            ? _orderDetails!['seller']['fullName']
+                            : _orderDetails!['buyer']['fullName'],
+                          icon: Icons.person_outline,
+                          isDark: isDark,
+                        ),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: SafeJetColors.error.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: SafeJetColors.error.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: SafeJetColors.error,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Please provide clear and accurate information about your dispute. False claims may result in account restrictions.',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Dispute Reason',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: reasonController,
+                          maxLines: 4,
+                          decoration: InputDecoration(
+                            hintText: 'Explain your issue in detail...',
+                            filled: true,
+                            fillColor: isDark 
+                              ? Colors.black.withOpacity(0.3) 
+                              : Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: isDark
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.grey[300]!,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: isDark
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.grey[300]!,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: SafeJetColors.error,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-          ),
-        ],
-              ),
-            ],
-          ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: isDark 
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.grey[300]!,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: isSubmitting || reasonController.text.trim().isEmpty
+                            ? null 
+                            : () async {
+                                setState(() {
+                                  isSubmitting = true;
+                                });
+                                try {
+                                  await _p2pService.disputeOrder(
+                                    widget.trackingId,
+                                    reasonController.text.trim(),
+                                  );
+                                  if (mounted) {
+                                    Navigator.of(context).pop(true);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Dispute raised successfully')),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    setState(() {
+                                      isSubmitting = false;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(e.toString())),
+                                    );
+                                  }
+                                }
+                              },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: SafeJetColors.error,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : const Text(
+                                'Submit Dispute',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // Helper method to determine if current user is the seller
   bool _isCurrentUserSeller() {
