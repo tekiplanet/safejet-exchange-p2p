@@ -1923,6 +1923,10 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   final TextEditingController reasonController = TextEditingController();
   bool isSubmitting = false;
 
+  bool hasConfirmedDispute = false;
+  final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+  final isDark = themeProvider.isDarkMode;
+
   showDialog<bool>(
     context: context,
     builder: (context) => Dialog.fullscreen(
@@ -1964,22 +1968,6 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                           ),
                         ),
                         const SizedBox(height: 32),
-                        _buildConfirmationDetailCard(
-                          title: 'Amount',
-                          value: '${_formatAmount(_orderDetails!['currencyAmount'])} ${_orderDetails!['offer']['currency']}',
-                          icon: Icons.account_balance_wallet,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildConfirmationDetailCard(
-                          title: 'Counterparty',
-                          value: _isCurrentUserBuyer() 
-                            ? _orderDetails!['seller']['fullName']
-                            : _orderDetails!['buyer']['fullName'],
-                          icon: Icons.person_outline,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 24),
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -2051,6 +2039,45 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                             ),
                           ),
                         ),
+
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Checkbox(
+                                  value: hasConfirmedDispute,
+                                  onChanged: (newValue) {
+                                    setState(() {
+                                      hasConfirmedDispute = newValue ?? false;
+                                    });
+                                  },
+                                  activeColor: SafeJetColors.error,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _isCurrentUserBuyer()
+                                    ? 'I confirm that the seller has breached the terms of this P2P trade and this order needs to be disputed'
+                                    : 'I confirm that the buyer has breached the terms of this P2P trade and this order needs to be disputed',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       ],
                     ),
                   ),
