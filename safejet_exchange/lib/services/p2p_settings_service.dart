@@ -44,9 +44,9 @@ class P2PSettingsService {
 
   Future<List<Map<String, dynamic>>> getCurrencies() async {
     try {
-      print('Fetching currencies...');
+      // print('Fetching currencies...');
       final response = await _dio.get('/currencies');
-      print('Response: ${response.data}');
+      // print('Response: ${response.data}');
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
       print('Error fetching currencies: $e');
@@ -56,9 +56,9 @@ class P2PSettingsService {
 
   Future<Map<String, dynamic>> getSettings() async {
     try {
-      print('Fetching settings...');
+      // print('Fetching settings...');
       final response = await _dio.get('/p2p-settings');
-      print('Response: ${response.data}');
+      // print('Response: ${response.data}');
       return Map<String, dynamic>.from(response.data);
     } catch (e) {
       print('Error fetching settings: $e');

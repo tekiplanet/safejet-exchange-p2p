@@ -70,7 +70,7 @@ class AuthProvider with ChangeNotifier {
 
     try {
       final response = await _authService.login(email, password);
-      print('Login response: $response'); // Debug log
+      // print('Login response: $response'); // Debug log
 
       _isLoading = false;
       notifyListeners();

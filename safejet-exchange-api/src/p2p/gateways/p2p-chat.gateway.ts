@@ -4,12 +4,14 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
+  MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { P2PChatMessage } from '../entities/p2p-chat-message.entity';
 import { ConfigService } from '@nestjs/config';
+import { P2PService } from '../p2p.service';
 
 @Injectable()
 @WebSocketGateway({
@@ -31,7 +33,9 @@ export class P2PChatGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
   constructor(
     private jwtService: JwtService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    @Inject(forwardRef(() => P2PService))
+    private p2pService: P2PService
   ) {}
 
   async handleConnection(client: Socket) {
@@ -118,7 +122,21 @@ export class P2PChatGateway implements OnGatewayConnection, OnGatewayDisconnect 
       this.logger.debug('Chat update emitted successfully');
     } catch (error) {
       this.logger.error(`Error emitting chat update: ${error.message}`);
-      this.logger.error(error.stack);  // Log the full error stack
+      this.logger.error(error.stack);
+    }
+  }
+
+  // Method to emit message read status
+  async emitMessageRead(orderId: string, messageId: string) {
+    try {
+      this.logger.debug(`Emitting read status for message ${messageId}`);
+      this.server.to(`order_${orderId}`).emit('messageRead', {
+        type: 'messageRead',
+        orderId,
+        messageId
+      });
+    } catch (error) {
+      this.logger.error(`Error emitting message read status: ${error.message}`);
     }
   }
 
@@ -135,16 +153,18 @@ export class P2PChatGateway implements OnGatewayConnection, OnGatewayDisconnect 
     }
   }
 
-  // Method to emit message read status
-  async emitMessageRead(orderId: string, messageId: string) {
+  @SubscribeMessage('messageRead')
+  async handleMessageRead(
+    @MessageBody() data: { messageId: string; orderId: string }
+  ) {
     try {
-      this.server.to(`order_${orderId}`).emit('messageRead', {
-        type: 'messageRead',
-        orderId,
-        messageId
-      });
+      this.logger.debug(`Marking message ${data.messageId} as read`);
+      await this.p2pService.markMessageAsRead(data.messageId);
+      
+      // Use the emitMessageRead method
+      await this.emitMessageRead(data.orderId, data.messageId);
     } catch (error) {
-      this.logger.error(`Error emitting message read status: ${error.message}`);
+      this.logger.error('Error marking message as read:', error);
     }
   }
 
@@ -164,4 +184,24 @@ export class P2PChatGateway implements OnGatewayConnection, OnGatewayDisconnect 
     // Send acknowledgment back to client
     return { event: 'joinedOrder', orderId };
   }
-} 
+
+  @SubscribeMessage('messageDelivered')
+  async handleMessageDelivered(
+    @MessageBody() data: { messageId: string; orderId: string }
+  ) {
+    try {
+      this.logger.debug(`Marking message ${data.messageId} as delivered`);
+      // Update message in database
+      await this.p2pService.markMessageAsDelivered(data.messageId);
+      
+      // Notify room about delivery
+      this.server.to(`order_${data.orderId}`).emit('messageDelivered', {
+        type: 'messageDelivered',
+        orderId: data.orderId,
+        messageId: data.messageId
+      });
+    } catch (error) {
+      this.logger.error('Error marking message as delivered:', error);
+    }
+  }
+}

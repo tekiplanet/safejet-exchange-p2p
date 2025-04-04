@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Raw, In, Brackets } from 'typeorm';
 import { P2POffer } from './entities/p2p-offer.entity';
@@ -55,6 +55,7 @@ export class P2PService {
     private readonly orderGateway: P2POrderGateway,
     @InjectRepository(P2PChatMessage)
     private chatMessageRepository: Repository<P2PChatMessage>,
+    @Inject(forwardRef(() => P2PChatGateway))
     private chatGateway: P2PChatGateway,
   ) {}
 

@@ -541,6 +541,22 @@ class P2PService {
       }
     });
 
+    _chatSocket?.on('messageDelivered', (data) {
+      print('=== MESSAGE DELIVERED ===');
+      print('Data: $data');
+      if (!_chatUpdateController.isClosed) {
+        _chatUpdateController.add(data);
+      }
+    });
+
+    _chatSocket?.on('messageRead', (data) {
+      print('=== MESSAGE READ ===');
+      print('Data: $data');
+      if (!_chatUpdateController.isClosed) {
+        _chatUpdateController.add(data);
+      }
+    });
+
     _chatSocket?.onError((error) {
       print('=== SOCKET ERROR ===');
       print(error);
@@ -587,7 +603,8 @@ class P2PService {
 
   void listenToDeliveryStatus(String orderId, Function(String) onDelivered) {
     _chatUpdateController.stream.listen((data) {
-      if (data['type'] == 'messageDelivered' && data['orderId'] == orderId) {
+      if (data['type'] == 'messageDelivered' && 
+          data['orderId'] == orderId) {
         onDelivered(data['messageId']);
       }
     });
@@ -595,7 +612,8 @@ class P2PService {
 
   void listenToReadStatus(String orderId, Function(String) onRead) {
     _chatUpdateController.stream.listen((data) {
-      if (data['type'] == 'messageRead' && data['orderId'] == orderId) {
+      if (data['type'] == 'messageRead' && 
+          data['orderId'] == orderId) {
         onRead(data['messageId']);
       }
     });
@@ -644,25 +662,37 @@ class P2PService {
 
   Future<void> markMessageAsDelivered(String messageId) async {
     try {
+      print('Marking message as delivered: $messageId');
       await _dio.post(
         '/p2p/chat/message/$messageId/delivered',
         options: Options(headers: await _getAuthHeaders()),
       );
+      
+      // Emit to socket
+      _chatSocket?.emit('messageDelivered', {
+        'messageId': messageId,
+        'orderId': _currentOrderId,
+      });
     } catch (e) {
       print('Error marking message as delivered: $e');
-      rethrow;
     }
   }
 
   Future<void> markMessageAsRead(String messageId) async {
     try {
+      print('Marking message as read: $messageId');
       await _dio.post(
         '/p2p/chat/message/$messageId/read',
         options: Options(headers: await _getAuthHeaders()),
       );
+      
+      // Emit to socket
+      _chatSocket?.emit('messageRead', {
+        'messageId': messageId,
+        'orderId': _currentOrderId,
+      });
     } catch (e) {
       print('Error marking message as read: $e');
-      rethrow;
     }
   }
 

@@ -45,6 +45,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     WalletModule,
     P2PSettingsModule,
     EmailModule,
+    ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
