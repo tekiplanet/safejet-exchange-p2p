@@ -460,4 +460,26 @@ export class EmailService {
       console.error('P2P order received seller email error:', error);
     }
   }
+
+  async sendP2PNewMessageEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    isSystemMessage: boolean = false
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `New Message in P2P Order ${trackingId} - SafeJet Exchange`,
+        html: this.emailTemplatesService.p2pNewMessageEmail(
+          userName,
+          trackingId,
+          isSystemMessage
+        ),
+      });
+    } catch (error) {
+      console.error('P2P new message email error:', error);
+    }
+  }
 }

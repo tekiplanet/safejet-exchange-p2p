@@ -1289,6 +1289,15 @@ export class P2PService {
 
   // New methods for chat functionality
   async createSystemMessage(orderId: string, message: string): Promise<P2PChatMessage> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: ['buyer', 'seller']
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
     const chatMessage = this.chatMessageRepository.create({
       orderId,
       messageType: MessageType.SYSTEM,
@@ -1299,6 +1308,23 @@ export class P2PService {
 
     const savedMessage = await this.chatMessageRepository.save(chatMessage);
     await this.chatGateway.emitChatUpdate(orderId, savedMessage);
+
+    // Send email notifications for system message
+    await Promise.all([
+      this.emailService.sendP2PNewMessageEmail(
+        order.buyer.email,
+        order.buyer.fullName,
+        order.trackingId,
+        true
+      ),
+      this.emailService.sendP2PNewMessageEmail(
+        order.seller.email,
+        order.seller.fullName,
+        order.trackingId,
+        true
+      )
+    ]);
+
     return savedMessage;
   }
 
@@ -1383,6 +1409,34 @@ export class P2PService {
     
     // Emit to websocket
     await this.chatGateway.emitChatUpdate(order.id, savedMessage);
+
+    // Send email notification to recipient
+    const isSystemMessage = chatMessage.messageType === MessageType.SYSTEM;
+    if (isSystemMessage) {
+      // Send to both buyer and seller for system messages
+      await Promise.all([
+        this.emailService.sendP2PNewMessageEmail(
+          order.buyer.email,
+          order.buyer.fullName,
+          trackingId,
+          true
+        ),
+        this.emailService.sendP2PNewMessageEmail(
+          order.seller.email,
+          order.seller.fullName,
+          trackingId,
+          true
+        )
+      ]);
+    } else {
+      // Send only to the recipient
+      const recipient = isBuyer ? order.seller : order.buyer;
+      await this.emailService.sendP2PNewMessageEmail(
+        recipient.email,
+        recipient.fullName,
+        trackingId
+      );
+    }
 
     return savedMessage;
   }

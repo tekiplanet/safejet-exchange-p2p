@@ -823,4 +823,32 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  p2pNewMessageEmail(
+    userName: string,
+    trackingId: string,
+    isSystemMessage: boolean = false,
+    isDark = true
+  ): string {
+    const content = `
+      <h1>New P2P Message Received 💬</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>${isSystemMessage ? 'A system notification' : 'A new message'} has been sent in your P2P order:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>Please log in to your SafeJet Exchange account to view and respond to the message.</p>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }
