@@ -15,9 +15,9 @@ import '../../services/p2p_service.dart';
 import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'p2p_screen.dart';
-import 'dart:convert';
 
 // Add this enum at the top of the file after the imports
 enum DisputeReasonType {
@@ -86,17 +86,19 @@ class CustomPageRoute extends PageRouteBuilder {
 class PaymentConfirmationDialog extends StatefulWidget {
   final String trackingId;
   final Map<String, dynamic> orderDetails;
+  final P2PService p2pService;
   final bool isDark;
   final Function formatAmount;
-  final P2PService p2pService;
+  final ValueNotifier<bool> hasAgreed;
 
   const PaymentConfirmationDialog({
     Key? key,
     required this.trackingId,
     required this.orderDetails,
+    required this.p2pService,
     required this.isDark,
     required this.formatAmount,
-    required this.p2pService,
+    required this.hasAgreed,
   }) : super(key: key);
 
   @override
@@ -105,12 +107,56 @@ class PaymentConfirmationDialog extends StatefulWidget {
 
 class _PaymentConfirmationDialogState extends State<PaymentConfirmationDialog> {
   bool isSubmitting = false;
-  final hasAgreed = ValueNotifier<bool>(false);
 
-  @override
-  void dispose() {
-    hasAgreed.dispose();
-    super.dispose();
+  Widget _buildConfirmationDetailCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -207,12 +253,12 @@ class _PaymentConfirmationDialogState extends State<PaymentConfirmationDialog> {
                             width: 24,
                             height: 24,
                             child: Checkbox(
-                              value: hasAgreed.value,
+                              value: widget.hasAgreed.value,
                               onChanged: isSubmitting 
                                 ? null 
                                 : (newValue) {
                                     setState(() {
-                                      hasAgreed.value = newValue ?? false;
+                                      widget.hasAgreed.value = newValue ?? false;
                                     });
                                   },
                               activeColor: SafeJetColors.secondaryHighlight,
@@ -265,7 +311,7 @@ class _PaymentConfirmationDialogState extends State<PaymentConfirmationDialog> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: (!hasAgreed.value || isSubmitting) 
+                      onPressed: (!widget.hasAgreed.value || isSubmitting) 
                         ? null 
                         : () async {
                             setState(() {
@@ -320,57 +366,6 @@ class _PaymentConfirmationDialogState extends State<PaymentConfirmationDialog> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildConfirmationDetailCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1826,6 +1821,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               ),
             ),
             const SizedBox(width: 12),
+
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
@@ -1834,16 +1830,10 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     builder: (context) => PaymentConfirmationDialog(
                       trackingId: widget.trackingId,
                       orderDetails: _orderDetails!,
-                      isDark: isDark,
-                      formatAmount: (amount) {
-                        // Determine if this is a crypto or fiat amount and format accordingly
-                        if (_orderDetails!['offer']['type'] == 'CRYPTO') {
-                          return _formatCryptoAmount(double.parse(amount.toString()));
-                        } else {
-                          return _formatFiatAmount(double.parse(amount.toString()));
-                        }
-                      },
                       p2pService: _p2pService,
+                      isDark: isDark,
+                      formatAmount: _formatAmount,
+                      hasAgreed: hasAgreed,
                     ),
                   );
                 },
@@ -1855,7 +1845,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   ),
                 ),
                 child: const Text('I Have Paid'),
-              ),              
+              ),
             ),
           ],
         ),
@@ -1900,19 +1890,20 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 ),
                 child: const Text('Cancel Order'),
               ),
-            ),   
+            ),
             const SizedBox(width: 12),
+
 
             Expanded(
               child: ElevatedButton(
                 onPressed: () => _showDisputeDialog(),
-                                              style: ElevatedButton.styleFrom(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: SafeJetColors.error,
-                                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                              ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
                 child: const Text('Raise Dispute'),
               ),
             ),
@@ -2032,8 +2023,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }
 
 
-  void _showDisputeDialog() {
-    final TextEditingController reasonController = TextEditingController();
+void _showDisputeDialog() {
+  final TextEditingController reasonController = TextEditingController();
   bool isSubmitting = false;
   bool hasConfirmedDispute = false;
   DisputeReasonType selectedReasonType = DisputeReasonType.OTHER;
@@ -2053,7 +2044,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }).toList();
 
   showDialog<bool>(
-      context: context,
+    context: context,
     builder: (context) => Dialog.fullscreen(
       child: Scaffold(
         backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
@@ -2081,13 +2072,13 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               children: [
                 Expanded(
                   child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
                           'Please provide details about your dispute:',
-                style: TextStyle(
+                          style: TextStyle(
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
                             fontSize: 16,
                           ),
@@ -2129,9 +2120,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                           style: TextStyle(
                             color: isDark ? Colors.white : Colors.black,
                             fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 12),
                         Container(
                           decoration: BoxDecoration(
@@ -2207,17 +2198,17 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                           ),
                         ),
                         const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                maxLines: 4,
-                decoration: InputDecoration(
+                        TextField(
+                          controller: reasonController,
+                          maxLines: 4,
+                          decoration: InputDecoration(
                             hintText: 'Explain your issue in detail...',
                             filled: true,
                             fillColor: isDark 
                               ? Colors.black.withOpacity(0.3) 
                               : Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
                                 color: isDark
                                   ? Colors.white.withOpacity(0.1)
@@ -2285,10 +2276,10 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-            onPressed: () => Navigator.pop(context),
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -2310,39 +2301,39 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                         ),
                       ),
                       const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
+                      Expanded(
+                        child: ElevatedButton(
                           onPressed: isSubmitting || reasonController.text.trim().isEmpty || !hasConfirmedDispute
                             ? null 
                             : () async {
                                 setState(() {
                                   isSubmitting = true;
                                 });
-                        try {
-                          await _p2pService.disputeOrder(
-                            widget.trackingId,
+                                try {
+                                  await _p2pService.disputeOrder(
+                                    widget.trackingId,
                                     selectedReasonType.value,
-                            reasonController.text.trim(),
-                          );
-                          if (mounted) {
+                                    reasonController.text.trim(),
+                                  );
+                                  if (mounted) {
                                     Navigator.of(context).pop(true);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Dispute raised successfully')),
-                            );
-                          }
-                        } catch (e) {
-                          if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Dispute raised successfully')),
+                                    );
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
                                     setState(() {
                                       isSubmitting = false;
                                     });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.toString())),
-                            );
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: SafeJetColors.error,
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(e.toString())),
+                                    );
+                                  }
+                                }
+                              },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: SafeJetColors.error,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -2364,19 +2355,19 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                    ),
-          ),
-        ],
+                        ),
+                      ),
+                    ],
                   ),
-              ),
-            ],
+                ),
+              ],
             );
           },
-          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   // Helper method to determine if current user is the seller
   bool _isCurrentUserSeller() {
@@ -2432,10 +2423,6 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     return DateTime.now().difference(createdAt) > paymentTimeLimit;
   }
 
-  bool _isCurrentUserBuyer() {
-    return _orderDetails?['buyerId'] == _userId;
-  }
-
   String _formatAmount(dynamic amount) {
     if (amount == null) return '0';
     
@@ -2460,5 +2447,9 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     }
     
     return wholeNumber;
+  }
+
+  bool _isCurrentUserBuyer() {
+    return _orderDetails?['buyerId'] == _userId;
   }
 } 
