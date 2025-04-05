@@ -30,6 +30,7 @@ class SafeJetColors {
   static const warning = Color(0xFFFFC107);
   static const error = Color(0xFFDC3545);
   static const info = Color(0xFF17A2B8);
+  static const blue = Color(0xFF007BFF);
   
   static const Color primary = Color(0xFF6200EE);
 

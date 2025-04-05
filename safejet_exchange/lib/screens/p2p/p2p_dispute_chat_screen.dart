@@ -251,8 +251,50 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
       }
     }
 
+    // Determine if the sender is a buyer or seller
+    final isSenderBuyer = _isSenderBuyer(message);
+    
     // Display user messages (either current user or other party)
-    return _buildUserMessage(message, isCurrentUser, isDark);
+    return _buildUserMessage(message, isCurrentUser, isDark, isSenderBuyer);
+  }
+
+  // Helper method to determine if a sender is a buyer based on message data
+  bool _isSenderBuyer(Map<String, dynamic> message) {
+    // First try to get role from the message itself
+    if (message['senderRole']?.toString().toLowerCase() == 'buyer') {
+      return true;
+    } else if (message['senderRole']?.toString().toLowerCase() == 'seller') {
+      return false;
+    }
+    
+    // Try to infer from dispute details if available
+    if (_disputeDetails != null) {
+      final dispute = _disputeDetails!;
+      final senderId = message['senderId']?.toString() ?? '';
+      
+      // Check if sender is initiator or respondent and their role
+      final initiatorId = dispute['initiatorId']?.toString() ?? '';
+      final respondentId = dispute['respondentId']?.toString() ?? '';
+      final buyerId = dispute['order']?['buyerId']?.toString() ?? '';
+      final sellerId = dispute['order']?['sellerId']?.toString() ?? '';
+      
+      if (senderId == buyerId) {
+        return true; // Sender is the buyer
+      } else if (senderId == sellerId) {
+        return false; // Sender is the seller
+      } else if (senderId == initiatorId && dispute['order']?['buyerId'] == initiatorId) {
+        return true; // Initiator is buyer
+      } else if (senderId == respondentId && dispute['order']?['buyerId'] == respondentId) {
+        return true; // Respondent is buyer
+      } else if (senderId == initiatorId && dispute['order']?['sellerId'] == initiatorId) {
+        return false; // Initiator is seller
+      } else if (senderId == respondentId && dispute['order']?['sellerId'] == respondentId) {
+        return false; // Respondent is seller
+      }
+    }
+    
+    // Default to false (seller) if we can't determine
+    return false;
   }
 
   Widget _buildSystemMessage(Map<String, dynamic> message, bool isDark) {
@@ -338,7 +380,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                _buildMessageContent(message, false, isDark),
+                _buildMessageContent(message, false, isDark, false),
               ],
             ),
           ),
@@ -347,11 +389,10 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     );
   }
 
-  Widget _buildUserMessage(Map<String, dynamic> message, bool isCurrentUser, bool isDark) {
-    final userName = isCurrentUser 
-        ? 'You'
-        : message['sender']?['username'] ?? 'User';
-        
+  Widget _buildUserMessage(Map<String, dynamic> message, bool isCurrentUser, bool isDark, bool isBuyer) {
+    final userName = message['sender']?['username'] ?? (isBuyer ? 'Buyer' : 'Seller');
+    final roleLabel = isBuyer ? 'Buyer' : 'Seller';
+    
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -360,33 +401,62 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
         children: [
           if (!isCurrentUser) ...[
             CircleAvatar(
-              backgroundColor: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                  : SafeJetColors.lightCardBorder,
+              backgroundColor: isBuyer
+                  ? SafeJetColors.blue.withOpacity(0.2)
+                  : SafeJetColors.success.withOpacity(0.2),
               radius: 16,
               child: Text(
-                userName[0].toUpperCase(),
+                isBuyer ? 'B' : 'S',
                 style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87,
+                  color: isBuyer ? SafeJetColors.blue : SafeJetColors.success,
                   fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
             const SizedBox(width: 8),
           ],
           Flexible(
-            child: _buildMessageContent(message, isCurrentUser, isDark),
+            child: Column(
+              crossAxisAlignment: isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                if (!isCurrentUser) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(
+                      color: isBuyer 
+                          ? SafeJetColors.blue.withOpacity(0.1)
+                          : SafeJetColors.success.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      roleLabel,
+                      style: TextStyle(
+                        color: isBuyer ? SafeJetColors.blue : SafeJetColors.success,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+                _buildMessageContent(message, isCurrentUser, isDark, isBuyer),
+              ],
+            ),
           ),
           if (isCurrentUser) ...[
             const SizedBox(width: 8),
             CircleAvatar(
-              backgroundColor: SafeJetColors.primary,
+              backgroundColor: isBuyer
+                  ? SafeJetColors.blue
+                  : SafeJetColors.success,
               radius: 16,
               child: Text(
-                'You',
-                style: TextStyle(
+                isBuyer ? 'B' : 'S',
+                style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 10,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -396,23 +466,28 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     );
   }
 
-  Widget _buildMessageContent(Map<String, dynamic> message, bool isCurrentUser, bool isDark) {
+  Widget _buildMessageContent(Map<String, dynamic> message, bool isCurrentUser, bool isDark, bool isBuyer) {
+    final bubbleColor = isCurrentUser
+        ? (isBuyer ? SafeJetColors.blue : SafeJetColors.success)
+        : isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground;
+            
+    final borderColor = !isCurrentUser
+        ? isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+            : SafeJetColors.lightCardBorder
+        : Colors.transparent;
+        
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isCurrentUser
-            ? SafeJetColors.primary
-            : isDark
-                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                : SafeJetColors.lightCardBackground,
+        color: bubbleColor,
         borderRadius: BorderRadius.circular(12),
-        border: !isCurrentUser
-            ? Border.all(
-                color: isDark
-                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                    : SafeJetColors.lightCardBorder,
-              )
-            : null,
+        border: Border.all(
+          color: borderColor,
+          width: !isCurrentUser ? 1 : 0,
+        ),
       ),
       child: Column(
         crossAxisAlignment: isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
