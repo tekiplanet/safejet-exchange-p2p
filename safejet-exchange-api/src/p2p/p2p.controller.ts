@@ -422,4 +422,23 @@ export class P2PController {
     await this.p2pService.markDisputeMessageAsRead(messageId);
     return { success: true };
   }
+
+  @Post('disputes/:disputeId/progress')
+  @UseGuards(JwtAuthGuard)
+  async addDisputeProgress(
+    @Param('disputeId') disputeId: string,
+    @Body() 
+    progressData: { 
+      title: string; 
+      details: string; 
+    },
+    @GetUser('id') adminId: string,
+  ) {
+    return this.p2pService.addDisputeProgress(
+      disputeId,
+      progressData.title,
+      progressData.details,
+      adminId
+    );
+  }
 } 

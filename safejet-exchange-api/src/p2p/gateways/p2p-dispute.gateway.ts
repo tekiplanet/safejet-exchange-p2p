@@ -248,12 +248,42 @@ export class P2PDisputeGateway implements OnGatewayConnection, OnGatewayDisconne
       this.server.to(`dispute_${disputeId}`).emit('disputeMessageUpdate', {
         type: 'disputeMessageUpdate',
         disputeId,
-        message
+        message,
       });
-      this.logger.debug('Dispute update emitted successfully');
     } catch (error) {
-      this.logger.error(`Error emitting dispute update: ${error.message}`);
-      this.logger.error(error.stack);
+      this.logger.error('Error emitting dispute message update:', error);
+    }
+  }
+
+  // Method to emit dispute updates including progress history changes
+  async emitDisputeUpdate(disputeId: string, dispute: P2PDispute) {
+    try {
+      this.logger.debug(`Emitting full dispute update to room: dispute_${disputeId}`);
+      
+      this.server.to(`dispute_${disputeId}`).emit('disputeUpdate', {
+        type: 'disputeUpdate',
+        disputeId,
+        dispute,
+      });
+      
+      // Also send to users directly
+      if (dispute.initiatorId) {
+        this.server.to(`user_${dispute.initiatorId}`).emit('disputeUpdate', {
+          type: 'disputeUpdate',
+          disputeId,
+          dispute,
+        });
+      }
+      
+      if (dispute.respondentId) {
+        this.server.to(`user_${dispute.respondentId}`).emit('disputeUpdate', {
+          type: 'disputeUpdate',
+          disputeId,
+          dispute,
+        });
+      }
+    } catch (error) {
+      this.logger.error('Error emitting dispute update:', error);
     }
   }
 

@@ -20,6 +20,14 @@ export enum DisputeStatus {
   CLOSED = 'closed'
 }
 
+// Interface for progress history items
+export interface DisputeProgressItem {
+  title: string;
+  details: string;
+  timestamp: string;
+  addedBy: string;
+}
+
 @Entity('p2p_disputes')
 export class P2PDispute {
   @PrimaryGeneratedColumn('uuid')
@@ -65,6 +73,9 @@ export class P2PDispute {
 
   @Column({ type: 'jsonb', nullable: true })
   evidence: any;
+
+  @Column({ type: 'jsonb', default: [] })
+  progressHistory: DisputeProgressItem[];
 
   @CreateDateColumn()
   createdAt: Date;

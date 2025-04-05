@@ -1289,6 +1289,14 @@ export class P2PService {
 
     await this.orderRepository.save(order);
 
+    // Add system message to chat
+    const isUserBuyer = order.buyerId === userId;
+    const userRole = isUserBuyer ? 'buyer' : 'seller';
+    await this.createSystemMessage(
+      order.id,
+      `The ${userRole} has raised a dispute: ${reason}`
+    );
+    
     // TODO: Send notification to admin and counterparty
 
     return { message: 'Dispute raised successfully' };
@@ -1537,9 +1545,25 @@ export class P2PService {
       evidence,
     });
 
+    // Initialize progress history with the first entry
+    dispute.progressHistory = [{
+      title: 'Dispute Opened',
+      details: reason,
+      timestamp: new Date().toISOString(),
+      addedBy: userId
+    }];
+
     const savedDispute = await this.p2pDisputeRepository.save(dispute);
 
-    // Create system message
+    // Add system message to regular P2P chat
+    const isUserBuyer = order.buyerId === userId;
+    const userRole = isUserBuyer ? 'buyer' : 'seller';
+    await this.createSystemMessage(
+      order.id,
+      `The ${userRole} has raised a dispute: ${reason}`
+    );
+
+    // Create system message for dispute chat
     await this.createDisputeSystemMessage(
       savedDispute.id,
       `Dispute opened by ${userId === order.buyerId ? 'buyer' : 'seller'}: ${reason}`
@@ -1776,6 +1800,78 @@ export class P2PService {
       await this.disputeMessageRepository.save(message);
       await this.disputeGateway.emitDisputeMessageUpdate(message.disputeId, message);
     }
+  }
+
+  /**
+   * Add a progress step to a dispute's history
+   * @param disputeId ID of the dispute to update
+   * @param title Short title for the progress step
+   * @param details Detailed description of the progress
+   * @param adminId ID of the admin adding this progress step
+   * @returns Updated P2PDispute object
+   */
+  async addDisputeProgress(
+    disputeId: string,
+    title: string,
+    details: string,
+    adminId: string
+  ): Promise<P2PDispute> {
+    // Find the dispute
+    const dispute = await this.p2pDisputeRepository.findOne({
+      where: { id: disputeId },
+      relations: ['order', 'initiator', 'respondent'],
+    });
+
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
+
+    // Verify admin
+    const admin = await this.userRepository.findOne({
+      where: { id: adminId },
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    // Create progress item
+    const progressItem = {
+      title,
+      details,
+      timestamp: new Date().toISOString(),
+      addedBy: adminId
+    };
+
+    // Add to progress history
+    if (!dispute.progressHistory) {
+      dispute.progressHistory = [];
+    }
+    
+    dispute.progressHistory.push(progressItem);
+
+    // Save the updated dispute
+    const updatedDispute = await this.p2pDisputeRepository.save(dispute);
+
+    // Create a system message in the dispute chat to notify both parties
+    await this.createDisputeSystemMessage(
+      disputeId,
+      `Progress Update - ${title}: ${details}`
+    );
+
+    // Create a system message in the P2P chat
+    await this.createSystemMessage(
+      dispute.order.id,
+      `Dispute Progress Update - ${title}: ${details}`
+    );
+
+    // Emit update to websocket
+    this.disputeGateway.emitDisputeUpdate(
+      disputeId, 
+      updatedDispute
+    );
+
+    return updatedDispute;
   }
 
   async getOrdersByUser(userId: string): Promise<Order[]> {
