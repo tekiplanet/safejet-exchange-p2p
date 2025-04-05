@@ -572,4 +572,45 @@ export class EmailService {
       console.error('P2P dispute created admin email error:', error);
     }
   }
+
+  async sendP2PDisputeMessageNotification(
+    params: {
+      userEmail: string;
+      userName: string;
+      adminEmail: string;
+      disputeId: string;
+      trackingId: string;
+      initiatorName: string;
+      respondentName: string;
+    }
+  ): Promise<void> {
+    try {
+      // Send email to the user
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: params.userEmail,
+        subject: `New Dispute Message - Order #${params.trackingId}`,
+        html: this.emailTemplatesService.p2pDisputeMessageUserEmail(
+          params.userName,
+          params.disputeId,
+          params.trackingId,
+        ),
+      });
+
+      // Send email to admin
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: params.adminEmail,
+        subject: `New Dispute Message - Order #${params.trackingId}`,
+        html: this.emailTemplatesService.p2pDisputeMessageAdminEmail(
+          params.disputeId,
+          params.trackingId,
+          params.initiatorName,
+          params.respondentName,
+        ),
+      });
+    } catch (error) {
+      console.error('P2P dispute message notification email error:', error);
+    }
+  }
 }

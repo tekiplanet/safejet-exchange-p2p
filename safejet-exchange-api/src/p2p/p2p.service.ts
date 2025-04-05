@@ -1795,6 +1795,34 @@ export class P2PService {
       await this.disputeGateway.emitDisputeMessageUpdate(disputeId, savedMessage);
       console.log('Message emitted to websocket');
 
+      // Send email notifications
+      try {
+        // Get admin email from database
+        const admins = await this.p2pDisputeRepository.manager.query(
+          `SELECT email FROM admins WHERE "isActive" = true LIMIT 1`
+        );
+        const adminEmail = admins?.[0]?.email;
+
+        if (adminEmail) {
+          // Determine recipient (the other party)
+          const isInitiator = userId === dispute.initiatorId;
+          const recipient = isInitiator ? dispute.respondent : dispute.initiator;
+
+          await this.emailService.sendP2PDisputeMessageNotification({
+            userEmail: recipient.email,
+            userName: recipient.fullName,
+            adminEmail,
+            disputeId,
+            trackingId: dispute.order.trackingId,
+            initiatorName: dispute.initiator.fullName,
+            respondentName: dispute.respondent.fullName,
+          });
+        }
+      } catch (error) {
+        console.error('Error sending dispute message notification emails:', error);
+        // Don't throw error here - we don't want to fail the message send if email fails
+      }
+
       return savedMessage;
     } catch (error) {
       console.error('Failed to save message:', error);

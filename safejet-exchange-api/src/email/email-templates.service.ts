@@ -1002,4 +1002,70 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  p2pDisputeMessageUserEmail(
+    userName: string,
+    disputeId: string,
+    trackingId: string,
+    isDark = true
+  ): string {
+    const content = `
+      <h1>New Dispute Message Received 💬</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A new message has been sent in your dispute case:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Dispute ID: ${disputeId}</p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>Please log in to your SafeJet Exchange account to view and respond to the message.</p>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  p2pDisputeMessageAdminEmail(
+    disputeId: string,
+    trackingId: string,
+    initiatorName: string,
+    respondentName: string,
+    isDark = true
+  ): string {
+    const content = `
+      <h1>New Dispute Message Received ⚠️</h1>
+      <p>Hello Admin,</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A new message has been sent in a dispute case:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Dispute ID: ${disputeId}</p>
+          <p style="margin: 5px 0;">Initiator: ${initiatorName}</p>
+          <p style="margin: 5px 0;">Respondent: ${respondentName}</p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Required Actions 🚀</h2>
+        <ol>
+          <li>Log in to the admin panel</li>
+          <li>Navigate to P2P Disputes section</li>
+          <li>Review the new message and take appropriate action</li>
+        </ol>
+      </div>
+
+      <p>Thank you for your attention to this matter.</p>
+      <p>Best regards,<br>The SafeJet System</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }
