@@ -735,6 +735,83 @@ class P2PService {
     _chatSocket = null;
   }
 
+  Future<Map<String, dynamic>> getDisputeByOrderId(String trackingId) async {
+    try {
+      final response = await _dio.get(
+        '/p2p/disputes/order/$trackingId',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      
+      if (response.statusCode == 200) {
+        print('Dispute details fetched successfully: ${response.data}');
+        return response.data;
+      } else {
+        throw Exception('Failed to load dispute details');
+      }
+    } catch (e) {
+      print('Error fetching dispute details: $e');
+      throw _handleError(e);
+    }
+  }
+
+  String formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      final now = DateTime.now();
+      final difference = now.difference(date);
+      
+      if (difference.inDays == 0) {
+        // Today - show time only
+        return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      } else if (difference.inDays == 1) {
+        // Yesterday
+        return 'Yesterday, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      } else if (difference.inDays < 7) {
+        // This week
+        final weekday = _getWeekdayName(date.weekday);
+        return '$weekday, ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      } else {
+        // Older - show full date
+        final monthName = _getMonthName(date.month);
+        return '$monthName ${date.day}, ${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+      }
+    } catch (e) {
+      print('Error formatting date: $e');
+      return dateString; // Return original string if parsing fails
+    }
+  }
+
+  String _getWeekdayName(int weekday) {
+    switch (weekday) {
+      case 1: return 'Monday';
+      case 2: return 'Tuesday';
+      case 3: return 'Wednesday';
+      case 4: return 'Thursday';
+      case 5: return 'Friday';
+      case 6: return 'Saturday';
+      case 7: return 'Sunday';
+      default: return '';
+    }
+  }
+
+  String _getMonthName(int month) {
+    switch (month) {
+      case 1: return 'Jan';
+      case 2: return 'Feb';
+      case 3: return 'Mar';
+      case 4: return 'Apr';
+      case 5: return 'May';
+      case 6: return 'Jun';
+      case 7: return 'Jul';
+      case 8: return 'Aug';
+      case 9: return 'Sep';
+      case 10: return 'Oct';
+      case 11: return 'Nov';
+      case 12: return 'Dec';
+      default: return '';
+    }
+  }
+
   void dispose() {
     print('=== DISPOSING P2P SERVICE ===');
     _chatSocket?.disconnect();

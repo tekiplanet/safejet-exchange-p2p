@@ -24,6 +24,7 @@ import 'providers/language_settings_provider.dart';
 import '../services/language_settings_service.dart';
 import 'providers/biometric_settings_provider.dart';
 import '../services/biometric_settings_service.dart';
+import './services/p2p_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -55,6 +56,9 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider.value(value: authProvider),  // Use the same instance
+        Provider<P2PService>(
+          create: (context) => P2PService(),
+        ),
         ChangeNotifierProvider(
           create: (context) => KYCProvider(
             KYCService(dio),
