@@ -7,6 +7,8 @@ import '../../services/p2p_service.dart';
 import '../../widgets/loading_indicator.dart';
 import 'dart:math' as math;
 import 'p2p_dispute_chat_screen.dart';
+import 'dart:convert';
+import 'dart:async';
 
 class P2PDisputeDetailsScreen extends StatefulWidget {
   final String orderId;
@@ -25,6 +27,7 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
   String _errorMessage = '';
   Map<String, dynamic>? _disputeData;
   P2PService? _p2pService;
+  String? _counterparty;
 
   @override
   void initState() {
@@ -167,7 +170,7 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
                 _buildDisputeTimeline(isDark),
               ],
             ),
-      ),
+          ),
       floatingActionButton: _disputeData != null 
         ? FloatingActionButton(
             onPressed: () => _openDisputeChat(), 
@@ -345,10 +348,6 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
     final total = order['currencyAmount'] ?? order['total'] ?? dispute['currencyAmount'] ?? '0';
     final createdAtStr = order['createdAt'] ?? dispute['createdAt'] ?? '';
     
-    // Debug print to see all available data
-    print('Dispute data: ${_disputeData.toString().substring(0, math.min(_disputeData.toString().length, 1000))}');
-    print('Order data: ${order.toString().substring(0, math.min(order.toString().length, 1000))}');
-    
     // Get crypto asset from different possible API response formats with more checks
     String cryptoAsset = '';
     
@@ -423,27 +422,76 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
     // Format total amount - with thousand separators
     final formattedTotal = _formatFiatAmount(total);
     
-    // Determine counterparty based on order type
-    String counterparty = 'Unknown';
-    final isBuy = order['isBuy'] == true || dispute['isBuy'] == true;
+    // Get buyer and seller details
+    final buyer = order['buyer'] ?? dispute['buyer'] ?? {};
+    final seller = order['seller'] ?? dispute['seller'] ?? {};
     
-    if (isBuy) {
-      if (order['seller'] != null) {
-        counterparty = order['seller']['username'] ?? order['seller']['fullName'] ?? 'Unknown Seller';
-      } else if (dispute['seller'] != null) {
-        counterparty = dispute['seller']['username'] ?? dispute['seller']['fullName'] ?? 'Unknown Seller';
-      } else {
-        counterparty = 'Unknown Seller';
+    // Get buyer and seller names
+    final buyerName = buyer['fullName'] ?? buyer['username'] ?? 'Unknown Buyer';
+    final sellerName = seller['fullName'] ?? seller['username'] ?? 'Unknown Seller';
+    
+    // Determine if current user is buyer or seller by checking the dispute initiator
+    final initiatorId = dispute['initiatorId'] ?? '';
+    final respondentId = dispute['respondentId'] ?? '';
+    final buyerId = buyer['id'] ?? '';
+    final sellerId = seller['id'] ?? '';
+    
+    // Extract current user ID from secure storage
+    Future<String> getCurrentUserId() async {
+      if (_p2pService == null) {
+        _p2pService = P2PService();
       }
-    } else {
-      if (order['buyer'] != null) {
-        counterparty = order['buyer']['username'] ?? order['buyer']['fullName'] ?? 'Unknown Buyer';
-      } else if (dispute['buyer'] != null) {
-        counterparty = dispute['buyer']['username'] ?? dispute['buyer']['fullName'] ?? 'Unknown Buyer';
-      } else {
-        counterparty = 'Unknown Buyer';
+      
+      try {
+        final userId = await _p2pService!.extractUserIdFromToken();
+        print('Current user ID from token: $userId');
+        return userId ?? '';
+      } catch (e) {
+        print('Error getting user ID: $e');
+        return '';
       }
     }
+    
+    // Async method to determine and update counterparty
+    Future<void> updateCounterparty() async {
+      final currentUserId = await getCurrentUserId();
+      
+      String newCounterparty = 'Unknown';
+      
+      if (currentUserId.isNotEmpty) {
+        if (currentUserId == buyerId) {
+          // Current user is buyer, counterparty is seller
+          newCounterparty = sellerName;
+          print('User is buyer, counterparty is seller: $sellerName');
+        } else if (currentUserId == sellerId) {
+          // Current user is seller, counterparty is buyer
+          newCounterparty = buyerName;
+          print('User is seller, counterparty is buyer: $buyerName');
+        } else {
+          // If we can't match the user, provide a fallback
+          newCounterparty = initiatorId == buyerId ? sellerName : buyerName;
+          print('Could not match user ID, showing counterparty as: $newCounterparty');
+        }
+        
+        // Update the UI if counterparty changed
+        if (mounted) {
+          setState(() {
+            _counterparty = newCounterparty;
+          });
+        }
+      }
+    }
+    
+    // Start the async operation to update counterparty
+    if (_counterparty == null) {
+      // Set initial value
+      _counterparty = 'Loading...';
+      // Update it asynchronously
+      updateCounterparty();
+    }
+    
+    // Use the _counterparty field or fallback
+    final counterparty = _counterparty ?? 'Unknown';
     
     return Container(
       padding: const EdgeInsets.all(16),

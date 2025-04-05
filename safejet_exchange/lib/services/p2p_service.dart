@@ -177,6 +177,83 @@ class P2PService {
     }
   }
 
+  Future<Map<String, dynamic>?> getProfile() async {
+    try {
+      // Try user profile endpoint first
+      final response = await _dio.get('/user/profile');
+      if (response.statusCode == 200) {
+        print('Profile fetched successfully: ${response.data}');
+        return Map<String, dynamic>.from(response.data);
+      }
+      
+      // If that fails, try the account endpoint
+      print('Profile endpoint returned ${response.statusCode}, trying account endpoint');
+      final accountResponse = await _dio.get('/account');
+      if (accountResponse.statusCode == 200) {
+        print('Account fetched successfully: ${accountResponse.data}');
+        return Map<String, dynamic>.from(accountResponse.data);
+      }
+      
+      // If all API calls fail, try to extract user ID from token
+      print('Failed to load profile from APIs, attempting to extract from token');
+      final userId = await extractUserIdFromToken();
+      if (userId != null) {
+        print('Extracted user ID from token: $userId');
+        return {'id': userId};
+      }
+      
+      print('Failed to get user profile through all methods');
+      return null;
+    } catch (e) {
+      print('Error fetching profile: $e');
+      
+      // Last resort: try to get ID from token
+      try {
+        final userId = await extractUserIdFromToken();
+        if (userId != null) {
+          print('Extracted user ID from token as fallback: $userId');
+          return {'id': userId};
+        }
+      } catch (tokenError) {
+        print('Error extracting user ID from token: $tokenError');
+      }
+      
+      return null;
+    }
+  }
+
+  Future<String?> extractUserIdFromToken() async {
+    try {
+      final token = await storage.read(key: 'accessToken');
+      if (token == null) return null;
+      
+      // JWT tokens are split into 3 parts by dots
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      
+      // The second part contains the payload
+      String payload = parts[1];
+      
+      // Add padding if needed
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      
+      // Decode the base64 payload
+      final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final Map<String, dynamic> data = jsonDecode(decoded);
+      
+      // Extract the user ID (typically stored as 'sub' or 'id' in JWT)
+      final userId = data['sub'] ?? data['id'] ?? data['userId'];
+      print('Token payload: $data');
+      return userId?.toString();
+    } catch (e) {
+      print('Error parsing JWT token: $e');
+      return null;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getMyOffers(bool isBuy) async {
     try {
       final response = await _dio.get(
@@ -904,29 +981,29 @@ class P2PService {
     });
 
     _disputeChatSocket?.onDisconnect((_) {
-      print('=== DISPUTE SOCKET DISCONNECTED ===');
-      print('Reason: ${_disputeChatSocket?.io?.engine?.transport?.readyState}');
+      // print('=== DISPUTE SOCKET DISCONNECTED ===');
+      // print('Reason: ${_disputeChatSocket?.io?.engine?.transport?.readyState}');
     });
 
     _disputeChatSocket?.onConnectError((err) {
       print('=== DISPUTE SOCKET CONNECT ERROR ===');
       print('Error details: $err');
-      print('Attempting to connect to: $apiUrl/p2p/dispute');
+      // print('Attempting to connect to: $apiUrl/p2p/dispute');
     });
     _disputeChatSocket?.onConnectTimeout((_) => print('=== DISPUTE SOCKET CONNECT TIMEOUT ==='));
 
     _disputeChatSocket?.on('disputeMessageUpdate', (data) {
-      print('=== DISPUTE MESSAGE UPDATE RECEIVED ===');
-      print('Raw socket data: $data');
-      print('Current DisputeID: $_currentDisputeId');
-      print('Data type: ${data['type']}');
-      print('Data disputeId: ${data['disputeId']}');
-      print('Message content: ${data['message']}');
+      // print('=== DISPUTE MESSAGE UPDATE RECEIVED ===');
+      // print('Raw socket data: $data');
+      // print('Current DisputeID: $_currentDisputeId');
+      // print('Data type: ${data['type']}');
+      // print('Data disputeId: ${data['disputeId']}');
+      // print('Message content: ${data['message']}');
       
       try {
         if (!_disputeChatUpdateController.isClosed) {
           _disputeChatUpdateController.add(data);
-          print('Dispute data added to controller');
+          // print('Dispute data added to controller');
         } else {
           print('Warning: Attempted to add data to closed dispute controller');
         }
@@ -936,24 +1013,24 @@ class P2PService {
     });
 
     _disputeChatSocket?.on('disputeMessageDelivered', (data) {
-      print('=== DISPUTE MESSAGE DELIVERED ===');
-      print('Data: $data');
+      // print('=== DISPUTE MESSAGE DELIVERED ===');
+      // print('Data: $data');
       if (!_disputeChatUpdateController.isClosed) {
         _disputeChatUpdateController.add(data);
       }
     });
 
     _disputeChatSocket?.on('disputeMessageRead', (data) {
-      print('=== DISPUTE MESSAGE READ ===');
-      print('Data: $data');
+      // print('=== DISPUTE MESSAGE READ ===');
+      // print('Data: $data');
       if (!_disputeChatUpdateController.isClosed) {
         _disputeChatUpdateController.add(data);
       }
     });
 
     _disputeChatSocket?.on('disputeUpdate', (data) {
-      print('=== DISPUTE UPDATE RECEIVED ===');
-      print('Data: $data');
+      // print('=== DISPUTE UPDATE RECEIVED ===');
+      // print('Data: $data');
       if (!_disputeChatUpdateController.isClosed) {
         _disputeChatUpdateController.add(data);
       }
@@ -966,14 +1043,14 @@ class P2PService {
 
     _disputeChatSocket?.connect();
 
-    print('=== DISPUTE CONNECTION ATTEMPT COMPLETE ===');
+    // print('=== DISPUTE CONNECTION ATTEMPT COMPLETE ===');
   }
 
   void joinDisputeChat(String disputeId) {
-    print('Joining dispute chat room: $disputeId');
+    // print('Joining dispute chat room: $disputeId');
     _currentDisputeId = disputeId;
-    print('Current dispute socket status: ${_disputeChatSocket?.connected}');
-    print('Socket ID: ${_disputeChatSocket?.id}');
+    // print('Current dispute socket status: ${_disputeChatSocket?.connected}');
+    // print('Socket ID: ${_disputeChatSocket?.id}');
     _disputeChatSocket?.emit('joinDispute', {'disputeId': disputeId});
   }
 
@@ -983,7 +1060,7 @@ class P2PService {
         '/p2p/disputes/$disputeId/messages',
         options: Options(headers: await _getAuthHeaders()),
       );
-      print('Fetched dispute messages: ${response.data}');
+      // print('Fetched dispute messages: ${response.data}');
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
       print('Error getting dispute messages: $e');
@@ -995,34 +1072,69 @@ class P2PService {
     print('=== SENDING DISPUTE MESSAGE ===');
     print('DisputeID for sending: $disputeId');
     print('Current DisputeID: $_currentDisputeId');
+    print('Message length: ${message.length}');
+    print('Has attachment: ${attachment != null}');
+    
     try {
-      final response = await _dio.post('/p2p/disputes/$disputeId/messages', data: {
-        'message': message,
-        'attachment': attachment,
-      });
+      // Validate attachment format if present
+      if (attachment != null) {
+        print('Attachment length: ${attachment.length}');
+        print('Attachment starts with: ${attachment.substring(0, math.min(100, attachment.length))}...');
+        
+        if (!attachment.startsWith('data:image/')) {
+          throw Exception('Invalid attachment format: Missing data:image/ prefix');
+        }
+        
+        if (!attachment.contains(';base64,')) {
+          throw Exception('Invalid attachment format: Missing ;base64, marker');
+        }
+      }
+      
+      print('Sending HTTP request to: ${_dio.options.baseUrl}/p2p/disputes/$disputeId/messages');
+      final response = await _dio.post(
+        '/p2p/disputes/$disputeId/messages',
+        data: {
+          'message': message,
+          'attachment': attachment,
+        },
+        options: Options(
+          headers: {
+            ...await _getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          validateStatus: (status) => status! < 500, // Allow 4xx responses to be handled
+        ),
+      );
+      
+      print('HTTP response status: ${response.statusCode}');
+      print('HTTP response data: ${response.data}');
       
       if (response.statusCode != 201) {
-        throw Exception('Failed to send dispute message');
+        print('Failed to send dispute message: ${response.statusCode} - ${response.data}');
+        throw Exception('Failed to send dispute message: ${response.statusCode} - ${response.data}');
       }
 
       print('Dispute message sent via HTTP, emitting to WebSocket');
-      print('Response data: ${response.data}');
       _disputeChatSocket?.emit('sendDisputeMessage', {
         'disputeId': disputeId,
-        'message': message
+        'message': message,
+        'hasAttachment': attachment != null,
       });
 
       print('Dispute message sent successfully');
+      return response.data;
     } catch (e) {
       print('=== DISPUTE MESSAGE SEND ERROR ===');
       print('Error sending dispute message: $e');
+      print('Error type: ${e.runtimeType}');
       print(StackTrace.current);
+      rethrow;
     }
   }
 
   Future<void> markDisputeMessageAsDelivered(String messageId) async {
     try {
-      print('Marking dispute message as delivered: $messageId');
+      // print('Marking dispute message as delivered: $messageId');
       await _dio.post(
         '/p2p/disputes/messages/$messageId/delivered',
         options: Options(headers: await _getAuthHeaders()),

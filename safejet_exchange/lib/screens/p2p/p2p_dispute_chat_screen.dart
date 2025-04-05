@@ -12,6 +12,8 @@ import 'dart:io';
 import 'dart:convert';
 import '../../widgets/image_viewer.dart';
 import '../../widgets/loading_indicator.dart';
+import 'dart:math' as math;
+import 'package:http/http.dart' as http;
 
 class P2PDisputeChatScreen extends StatefulWidget {
   final String disputeId;
@@ -55,13 +57,19 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     print('=== INITIALIZING DISPUTE CHAT ===');
     print('DisputeID: ${widget.disputeId}');
     print('OrderID: ${widget.orderId}');
+    
     try {
-      // Fetch the current user ID from secure storage
-      final userId = await _p2pService.storage.read(key: 'userId');
+      // Test image endpoint to check if server configuration is correct
+      _testImageEndpoint();
+      
+      // Extract the user ID directly from the token using the service
+      final userId = await _p2pService.extractUserIdFromToken();
+      
       setState(() {
         _currentUserId = userId;
-        print('Current user ID: $_currentUserId');
       });
+      
+      print('Current user ID: $_currentUserId');
 
       // Connect to the dispute chat socket
       await _p2pService.connectToDisputeChat();
@@ -71,13 +79,35 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
       _p2pService.joinDisputeChat(widget.disputeId);
       print('Joined dispute chat: ${widget.disputeId}');
       
-      // Fetch dispute details (optional)
+      // Fetch dispute details with full relations (includes buyer, seller, initiator, respondent)
       try {
         final details = await _p2pService.getDisputeByOrderId(widget.orderId);
+        
+        // Debug: Print the full dispute details structure
+        print('=== FULL DISPUTE DETAILS ===');
+        print('Dispute data keys: ${details.keys.toList()}');
+        
         setState(() {
           _disputeDetails = details;
         });
         print('Dispute details loaded');
+        
+        // Log information about the involved parties to help with debugging
+        if (_disputeDetails != null) {
+          final order = _disputeDetails!['order'] ?? {};
+          final buyer = order['buyer'] ?? {};
+          final seller = order['seller'] ?? {};
+          
+          print('Buyer: ${buyer['fullName'] ?? buyer['username'] ?? 'Unknown'} (ID: ${buyer['id'] ?? 'Unknown'})');
+          print('Seller: ${seller['fullName'] ?? seller['username'] ?? 'Unknown'} (ID: ${seller['id'] ?? 'Unknown'})');
+          
+          if (_currentUserId != null) {
+            print('Current user is buyer: ${_currentUserId == buyer['id']}');
+            print('Current user is seller: ${_currentUserId == seller['id']}');
+          } else {
+            print('Cannot determine user role: currentUserId is null');
+          }
+        }
       } catch (e) {
         print('Error loading dispute details: $e');
       }
@@ -85,6 +115,29 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
       // Fetch initial messages
       final messages = await _p2pService.getDisputeMessages(widget.disputeId);
       print('Fetched initial dispute messages: ${messages.length}');
+
+      // If we have messages, analyze the first few to understand structure
+      if (messages.isNotEmpty) {
+        print('=== MESSAGE DATA STRUCTURE ===');
+        final firstMessage = messages[0];
+        print('Message keys: ${firstMessage.keys.toList()}');
+        
+        for (int i = 0; i < math.min(3, messages.length); i++) {
+          final message = messages[i];
+          print('Sample message $i:');
+          print('  Sender ID: ${message['senderId']}');
+          print('  Sender Type: ${message['senderType']}');
+          print('  Message: ${message['message']}');
+          
+          // Check if there's a sender object
+          if (message['sender'] != null) {
+            print('  Sender object keys: ${message['sender'].keys.toList()}');
+            print('  Sender username: ${message['sender']['username'] ?? 'N/A'}');
+          } else {
+            print('  No sender object in message');
+          }
+        }
+      }
 
       setState(() {
         _messages = messages;
@@ -108,6 +161,30 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
         _isLoading = false;
         _isInitializing = false;
       });
+    }
+  }
+
+  Future<void> _testImageEndpoint() async {
+    try {
+      // Create a simple HTTP GET request to test if the image endpoint is accessible
+      print('=== TESTING IMAGE ENDPOINT ===');
+      final imageUrl = '${_p2pService.apiUrl}/p2p/chat/images/test.jpg';
+      print('Testing endpoint: $imageUrl');
+      
+      final response = await http.head(Uri.parse(imageUrl));
+      print('Image endpoint status code: ${response.statusCode}');
+      print('Image endpoint headers: ${response.headers}');
+      
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        print('✓ Image endpoint appears to be available');
+      } else if (response.statusCode == 404) {
+        print('⚠ Image endpoint returned 404 - this is expected for a test file');
+        print('✓ Image endpoint appears to be correctly configured');
+      } else {
+        print('⚠ Image endpoint may have configuration issues: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('⚠ Error testing image endpoint: $e');
     }
   }
 
@@ -228,8 +305,54 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     final senderId = message['senderId']?.toString() ?? '';
     final isSystem = senderType == 'system';
     final isAdmin = senderType == 'admin';
-    final isCurrentUser = senderId == _currentUserId;
+    final isCurrentUser = _currentUserId != null && senderId == _currentUserId;
     final messageId = message['id'];
+    
+    // Add more detailed logging for debugging
+    print('=== BUILDING MESSAGE ITEM ===');
+    print('Message ID: $messageId');
+    print('Sender Type: $senderType');
+    print('Sender ID: $senderId');
+    print('Current User ID: $_currentUserId');
+    print('Is Current User: $isCurrentUser');
+    
+    // Log sender data if available
+    if (message['sender'] != null) {
+      print('Sender data available:');
+      print('  Username: ${message['sender']['username']}');
+      print('  Full name: ${message['sender']['fullName']}');
+      
+      // Print all keys and values to help debug
+      message['sender'].forEach((key, value) {
+        print('  $key: $value');
+      });
+    } else {
+      print('No sender data available in message');
+    }
+    
+    // Log dispute details
+    if (_disputeDetails != null) {
+      print('Dispute details available:');
+      final order = _disputeDetails!['order'] ?? {};
+      final buyer = order['buyer'] ?? {};
+      final seller = order['seller'] ?? {};
+      print('  Order buyer ID: ${buyer['id']}');
+      print('  Order buyer username: ${buyer['username']}');
+      print('  Order buyer fullName: ${buyer['fullName']}');
+      print('  Order seller ID: ${seller['id']}');
+      print('  Order seller username: ${seller['username']}');
+      print('  Order seller fullName: ${seller['fullName']}');
+      
+      // Try to determine if sender is buyer or seller based on ID
+      if (senderId.isNotEmpty) {
+        final isSenderBuyer = senderId == buyer['id'];
+        final isSenderSeller = senderId == seller['id'];
+        print('  Sender is buyer: $isSenderBuyer');
+        print('  Sender is seller: $isSenderSeller');
+      }
+    } else {
+      print('No dispute details available');
+    }
     
     // If it's a system message, display a special bubble
     if (isSystem) {
@@ -241,8 +364,9 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
       return _buildAdminMessage(message, isDark);
     }
 
-    // Only mark other's messages as delivered/read
-    if (!isCurrentUser) {
+    // Only mark other's messages as delivered/read if we have a valid user ID
+    if (_currentUserId != null && !isCurrentUser) {
+      print('Marking message as delivered/read: $messageId');
       if (!message['isDelivered']) {
         _p2pService.markDisputeMessageAsDelivered(messageId);
       }
@@ -253,6 +377,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
 
     // Determine if the sender is a buyer or seller
     final isSenderBuyer = _isSenderBuyer(message);
+    print('Is Sender Buyer: $isSenderBuyer');
     
     // Display user messages (either current user or other party)
     return _buildUserMessage(message, isCurrentUser, isDark, isSenderBuyer);
@@ -260,41 +385,23 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
 
   // Helper method to determine if a sender is a buyer based on message data
   bool _isSenderBuyer(Map<String, dynamic> message) {
-    // First try to get role from the message itself
-    if (message['senderRole']?.toString().toLowerCase() == 'buyer') {
-      return true;
-    } else if (message['senderRole']?.toString().toLowerCase() == 'seller') {
-      return false;
-    }
+    // If we don't have dispute details or sender ID, default to false
+    if (_disputeDetails == null) return false;
     
-    // Try to infer from dispute details if available
-    if (_disputeDetails != null) {
-      final dispute = _disputeDetails!;
-      final senderId = message['senderId']?.toString() ?? '';
-      
-      // Check if sender is initiator or respondent and their role
-      final initiatorId = dispute['initiatorId']?.toString() ?? '';
-      final respondentId = dispute['respondentId']?.toString() ?? '';
-      final buyerId = dispute['order']?['buyerId']?.toString() ?? '';
-      final sellerId = dispute['order']?['sellerId']?.toString() ?? '';
-      
-      if (senderId == buyerId) {
-        return true; // Sender is the buyer
-      } else if (senderId == sellerId) {
-        return false; // Sender is the seller
-      } else if (senderId == initiatorId && dispute['order']?['buyerId'] == initiatorId) {
-        return true; // Initiator is buyer
-      } else if (senderId == respondentId && dispute['order']?['buyerId'] == respondentId) {
-        return true; // Respondent is buyer
-      } else if (senderId == initiatorId && dispute['order']?['sellerId'] == initiatorId) {
-        return false; // Initiator is seller
-      } else if (senderId == respondentId && dispute['order']?['sellerId'] == respondentId) {
-        return false; // Respondent is seller
-      }
-    }
+    final senderId = message['senderId']?.toString() ?? '';
+    if (senderId.isEmpty) return false;
     
-    // Default to false (seller) if we can't determine
-    return false;
+    // Get buyer and seller IDs from the order
+    final order = _disputeDetails!['order'] ?? {};
+    final buyerId = order['buyerId']?.toString() ?? '';
+    final sellerId = order['sellerId']?.toString() ?? '';
+    
+    print('Comparing sender ID: $senderId');
+    print('With buyer ID: $buyerId');
+    print('With seller ID: $sellerId');
+    
+    // Simple check if sender matches buyer ID
+    return senderId == buyerId;
   }
 
   Widget _buildSystemMessage(Map<String, dynamic> message, bool isDark) {
@@ -380,7 +487,94 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                _buildMessageContent(message, false, isDark, false),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        : SafeJetColors.lightCardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                          : SafeJetColors.lightCardBorder,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (message['attachmentUrl'] != null) ...[
+                        Container(
+                          margin: EdgeInsets.only(bottom: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ImageViewer(
+                                      imageUrl: '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Hero(
+                                tag: message['attachmentUrl'],
+                                child: Image.network(
+                                  '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
+                                  width: 200,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, progress) {
+                                    if (progress == null) return child;
+                                    return Container(
+                                      width: 200,
+                                      height: 150,
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          value: progress.expectedTotalBytes != null
+                                              ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                              : null,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    print('Error loading image: $error');
+                                    return Container(
+                                      width: 200,
+                                      height: 150,
+                                      color: Colors.grey[300],
+                                      child: Icon(Icons.error),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      Text(
+                        message['message'],
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormat('HH:mm').format(
+                          DateTime.parse(message['createdAt']),
+                        ),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark
+                              ? Colors.grey[400]
+                              : SafeJetColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -390,203 +584,182 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
   }
 
   Widget _buildUserMessage(Map<String, dynamic> message, bool isCurrentUser, bool isDark, bool isBuyer) {
-    final userName = message['sender']?['username'] ?? (isBuyer ? 'Buyer' : 'Seller');
-    final roleLabel = isBuyer ? 'Buyer' : 'Seller';
+    // Get the sender's full name from the sender object
+    final fullName = message['sender']?['fullName'] ?? '';
+    
+    // Log available data for debugging
+    print('=== BUILDING USER MESSAGE ===');
+    print('Is Current User: $isCurrentUser');
+    print('Is Buyer: $isBuyer');
+    print('Sender Full Name: $fullName');
+    print('All sender data: ${message['sender']}');
+    
+    // Get the appropriate name to display
+    String displayName;
+    if (isCurrentUser) {
+      displayName = 'You';
+    } else {
+      // If we have dispute details and the sender's full name isn't available from the message
+      if (_disputeDetails != null && (fullName == null || fullName.isEmpty)) {
+        final order = _disputeDetails!['order'] ?? {};
+        final buyer = order['buyer'] ?? {};
+        final seller = order['seller'] ?? {};
+        
+        if (isBuyer) {
+          displayName = buyer['fullName'] ?? 'Buyer';
+        } else {
+          displayName = seller['fullName'] ?? 'Seller';
+        }
+      } else {
+        // Use the full name from the message if available
+        displayName = fullName.isNotEmpty ? fullName : (isBuyer ? 'Buyer' : 'Seller');
+      }
+    }
+    
+    // Always use B/S in avatars to match the screenshot
+    final String avatarText = isBuyer ? 'B' : 'S';
+    
+    final bubbleColor = isDark
+        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+        : SafeJetColors.lightCardBackground;
     
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        // Always align to the left side for both buyer and seller messages
+        // This matches the exact UI shown in the screenshot
+        mainAxisAlignment: MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isCurrentUser) ...[
-            CircleAvatar(
-              backgroundColor: isBuyer
-                  ? SafeJetColors.blue.withOpacity(0.2)
-                  : SafeJetColors.success.withOpacity(0.2),
-              radius: 16,
-              child: Text(
-                isBuyer ? 'B' : 'S',
-                style: TextStyle(
-                  color: isBuyer ? SafeJetColors.blue : SafeJetColors.success,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+          // Always show the avatar on the left
+          CircleAvatar(
+            backgroundColor: isBuyer
+                ? SafeJetColors.blue.withOpacity(0.2)
+                : SafeJetColors.success.withOpacity(0.2),
+            radius: 16,
+            child: Text(
+              avatarText,
+              style: TextStyle(
+                color: isBuyer ? SafeJetColors.blue : SafeJetColors.success,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(width: 8),
-          ],
+          ),
+          const SizedBox(width: 8),
           Flexible(
             child: Column(
-              crossAxisAlignment: isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (!isCurrentUser) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    margin: const EdgeInsets.only(bottom: 4),
-                    decoration: BoxDecoration(
-                      color: isBuyer 
-                          ? SafeJetColors.blue.withOpacity(0.1)
-                          : SafeJetColors.success.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      roleLabel,
-                      style: TextStyle(
-                        color: isBuyer ? SafeJetColors.blue : SafeJetColors.success,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
+                // Always show the name/role label
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  margin: const EdgeInsets.only(bottom: 4),
+                  decoration: BoxDecoration(
+                    color: isBuyer 
+                        ? SafeJetColors.blue.withOpacity(0.1)
+                        : SafeJetColors.success.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    displayName,
+                    style: TextStyle(
+                      color: isBuyer ? SafeJetColors.blue : SafeJetColors.success,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-                _buildMessageContent(message, isCurrentUser, isDark, isBuyer),
-              ],
-            ),
-          ),
-          if (isCurrentUser) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              backgroundColor: isBuyer
-                  ? SafeJetColors.blue
-                  : SafeJetColors.success,
-              radius: 16,
-              child: Text(
-                isBuyer ? 'B' : 'S',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
                 ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageContent(Map<String, dynamic> message, bool isCurrentUser, bool isDark, bool isBuyer) {
-    final bubbleColor = isCurrentUser
-        ? (isBuyer ? SafeJetColors.blue : SafeJetColors.success)
-        : isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground;
-            
-    final borderColor = !isCurrentUser
-        ? isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.2)
-            : SafeJetColors.lightCardBorder
-        : Colors.transparent;
-        
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bubbleColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: borderColor,
-          width: !isCurrentUser ? 1 : 0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: isCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          if (message['attachmentUrl'] != null) ...[
-            Container(
-              margin: EdgeInsets.only(bottom: 8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ImageViewer(
-                          imageUrl: '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
-                        ),
-                      ),
-                    );
-                  },
-                  child: Hero(
-                    tag: message['attachmentUrl'],
-                    child: Image.network(
-                      '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
-                      width: 200,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, progress) {
-                        if (progress == null) return child;
-                        return Container(
-                          width: 200,
-                          height: 150,
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              value: progress.expectedTotalBytes != null
-                                  ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                  : null,
+                // Use a simplified message content that matches the screenshot
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                          : SafeJetColors.lightCardBorder,
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (message['attachmentUrl'] != null) ...[
+                        Container(
+                          margin: EdgeInsets.only(bottom: 8),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ImageViewer(
+                                      imageUrl: '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Hero(
+                                tag: message['attachmentUrl'],
+                                child: Image.network(
+                                  '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
+                                  width: 200,
+                                  fit: BoxFit.cover,
+                                  loadingBuilder: (context, child, progress) {
+                                    if (progress == null) return child;
+                                    return Container(
+                                      width: 200,
+                                      height: 150,
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          value: progress.expectedTotalBytes != null
+                                              ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                              : null,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    print('Error loading image: $error');
+                                    return Container(
+                                      width: 200,
+                                      height: 150,
+                                      color: Colors.grey[300],
+                                      child: Icon(Icons.error),
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
                           ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        print('Error loading image: $error');
-                        return Container(
-                          width: 200,
-                          height: 150,
-                          color: Colors.grey[300],
-                          child: Icon(Icons.error),
-                        );
-                      },
-                    ),
+                        ),
+                      ],
+                      Text(
+                        message['message'],
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        DateFormat('HH:mm').format(
+                          DateTime.parse(message['createdAt']),
+                        ),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDark
+                              ? Colors.grey[400]
+                              : SafeJetColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ),
-          ],
-          Text(
-            message['message'],
-            style: TextStyle(
-              color: isCurrentUser
-                  ? Colors.white
-                  : isDark
-                      ? Colors.white
-                      : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                DateFormat('HH:mm').format(
-                  DateTime.parse(message['createdAt']),
-                ),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isCurrentUser
-                      ? Colors.white70
-                      : isDark
-                          ? Colors.grey[400]
-                          : SafeJetColors.lightTextSecondary,
-                ),
-              ),
-              if (isCurrentUser) ...[
-                const SizedBox(width: 4),
-                Icon(
-                  message['isRead']
-                      ? Icons.done_all
-                      : message['isDelivered']
-                          ? Icons.done_all
-                          : Icons.done,
-                  size: 12,
-                  color: message['isRead']
-                      ? SafeJetColors.success
-                      : isCurrentUser
-                          ? Colors.white70
-                          : Colors.grey[400],
-                ),
               ],
-            ],
+            ),
           ),
         ],
       ),
@@ -717,20 +890,69 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     
     String? base64Image;
     if (_selectedImage != null) {
-      final bytes = await _selectedImage!.readAsBytes();
-      base64Image = 'data:image/jpeg;base64,${base64.encode(bytes)}';
+      try {
+        final bytes = await _selectedImage!.readAsBytes();
+        print('Image size before encoding: ${bytes.length} bytes');
+        
+        // Get file extension from path
+        final extension = _selectedImage!.path.split('.').last.toLowerCase();
+        String mimeType;
+        switch (extension) {
+          case 'jpg':
+          case 'jpeg':
+            mimeType = 'image/jpeg';
+            break;
+          case 'png':
+            mimeType = 'image/png';
+            break;
+          case 'webp':
+            mimeType = 'image/webp';
+            break;
+          default:
+            mimeType = 'image/jpeg'; // Default to JPEG
+        }
+        
+        base64Image = 'data:$mimeType;base64,${base64.encode(bytes)}';
+        print('Image encoded successfully, length: ${base64Image.length}');
+        print('MIME type: $mimeType');
+      } catch (e) {
+        print('Error encoding image: $e');
+        print(StackTrace.current);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to process image: $e')),
+        );
+        return;
+      }
     }
     
-    await _p2pService.sendDisputeMessage(
-      widget.disputeId,
-      _messageController.text,
-      attachment: base64Image,
-    );
-    
-    _messageController.clear();
-    setState(() {
-      _selectedImage = null;
-    });
+    try {
+      print('=== SENDING DISPUTE MESSAGE WITH ATTACHMENT ===');
+      print('Dispute ID: ${widget.disputeId}');
+      print('Has attachment: ${_selectedImage != null}');
+      if (_selectedImage != null) {
+        print('Original image path: ${_selectedImage!.path}');
+        print('Image base64 prefix: ${base64Image!.substring(0, math.min(100, base64Image.length))}...');
+      }
+      
+      await _p2pService.sendDisputeMessage(
+        widget.disputeId,
+        _messageController.text.trim(),
+        attachment: base64Image,
+      );
+      
+      print('Message sent successfully');
+      
+      _messageController.clear();
+      setState(() {
+        _selectedImage = null;
+      });
+    } catch (e) {
+      print('Error sending message with attachment: $e');
+      print(StackTrace.current);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send message: $e')),
+      );
+    }
   }
 
   @override

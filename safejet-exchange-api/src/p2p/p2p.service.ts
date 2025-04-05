@@ -1705,12 +1705,20 @@ export class P2PService {
     message: string,
     attachment?: string
   ): Promise<P2PDisputeMessage> {
+    console.log('Starting sendDisputeMessage:', {
+      disputeId,
+      userId,
+      hasAttachment: !!attachment,
+      attachmentLength: attachment?.length
+    });
+
     const dispute = await this.p2pDisputeRepository.findOne({
       where: { id: disputeId },
       relations: ['initiator', 'respondent', 'order'],
     });
 
     if (!dispute) {
+      console.error('Dispute not found:', disputeId);
       throw new NotFoundException('Dispute not found');
     }
 
@@ -1720,6 +1728,12 @@ export class P2PService {
       dispute.respondentId !== userId &&
       dispute.adminId !== userId
     ) {
+      console.error('User not authorized:', {
+        userId,
+        initiatorId: dispute.initiatorId,
+        respondentId: dispute.respondentId,
+        adminId: dispute.adminId
+      });
       throw new ForbiddenException('Not authorized to send messages in this dispute');
     }
 
@@ -1727,12 +1741,22 @@ export class P2PService {
     let attachmentType: string | undefined;
     
     if (attachment) {
+      console.log('Processing attachment...');
       try {
         // Use the same file service as for chat attachments
         attachmentUrl = await this.fileService.saveChatImage(attachment);
         attachmentType = 'image';
+        console.log('Attachment saved successfully:', {
+          attachmentUrl,
+          attachmentType
+        });
       } catch (error) {
         console.error('Failed to save attachment:', error);
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
         throw new BadRequestException('Invalid attachment');
       }
     }
@@ -1740,6 +1764,14 @@ export class P2PService {
     const senderType = dispute.adminId === userId 
       ? DisputeMessageSenderType.ADMIN 
       : DisputeMessageSenderType.USER;
+
+    console.log('Creating dispute message:', {
+      disputeId,
+      senderId: userId,
+      senderType,
+      hasAttachment: !!attachmentUrl,
+      attachmentType
+    });
 
     const disputeMessage = this.disputeMessageRepository.create({
       disputeId,
@@ -1752,12 +1784,27 @@ export class P2PService {
       isRead: false,
     });
 
-    const savedMessage = await this.disputeMessageRepository.save(disputeMessage);
-    
-    // Emit to websocket
-    await this.disputeGateway.emitDisputeMessageUpdate(disputeId, savedMessage);
+    try {
+      const savedMessage = await this.disputeMessageRepository.save(disputeMessage);
+      console.log('Message saved successfully:', {
+        messageId: savedMessage.id,
+        hasAttachment: !!savedMessage.attachmentUrl
+      });
+      
+      // Emit to websocket
+      await this.disputeGateway.emitDisputeMessageUpdate(disputeId, savedMessage);
+      console.log('Message emitted to websocket');
 
-    return savedMessage;
+      return savedMessage;
+    } catch (error) {
+      console.error('Failed to save message:', error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
   }
 
   private async createDisputeSystemMessage(

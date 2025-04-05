@@ -131,27 +131,38 @@ export class FileService {
 
   async saveChatImage(base64String: string): Promise<string> {
     try {
+      console.log('Starting saveChatImage process...');
+      console.log('Chat upload directory:', this.chatUploadDir);
+      console.log('Base64 string length:', base64String?.length);
+
       // If it's just a filename and has valid image extension, return it as is
       if (!base64String.includes('base64,') && this.isValidImageFilename(base64String)) {
+        console.log('Input is a valid filename, returning as is:', base64String);
         return base64String;
       }
 
       // Validate base64 string format
       if (!base64String.includes('base64,')) {
+        console.error('Invalid base64 format - missing "base64," marker');
         throw new Error('Invalid base64 image format');
       }
 
       // Extract MIME type and base64 data
       const matches = base64String.match(/^data:image\/([a-zA-Z0-9-+/]+);base64,/);
       if (!matches) {
+        console.error('Invalid image format - could not extract MIME type');
         throw new Error('Invalid image format');
       }
 
       const imageFormat = matches[1].toLowerCase();
+      console.log('Detected image format:', imageFormat);
+      
       const base64Data = base64String.split('base64,')[1];
       const buffer = Buffer.from(base64Data, 'base64');
+      console.log('Decoded buffer size:', buffer.length, 'bytes');
       
       if (buffer.length > 5 * 1024 * 1024) {
+        console.error('Image size exceeds limit:', buffer.length, 'bytes');
         throw new Error('Image size exceeds 5MB limit');
       }
 
@@ -162,8 +173,10 @@ export class FileService {
       
       const filename = `${crypto.randomBytes(16).toString('hex')}.${outputFormat}`;
       const filepath = path.join(this.chatUploadDir, filename);
+      console.log('Generated filepath:', filepath);
 
       try {
+        console.log('Creating Sharp instance for image processing...');
         const sharpInstance = sharp(buffer)
           .resize(800, 800, {
             fit: 'inside',
@@ -171,6 +184,7 @@ export class FileService {
           });
 
         // Apply format-specific processing
+        console.log('Processing image with format:', outputFormat);
         switch (outputFormat) {
           case 'jpeg':
             await sharpInstance
@@ -198,14 +212,37 @@ export class FileService {
               .toFile(filepath);
         }
 
+        // Verify file was created
+        const fileExists = fs.existsSync(filepath);
+        const fileStats = fileExists ? fs.statSync(filepath) : null;
+        console.log('File creation status:', {
+          exists: fileExists,
+          size: fileStats?.size,
+          path: filepath
+        });
+
+        if (!fileExists || !fileStats?.size) {
+          throw new Error('File was not created successfully');
+        }
+
         console.log(`Chat image saved successfully at: ${filepath}`);
         return filename;
       } catch (error) {
         console.error('Sharp processing error:', error);
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
         throw new Error('Failed to process image');
       }
     } catch (error) {
       console.error('Chat image processing error:', error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       throw error;
     }
   }

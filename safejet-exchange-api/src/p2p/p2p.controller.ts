@@ -363,31 +363,23 @@ export class P2PController {
 
   @Post('disputes/:disputeId/messages')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('attachment'))
   async sendDisputeMessage(
     @Param('disputeId') disputeId: string,
-    @Body() body: { message: string },
-    @UploadedFile() attachment,
+    @Body() body: { message: string, attachment?: string },
     @Request() req,
   ) {
     const userId = req.user.id;
-    const { message } = body;
+    const { message, attachment } = body;
 
     if (!message || message.trim().length === 0) {
       throw new BadRequestException('Message is required');
-    }
-
-    let attachmentData;
-    if (attachment) {
-      // Convert file buffer to base64 string
-      attachmentData = `data:${attachment.mimetype};base64,${attachment.buffer.toString('base64')}`;
     }
 
     return this.p2pService.sendDisputeMessage(
       disputeId,
       userId,
       message,
-      attachmentData,
+      attachment,
     );
   }
 
