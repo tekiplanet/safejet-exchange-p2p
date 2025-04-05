@@ -5,6 +5,8 @@ import '../../config/theme/theme_provider.dart';
 import '../../widgets/p2p_app_bar.dart';
 import '../../services/p2p_service.dart';
 import '../../widgets/loading_indicator.dart';
+import 'dart:math' as math;
+import 'p2p_dispute_chat_screen.dart';
 
 class P2PDisputeDetailsScreen extends StatefulWidget {
   final String orderId;
@@ -34,26 +36,87 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
   }
 
   Future<void> _fetchDisputeDetails() async {
-    // Get the service when needed
-    final p2pService = Provider.of<P2PService>(context, listen: false);
-    
-    try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
 
+    try {
+      print('Fetching dispute details for order ID: ${widget.orderId}');
+      final P2PService p2pService = P2PService();
       final dispute = await p2pService.getDisputeByOrderId(widget.orderId);
+      print('Received dispute data: ${dispute != null ? 'Found' : 'Not found'}');
+      
+      // Log all potential token symbol paths
+      final possibleTokenPaths = [
+        'order.offer.token.symbol',
+        'order.cryptoAsset',
+        'order.tokenSymbol',
+        'order.symbol',
+        'cryptoAsset',
+        'tokenSymbol',
+        'symbol',
+        'offer.token.symbol'
+      ];
+      
+      // Debug function to inspect each path
+      void inspectObjectPaths(Map<String, dynamic> obj, String basePath) {
+        obj.forEach((key, value) {
+          final currentPath = basePath.isEmpty ? key : '$basePath.$key';
+          
+          if (value is Map<String, dynamic>) {
+            // If this is an object, recursively inspect its properties
+            inspectObjectPaths(value, currentPath);
+          } else if (key == 'symbol' || key == 'tokenSymbol' || key == 'cryptoAsset') {
+            // Special check for any key that might contain token symbol
+            print('🔍 Found potential token info at path "$currentPath": $value');
+          }
+          
+          // Also check if this particular path might contain token info
+          if (currentPath.endsWith('.symbol') || 
+              currentPath.endsWith('.tokenSymbol') || 
+              currentPath.endsWith('.cryptoAsset')) {
+            print('🔍 Found potential token info at path "$currentPath": $value');
+          }
+        });
+      }
+      
+      // Try to find token symbol in all possible paths
+      print('🔍 Checking for token symbol in dispute data...');
+      for (final path in possibleTokenPaths) {
+        final parts = path.split('.');
+        dynamic value = dispute;
+        
+        bool pathExists = true;
+        for (final part in parts) {
+          if (value is Map && value.containsKey(part)) {
+            value = value[part];
+          } else {
+            pathExists = false;
+            break;
+          }
+        }
+        
+        if (pathExists && value != null) {
+          print('✅ Found token symbol at path "$path": $value');
+        }
+      }
+      
+      // Inspect the entire object structure for symbol-related fields
+      if (dispute is Map<String, dynamic>) {
+        print('🔍 Inspecting complete dispute object structure:');
+        inspectObjectPaths(dispute, '');
+      }
       
       setState(() {
-        _p2pService = p2pService;
         _disputeData = dispute;
         _isLoading = false;
       });
     } catch (e) {
+      print('Error fetching dispute details: $e');
       setState(() {
+        _errorMessage = 'Failed to load dispute details: $e';
         _isLoading = false;
-        _errorMessage = 'Failed to load dispute details: ${e.toString()}';
       });
     }
   }
@@ -77,7 +140,7 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+        children: [
                       Text(
                         _errorMessage,
                         textAlign: TextAlign.center,
@@ -94,17 +157,72 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
                 )
               : RefreshIndicator(
                   onRefresh: _fetchDisputeDetails,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _buildStatusCard(isDark),
-                      const SizedBox(height: 16),
-                      _buildOrderDetailsCard(isDark),
-                      const SizedBox(height: 16),
-                      _buildDisputeTimeline(isDark),
-                    ],
-                  ),
-                ),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildStatusCard(isDark),
+                const SizedBox(height: 16),
+                _buildOrderDetailsCard(isDark),
+                const SizedBox(height: 16),
+                _buildDisputeTimeline(isDark),
+              ],
+            ),
+      ),
+      floatingActionButton: _disputeData != null 
+        ? FloatingActionButton(
+            onPressed: () => _openDisputeChat(), 
+            backgroundColor: SafeJetColors.primary,
+            child: const Icon(Icons.chat, color: Colors.white),
+          )
+        : null,
+    );
+  }
+
+  void _openDisputeChat() {
+    if (_disputeData == null) return;
+    
+    final dispute = _disputeData!;
+    final disputeId = dispute['id'] ?? '';
+    
+    if (disputeId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Cannot open chat: Dispute ID not found'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    // Get order tracking ID or any other details
+    final status = dispute['status'] ?? 'PENDING';
+    final order = dispute['order'] ?? {};
+    final trackingId = order['trackingId'] ?? widget.orderId;
+    
+    // Generate dispute title from reason or order ID
+    String disputeTitle = 'Dispute Chat';
+    if (dispute['reasonType'] != null) {
+      final reasonType = dispute['reasonType'].toString()
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((word) => word.isNotEmpty 
+            ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}'
+            : '')
+        .join(' ');
+      disputeTitle = reasonType;
+    } else {
+      disputeTitle = "Dispute #${trackingId.substring(0, 8)}";
+    }
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => P2PDisputeChatScreen(
+          disputeId: disputeId,
+          orderId: trackingId,
+          disputeTitle: disputeTitle,
+        ),
+      ),
     );
   }
 
@@ -227,24 +345,67 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
     final total = order['currencyAmount'] ?? order['total'] ?? dispute['currencyAmount'] ?? '0';
     final createdAtStr = order['createdAt'] ?? dispute['createdAt'] ?? '';
     
-    // Get crypto asset from different possible API response formats
-    String cryptoAsset = 'USDT';
+    // Debug print to see all available data
+    print('Dispute data: ${_disputeData.toString().substring(0, math.min(_disputeData.toString().length, 1000))}');
+    print('Order data: ${order.toString().substring(0, math.min(order.toString().length, 1000))}');
+    
+    // Get crypto asset from different possible API response formats with more checks
+    String cryptoAsset = '';
+    
+    // Check for direct token symbol first
     if (order['cryptoAsset'] != null) {
       cryptoAsset = order['cryptoAsset'];
-    } else if (order['offer']?['token']?['symbol'] != null) {
-      cryptoAsset = order['offer']['token']['symbol'];
     } else if (dispute['cryptoAsset'] != null) {
       cryptoAsset = dispute['cryptoAsset'];
     }
+    // Check nested token objects
+    else if (order['offer']?['token']?['symbol'] != null) {
+      cryptoAsset = order['offer']['token']['symbol'];
+    } else if (dispute['offer']?['token']?['symbol'] != null) {
+      cryptoAsset = dispute['offer']['token']['symbol'];
+    } else if (order['token']?['symbol'] != null) {
+      cryptoAsset = order['token']['symbol'];
+    } else if (dispute['token']?['symbol'] != null) {
+      cryptoAsset = dispute['token']['symbol'];
+    }
+    // Check direct symbol property
+    else if (order['tokenSymbol'] != null) {
+      cryptoAsset = order['tokenSymbol'];
+    } else if (dispute['tokenSymbol'] != null) {
+      cryptoAsset = dispute['tokenSymbol'];
+    } else if (order['symbol'] != null) {
+      cryptoAsset = order['symbol'];
+    } else if (dispute['symbol'] != null) {
+      cryptoAsset = dispute['symbol'];
+    }
     
-    // Get fiat currency from different possible API response formats
-    String fiatCurrency = 'NGN';
+    // Only fallback to USDT if nothing was found
+    if (cryptoAsset.isEmpty) {
+      cryptoAsset = 'USDT';
+      print('Warning: Using fallback crypto asset symbol USDT');
+    }
+    
+    // Get fiat currency from different possible API response formats with more checks
+    String fiatCurrency = '';
+    
     if (order['fiatCurrency'] != null) {
       fiatCurrency = order['fiatCurrency'];
-    } else if (order['offer']?['currency'] != null) {
-      fiatCurrency = order['offer']['currency'];
     } else if (dispute['fiatCurrency'] != null) {
       fiatCurrency = dispute['fiatCurrency'];
+    } else if (order['currency'] != null) {
+      fiatCurrency = order['currency'];
+    } else if (dispute['currency'] != null) {
+      fiatCurrency = dispute['currency'];
+    } else if (order['offer']?['currency'] != null) {
+      fiatCurrency = order['offer']['currency'];
+    } else if (dispute['offer']?['currency'] != null) {
+      fiatCurrency = dispute['offer']['currency'];
+    }
+    
+    // Only fallback to NGN if nothing was found
+    if (fiatCurrency.isEmpty) {
+      fiatCurrency = 'NGN';
+      print('Warning: Using fallback fiat currency NGN');
     }
     
     final buyerStatus = order['buyerStatus'] ?? dispute['buyerStatus'] ?? 'unknown';
@@ -438,7 +599,7 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
                 title,
                 formattedTime,
                 details,
-                isDark,
+            isDark,
                 isFirst: index == 0,
                 isLast: isLast,
                 isCompleted: itemCompleted,

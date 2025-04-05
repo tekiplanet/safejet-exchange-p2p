@@ -5,8 +5,10 @@ import '../services/auth_service.dart';
 import 'api_client.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 
 class P2PService {
   late final Dio _dio;
@@ -15,9 +17,12 @@ class P2PService {
   Timer? _pollTimer;
   final _orderUpdateController = StreamController<Map<String, dynamic>>.broadcast();
   IO.Socket? _chatSocket;
+  IO.Socket? _disputeChatSocket;
   final _chatUpdateController = StreamController<Map<String, dynamic>>.broadcast();
+  final _disputeChatUpdateController = StreamController<Map<String, dynamic>>.broadcast();
   StreamSubscription? _chatSubscription;
   String? _currentOrderId;
+  String? _currentDisputeId;
 
   String get apiUrl {
     return _dio.options.baseUrl;
@@ -741,10 +746,38 @@ class P2PService {
         '/p2p/disputes/order/$trackingId',
         options: Options(headers: await _getAuthHeaders()),
       );
-      
+
       if (response.statusCode == 200) {
-        print('Dispute details fetched successfully: ${response.data}');
-        return response.data;
+        final data = response.data;
+        
+        // Enhance debugging - log token information at different levels
+        print('Dispute API response successful, examining token/asset data:');
+        
+        // Check if order and token data are present
+        if (data != null && data['order'] != null) {
+          print('Order data is present in dispute response');
+          
+          // Check various paths for token information
+          if (data['order']['offer'] != null && data['order']['offer']['token'] != null) {
+            print('Found token info in order.offer.token: ${jsonEncode(data['order']['offer']['token'])}');
+          }
+          
+          // Check directly attached token data to order
+          if (data['order']['cryptoAsset'] != null) {
+            print('Found cryptoAsset directly on order: ${data['order']['cryptoAsset']}');
+          }
+          
+          // Check token symbol on order
+          if (data['order']['tokenSymbol'] != null) {
+            print('Found tokenSymbol directly on order: ${data['order']['tokenSymbol']}');
+          }
+        }
+        
+        // Debug log - limit size to prevent excessive output
+        final debugData = jsonEncode(data);
+        print('Dispute data: ${debugData.substring(0, math.min(debugData.length, 500))}...');
+        
+        return data;
       } else {
         throw Exception('Failed to load dispute details');
       }
@@ -812,11 +845,290 @@ class P2PService {
     }
   }
 
+  Future<void> connectToDisputeChat() async {
+    print('=== DISPUTE CHAT CONNECTION START ===');
+    _disputeChatSocket?.disconnect();
+    _disputeChatSocket = null;
+
+    final token = await _getAuthToken();
+    if (token == null) {
+      print('=== ERROR: No token found for socket connection ===');
+      return;
+    }
+
+    final apiUrl = dotenv.env['API_URL'] ?? 'http://localhost:3000';
+    final uri = Uri.parse(apiUrl);
+    final wsUrl = '${uri.scheme}://${uri.host}:3000';
+    print('Connecting to Socket.IO: $wsUrl/p2p/dispute');
+
+    _disputeChatSocket = IO.io(
+      '$wsUrl/p2p/dispute',
+      <String, dynamic>{
+        'transports': ['websocket'],
+        'autoConnect': false,
+        'path': '/socket.io/',
+        'extraHeaders': {'Authorization': 'Bearer $token'},
+        'query': {
+          'token': token,
+          'EIO': '4'
+        },
+        'reconnection': true,
+        'reconnectionDelay': 1000,
+        'reconnectionAttempts': 5
+      }
+    );
+
+    _disputeChatSocket?.onConnecting((_) {
+      print('=== DISPUTE SOCKET CONNECTING ===');
+      print('Socket ID: ${_disputeChatSocket?.id}');
+      print('Socket namespace: ${_disputeChatSocket?.nsp}');
+    });
+
+    _disputeChatSocket?.onConnect((_) {
+      print('=== DISPUTE SOCKET CONNECTED ===');
+      print('Socket ID: ${_disputeChatSocket?.id}');
+      print('Socket namespace: ${_disputeChatSocket?.nsp}');
+      if (_currentDisputeId != null) {
+        print('Joining dispute room: $_currentDisputeId');
+        _disputeChatSocket?.emit('joinDispute', {'disputeId': _currentDisputeId});
+      }
+    });
+
+    _disputeChatSocket?.onReconnect((_) {
+      print('=== DISPUTE SOCKET RECONNECTED ===');
+      print('Socket ID: ${_disputeChatSocket?.id}');
+      if (_currentDisputeId != null) {
+        print('Rejoining dispute room after reconnect: $_currentDisputeId');
+        _disputeChatSocket?.emit('joinDispute', {'disputeId': _currentDisputeId});
+      }
+    });
+
+    _disputeChatSocket?.onDisconnect((_) {
+      print('=== DISPUTE SOCKET DISCONNECTED ===');
+      print('Reason: ${_disputeChatSocket?.io?.engine?.transport?.readyState}');
+    });
+
+    _disputeChatSocket?.onConnectError((err) {
+      print('=== DISPUTE SOCKET CONNECT ERROR ===');
+      print('Error details: $err');
+      print('Attempting to connect to: $apiUrl/p2p/dispute');
+    });
+    _disputeChatSocket?.onConnectTimeout((_) => print('=== DISPUTE SOCKET CONNECT TIMEOUT ==='));
+
+    _disputeChatSocket?.on('disputeMessageUpdate', (data) {
+      print('=== DISPUTE MESSAGE UPDATE RECEIVED ===');
+      print('Raw socket data: $data');
+      print('Current DisputeID: $_currentDisputeId');
+      print('Data type: ${data['type']}');
+      print('Data disputeId: ${data['disputeId']}');
+      print('Message content: ${data['message']}');
+      
+      try {
+        if (!_disputeChatUpdateController.isClosed) {
+          _disputeChatUpdateController.add(data);
+          print('Dispute data added to controller');
+        } else {
+          print('Warning: Attempted to add data to closed dispute controller');
+        }
+      } catch (e) {
+        print('Error adding dispute data to stream: $e');
+      }
+    });
+
+    _disputeChatSocket?.on('disputeMessageDelivered', (data) {
+      print('=== DISPUTE MESSAGE DELIVERED ===');
+      print('Data: $data');
+      if (!_disputeChatUpdateController.isClosed) {
+        _disputeChatUpdateController.add(data);
+      }
+    });
+
+    _disputeChatSocket?.on('disputeMessageRead', (data) {
+      print('=== DISPUTE MESSAGE READ ===');
+      print('Data: $data');
+      if (!_disputeChatUpdateController.isClosed) {
+        _disputeChatUpdateController.add(data);
+      }
+    });
+
+    _disputeChatSocket?.on('disputeUpdate', (data) {
+      print('=== DISPUTE UPDATE RECEIVED ===');
+      print('Data: $data');
+      if (!_disputeChatUpdateController.isClosed) {
+        _disputeChatUpdateController.add(data);
+      }
+    });
+
+    _disputeChatSocket?.onError((error) {
+      print('=== DISPUTE SOCKET ERROR ===');
+      print(error);
+    });
+
+    _disputeChatSocket?.connect();
+
+    print('=== DISPUTE CONNECTION ATTEMPT COMPLETE ===');
+  }
+
+  void joinDisputeChat(String disputeId) {
+    print('Joining dispute chat room: $disputeId');
+    _currentDisputeId = disputeId;
+    print('Current dispute socket status: ${_disputeChatSocket?.connected}');
+    print('Socket ID: ${_disputeChatSocket?.id}');
+    _disputeChatSocket?.emit('joinDispute', {'disputeId': disputeId});
+  }
+
+  Future<List<Map<String, dynamic>>> getDisputeMessages(String disputeId) async {
+    try {
+      final response = await _dio.get(
+        '/p2p/disputes/$disputeId/messages',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      print('Fetched dispute messages: ${response.data}');
+      return List<Map<String, dynamic>>.from(response.data);
+    } catch (e) {
+      print('Error getting dispute messages: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> sendDisputeMessage(String disputeId, String message, {String? attachment}) async {
+    print('=== SENDING DISPUTE MESSAGE ===');
+    print('DisputeID for sending: $disputeId');
+    print('Current DisputeID: $_currentDisputeId');
+    try {
+      final response = await _dio.post('/p2p/disputes/$disputeId/messages', data: {
+        'message': message,
+        'attachment': attachment,
+      });
+      
+      if (response.statusCode != 201) {
+        throw Exception('Failed to send dispute message');
+      }
+
+      print('Dispute message sent via HTTP, emitting to WebSocket');
+      print('Response data: ${response.data}');
+      _disputeChatSocket?.emit('sendDisputeMessage', {
+        'disputeId': disputeId,
+        'message': message
+      });
+
+      print('Dispute message sent successfully');
+    } catch (e) {
+      print('=== DISPUTE MESSAGE SEND ERROR ===');
+      print('Error sending dispute message: $e');
+      print(StackTrace.current);
+    }
+  }
+
+  Future<void> markDisputeMessageAsDelivered(String messageId) async {
+    try {
+      print('Marking dispute message as delivered: $messageId');
+      await _dio.post(
+        '/p2p/disputes/messages/$messageId/delivered',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      
+      // Emit to socket
+      _disputeChatSocket?.emit('disputeMessageDelivered', {
+        'messageId': messageId,
+        'disputeId': _currentDisputeId,
+      });
+      print('Delivery status emitted for dispute message: $messageId');
+    } catch (e) {
+      print('Error marking dispute message as delivered: $e');
+    }
+  }
+
+  Future<void> markDisputeMessageAsRead(String messageId) async {
+    try {
+      print('Marking dispute message as read: $messageId');
+      await _dio.post(
+        '/p2p/disputes/messages/$messageId/read',
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      
+      // Emit to socket
+      _disputeChatSocket?.emit('disputeMessageRead', {
+        'messageId': messageId,
+        'disputeId': _currentDisputeId,
+      });
+      print('Read status emitted for dispute message: $messageId');
+    } catch (e) {
+      print('Error marking dispute message as read: $e');
+    }
+  }
+
+  StreamSubscription listenToDisputeMessages(String disputeId, Function(Map<String, dynamic>) onMessage) {
+    print('Setting up dispute message listener for dispute: $disputeId');
+    return _disputeChatUpdateController.stream.listen((data) {
+      print('Data: $data');
+      print('Expected disputeId: $disputeId');
+      print('Received disputeId: ${data['disputeId']}');
+      
+      // Convert data to Map if needed
+      final messageData = data is Map ? 
+        Map<String, dynamic>.from(data) : 
+        jsonDecode(data.toString());
+        
+      if (messageData['type'] == 'disputeMessageUpdate' && 
+          messageData['disputeId'].toString() == disputeId) {
+        print('✓ Dispute message matches current dispute');
+        print('Message content: ${messageData['message']}');
+        onMessage(messageData['message']);
+      } else {
+        print('✗ Dispute message mismatch:');
+        print('Expected type: disputeMessageUpdate, got: ${messageData['type']}');
+        print('Expected disputeId: $disputeId, got: ${messageData['disputeId']}');
+      }
+    });
+  }
+
+  StreamSubscription listenToDisputeDeliveryStatus(String disputeId, Function(String) onDelivered) {
+    print('=== SETTING UP DISPUTE DELIVERY STATUS LISTENER ===');
+    print('Listening for delivery status on dispute: $disputeId');
+    return _disputeChatUpdateController.stream.listen((data) {
+      print('=== DISPUTE DELIVERY STATUS DATA RECEIVED ===');
+      print('Data type: ${data['type']}');
+      print('Data disputeId: ${data['disputeId']}');
+      print('Expected disputeId: $disputeId');
+      if (data['type'] == 'disputeMessageDelivered' && 
+          data['disputeId'] == disputeId) {
+        print('✓ Delivery status matches current dispute');
+        print('Message ID: ${data['messageId']}');
+        onDelivered(data['messageId']);
+      } else {
+        print('✗ Delivery status mismatch');
+      }
+    });
+  }
+
+  StreamSubscription listenToDisputeReadStatus(String disputeId, Function(String) onRead) {
+    print('=== SETTING UP DISPUTE READ STATUS LISTENER ===');
+    print('Listening for read status on dispute: $disputeId');
+    return _disputeChatUpdateController.stream.listen((data) {
+      print('=== DISPUTE READ STATUS DATA RECEIVED ===');
+      print('Data type: ${data['type']}');
+      print('Data disputeId: ${data['disputeId']}');
+      print('Expected disputeId: $disputeId');
+      if (data['type'] == 'disputeMessageRead' && 
+          data['disputeId'] == disputeId) {
+        print('✓ Read status matches current dispute');
+        print('Message ID: ${data['messageId']}');
+        onRead(data['messageId']);
+      } else {
+        print('✗ Read status mismatch');
+      }
+    });
+  }
+
   void dispose() {
     print('=== DISPOSING P2P SERVICE ===');
     _chatSocket?.disconnect();
     _chatSocket = null;
+    _disputeChatSocket?.disconnect();
+    _disputeChatSocket = null;
     _chatUpdateController.close();
+    _disputeChatUpdateController.close();
     _orderUpdateController.close();
   }
 } 

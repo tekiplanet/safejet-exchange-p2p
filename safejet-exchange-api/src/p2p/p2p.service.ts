@@ -1633,7 +1633,7 @@ export class P2PService {
   async getDisputeByOrderId(orderId: string, userId: string): Promise<P2PDispute> {
     const dispute = await this.p2pDisputeRepository.findOne({
       where: { orderId },
-      relations: ['order', 'order.buyer', 'order.seller', 'initiator', 'respondent', 'admin'],
+      relations: ['order', 'order.buyer', 'order.seller', 'order.offer', 'order.offer.token', 'initiator', 'respondent', 'admin'],
     });
 
     if (!dispute) {
@@ -1655,7 +1655,7 @@ export class P2PService {
   async getDisputeById(disputeId: string, userId: string): Promise<P2PDispute> {
     const dispute = await this.p2pDisputeRepository.findOne({
       where: { id: disputeId },
-      relations: ['order', 'order.buyer', 'order.seller', 'initiator', 'respondent', 'admin'],
+      relations: ['order', 'order.buyer', 'order.seller', 'order.offer', 'order.offer.token', 'initiator', 'respondent', 'admin'],
     });
 
     if (!dispute) {
