@@ -1007,6 +1007,8 @@ export class EmailTemplatesService {
     userName: string,
     disputeId: string,
     trackingId: string,
+    senderName: string,
+    isAdmin: boolean = false,
     isDark = true
   ): string {
     const content = `
@@ -1017,7 +1019,7 @@ export class EmailTemplatesService {
         <p>A new message has been sent in your dispute case:</p>
         <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
           <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
-          <p style="margin: 5px 0;">Dispute ID: ${disputeId}</p>
+          <p style="margin: 5px 0;">From: ${isAdmin ? 'Admin' : senderName}</p>
         </div>
       </div>
 

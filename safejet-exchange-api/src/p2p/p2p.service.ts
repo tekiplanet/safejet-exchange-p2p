@@ -1807,6 +1807,8 @@ export class P2PService {
           // Determine recipient (the other party)
           const isInitiator = userId === dispute.initiatorId;
           const recipient = isInitiator ? dispute.respondent : dispute.initiator;
+          const sender = isInitiator ? dispute.initiator : dispute.respondent;
+          const isAdminSender = senderType === DisputeMessageSenderType.ADMIN;
 
           await this.emailService.sendP2PDisputeMessageNotification({
             userEmail: recipient.email,
@@ -1816,6 +1818,8 @@ export class P2PService {
             trackingId: dispute.order.trackingId,
             initiatorName: dispute.initiator.fullName,
             respondentName: dispute.respondent.fullName,
+            senderName: sender.fullName,
+            isAdmin: isAdminSender
           });
         }
       } catch (error) {

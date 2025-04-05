@@ -582,6 +582,8 @@ export class EmailService {
       trackingId: string;
       initiatorName: string;
       respondentName: string;
+      senderName: string;
+      isAdmin: boolean;
     }
   ): Promise<void> {
     try {
@@ -594,6 +596,8 @@ export class EmailService {
           params.userName,
           params.disputeId,
           params.trackingId,
+          params.senderName,
+          params.isAdmin
         ),
       });
 
