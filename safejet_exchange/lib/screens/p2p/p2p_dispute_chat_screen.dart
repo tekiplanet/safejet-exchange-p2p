@@ -309,22 +309,22 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     final messageId = message['id'];
     
     // Add more detailed logging for debugging
-    print('=== BUILDING MESSAGE ITEM ===');
-    print('Message ID: $messageId');
-    print('Sender Type: $senderType');
-    print('Sender ID: $senderId');
-    print('Current User ID: $_currentUserId');
-    print('Is Current User: $isCurrentUser');
+    // print('=== BUILDING MESSAGE ITEM ===');
+    // print('Message ID: $messageId');
+    // print('Sender Type: $senderType');
+    // print('Sender ID: $senderId');
+    // print('Current User ID: $_currentUserId');
+    // print('Is Current User: $isCurrentUser');
     
     // Log sender data if available
     if (message['sender'] != null) {
-      print('Sender data available:');
-      print('  Username: ${message['sender']['username']}');
-      print('  Full name: ${message['sender']['fullName']}');
+    //   print('Sender data available:');
+    //   print('  Username: ${message['sender']['username']}');
+    //   print('  Full name: ${message['sender']['fullName']}');
       
       // Print all keys and values to help debug
       message['sender'].forEach((key, value) {
-        print('  $key: $value');
+        // print('  $key: $value');
       });
     } else {
       print('No sender data available in message');
@@ -332,23 +332,23 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     
     // Log dispute details
     if (_disputeDetails != null) {
-      print('Dispute details available:');
+    //   print('Dispute details available:');
       final order = _disputeDetails!['order'] ?? {};
       final buyer = order['buyer'] ?? {};
       final seller = order['seller'] ?? {};
-      print('  Order buyer ID: ${buyer['id']}');
-      print('  Order buyer username: ${buyer['username']}');
-      print('  Order buyer fullName: ${buyer['fullName']}');
-      print('  Order seller ID: ${seller['id']}');
-      print('  Order seller username: ${seller['username']}');
-      print('  Order seller fullName: ${seller['fullName']}');
+    //   print('  Order buyer ID: ${buyer['id']}');
+    //   print('  Order buyer username: ${buyer['username']}');
+    //   print('  Order buyer fullName: ${buyer['fullName']}');
+    //   print('  Order seller ID: ${seller['id']}');
+    //   print('  Order seller username: ${seller['username']}');
+    //   print('  Order seller fullName: ${seller['fullName']}');
       
       // Try to determine if sender is buyer or seller based on ID
       if (senderId.isNotEmpty) {
         final isSenderBuyer = senderId == buyer['id'];
         final isSenderSeller = senderId == seller['id'];
-        print('  Sender is buyer: $isSenderBuyer');
-        print('  Sender is seller: $isSenderSeller');
+    //     print('  Sender is buyer: $isSenderBuyer');
+    //     print('  Sender is seller: $isSenderSeller');
       }
     } else {
       print('No dispute details available');
@@ -588,11 +588,11 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     final fullName = message['sender']?['fullName'] ?? '';
     
     // Log available data for debugging
-    print('=== BUILDING USER MESSAGE ===');
-    print('Is Current User: $isCurrentUser');
-    print('Is Buyer: $isBuyer');
-    print('Sender Full Name: $fullName');
-    print('All sender data: ${message['sender']}');
+    // print('=== BUILDING USER MESSAGE ===');
+    // print('Is Current User: $isCurrentUser');
+    // print('Is Buyer: $isBuyer');
+    // print('Sender Full Name: $fullName');
+    // print('All sender data: ${message['sender']}');
     
     // Get the appropriate name to display
     String displayName;
