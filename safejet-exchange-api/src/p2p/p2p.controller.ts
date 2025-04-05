@@ -230,8 +230,18 @@ export class P2PController {
   async disputeOrder(
     @Param('trackingId') trackingId: string,
     @GetUser('id') userId: string,
-    @Body() disputeData: { reason: string },
+    @Body() disputeData: { reason: string, reasonType?: string },
   ) {
+    // If reasonType is provided, use the newer createDispute method
+    if (disputeData.reasonType) {
+      return this.p2pService.createDispute(
+        trackingId,
+        userId,
+        disputeData.reasonType,
+        disputeData.reason,
+      );
+    }
+    // Otherwise fallback to the old method
     return this.p2pService.disputeOrder(trackingId, userId, disputeData.reason);
   }
 

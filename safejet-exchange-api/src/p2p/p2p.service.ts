@@ -1484,6 +1484,13 @@ export class P2PService {
     reason: string,
     evidence?: any
   ): Promise<P2PDispute> {
+    // Validate reasonType
+    const validReasonTypes = Object.values(DisputeReasonType);
+    if (!validReasonTypes.includes(reasonType as DisputeReasonType)) {
+      console.warn(`Invalid reasonType provided: ${reasonType}. Valid types are: ${validReasonTypes.join(', ')}`);
+      reasonType = DisputeReasonType.OTHER; // Default to OTHER if invalid
+    }
+
     const order = await this.orderRepository.findOne({
       where: { trackingId },
       relations: ['buyer', 'seller'],

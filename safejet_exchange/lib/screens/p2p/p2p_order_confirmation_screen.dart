@@ -1831,7 +1831,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                       trackingId: widget.trackingId,
                       orderDetails: _orderDetails!,
                       p2pService: _p2pService,
-                      isDark: isDark,
+                                          isDark: isDark,
                       formatAmount: _formatAmount,
                       hasAgreed: hasAgreed,
                     ),
@@ -2023,8 +2023,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }
 
 
-void _showDisputeDialog() {
-  final TextEditingController reasonController = TextEditingController();
+  void _showDisputeDialog() {
+    final TextEditingController reasonController = TextEditingController();
   bool isSubmitting = false;
   bool hasConfirmedDispute = false;
   DisputeReasonType selectedReasonType = DisputeReasonType.OTHER;
@@ -2044,7 +2044,7 @@ void _showDisputeDialog() {
   }).toList();
 
   showDialog<bool>(
-    context: context,
+      context: context,
     builder: (context) => Dialog.fullscreen(
       child: Scaffold(
         backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
@@ -2072,13 +2072,13 @@ void _showDisputeDialog() {
               children: [
                 Expanded(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
                         Text(
                           'Please provide details about your dispute:',
-                          style: TextStyle(
+                style: TextStyle(
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
                             fontSize: 16,
                           ),
@@ -2120,9 +2120,9 @@ void _showDisputeDialog() {
                           style: TextStyle(
                             color: isDark ? Colors.white : Colors.black,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
                         const SizedBox(height: 12),
                         Container(
                           decoration: BoxDecoration(
@@ -2198,17 +2198,17 @@ void _showDisputeDialog() {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        TextField(
-                          controller: reasonController,
-                          maxLines: 4,
-                          decoration: InputDecoration(
+              TextField(
+                controller: reasonController,
+                maxLines: 4,
+                decoration: InputDecoration(
                             hintText: 'Explain your issue in detail...',
                             filled: true,
                             fillColor: isDark 
                               ? Colors.black.withOpacity(0.3) 
                               : Colors.grey[100],
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
                                 color: isDark
                                   ? Colors.white.withOpacity(0.1)
@@ -2276,10 +2276,10 @@ void _showDisputeDialog() {
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context),
+                children: [
+                  Expanded(
+                    child: TextButton(
+            onPressed: () => Navigator.pop(context),
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -2301,39 +2301,39 @@ void _showDisputeDialog() {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton(
+                  Expanded(
+                    child: ElevatedButton(
                           onPressed: isSubmitting || reasonController.text.trim().isEmpty || !hasConfirmedDispute
                             ? null 
                             : () async {
                                 setState(() {
                                   isSubmitting = true;
                                 });
-                                try {
-                                  await _p2pService.disputeOrder(
-                                    widget.trackingId,
+                        try {
+                          await _p2pService.disputeOrder(
+                            widget.trackingId,
                                     selectedReasonType.value,
-                                    reasonController.text.trim(),
-                                  );
-                                  if (mounted) {
+                            reasonController.text.trim(),
+                          );
+                          if (mounted) {
                                     Navigator.of(context).pop(true);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Dispute raised successfully')),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Dispute raised successfully')),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
                                     setState(() {
                                       isSubmitting = false;
                                     });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(e.toString())),
-                                    );
-                                  }
-                                }
-                              },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: SafeJetColors.error,
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.error,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
@@ -2355,19 +2355,19 @@ void _showDisputeDialog() {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                        ),
-                      ),
-                    ],
+                    ),
+          ),
+        ],
                   ),
-                ),
-              ],
+              ),
+            ],
             );
           },
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // Helper method to determine if current user is the seller
   bool _isCurrentUserSeller() {
