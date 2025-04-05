@@ -897,4 +897,109 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  p2pDisputeCreatedUserEmail(
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    reasonType: string,
+    reason: string,
+    isDark = true
+  ): string {
+    // Convert reasonType from snake_case to a more readable format
+    const formattedReasonType = reasonType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+    
+    const content = `
+      <h1>P2P Order Disputed ⚠️</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A dispute has been raised for the following P2P order:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total: ${currency}</p>
+          <p style="margin: 5px 0;">Reason Type: ${formattedReasonType}</p>
+          <p style="margin: 5px 0;">Reason: ${reason}</p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Next Steps 🚀</h2>
+        <ol>
+          <li>Log in to your SafeJet Exchange account</li>
+          <li>Navigate to the P2P Order Details page</li>
+          <li>Respond to the dispute with any relevant information</li>
+          <li>Our admin team will review the case and assist with resolution</li>
+        </ol>
+        <p style="color: ${isDark ? '#ff9800' : '#e65100'}; font-weight: bold;">
+          Important: Please respond promptly to ensure a quick resolution.
+        </p>
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  p2pDisputeCreatedAdminEmail(
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    reasonType: string,
+    reason: string,
+    initiatorName: string,
+    respondentName: string,
+    isDark = true
+  ): string {
+    // Convert reasonType from snake_case to a more readable format
+    const formattedReasonType = reasonType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+    
+    const content = `
+      <h1>New P2P Dispute Raised ⚠️</h1>
+      <p>Hello Admin,</p>
+      
+      <div style="margin: 20px 0;">
+        <p>A new dispute has been raised for the following P2P order:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total: ${currency}</p>
+          <p style="margin: 5px 0;">Initiator: ${initiatorName}</p>
+          <p style="margin: 5px 0;">Respondent: ${respondentName}</p>
+          <p style="margin: 5px 0;">Reason Type: ${formattedReasonType}</p>
+          <p style="margin: 5px 0;">Reason: ${reason}</p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Required Actions 🚀</h2>
+        <ol>
+          <li>Log in to the admin panel</li>
+          <li>Navigate to P2P Disputes section</li>
+          <li>Review the dispute details and communication between users</li>
+          <li>Mediate and resolve the dispute according to our policies</li>
+        </ol>
+        <p style="color: ${isDark ? '#ff9800' : '#e65100'}; font-weight: bold;">
+          Important: Please address this dispute promptly as it impacts user satisfaction and platform trust.
+        </p>
+      </div>
+
+      <p>Thank you for your attention to this matter.</p>
+      <p>Best regards,<br>The SafeJet System</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }

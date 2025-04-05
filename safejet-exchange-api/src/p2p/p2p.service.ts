@@ -1275,12 +1275,9 @@ export class P2PService {
       throw new BadRequestException('Cannot dispute cancelled order');
     }
 
-    // Update order status
-    if (userId === order.buyerId) {
-      order.buyerStatus = 'disputed';
-    } else {
-      order.sellerStatus = 'disputed';
-    }
+    // Update order status - set both to disputed regardless of who initiated
+    order.buyerStatus = 'disputed';
+    order.sellerStatus = 'disputed';
 
     // Save dispute details
     await this.disputeRepository.save({
@@ -1493,7 +1490,7 @@ export class P2PService {
 
     const order = await this.orderRepository.findOne({
       where: { trackingId },
-      relations: ['buyer', 'seller'],
+      relations: ['buyer', 'seller', 'offer', 'offer.token'],
     });
 
     if (!order) {
@@ -1523,12 +1520,9 @@ export class P2PService {
       throw new BadRequestException('Dispute already exists for this order');
     }
 
-    // Update order status
-    if (userId === order.buyerId) {
-      order.buyerStatus = 'disputed';
-    } else {
-      order.sellerStatus = 'disputed';
-    }
+    // Update order status - set both statuses to disputed regardless of who initiated
+    order.buyerStatus = 'disputed';
+    order.sellerStatus = 'disputed';
 
     await this.orderRepository.save(order);
 
@@ -1558,6 +1552,56 @@ export class P2PService {
       order.seller.id,
       order
     );
+
+    // Determine initiator and respondent for emails
+    const initiator = userId === order.buyerId ? order.buyer : order.seller;
+    const respondent = userId === order.buyerId ? order.seller : order.buyer;
+
+    try {
+      // Get admin email(s) from the database (using entityManager to query across modules)
+      const admins = await this.p2pDisputeRepository.manager.query(
+        `SELECT email FROM admins WHERE "isActive" = true`
+      );
+      
+      if (admins && admins.length > 0) {
+        // Format values for email
+        const tokenSymbol = order.offer.token.symbol;
+        const currency = order.offer.currency; // Get currency from offer
+        const amount = order.assetAmount.toString();
+        const formattedCurrencyAmount = order.currencyAmount.toString();
+        
+        // Send email to all active admins
+        for (const admin of admins) {
+          await this.emailService.sendP2PDisputeCreatedAdminEmail(
+            admin.email,
+            trackingId,
+            amount,
+            tokenSymbol,
+            currency,
+            reasonType,
+            reason,
+            initiator.fullName,
+            respondent.fullName
+          );
+        }
+      }
+      
+      // Send email to the counterparty
+      await this.emailService.sendP2PDisputeCreatedUserEmail(
+        respondent.email,
+        respondent.fullName,
+        trackingId,
+        order.assetAmount.toString(),
+        order.offer.token.symbol,
+        order.offer.currency,
+        reasonType,
+        reason
+      );
+      
+    } catch (error) {
+      console.error('Error sending dispute notification emails:', error);
+      // We don't want to fail the dispute creation if emails fail to send
+    }
 
     return savedDispute;
   }

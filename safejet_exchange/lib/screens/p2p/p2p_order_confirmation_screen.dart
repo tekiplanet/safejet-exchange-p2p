@@ -595,191 +595,6 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               },
               icon: const Icon(Icons.chat_outlined),
             ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              position: PopupMenuPosition.under,
-              offset: const Offset(0, 8),
-              itemBuilder: (context) => <PopupMenuEntry<String>>[
-                PopupMenuItem<String>(
-                  value: 'dispute',
-                  onTap: () {
-                    Future.delayed(const Duration(milliseconds: 10), () {
-                      Navigator.push(
-                        context,
-                        CustomPageRoute(
-                          child: P2PDisputeScreen(
-                            orderId: _orderDetails?['trackingId'] ?? '',
-                            isBuyer: _orderDetails?['buyerId'] == _userId,
-                          ),
-                        ),
-                      );
-                    });
-                  },
-                  child: Tooltip(
-                    message: 'Open dispute if you have issues with this order',
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: SafeJetColors.warning.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.warning_rounded,
-                              color: SafeJetColors.warning,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Raise Dispute',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  'Report issues with this order',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  value: 'copy',
-                  onTap: () {
-                    final trackingId = _orderDetails?['trackingId'] ?? '';
-                    Clipboard.setData(ClipboardData(text: trackingId));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Order ID copied to clipboard'),
-                        backgroundColor: SafeJetColors.success,
-                      ),
-                    );
-                  },
-                  child: Tooltip(
-                    message: 'Copy order ID to clipboard',
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.black.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.copy_rounded,
-                              color: isDark ? Colors.white : SafeJetColors.lightText,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Copy Order ID',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  '#${_orderDetails?['trackingId'] ?? ''}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                PopupMenuItem<String>(
-                  value: 'viewDispute',
-                  onTap: () {
-                    Future.delayed(const Duration(milliseconds: 10), () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => P2PDisputeDetailsScreen(
-                            orderId: 'P2P123456789',
-                          ),
-                        ),
-                      );
-                    });
-                  },
-                  child: Tooltip(
-                    message: 'View dispute details for this order',
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: SafeJetColors.warning.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              Icons.gavel_rounded,
-                              color: SafeJetColors.warning,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'View Dispute',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  'Check dispute status and details',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
@@ -1781,6 +1596,80 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       );
     }
 
+    // For disputed orders
+    if (buyerStatus == 'disputed') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+          border: Border(
+            top: BorderSide(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () async {
+                  // For buyer: Cancel order
+                  // For seller: Release coins
+                  try {
+                    if (isBuyer) {
+                      await _p2pService.cancelOrder(widget.trackingId);
+                    } else {
+                      await _p2pService.releaseOrder(_orderDetails!['id']);
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.toString())),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isBuyer ? SafeJetColors.warning : SafeJetColors.success,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(isBuyer ? 'Cancel Order' : 'Release Coin'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  // Navigate to dispute details screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => P2PDisputeDetailsScreen(
+                        orderId: widget.trackingId,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.error,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('View Dispute'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     // For buyer with pending status
     if (isBuyer && buyerStatus == 'pending') {
       return Container(
@@ -1821,7 +1710,6 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               ),
             ),
             const SizedBox(width: 12),
-
             Expanded(
               child: ElevatedButton(
                 onPressed: () {
@@ -1892,8 +1780,6 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               ),
             ),
             const SizedBox(width: 12),
-
-
             Expanded(
               child: ElevatedButton(
                 onPressed: () => _showDisputeDialog(),
@@ -2022,62 +1908,61 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     return const SizedBox.shrink(); // Default case, no buttons
   }
 
-
   void _showDisputeDialog() {
     final TextEditingController reasonController = TextEditingController();
-  bool isSubmitting = false;
-  bool hasConfirmedDispute = false;
-  DisputeReasonType selectedReasonType = DisputeReasonType.OTHER;
+    bool isSubmitting = false;
+    bool hasConfirmedDispute = false;
+    DisputeReasonType selectedReasonType = DisputeReasonType.OTHER;
 
-  final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-  final isDark = themeProvider.isDarkMode;
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = themeProvider.isDarkMode;
 
-  // Determine available reasons based on user role
-  List<DisputeReasonType> availableReasons = DisputeReasonType.values.where((reason) {
-    if (_isCurrentUserBuyer() && reason == DisputeReasonType.BUYER_NOT_PAID) {
-      return false;
-    }
-    if (!_isCurrentUserBuyer() && reason == DisputeReasonType.SELLER_NOT_RELEASED) {
-      return false;
-    }
-    return true;
-  }).toList();
+    // Determine available reasons based on user role
+    List<DisputeReasonType> availableReasons = DisputeReasonType.values.where((reason) {
+      if (_isCurrentUserBuyer() && reason == DisputeReasonType.BUYER_NOT_PAID) {
+        return false;
+      }
+      if (!_isCurrentUserBuyer() && reason == DisputeReasonType.SELLER_NOT_RELEASED) {
+        return false;
+      }
+      return true;
+    }).toList();
 
-  showDialog<bool>(
-      context: context,
-    builder: (context) => Dialog.fullscreen(
-      child: Scaffold(
-        backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: Icon(
-              Icons.close,
-              color: isDark ? Colors.white : Colors.black,
+    showDialog<bool>(
+        context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.close,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              onPressed: () => Navigator.pop(context),
             ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Text(
-            'Raise Dispute',
-            style: TextStyle(
-              color: isDark ? Colors.white : Colors.black,
-              fontWeight: FontWeight.bold,
+            title: Text(
+              'Raise Dispute',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-        ),
-        body: StatefulBuilder(
-          builder: (context, setState) {
-            return Column(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-                        Text(
-                          'Please provide details about your dispute:',
+                          Text(
+                            'Please provide details about your dispute:',
                 style: TextStyle(
                             color: isDark ? Colors.grey[400] : Colors.grey[600],
                             fontSize: 16,
@@ -2365,8 +2250,8 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
           },
           ),
         ),
-      ),
-    );
+      ),        
+      );
   }
 
   // Helper method to determine if current user is the seller
