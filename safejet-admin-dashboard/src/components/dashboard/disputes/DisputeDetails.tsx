@@ -311,8 +311,12 @@ export default function DisputeDetails() {
     }
   };
 
-  const getMessageStyle = (senderType: string) => {
+  const getMessageStyle = (senderType: string, message: DisputeMessage, dispute: Dispute) => {
     const type = senderType?.toUpperCase() || '';
+    
+    // Determine if message sender is buyer or seller
+    const isBuyer = message.sender && dispute.order.buyer.email === message.sender.email;
+    const isSeller = message.sender && dispute.order.seller.email === message.sender.email;
     
     switch (type) {
       case 'ADMIN':
@@ -325,14 +329,34 @@ export default function DisputeDetails() {
           boxShadow: '0 2px 4px rgba(33, 150, 243, 0.2)',
         };
       case 'USER':
-        return {
-          ml: 0,
-          mr: 'auto',
-          bgcolor: '#e8f5e9',  // Light green for user
-          color: '#1b5e20',
-          borderRadius: '12px 12px 12px 0',
-          boxShadow: '0 2px 4px rgba(76, 175, 80, 0.1)',
-        };
+        if (isBuyer) {
+          return {
+            ml: 0,
+            mr: 'auto',
+            bgcolor: '#e8f5e9',  // Light green for buyer
+            color: '#1b5e20',
+            borderRadius: '12px 12px 12px 0',
+            boxShadow: '0 2px 4px rgba(76, 175, 80, 0.1)',
+          };
+        } else if (isSeller) {
+          return {
+            ml: 0,
+            mr: 'auto',
+            bgcolor: '#e3f2fd',  // Light blue for seller
+            color: '#0d47a1',
+            borderRadius: '12px 12px 12px 0',
+            boxShadow: '0 2px 4px rgba(13, 71, 161, 0.1)',
+          };
+        } else {
+          return {
+            ml: 0,
+            mr: 'auto',
+            bgcolor: '#f5f5f5',  // Default light grey for user
+            color: '#424242',
+            borderRadius: '12px 12px 12px 0',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+          };
+        }
       case 'SYSTEM':
         return {
           mx: 'auto',
@@ -509,6 +533,23 @@ export default function DisputeDetails() {
                   .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                   .map((message) => {
                     const senderTypeUpper = message.senderType?.toUpperCase() || '';
+                    // Determine if message sender is buyer or seller
+                    const isBuyer = message.sender && dispute.order.buyer.email === message.sender.email;
+                    const isSeller = message.sender && dispute.order.seller.email === message.sender.email;
+                    
+                    let senderLabel = '';
+                    if (senderTypeUpper === 'SYSTEM') {
+                      senderLabel = 'System';
+                    } else if (isBuyer) {
+                      senderLabel = `${message.sender?.fullName || 'Buyer'}`;
+                    } else if (isSeller) {
+                      senderLabel = `${message.sender?.fullName || 'Seller'}`;
+                    } else if (senderTypeUpper === 'ADMIN') {
+                      senderLabel = 'Admin';
+                    } else {
+                      senderLabel = message.sender?.fullName || message.senderType;
+                    }
+                    
                     return (
                       <Paper 
                         key={message.id} 
@@ -516,7 +557,7 @@ export default function DisputeDetails() {
                           p: 2, 
                           mb: 2,
                           maxWidth: '80%',
-                          ...getMessageStyle(message.senderType)
+                          ...getMessageStyle(message.senderType, message, dispute)
                         }}
                         elevation={2}
                       >
@@ -528,9 +569,9 @@ export default function DisputeDetails() {
                               fontWeight: 600
                             }}
                           >
-                            {senderTypeUpper === 'SYSTEM' 
-                              ? 'System'
-                              : message.sender?.fullName || message.senderType}
+                            {senderLabel}
+                            {isBuyer && senderTypeUpper === 'USER' && ' (Buyer)'}
+                            {isSeller && senderTypeUpper === 'USER' && ' (Seller)'}
                           </Typography>
                           <Typography 
                             variant="caption" 
