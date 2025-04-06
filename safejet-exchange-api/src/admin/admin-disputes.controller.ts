@@ -14,6 +14,10 @@ interface PaymentMetadata {
   name?: string;
   details?: Record<string, any>;
   icon?: string;
+  typeName?: string;
+  methodDetails?: Record<string, any>;
+  userId?: string;
+  methodName?: string;
 }
 
 interface ProgressHistoryEntry {
@@ -77,7 +81,7 @@ export class AdminDisputesController {
       const messages = await this.disputeMessageRepository.find({
         where: { disputeId: id },
         relations: ['sender'],
-        order: { createdAt: 'DESC' }
+        order: { createdAt: 'ASC' }
       });
 
       // Parse payment metadata
@@ -85,21 +89,165 @@ export class AdminDisputesController {
       let completePaymentDetails = null;
       
       try {
-        paymentMetadata = JSON.parse(dispute.order.paymentMetadata) as PaymentMetadata;
-        if (paymentMetadata.methodId) {
-          // TODO: Fetch complete payment method details from payment service
-          // For now, we'll use the basic payment metadata
-          completePaymentDetails = {
-            name: paymentMetadata.name || '',
-            details: paymentMetadata.details || {},
-            paymentMethodType: {
-              name: paymentMetadata.methodType || 'Payment Method',
-              icon: paymentMetadata.icon || 'payment'
+        this.logger.log(`Original payment metadata type: ${typeof dispute.order.paymentMetadata}`);
+        this.logger.log(`Original payment metadata: ${JSON.stringify(dispute.order.paymentMetadata)}`);
+        
+        // Check if payment metadata is already an object or needs parsing
+        if (dispute.order.paymentMetadata) {
+          if (typeof dispute.order.paymentMetadata === 'string') {
+            try {
+              paymentMetadata = JSON.parse(dispute.order.paymentMetadata) as PaymentMetadata;
+              this.logger.log(`Parsed payment metadata: ${JSON.stringify(paymentMetadata)}`);
+            } catch (parseError) {
+              this.logger.error(`Error parsing payment metadata: ${parseError.message}`);
+              // If can't parse, use as is or set default
+              paymentMetadata = { methodType: dispute.order.paymentMetadata || 'Unknown' };
             }
-          };
+          } else {
+            // It's already an object
+            paymentMetadata = dispute.order.paymentMetadata as PaymentMetadata;
+            this.logger.log(`Using object payment metadata: ${JSON.stringify(paymentMetadata)}`);
+          }
+          
+          const methodId = paymentMetadata.methodId;
+          
+          if (methodId) {
+            // Fetch the actual payment method details from the database
+            try {
+              // Similar to how it's done in p2p.service.ts
+              const paymentMethodRepo = this.disputeRepository.manager.getRepository('payment_methods');
+              const paymentMethod = await paymentMethodRepo.findOne({
+                where: { id: methodId },
+                relations: ['paymentMethodType'],
+              });
+              
+              if (paymentMethod) {
+                this.logger.log(`Found payment method: ${JSON.stringify(paymentMethod)}`);
+                
+                // Get the payment method fields for this payment method type
+                const paymentMethodFieldRepo = this.disputeRepository.manager.getRepository('payment_method_fields');
+                const paymentMethodFields = await paymentMethodFieldRepo.find({
+                  where: { paymentMethodTypeId: paymentMethod.paymentMethodTypeId },
+                  order: { order: 'ASC' },
+                });
+                
+                // Parse the details JSON
+                let details = {};
+                try {
+                  details = typeof paymentMethod.details === 'string' 
+                    ? JSON.parse(paymentMethod.details) 
+                    : paymentMethod.details;
+                } catch (error) {
+                  this.logger.error('Error parsing payment method details:', error);
+                }
+                
+                // Format payment details in a user-friendly way
+                completePaymentDetails = {
+                  id: paymentMethod.id,
+                  name: paymentMethod.name || '',
+                  details: details,
+                  paymentMethodType: {
+                    id: paymentMethod.paymentMethodType.id,
+                    name: paymentMethod.paymentMethodType.name,
+                    icon: paymentMethod.paymentMethodType.icon || 'payment'
+                  },
+                  fields: paymentMethodFields
+                };
+                
+                this.logger.log(`Complete payment details: ${JSON.stringify(completePaymentDetails)}`);
+              } else {
+                this.logger.warn(`Payment method not found for ID: ${methodId}`);
+                // Fallback to extracted details
+                const methodName = paymentMetadata.methodType || paymentMetadata.typeName || 'Payment Method';
+                let paymentDetails = {};
+                
+                if (paymentMetadata.details) {
+                  paymentDetails = paymentMetadata.details;
+                } else {
+                  // Extract any fields that might be payment details
+                  const knownFields = ['methodId', 'methodType', 'icon', 'name', 'typeName', 'userId'];
+                  paymentDetails = Object.entries(paymentMetadata)
+                    .filter(([key]) => !knownFields.includes(key))
+                    .reduce((obj, [key, value]) => {
+                      obj[key] = value;
+                      return obj;
+                    }, {});
+                }
+                
+                this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
+                
+                completePaymentDetails = {
+                  name: paymentMetadata.methodName || paymentMetadata.name || '',
+                  details: paymentDetails,
+                  paymentMethodType: {
+                    name: methodName,
+                    icon: paymentMetadata.icon || 'payment'
+                  }
+                };
+              }
+            } catch (error) {
+              this.logger.error(`Error fetching payment method: ${error.message}`);
+              // Fallback to basic extraction
+              const methodName = paymentMetadata.methodType || paymentMetadata.typeName || 'Payment Method';
+              let paymentDetails = {};
+              
+              if (paymentMetadata.details) {
+                paymentDetails = paymentMetadata.details;
+              } else {
+                // Extract any fields that might be payment details
+                const knownFields = ['methodId', 'methodType', 'icon', 'name', 'typeName', 'userId'];
+                paymentDetails = Object.entries(paymentMetadata)
+                  .filter(([key]) => !knownFields.includes(key))
+                  .reduce((obj, [key, value]) => {
+                    obj[key] = value;
+                    return obj;
+                  }, {});
+              }
+              
+              this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
+              
+              completePaymentDetails = {
+                name: paymentMetadata.methodName || paymentMetadata.name || '',
+                details: paymentDetails,
+                paymentMethodType: {
+                  name: methodName,
+                  icon: paymentMetadata.icon || 'payment'
+                }
+              };
+            }
+          } else {
+            // If no methodId, extract details from metadata
+            const methodName = paymentMetadata.methodType || paymentMetadata.typeName || 'Payment Method';
+            let paymentDetails = {};
+            
+            if (paymentMetadata.details) {
+              paymentDetails = paymentMetadata.details;
+            } else {
+              // Extract any fields that might be payment details
+              const knownFields = ['methodId', 'methodType', 'icon', 'name', 'typeName', 'userId'];
+              paymentDetails = Object.entries(paymentMetadata)
+                .filter(([key]) => !knownFields.includes(key))
+                .reduce((obj, [key, value]) => {
+                  obj[key] = value;
+                  return obj;
+                }, {});
+            }
+            
+            this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
+            
+            completePaymentDetails = {
+              name: paymentMetadata.methodName || paymentMetadata.name || '',
+              details: paymentDetails,
+              paymentMethodType: {
+                name: methodName,
+                icon: paymentMetadata.icon || 'payment'
+              }
+            };
+          }
         }
       } catch (e) {
-        this.logger.error('Error parsing payment metadata:', e);
+        this.logger.error(`Error handling payment metadata: ${e.message}`, e);
+        paymentMetadata = { methodType: 'Unknown' };
       }
 
       // Transform the data to match the frontend interface
@@ -117,7 +265,7 @@ export class AdminDisputesController {
           status: dispute.order.buyerStatus, // Using buyer status as main status
           buyerStatus: dispute.order.buyerStatus,
           sellerStatus: dispute.order.sellerStatus,
-          paymentMethod: paymentMetadata.methodType || 'Unknown',
+          paymentMethod: completePaymentDetails?.paymentMethodType?.name || paymentMetadata.methodType || paymentMetadata.typeName || 'Unknown',
           paymentMetadata,
           completePaymentDetails,
           buyer: {

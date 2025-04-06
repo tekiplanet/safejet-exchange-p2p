@@ -60,15 +60,31 @@ interface Dispute {
     sellerStatus: string;
     paymentMethod: string;
     paymentMetadata: {
-      methodId: string;
-      details: Record<string, any>;
+      methodId?: string;
+      methodType?: string;
+      name?: string;
+      details?: Record<string, any>;
+      icon?: string;
+      typeName?: string;
+      methodDetails?: Record<string, any>;
+      userId?: string;
+      [key: string]: any; // Allow for additional properties
     };
     completePaymentDetails?: {
       name: string;
       details: Record<string, any>;
+      id?: string;
+      fields?: Array<{
+        id: string;
+        name: string;
+        label?: string;
+        fieldType?: string;
+        order?: number;
+      }>;
       paymentMethodType: {
         name: string;
         icon: string;
+        id?: string;
       };
     };
     buyer: {
@@ -164,6 +180,7 @@ export default function DisputeDetails() {
       }
 
       const data = await response.json();
+      
       setDispute(data);
       setNewStatus(data.status);
       setError(null);
@@ -229,6 +246,27 @@ export default function DisputeDetails() {
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
+
+  // Add console logging for payment method debugging
+  useEffect(() => {
+    if (dispute?.order) {
+      console.log('Payment Debug Information:', {
+        paymentMethod: dispute.order.paymentMethod,
+        paymentMetadataType: typeof dispute.order.paymentMetadata,
+        paymentMetadataKeys: dispute.order.paymentMetadata ? Object.keys(dispute.order.paymentMetadata) : [],
+        hasDetails: dispute.order.paymentMetadata?.details ? 'yes' : 'no',
+        detailsType: dispute.order.paymentMetadata?.details ? typeof dispute.order.paymentMetadata.details : 'n/a',
+        hasCompleteDetails: dispute.order.completePaymentDetails ? 'yes' : 'no',
+        completeDetailsKeys: dispute.order.completePaymentDetails ? Object.keys(dispute.order.completePaymentDetails) : [],
+        hasFields: dispute.order.completePaymentDetails?.fields ? 'yes' : 'no',
+        fieldsCount: dispute.order.completePaymentDetails?.fields?.length || 0,
+        fieldsExample: dispute.order.completePaymentDetails?.fields?.length 
+          ? dispute.order.completePaymentDetails.fields[0] 
+          : null,
+        detailsContent: dispute.order.completePaymentDetails?.details || dispute.order.paymentMetadata?.details || {},
+      });
+    }
+  }, [dispute]);
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleString();
@@ -727,46 +765,153 @@ export default function DisputeDetails() {
               <Typography variant="subtitle2" color="text.secondary">
                 Payment Method
               </Typography>
-              {dispute.order.completePaymentDetails ? (
-                <Box mt={1}>
-                  <Typography variant="body1" fontWeight="bold">
-                    {dispute.order.completePaymentDetails.paymentMethodType.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" mb={1}>
-                    Account Owner: {dispute.order.completePaymentDetails.name}
-                  </Typography>
-                  {Object.entries(dispute.order.completePaymentDetails.details).map(([key, value]) => (
-                    <Box key={key} mb={1}>
-                      <Typography variant="body2" color="text.secondary">
-                        {key.replace(/([A-Z])/g, ' $1').trim()}
+              <Paper variant="outlined" sx={{ p: 2, mt: 1, bgcolor: 'rgba(0, 0, 0, 0.02)' }}>
+                {(() => {
+                  // Define variables for payment display
+                  let methodName = 'Unknown Payment Method';
+                  let accountOwner = '';
+                  let details: Record<string, any> = {};
+                  let fields: any[] = [];
+                  
+                  // Try to get data from completePaymentDetails
+                  if (dispute.order.completePaymentDetails) {
+                    const completeDetails = dispute.order.completePaymentDetails;
+                    methodName = completeDetails.paymentMethodType?.name || methodName;
+                    accountOwner = completeDetails.name || '';
+                    details = completeDetails.details || {};
+                    fields = completeDetails.fields || [];
+                    
+                    // Add additional debug log to check field structure
+                    console.log('Payment fields detail:', {
+                      fields: fields,
+                      details: details,
+                      detailsKeys: Object.keys(details),
+                      sampleDetail: details[fields[0]?.name],
+                    });
+                  } 
+                  // Fallback to paymentMetadata
+                  else if (dispute.order.paymentMetadata) {
+                    // Extract method name (Bank Transfer, etc)
+                    methodName = dispute.order.paymentMetadata.typeName || 
+                                 dispute.order.paymentMethod || 
+                                 methodName;
+                    
+                    // Extract account owner (person name)
+                    accountOwner = dispute.order.paymentMetadata.methodName || 
+                                   dispute.order.paymentMetadata.name || 
+                                   '';
+                    
+                    // Extract details
+                    if (dispute.order.paymentMetadata.details) {
+                      details = dispute.order.paymentMetadata.details;
+                    } else {
+                      // Create details object from relevant fields
+                      details = {
+                        ...(dispute.order.paymentMetadata.typeId && { 'Type ID': dispute.order.paymentMetadata.typeId }),
+                        ...(dispute.order.paymentMetadata.description && { 'Description': dispute.order.paymentMetadata.description })
+                      };
+                    }
+                  }
+                  
+                  return (
+                    <Box>
+                      <Typography variant="h6" fontWeight="bold" color="primary" mb={1}>
+                        {methodName}
                       </Typography>
-                      <Typography variant="body1">
-                        {value}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Box>
-              ) : (
-                <Box mt={1}>
-                  <Typography variant="body1">
-                    {dispute.order.paymentMethod || 'Not specified'}
-                  </Typography>
-                  {dispute.order.paymentMetadata?.details && (
-                    <Box mt={1}>
-                      {Object.entries(dispute.order.paymentMetadata.details).map(([key, value]) => (
-                        <Box key={key} mb={1}>
-                          <Typography variant="body2" color="text.secondary">
-                            {key.replace(/([A-Z])/g, ' $1').trim()}
+                      
+                      {accountOwner && (
+                        <Box display="flex" alignItems="center" mb={2}>
+                          <Typography variant="subtitle2" color="text.secondary" sx={{ mr: 1 }}>
+                            Account Owner:
                           </Typography>
-                          <Typography variant="body1">
-                            {value}
+                          <Typography variant="body1" fontWeight="500">
+                            {accountOwner}
                           </Typography>
                         </Box>
-                      ))}
+                      )}
+                      
+                      {/* If we have structured fields from database, use them */}
+                      {fields && fields.length > 0 && (
+                        <Box>
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                            Payment Details (Structured):
+                          </Typography>
+                          
+                          <Grid container spacing={2}>
+                            {fields.map((field) => {
+                              const fieldId = field.id;
+                              const fieldName = field.name;
+                              const fieldLabel = field.label || field.name;
+                              
+                              // Access the field value from details
+                              let fieldValue = 'Not provided';
+                              
+                              // First check if we have a nested object with the field name
+                              if (details[fieldName]) {
+                                const detail = details[fieldName];
+                                // If it's an object with a value property
+                                if (typeof detail === 'object' && detail !== null && 'value' in detail) {
+                                  fieldValue = detail.value;
+                                } else {
+                                  // Otherwise use the value directly
+                                  fieldValue = detail;
+                                }
+                              }
+                              
+                              return (
+                                <Grid item xs={12} sm={6} key={fieldId || fieldName}>
+                                  <Box mb={1} sx={{ bgcolor: 'background.paper', p: 1.5, borderRadius: 1 }}>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                      {fieldLabel}
+                                    </Typography>
+                                    <Typography variant="body1" fontWeight="medium">
+                                      {typeof fieldValue === 'object' 
+                                        ? JSON.stringify(fieldValue) 
+                                        : fieldValue?.toString() || ''}
+                                    </Typography>
+                                  </Box>
+                                </Grid>
+                              );
+                            })}
+                          </Grid>
+                        </Box>
+                      )}
+                      
+                      {/* Otherwise use raw details data */}
+                      {Object.keys(details).length > 0 && (!fields || fields.length === 0) && (
+                        <Box>
+                          <Divider sx={{ my: 1 }} />
+                          <Typography variant="subtitle2" color="text.secondary" mb={1}>
+                            Payment Details:
+                          </Typography>
+                          
+                          <Grid container spacing={2}>
+                            {Object.entries(details).map(([key, value]) => (
+                              <Grid item xs={12} sm={6} key={key}>
+                                <Box mb={1} sx={{ bgcolor: 'background.paper', p: 1.5, borderRadius: 1 }}>
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {key.replace(/([A-Z])/g, ' $1').trim()}
+                                  </Typography>
+                                  <Typography variant="body1" fontWeight="medium">
+                                    {value?.toString() || ''}
+                                  </Typography>
+                                </Box>
+                              </Grid>
+                            ))}
+                          </Grid>
+                        </Box>
+                      )}
+                      
+                      {Object.keys(details).length === 0 && (!fields || fields.length === 0) && (
+                        <Typography variant="body2" color="text.secondary">
+                          No additional payment details available
+                        </Typography>
+                      )}
                     </Box>
-                  )}
-                </Box>
-              )}
+                  );
+                })()}
+              </Paper>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="subtitle2" color="text.secondary">
