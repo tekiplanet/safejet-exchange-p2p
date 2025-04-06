@@ -21,6 +21,9 @@ import { AdminDepositManagementController } from './admin-deposit-management.con
 import { User } from '../auth/entities/user.entity';
 import { SweepTransaction } from '../wallet/entities/sweep-transaction.entity';
 import { AdminSweepTransactionsController } from './admin-sweep-transactions.controller';
+import { AdminDisputesController } from './admin-disputes.controller';
+import { P2PDispute } from '../p2p/entities/p2p-dispute.entity';
+import { P2PDisputeMessage } from '../p2p/entities/p2p-dispute-message.entity';
 
 @Module({
   imports: [
@@ -34,6 +37,8 @@ import { AdminSweepTransactionsController } from './admin-sweep-transactions.con
       Deposit,
       User,
       SweepTransaction,
+      P2PDispute,
+      P2PDisputeMessage,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -53,6 +58,7 @@ import { AdminSweepTransactionsController } from './admin-sweep-transactions.con
     AdminWalletManagementController,
     AdminDepositManagementController,
     AdminSweepTransactionsController,
+    AdminDisputesController,
   ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
