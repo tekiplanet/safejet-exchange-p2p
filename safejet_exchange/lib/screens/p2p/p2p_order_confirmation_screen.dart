@@ -565,6 +565,15 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     final isDark = theme.brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
 
+    // Check if order is completed or cancelled
+    final String buyerStatus = _orderDetails?['buyerStatus']?.toString().toLowerCase() ?? '';
+    final String sellerStatus = _orderDetails?['sellerStatus']?.toString().toLowerCase() ?? '';
+    final bool isOrderCompletedOrCancelled = 
+        buyerStatus == 'completed' || 
+        sellerStatus == 'completed' ||
+        buyerStatus == 'cancelled' || 
+        sellerStatus == 'cancelled';
+    
     return Scaffold(
       appBar: P2PAppBar(
         title: 'Order Confirmation',
@@ -574,7 +583,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
         onThemeToggle: () {
           themeProvider.toggleTheme();
         },
-        trailing: Row(
+        trailing: !isOrderCompletedOrCancelled ? Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
@@ -596,99 +605,599 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               icon: const Icon(Icons.chat_outlined),
             ),
           ],
-        ),
+        ) : null, // Hide chat button in completed/cancelled state
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : _errorMessage.isNotEmpty
+          ? Center(child: Text(_errorMessage, style: TextStyle(color: SafeJetColors.error)))
+          : isOrderCompletedOrCancelled 
+            ? _buildCompletedOrCancelledScreen(isDark)
+            : Column(
                 children: [
-                  // Order Timer
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 400),
-                    child: _buildTimerSection(isDark),
-                  ),
-                  const SizedBox(height: 24),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          // Order Timer
+                          FadeInDown(
+                            duration: const Duration(milliseconds: 400),
+                            child: _buildTimerSection(isDark),
+                          ),
+                          const SizedBox(height: 24),
 
-                  // Order Details
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 400),
-                    delay: const Duration(milliseconds: 200),
-                    child: _buildOrderDetails(isDark),
-                  ),
-                  const SizedBox(height: 24),
+                          // Order Details
+                          FadeInDown(
+                            duration: const Duration(milliseconds: 400),
+                            delay: const Duration(milliseconds: 200),
+                            child: _buildOrderDetails(isDark),
+                          ),
+                          const SizedBox(height: 24),
 
-                  // Buyer Information (new section)
-                  if (_isCurrentUserSeller() && _orderDetails?['buyer'] != null)
-                    FadeInDown(
-                      duration: const Duration(milliseconds: 400),
-                      delay: const Duration(milliseconds: 300),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: SafeJetColors.success.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.person_outline, color: SafeJetColors.success, size: 16),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Buyer Information',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: SafeJetColors.success,
-                                  ),
+                          // Buyer Information (new section)
+                          if (_isCurrentUserSeller() && _orderDetails?['buyer'] != null)
+                            FadeInDown(
+                              duration: const Duration(milliseconds: 400),
+                              delay: const Duration(milliseconds: 300),
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: SafeJetColors.success.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            _buildPaymentDetailRow(
-                              'Buyer Name',
-                              _orderDetails?['buyer']?['fullName'] ?? 'Unknown',
-                              isDark,
-                            ),
-                            if (_orderDetails?['buyer']?['email'] != null)
-                              _buildPaymentDetailRow(
-                                'Email',
-                                _orderDetails!['buyer']['email'],
-                                isDark,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(Icons.person_outline, color: SafeJetColors.success, size: 16),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Buyer Information',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: SafeJetColors.success,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _buildPaymentDetailRow(
+                                      'Buyer Name',
+                                      _orderDetails?['buyer']?['fullName'] ?? 'Unknown',
+                                      isDark,
+                                    ),
+                                    if (_orderDetails?['buyer']?['email'] != null)
+                                      _buildPaymentDetailRow(
+                                        'Email',
+                                        _orderDetails!['buyer']['email'],
+                                        isDark,
+                                      ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'The buyer will send payment using the details you provided.',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: isDark ? Colors.grey[300] : Colors.grey[700],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'The buyer will send payment using the details you provided.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Payment Instructions
+                          FadeInDown(
+                            duration: const Duration(milliseconds: 400),
+                            delay: const Duration(milliseconds: 400),
+                            child: _buildPaymentInstructions(isDark),
+                          ),
+
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Bottom Actions
+                  _buildBottomActions(isDark),
+                ],
+              ),
+    );
+  }
+
+  Widget _buildCompletedOrCancelledScreen(bool isDark) {
+    // Extract order information
+    final tokenSymbol = _orderDetails?['offer']?['token']?['symbol'] ?? 'USDT';
+    final assetAmount = _orderDetails?['assetAmount'];
+    final formattedAssetAmount = _formatCryptoAmount(double.tryParse(assetAmount.toString()) ?? 0);
+    final String currency = _orderDetails?['offer']?['currency'] ?? '₦';
+    final currencyAmount = _orderDetails?['currencyAmount'];
+    final formattedCurrencyAmount = _formatFiatAmount(double.tryParse(currencyAmount.toString()) ?? 0);
+    final String buyerStatus = _orderDetails?['buyerStatus']?.toString().toLowerCase() ?? '';
+    final bool isCompleted = buyerStatus == 'completed';
+    final String trackingId = _orderDetails?['trackingId'] ?? '';
+    final String createdAt = _orderDetails?['createdAt'] != null 
+        ? DateTime.parse(_orderDetails!['createdAt']).toLocal().toString().substring(0, 16)
+        : 'Unknown';
+    final String completedOrCancelledAt = _orderDetails?[isCompleted ? 'completedAt' : 'cancelledAt'] != null
+        ? DateTime.parse(_orderDetails![isCompleted ? 'completedAt' : 'cancelledAt']).toLocal().toString().substring(0, 16)
+        : DateTime.now().toString().substring(0, 16);
+    final String counterpartyName = _isCurrentUserBuyer()
+        ? _orderDetails?['seller']?['fullName'] ?? 'Seller'
+        : _orderDetails?['buyer']?['fullName'] ?? 'Buyer';
+
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                // Status illustration and heading
+                FadeInDown(
+                  duration: const Duration(milliseconds: 500),
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: isCompleted 
+                          ? SafeJetColors.success.withOpacity(0.1)
+                          : SafeJetColors.warning.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        isCompleted ? Icons.check_circle_outline : Icons.cancel_outlined,
+                        size: 70,
+                        color: isCompleted ? SafeJetColors.success : SafeJetColors.warning,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FadeInDown(
+                  duration: const Duration(milliseconds: 500),
+                  delay: const Duration(milliseconds: 100),
+                  child: Text(
+                    isCompleted ? 'Order Completed' : 'Order Cancelled',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FadeInDown(
+                  duration: const Duration(milliseconds: 500),
+                  delay: const Duration(milliseconds: 150),
+                  child: Text(
+                    isCompleted 
+                        ? 'Transaction completed successfully!' 
+                        : 'This transaction has been cancelled.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 36),
+
+                // Transaction summary card
+                FadeInDown(
+                  duration: const Duration(milliseconds: 500),
+                  delay: const Duration(milliseconds: 200),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                          : SafeJetColors.lightCardBackground,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Transaction Summary',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Amount row
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.white.withOpacity(0.05) 
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.currency_bitcoin,
+                                color: isDark ? Colors.white : Colors.black,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Amount',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    '$formattedAssetAmount $tokenSymbol',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 16),
+                        
+                        // Value row
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.white.withOpacity(0.05) 
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.attach_money,
+                                color: isDark ? Colors.white : Colors.black,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Value',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    '$currency $formattedCurrencyAmount',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Order ID row
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.white.withOpacity(0.05) 
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.receipt_long_outlined,
+                                color: isDark ? Colors.white : Colors.black,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Order ID',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    '#$trackingId',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.copy,
+                                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                Clipboard.setData(ClipboardData(text: trackingId));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Order ID copied to clipboard')),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Dates row
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Created',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    createdAt,
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    isCompleted ? 'Completed' : 'Cancelled',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    completedOrCancelledAt,
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Counter party
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark 
+                                    ? Colors.white.withOpacity(0.05) 
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.person_outline,
+                                color: isDark ? Colors.white : Colors.black,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _isCurrentUserBuyer() ? 'Seller' : 'Buyer',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    counterpartyName,
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Status message
+                FadeInDown(
+                  duration: const Duration(milliseconds: 500),
+                  delay: const Duration(milliseconds: 250),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isCompleted 
+                          ? SafeJetColors.success.withOpacity(0.1)
+                          : SafeJetColors.warning.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isCompleted
+                            ? SafeJetColors.success.withOpacity(0.3)
+                            : SafeJetColors.warning.withOpacity(0.3),
                       ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isCompleted ? Icons.info_outline : Icons.warning_amber_rounded,
+                          color: isCompleted ? SafeJetColors.success : SafeJetColors.warning,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            isCompleted
+                                ? _isCurrentUserBuyer()
+                                    ? 'The coins have been released by the seller and added to your wallet.'
+                                    : 'You have released the coins to the buyer. The transaction is now complete.'
+                                : _getStatusMessage(),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // Payment Instructions
-                  FadeInDown(
-                    duration: const Duration(milliseconds: 400),
-                    delay: const Duration(milliseconds: 400),
-                    child: _buildPaymentInstructions(isDark),
-                  ),
-
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          // Bottom Actions
-          _buildBottomActions(isDark),
-        ],
-      ),
+        ),
+        
+        // Action buttons
+        FadeInUp(
+          duration: const Duration(milliseconds: 500),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: isDark ? SafeJetColors.primaryBackground : SafeJetColors.lightBackground,
+              border: Border(
+                top: BorderSide(
+                  color: isDark
+                      ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                      : SafeJetColors.lightCardBorder,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Navigate to wallet/assets screen
+                      // This is a placeholder - implement the actual navigation
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Navigate to wallet/assets (to be implemented)')),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDark 
+                          ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                          : Colors.grey[200],
+                      foregroundColor: isDark ? Colors.white : Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'View Assets',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Navigate to new trade screen
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const P2PScreen()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isCompleted ? SafeJetColors.success : SafeJetColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'New Trade',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
+  }
+
+  String _getStatusMessage() {
+    final String buyerStatus = _orderDetails?['buyerStatus']?.toString().toLowerCase() ?? '';
+    final bool isCurrentUserCanceller = _orderDetails?['cancellationMetadata']?['cancelledBy'] == (_isCurrentUserBuyer() ? 'buyer' : 'seller');
+    final String reason = _orderDetails?['cancellationMetadata']?['reason'] ?? 'No reason provided';
+    
+    if (buyerStatus == 'cancelled') {
+      if (isCurrentUserCanceller) {
+        return 'You cancelled this order. Reason: $reason';
+      } else {
+        return _isCurrentUserBuyer() 
+            ? 'The seller cancelled this order. Reason: $reason'
+            : 'The buyer cancelled this order. Reason: $reason';
+      }
+    }
+    
+    return 'This order has been cancelled.';
   }
 
   Widget _buildTimerSection(bool isDark) {
