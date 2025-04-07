@@ -1196,4 +1196,86 @@ export class EmailTemplatesService {
       <p>Your dispute is being processed. Please continue to monitor your account for further updates.</p>
     `;
   }
+
+  p2pOrderCompletedBuyerEmail(
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    isDark = true
+  ): string {
+    const content = `
+      <h1>P2P Order Completed - Coins Received! 🎉</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>Great news! The seller has released your coins:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount Received: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total Paid: ${currency}</p>
+          <p style="margin: 5px 0; color: #00c853; font-weight: bold;">Status: Completed</p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">What's Next? 🚀</h2>
+        <ul>
+          <li>Your ${tokenSymbol} has been added to your funding wallet</li>
+          <li>You can now transfer, trade, or withdraw your coins</li>
+          <li>Don't forget to rate your trading experience</li>
+        </ul>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>Thank you for choosing SafeJet for your P2P trading needs!</p>
+      </div>
+
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  p2pOrderCompletedSellerEmail(
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    isDark = true
+  ): string {
+    const content = `
+      <h1>P2P Order Completed - Coins Released! ✅</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>You have successfully released coins to the buyer:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount Released: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total Received: ${currency}</p>
+          <p style="margin: 5px 0; color: #00c853; font-weight: bold;">Status: Completed</p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Transaction Summary 📊</h2>
+        <ul>
+          <li>The ${tokenSymbol} has been successfully transferred to the buyer</li>
+          <li>The transaction is now marked as completed</li>
+          <li>You can find this order in your completed orders history</li>
+        </ul>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <p>Thank you for being a trusted seller on SafeJet Exchange!</p>
+      </div>
+
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
 }

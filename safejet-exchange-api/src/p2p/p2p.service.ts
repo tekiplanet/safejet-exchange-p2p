@@ -1214,11 +1214,38 @@ export class P2PService {
     // Update order status
     order.buyerStatus = 'completed';
     order.sellerStatus = 'completed';
+    order.completedAt = new Date();
     
     // Transfer funds from escrow to buyer
     await this.transferFundsFromEscrow(order);
 
     const updatedOrder = await this.orderRepository.save(order);
+
+    // Add system message to chat
+    await this.createSystemMessage(
+      order.id,
+      'Order completed. Coins have been released to the buyer.'
+    );
+
+    // Send email notification to buyer
+    await this.emailService.sendP2POrderCompletedBuyerEmail(
+      order.buyer.email,
+      order.buyer.fullName,
+      order.trackingId,
+      order.assetAmount.toString(),
+      order.offer.token.symbol,
+      `${order.currencyAmount.toString()} ${order.offer.currency}`
+    );
+
+    // Send email notification to seller
+    await this.emailService.sendP2POrderCompletedSellerEmail(
+      order.seller.email,
+      order.seller.fullName,
+      order.trackingId,
+      order.assetAmount.toString(),
+      order.offer.token.symbol,
+      `${order.currencyAmount.toString()} ${order.offer.currency}`
+    );
 
     // Emit update
     await this.orderGateway.emitOrderUpdate(

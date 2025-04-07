@@ -681,4 +681,56 @@ export class EmailService {
       console.error('P2P order cancelled email error:', error);
     }
   }
+
+  async sendP2POrderCompletedBuyerEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Completed - ${tokenSymbol} Received`,
+        html: this.emailTemplatesService.p2pOrderCompletedBuyerEmail(
+          userName,
+          trackingId,
+          amount,
+          tokenSymbol,
+          currency
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order completed buyer email error:', error);
+    }
+  }
+
+  async sendP2POrderCompletedSellerEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Completed - ${tokenSymbol} Released`,
+        html: this.emailTemplatesService.p2pOrderCompletedSellerEmail(
+          userName,
+          trackingId,
+          amount,
+          tokenSymbol,
+          currency
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order completed seller email error:', error);
+    }
+  }
 }
