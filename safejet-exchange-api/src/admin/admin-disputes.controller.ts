@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, HttpException, HttpStatus, Param, Logger, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, HttpException, HttpStatus, Param, Logger, Put, Res } from '@nestjs/common';
 import { AdminGuard } from '../auth/admin.guard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,6 +7,9 @@ import { P2PDisputeMessage } from '../p2p/entities/p2p-dispute-message.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { User } from '../auth/entities/user.entity';
+import { Response } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 
 interface PaymentMetadata {
   methodId?: string;
@@ -27,7 +30,7 @@ interface ProgressHistoryEntry {
   timestamp: string;
 }
 
-@Controller('admin/disputes')
+@Controller('admin')
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminDisputesController {
   private readonly logger = new Logger(AdminDisputesController.name);
@@ -39,7 +42,7 @@ export class AdminDisputesController {
     private disputeMessageRepository: Repository<P2PDisputeMessage>
   ) {}
 
-  @Get()
+  @Get('disputes')
   async getAllDisputes() {
     try {
       const disputes = await this.disputeRepository.find({
@@ -57,7 +60,7 @@ export class AdminDisputesController {
     }
   }
 
-  @Get(':id')
+  @Get('disputes/:id')
   async getDisputeById(@Param('id') id: string) {
     try {
       const dispute = await this.disputeRepository.findOne({
@@ -83,6 +86,18 @@ export class AdminDisputesController {
         relations: ['sender'],
         order: { createdAt: 'ASC' }
       });
+
+      // Ensure status is a valid DisputeStatus enum value
+      if (dispute.status) {
+        const upperStatus = dispute.status.toUpperCase();
+        if (Object.values(DisputeStatus).includes(upperStatus as DisputeStatus)) {
+          dispute.status = upperStatus as DisputeStatus;
+        } else {
+          dispute.status = DisputeStatus.PENDING;
+        }
+      } else {
+        dispute.status = DisputeStatus.PENDING;
+      }
 
       // Parse payment metadata
       let paymentMetadata: PaymentMetadata = {};
@@ -254,6 +269,7 @@ export class AdminDisputesController {
       const transformedDispute = {
         ...dispute,
         messages,
+        status: dispute.status,  // Now properly typed as DisputeStatus
         order: {
           ...dispute.order,
           trackingId: dispute.order.trackingId,
@@ -262,9 +278,9 @@ export class AdminDisputesController {
           price: Number(dispute.order.price || dispute.order.offer.price),
           currency: dispute.order.offer.currency,
           cryptoAsset: dispute.order.offer.token.symbol,
-          status: dispute.order.buyerStatus, // Using buyer status as main status
-          buyerStatus: dispute.order.buyerStatus,
-          sellerStatus: dispute.order.sellerStatus,
+          status: (dispute.order.buyerStatus || '').toUpperCase(), // Ensure uppercase
+          buyerStatus: (dispute.order.buyerStatus || '').toUpperCase(),
+          sellerStatus: (dispute.order.sellerStatus || '').toUpperCase(),
           paymentMethod: completePaymentDetails?.paymentMethodType?.name || paymentMetadata.methodType || paymentMetadata.typeName || 'Unknown',
           paymentMetadata,
           completePaymentDetails,
@@ -290,7 +306,7 @@ export class AdminDisputesController {
     }
   }
 
-  @Put(':id/status')
+  @Put('disputes/:id/status')
   async updateDisputeStatus(
     @Param('id') id: string,
     @Body() dto: { status: DisputeStatus },
@@ -331,7 +347,7 @@ export class AdminDisputesController {
     }
   }
 
-  @Post(':id/message')
+  @Post('disputes/:id/message')
   async sendDisputeMessage(
     @Param('id') disputeId: string,
     @Body() dto: { message: string },
@@ -368,6 +384,53 @@ export class AdminDisputesController {
       this.logger.error('Error sending dispute message:', error);
       throw new HttpException(
         error.message || 'Failed to send message',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('p2p/chat/images/:filename')
+  async getChatImage(
+    @Param('filename') filename: string,
+    @Res() res: Response
+  ) {
+    try {
+      // Correct path to public/uploads/chat where images are actually stored
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'chat');
+      const filePath = path.join(uploadDir, filename);
+
+      this.logger.log(`Attempting to serve image from: ${filePath}`);
+
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        this.logger.error(`Image not found: ${filePath}`);
+        throw new HttpException('Image not found', HttpStatus.NOT_FOUND);
+      }
+
+      // Get file mime type
+      const ext = path.extname(filename).toLowerCase();
+      let contentType = 'application/octet-stream';
+      if (['.jpg', '.jpeg'].includes(ext)) contentType = 'image/jpeg';
+      else if (ext === '.png') contentType = 'image/png';
+      else if (ext === '.gif') contentType = 'image/gif';
+      else if (ext === '.webp') contentType = 'image/webp';
+
+      // Set proper content type and send file
+      res.set({
+        'Content-Type': contentType,
+        'Content-Disposition': `inline; filename="${filename}"`,
+        'Cache-Control': 'public, max-age=31536000',
+      });
+
+      // Stream the file
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+
+      this.logger.log(`Successfully serving image: ${filename}`);
+    } catch (error) {
+      this.logger.error(`Error serving chat image ${filename}:`, error);
+      throw new HttpException(
+        'Failed to serve image',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

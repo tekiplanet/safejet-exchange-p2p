@@ -29,6 +29,29 @@ interface DisputeMessage {
     fullName: string;
     email: string;
   };
+  attachments?: Array<{
+    id: string;
+    url: string;
+    type: string;
+    fileName?: string;
+    originalUrl?: string;
+  }>;
+  attachmentUrl?: string;
+  attachmentType?: string;
+}
+
+interface MessageWithFiles extends DisputeMessage {
+  files?: Array<{
+    id?: string;
+    url?: string;
+    path?: string;
+    location?: string;
+    type?: string;
+    mimeType?: string;
+    name?: string;
+    originalName?: string;
+    [key: string]: any;
+  }>;
 }
 
 interface Dispute {
@@ -149,6 +172,8 @@ export default function DisputeDetails() {
   const [updating, setUpdating] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const API_BASE = '/api';
@@ -180,6 +205,157 @@ export default function DisputeDetails() {
       }
 
       const data = await response.json();
+      
+      // Check specifically for message attachments
+      if (data.messages && data.messages.length > 0) {
+        // Check for messages with direct attachmentUrl
+        const messagesWithAttachmentUrl = data.messages.filter((m: any) => m.attachmentUrl);
+        if (messagesWithAttachmentUrl.length > 0) {
+          console.log(`Found ${messagesWithAttachmentUrl.length} messages with direct attachmentUrl:`, 
+            messagesWithAttachmentUrl.map((m: any) => ({ 
+              id: m.id, 
+              attachmentUrl: m.attachmentUrl, 
+              attachmentType: m.attachmentType 
+            }))
+          );
+          
+          // Extract all image path variants for testing
+          const testImagePaths = [
+            `/api/p2p/chat/images/${messagesWithAttachmentUrl[0].attachmentUrl}`,
+            `/api/upload/${messagesWithAttachmentUrl[0].attachmentUrl}`,
+            `/api/attachments/${messagesWithAttachmentUrl[0].attachmentUrl}`,
+            `/uploads/${messagesWithAttachmentUrl[0].attachmentUrl}`,
+            `/${messagesWithAttachmentUrl[0].attachmentUrl}`
+          ];
+          console.log('Testing multiple image path formats:', testImagePaths);
+          
+          // Check sample URL from Flutter app
+          const sampleUrl = messagesWithAttachmentUrl[0].attachmentUrl;
+          console.log(`Sample attachment URL: ${sampleUrl} - is absolute: ${sampleUrl.startsWith('http')}`);
+        }
+        
+        // Convert direct attachmentUrl to attachments array
+        data.messages = data.messages.map((message: any) => {
+          // If the message has attachmentUrl but no attachments array
+          if (message.attachmentUrl && (!message.attachments || message.attachments.length === 0)) {
+            // Use the exact filename without any path prefixes
+            const fileName = message.attachmentUrl;
+            
+            console.log(`Converting message ${message.id} attachmentUrl to attachments array:`, {
+              originalUrl: message.attachmentUrl,
+              fileName
+            });
+            
+            const directImageUrl = `/api/p2p/chat/images/${fileName}`;  // Match the backend endpoint exactly
+            return {
+              ...message,
+              attachments: [{
+                id: `${message.id}-attachment`,
+                url: directImageUrl,  // Use the unique name
+                type: message.attachmentType || 
+                      (message.attachmentUrl.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image/jpeg' : 'application/octet-stream'),
+                fileName: fileName,
+                originalUrl: message.attachmentUrl
+              }]
+            };
+          }
+          return message;
+        });
+        
+        // Check if there's any message with files property
+        const messagesWithFiles = data.messages.filter((m: any) => m.files && m.files.length > 0);
+        if (messagesWithFiles.length > 0) {
+          console.log('Found messages with files property instead of attachments:', messagesWithFiles);
+          
+          // Fix the property name discrepancy by copying files to attachments
+          data.messages = data.messages.map((message: any) => {
+            if (message.files && message.files.length > 0 && (!message.attachments || message.attachments.length === 0)) {
+              return {
+                ...message,
+                attachments: message.files.map((file: any) => ({
+                  id: file.id || Math.random().toString(),
+                  url: file.url || file.path || file.location || '',
+                  type: file.type || file.mimeType || (file.url?.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image/jpeg' : 'application/octet-stream'),
+                  fileName: file.name || file.originalName || 'attachment'
+                }))
+              };
+            }
+            return message;
+          });
+        }
+        
+        // Also check for fileAttachments property
+        const messagesWithFileAttachments = data.messages.filter((m: any) => m.fileAttachments && m.fileAttachments.length > 0);
+        if (messagesWithFileAttachments.length > 0) {
+          console.log('Found messages with fileAttachments property:', messagesWithFileAttachments);
+          
+          // Map fileAttachments to attachments
+          data.messages = data.messages.map((message: any) => {
+            if (message.fileAttachments && message.fileAttachments.length > 0 && (!message.attachments || message.attachments.length === 0)) {
+              return {
+                ...message,
+                attachments: message.fileAttachments.map((file: any) => ({
+                  id: file.id || Math.random().toString(),
+                  url: file.url || file.path || file.location || '',
+                  type: file.type || file.mimeType || (file.url?.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image/jpeg' : 'application/octet-stream'),
+                  fileName: file.name || file.originalName || 'attachment'
+                }))
+              };
+            }
+            return message;
+          });
+        }
+        
+        // Also check for media property
+        const messagesWithMedia = data.messages.filter((m: any) => m.media && m.media.length > 0);
+        if (messagesWithMedia.length > 0) {
+          console.log('Found messages with media property:', messagesWithMedia);
+          
+          // Map media to attachments
+          data.messages = data.messages.map((message: any) => {
+            if (message.media && message.media.length > 0 && (!message.attachments || message.attachments.length === 0)) {
+              return {
+                ...message,
+                attachments: message.media.map((media: any) => ({
+                  id: media.id || Math.random().toString(),
+                  url: media.url || media.path || media.location || '',
+                  type: media.type || media.mimeType || (media.url?.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image/jpeg' : 'application/octet-stream'),
+                  fileName: media.name || media.originalName || 'media'
+                }))
+              };
+            }
+            return message;
+          });
+        }
+        
+        // Check for images property
+        const messagesWithImages = data.messages.filter((m: any) => m.images && m.images.length > 0);
+        if (messagesWithImages.length > 0) {
+          console.log('Found messages with images property:', messagesWithImages);
+          
+          // Map images to attachments
+          data.messages = data.messages.map((message: any) => {
+            if (message.images && message.images.length > 0 && (!message.attachments || message.attachments.length === 0)) {
+              return {
+                ...message,
+                attachments: message.images.map((image: any) => ({
+                  id: image.id || Math.random().toString(),
+                  url: image.url || image.path || image.location || '',
+                  type: 'image/jpeg', // Assuming it's an image
+                  fileName: image.name || image.originalName || 'image'
+                }))
+              };
+            }
+            return message;
+          });
+        }
+        
+        // Log the final messages with attachments
+        const finalMessagesWithAttachments = data.messages.filter((m: any) => m.attachments && m.attachments.length > 0);
+        if (finalMessagesWithAttachments.length > 0) {
+          console.log('Final messages with attachments after processing:', finalMessagesWithAttachments.length);
+        }
+      }
       
       setDispute(data);
       setNewStatus(data.status);
@@ -235,6 +411,9 @@ export default function DisputeDetails() {
   useEffect(() => {
     if (router.query.id) {
       fetchDispute();
+      
+      // Log the domain for debugging purposes
+      console.log('Current domain:', window.location.origin);
     }
     scrollToBottom();
   }, [router.query.id]);
@@ -249,24 +428,38 @@ export default function DisputeDetails() {
 
   // Add console logging for payment method debugging
   useEffect(() => {
-    if (dispute?.order) {
-      console.log('Payment Debug Information:', {
-        paymentMethod: dispute.order.paymentMethod,
-        paymentMetadataType: typeof dispute.order.paymentMetadata,
-        paymentMetadataKeys: dispute.order.paymentMetadata ? Object.keys(dispute.order.paymentMetadata) : [],
-        hasDetails: dispute.order.paymentMetadata?.details ? 'yes' : 'no',
-        detailsType: dispute.order.paymentMetadata?.details ? typeof dispute.order.paymentMetadata.details : 'n/a',
-        hasCompleteDetails: dispute.order.completePaymentDetails ? 'yes' : 'no',
-        completeDetailsKeys: dispute.order.completePaymentDetails ? Object.keys(dispute.order.completePaymentDetails) : [],
-        hasFields: dispute.order.completePaymentDetails?.fields ? 'yes' : 'no',
-        fieldsCount: dispute.order.completePaymentDetails?.fields?.length || 0,
-        fieldsExample: dispute.order.completePaymentDetails?.fields?.length 
-          ? dispute.order.completePaymentDetails.fields[0] 
-          : null,
-        detailsContent: dispute.order.completePaymentDetails?.details || dispute.order.paymentMetadata?.details || {},
-      });
-    }
   }, [dispute]);
+
+  // Add console logging for message debugging
+  useEffect(() => {
+    if (dispute?.messages?.length) {
+      const messagesWithAttachments = dispute.messages.filter(m => m.attachments && m.attachments.length > 0);
+      if (messagesWithAttachments.length > 0) {
+        console.log('Messages with attachments:', messagesWithAttachments);
+      } else {
+        console.log('No messages with attachments found');
+        // Check if attachments exist but with a different property name
+        const sampleMessage = dispute.messages[0];
+        const messageKeys = Object.keys(sampleMessage);
+        console.log('Message structure:', {
+          keys: messageKeys,
+          sample: sampleMessage
+        });
+        
+        // Look for potential attachment fields
+        const potentialAttachmentFields = messageKeys.filter(key => 
+          key.includes('attach') || 
+          key.includes('file') || 
+          key.includes('image') || 
+          key.includes('media')
+        );
+        
+        if (potentialAttachmentFields.length > 0) {
+          console.log('Potential attachment fields:', potentialAttachmentFields);
+        }
+      }
+    }
+  }, [dispute?.messages]);
 
   const formatDate = (date: string) => {
     return new Date(date).toLocaleString();
@@ -314,7 +507,7 @@ export default function DisputeDetails() {
   };
 
   const handleSendMessage = async () => {
-    if (!dispute || !newMessage.trim()) return;
+    if (!dispute || (!newMessage.trim() && selectedFiles.length === 0)) return;
 
     setSendingMessage(true);
     try {
@@ -324,29 +517,103 @@ export default function DisputeDetails() {
         return;
       }
 
+      // Use FormData to handle file uploads
+      const formData = new FormData();
+      formData.append('message', newMessage.trim());
+      
+      // If we have files, add them
+      if (selectedFiles.length > 0) {
+        console.log(`Sending ${selectedFiles.length} files:`, selectedFiles.map(f => f.name));
+        
+        // Add files to FormData
+        // Match exactly how Flutter is sending the attachment
+        const firstFile = selectedFiles[0];
+        
+        try {
+          // Convert the first file to base64 for attachment
+          const base64 = await fileToBase64(firstFile);
+          const mimeType = firstFile.type || 'application/octet-stream';
+          
+          // Append with proper parameter name exactly as Flutter app does
+          formData.append('attachment', `data:${mimeType};base64,${base64}`);
+          console.log(`Attachment added as base64, MIME type: ${mimeType}, size: ${base64.length} chars`);
+        } catch (error) {
+          console.error('Error converting file to base64:', error);
+          setStatus('Failed to prepare file for upload');
+          setSendingMessage(false);
+          return;
+        }
+      }
+
+      console.log('Sending message to dispute:', dispute.id);
+      console.log('FormData keys:', [...formData.keys()]);
+      
       const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
           'ngrok-skip-browser-warning': 'true'
+          // Note: Don't set Content-Type when using FormData, browser will set it automatically with boundary
         },
-        body: JSON.stringify({ message: newMessage.trim() })
+        body: formData
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        // Try to get response body for more error details
+        try {
+          const errorData = await response.json();
+          console.error('Error response from server:', errorData);
+          throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
+        } catch (jsonError) {
+          throw new Error(`Failed to send message: ${response.statusText}`);
+        }
+      }
+
+      // Try to get response body for debugging
+      try {
+        const responseData = await response.json();
+        console.log('Message sent successfully, response:', responseData);
+      } catch (jsonError) {
+        console.log('Message sent successfully, no JSON response');
       }
 
       await fetchDispute();
       setNewMessage('');
+      setSelectedFiles([]);
+      setStatus('Message sent successfully');
     } catch (error) {
       console.error('Error sending message:', error);
-      setStatus('Failed to send message');
+      setStatus(error instanceof Error ? error.message : 'Failed to send message');
     } finally {
       setSendingMessage(false);
     }
+  };
+  
+  // Helper function to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const base64String = reader.result as string;
+        // Remove the data:mime/type;base64, prefix
+        const base64 = base64String.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const filesArray = Array.from(event.target.files);
+      setSelectedFiles(filesArray);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
   };
 
   const getMessageStyle = (senderType: string, message: DisputeMessage, dispute: Dispute) => {
@@ -624,6 +891,85 @@ export default function DisputeDetails() {
                         <Typography variant="body1" sx={{ color: 'inherit' }}>
                           {message.message}
                         </Typography>
+                        {/* Handle both attachments array and direct attachmentUrl */}
+                        {((message.attachments && message.attachments.length > 0) || message.attachmentUrl) && (
+                          <Box mt={1}>
+                            {/* If we have an attachment array, render those */}
+                            {message.attachments && message.attachments.length > 0 && message.attachments.map((attachment) => {
+                              const fileName = attachment.originalUrl || 
+                                              (attachment.fileName) || 
+                                              (attachment.url && attachment.url.split('/').pop());
+                              
+                              // Try the Flutter approach of using a direct URL
+                              const directImageUrl = `/api/p2p/chat/images/${fileName}`;  // Match the backend endpoint exactly
+                              console.log(`Rendering attachment with direct URL: ${fileName}, URL: ${directImageUrl}`);
+                              
+                              // More robust image type detection 
+                              const isImage = 
+                                // Check by mime type
+                                (attachment.type && attachment.type.toLowerCase().startsWith('image/')) || 
+                                // Check by file extension in URL
+                                (fileName && /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fileName)) ||
+                                // Check for image-specific URL patterns
+                                (fileName && /\/(img|image|photo|picture)s?\//i.test(fileName));
+                              
+                              return isImage ? (
+                                <Box key={attachment.id} mt={1} sx={{ maxWidth: '100%' }}>
+                                  <img
+                                    src={directImageUrl}
+                                    alt={attachment.fileName || 'Image attachment'}
+                                    style={{ 
+                                      maxWidth: '100%', 
+                                      maxHeight: '300px', 
+                                      borderRadius: '8px',
+                                      cursor: 'pointer',
+                                      border: '1px solid rgba(0,0,0,0.1)'
+                                    }}
+                                    onClick={() => window.open(directImageUrl, '_blank')}
+                                    onError={(e) => {
+                                      console.error(`Error loading image: ${directImageUrl}`);
+                                      e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0yNCAwdjI0aC0yNHYtMjRoMjR6bS0yIDVoLTIwdjE0aDIwdi0xNHptLTEgMTNoLTE4di0xMmgxOHYxMnptLTEzLjUyOC0zLjI2OWwtMi4xOTYgMi4yNy0uMDA1LS4wMDUtLjM1MS0uMzY0IDIuNTUxLTIuNjQ1LTIuNTUxLTIuNjQ2LjM1MS0uMzY0LjAwNS0uMDA1IDIuMTk2IDIuMjcgNC4yNzItNC40MjcuMzUxLjM2NC4wMDUuMDA1YTQ1NzMuMzcxIDQ1NzMuMzcxIDAgMDEtNC42MjggNC43OTMgNDU3My43ODQgNDU3My43ODQgMCAwMTQuNjI4IDQuNzkzLS4wMDUuMDA1LS4zNTEuMzY0LTQuMjcyLTQuNDI3eiIgZmlsbD0iI2QzZDNkMyIvPjwvc3ZnPg==';
+                                      e.currentTarget.style.padding = '10%';
+                                      e.currentTarget.style.background = '#f5f5f5';
+                                    }}
+                                  />
+                                  {attachment.fileName && (
+                                    <Typography variant="caption" display="block" sx={{ mt: 0.5, color: 'inherit', opacity: 0.7 }}>
+                                      {attachment.fileName}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              ) : (
+                                <Box 
+                                  key={attachment.id} 
+                                  mt={1} 
+                                  sx={{ 
+                                    p: 1.5, 
+                                    bgcolor: 'rgba(0,0,0,0.04)', 
+                                    borderRadius: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between'
+                                  }}
+                                >
+                                  <Typography variant="body2">
+                                    {attachment.fileName || 'File attachment'}
+                                  </Typography>
+                                  <Button 
+                                    size="small" 
+                                    component="a" 
+                                    href={directImageUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    variant="outlined"
+                                  >
+                                    Download
+                                  </Button>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        )}
                       </Paper>
                     );
                   })
@@ -648,13 +994,70 @@ export default function DisputeDetails() {
                   multiline
                   maxRows={4}
                 />
+                <input
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                />
+                <IconButton 
+                  color="primary"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sendingMessage}
+                  title="Attach files"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" 
+                    style={{ width: '20px', height: '20px' }}
+                  >
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </IconButton>
                 <IconButton 
                   color="primary"
                   onClick={handleSendMessage}
-                  disabled={sendingMessage || !newMessage.trim()}
+                  disabled={sendingMessage || (!newMessage.trim() && selectedFiles.length === 0)}
                 >
                   <SendIcon />
                 </IconButton>
+              </Box>
+            )}
+            {selectedFiles.length > 0 && (
+              <Box mt={2} sx={{ bgcolor: 'rgba(0,0,0,0.03)', p: 1, borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary" display="block" mb={1}>
+                  {selectedFiles.length} file(s) selected
+                </Typography>
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  {selectedFiles.map((file, index) => (
+                    <Box 
+                      key={index}
+                      sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        bgcolor: 'background.paper', 
+                        p: 0.5, 
+                        pl: 1, 
+                        borderRadius: 1,
+                        border: '1px solid rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      <Typography variant="caption" noWrap sx={{ maxWidth: '120px' }}>
+                        {file.name}
+                      </Typography>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => handleRemoveFile(index)}
+                        sx={{ ml: 0.5 }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
               </Box>
             )}
           </Box>
@@ -782,12 +1185,12 @@ export default function DisputeDetails() {
                     fields = completeDetails.fields || [];
                     
                     // Add additional debug log to check field structure
-                    console.log('Payment fields detail:', {
-                      fields: fields,
-                      details: details,
-                      detailsKeys: Object.keys(details),
-                      sampleDetail: details[fields[0]?.name],
-                    });
+                    // console.log('Payment fields detail:', {
+                    //   fields: fields,
+                    //   details: details,
+                    //   detailsKeys: Object.keys(details),
+                    //   sampleDetail: details[fields[0]?.name],
+                    // });
                   } 
                   // Fallback to paymentMetadata
                   else if (dispute.order.paymentMetadata) {
