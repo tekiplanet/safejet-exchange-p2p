@@ -20,6 +20,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ExchangeModule } from './exchange/exchange.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TokenManagementModule } from './tokens/token-management.module';
+import { TokensModule } from './tokens/tokens.module';
 import { P2PModule } from './p2p/p2p.module';
 import { JwtModule } from '@nestjs/jwt';
 
@@ -61,6 +62,7 @@ import { JwtModule } from '@nestjs/jwt';
     ExchangeModule,
     ScheduleModule.forRoot(),
     TokenManagementModule,
+    TokensModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '60m' },
