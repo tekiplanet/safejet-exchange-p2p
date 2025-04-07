@@ -647,4 +647,38 @@ export class EmailService {
       console.error('P2P dispute status update email error:', error);
     }
   }
+
+  async sendP2POrderCancelledEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    cancelledBy: 'buyer' | 'seller',
+    reason: string,
+    additionalDetails: string,
+    isUserCanceller: boolean
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `P2P Order Cancelled - #${trackingId}`,
+        html: this.emailTemplatesService.p2pOrderCancelledEmail(
+          userName,
+          trackingId,
+          amount,
+          tokenSymbol,
+          currency,
+          cancelledBy,
+          reason,
+          additionalDetails,
+          isUserCanceller
+        ),
+      });
+    } catch (error) {
+      console.error('P2P order cancelled email error:', error);
+    }
+  }
 }

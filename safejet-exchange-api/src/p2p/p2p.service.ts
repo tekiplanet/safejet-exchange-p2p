@@ -25,6 +25,7 @@ import { FileService } from '../common/services/file.service';
 import { P2PDispute, DisputeReasonType, DisputeStatus } from './entities/p2p-dispute.entity';
 import { P2PDisputeMessage, DisputeMessageSenderType } from './entities/p2p-dispute-message.entity';
 import { P2PDisputeGateway } from './gateways/p2p-dispute.gateway';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class P2PService {
@@ -1171,14 +1172,14 @@ export class P2PService {
     }
   }
 
-  async releaseOrder(trackingId: string, userId: string): Promise<Order> {
+  async releaseOrder(trackingId: string, userId: string, password: string) {
     const order = await this.orderRepository.findOne({
       where: { trackingId },
       relations: ['buyer', 'seller', 'offer', 'offer.token'],
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException(`Order with tracking ID ${trackingId} not found`);
     }
 
     // Verify user is the seller
@@ -1186,9 +1187,28 @@ export class P2PService {
       throw new BadRequestException('Only the seller can release funds');
     }
 
-    // Verify order is in correct state
-    if (order.buyerStatus !== 'paid') {
-      throw new BadRequestException('Buyer has not confirmed payment');
+    // Verify order is in a releasable state
+    if (order.buyerStatus === 'pending') {
+      throw new BadRequestException('Buyer has not initiated payment yet');
+    }
+
+    if (order.buyerStatus === 'cancelled' || order.sellerStatus === 'cancelled') {
+      throw new BadRequestException('Cannot release funds for a cancelled order');
+    }
+
+    // Verify seller's password
+    const seller = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'passwordHash']
+    });
+
+    if (!seller) {
+      throw new NotFoundException('Seller not found');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, seller.passwordHash);
+    if (!isPasswordValid) {
+      throw new BadRequestException('Invalid password');
     }
 
     // Update order status
@@ -1251,8 +1271,9 @@ export class P2PService {
     order.sellerStatus = 'cancelled';
 
     // Save cancellation metadata
+    const cancelledBy = order.buyerId === userId ? 'buyer' : 'seller';
     order.cancellationMetadata = {
-      cancelledBy: order.buyerId === userId ? 'buyer' : 'seller',
+      cancelledBy,
       reason: cancellationReason || 'No reason provided',
       additionalDetails: additionalDetails || '',
       cancelledAt: new Date().toISOString(),
@@ -1266,7 +1287,41 @@ export class P2PService {
     // Add system message to chat
     await this.createSystemMessage(
       order.id,
-      `Order cancelled by ${order.buyerId === userId ? 'buyer' : 'seller'}${cancellationReason ? ': ' + cancellationReason : ''}`
+      `Order cancelled by ${cancelledBy}${cancellationReason ? ': ' + cancellationReason : ''}`
+    );
+
+    // Send cancellation emails to both parties
+    const tokenSymbol = order.offer.token.symbol;
+    const currencyAmount = order.currencyAmount.toString();
+    const assetAmount = order.assetAmount.toString();
+    const currency = `${order.offer.currency} ${currencyAmount}`;
+
+    // Send email to buyer
+    await this.emailService.sendP2POrderCancelledEmail(
+      order.buyer.email,
+      order.buyer.fullName,
+      trackingId,
+      assetAmount,
+      tokenSymbol,
+      currency,
+      cancelledBy,
+      cancellationReason || 'No reason provided',
+      additionalDetails || '',
+      order.buyerId === userId // isUserCanceller
+    );
+
+    // Send email to seller
+    await this.emailService.sendP2POrderCancelledEmail(
+      order.seller.email,
+      order.seller.fullName,
+      trackingId,
+      assetAmount,
+      tokenSymbol,
+      currency,
+      cancelledBy,
+      cancellationReason || 'No reason provided',
+      additionalDetails || '',
+      order.sellerId === userId // isUserCanceller
     );
 
     return { message: 'Order cancelled successfully' };
@@ -1324,8 +1379,73 @@ export class P2PService {
   }
 
   private async transferFundsFromEscrow(order: Order) {
-    // Implementation for transferring funds from escrow to buyer
-    // This would involve your actual business logic for handling the transfer
+    try {
+      console.log('Transferring funds from escrow:', {
+        orderId: order.id,
+        sellerId: order.sellerId,
+        buyerId: order.buyerId,
+        amount: order.assetAmount,
+        token: order.offer.token.symbol
+      });
+
+      // Find the seller's funding wallet balance for this token
+      const sellerWalletBalance = await this.walletBalanceRepository.findOne({
+        where: {
+          userId: order.sellerId,
+          type: 'funding',
+          baseSymbol: order.offer.token.symbol
+        }
+      });
+
+      if (!sellerWalletBalance) {
+        console.error(`Seller does not have a funding wallet balance for ${order.offer.token.symbol}`);
+        throw new Error('Seller wallet balance not found');
+      }
+
+      // Find the buyer's funding wallet balance for this token
+      const buyerWalletBalance = await this.walletBalanceRepository.findOne({
+        where: {
+          userId: order.buyerId,
+          type: 'funding',
+          baseSymbol: order.offer.token.symbol
+        }
+      });
+
+      if (!buyerWalletBalance) {
+        console.error(`Buyer does not have a funding wallet balance for ${order.offer.token.symbol}`);
+        throw new Error('Buyer wallet balance not found');
+      }
+
+      // Parse current balances
+      const sellerFrozen = parseFloat(sellerWalletBalance.frozen?.toString() || '0');
+      const buyerBalance = parseFloat(buyerWalletBalance.balance.toString());
+      const orderAmount = parseFloat(order.assetAmount.toString());
+
+      // Verify there are enough frozen funds
+      if (sellerFrozen < orderAmount) {
+        console.error('Insufficient frozen balance:', {
+          frozen: sellerFrozen,
+          required: orderAmount
+        });
+        throw new Error('Insufficient frozen balance');
+      }
+
+      // Update the balances
+      sellerWalletBalance.frozen = (sellerFrozen - orderAmount).toString();
+      buyerWalletBalance.balance = (buyerBalance + orderAmount).toString();
+
+      // Save the updated balances
+      await this.walletBalanceRepository.save(sellerWalletBalance);
+      await this.walletBalanceRepository.save(buyerWalletBalance);
+
+      console.log('Successfully transferred funds:', {
+        sellerNewFrozen: sellerWalletBalance.frozen,
+        buyerNewBalance: buyerWalletBalance.balance
+      });
+    } catch (error) {
+      console.error('Error transferring funds from escrow:', error);
+      throw error;
+    }
   }
 
   private async returnFundsToSeller(order: Order) {

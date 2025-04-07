@@ -434,13 +434,20 @@ class P2PService {
     }
   }
 
-  Future<void> releaseOrder(String trackingId) async {
+  Future<void> releaseOrder(String trackingId, String password) async {
     try {
       final response = await _dio.post(
         '/p2p/orders/$trackingId/release',
+        data: {'password': password},
         options: Options(headers: await _getAuthHeaders()),
       );
       print('Release order response: ${response.data}');
+      
+      // Check for non-success status codes (not in 200 range)
+      if (response.statusCode! < 200 || response.statusCode! >= 300) {
+        final errorMessage = response.data['message'] ?? 'Failed to release coins';
+        throw Exception(errorMessage);
+      }
     } catch (e) {
       print('Error releasing order: $e');
       _handleError(e);

@@ -1621,7 +1621,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                     if (isBuyer) {
                       _showCancelOrderDialog();
                     } else {
-                      await _p2pService.releaseOrder(_orderDetails!['id']);
+                      _showReleaseCoinDialog();
                     }
                   } catch (e) {
                     if (mounted) {
@@ -1802,7 +1802,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
               child: ElevatedButton(
                 onPressed: () async {
                   try {
-                    await _p2pService.releaseOrder(_orderDetails!['id']);
+                    _showReleaseCoinDialog();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text(e.toString())),
@@ -2239,6 +2239,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
   }
 
   void _showCancelOrderDialog() {
+    print('DEBUG: _showCancelOrderDialog method called');
     final TextEditingController reasonController = TextEditingController();
     bool isSubmitting = false;
     bool hasConfirmedCancel = false;
@@ -2550,6 +2551,445 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             ],
             );
           },
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showReleaseCoinDialog() {
+    print('DEBUG: _showReleaseCoinDialog method called');
+    final TextEditingController passwordController = TextEditingController();
+    bool isSubmitting = false;
+    bool hasConfirmedReceipt = false;
+    bool hasConfirmedTerms = false;
+    bool isPasswordVisible = false;
+
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = themeProvider.isDarkMode;
+
+    final tokenSymbol = _orderDetails?['offer']?['token']?['symbol'] ?? 'USDT';
+    final formattedAssetAmount = _orderDetails?['assetAmount'] != null 
+        ? _formatCryptoAmount(double.tryParse(_orderDetails!['assetAmount'].toString()) ?? 0)
+        : '0';
+    final formattedCurrencyAmount = _orderDetails?['currencyAmount'] != null 
+        ? _formatFiatAmount(double.tryParse(_orderDetails!['currencyAmount'].toString()) ?? 0)
+        : '0';
+    final currency = _orderDetails?['offer']?['currency'] ?? '₦';
+    final buyerName = _orderDetails?['buyer']?['fullName'] ?? 'the buyer';
+
+    showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.close,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Release Coins',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Please confirm you want to release the coins:',
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                          
+                          // Order amount details card
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.grey[300]!,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Order Details',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Amount:',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                    Text(
+                                      '$formattedAssetAmount $tokenSymbol',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Total:',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                    Text(
+                                      '$currency $formattedCurrencyAmount',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Buyer:',
+                                      style: TextStyle(
+                                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                    Text(
+                                      buyerName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Warning box
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: SafeJetColors.warning.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: SafeJetColors.warning.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  color: SafeJetColors.warning,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Once you release coins, this action cannot be undone. Please ensure you have received the payment before proceeding.',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : Colors.black,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Confirmation checkboxes
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: Checkbox(
+                                        value: hasConfirmedReceipt,
+                                        onChanged: isSubmitting ? null : (newValue) {
+                                          setState(() {
+                                            hasConfirmedReceipt = newValue ?? false;
+                                          });
+                                        },
+                                        activeColor: SafeJetColors.success,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'I confirm that I have received the full payment of $currency $formattedCurrencyAmount for this order',
+                                        style: TextStyle(
+                                          color: isDark ? Colors.white : Colors.black,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      width: 24,
+                                      height: 24,
+                                      child: Checkbox(
+                                        value: hasConfirmedTerms,
+                                        onChanged: isSubmitting ? null : (newValue) {
+                                          setState(() {
+                                            hasConfirmedTerms = newValue ?? false;
+                                          });
+                                        },
+                                        activeColor: SafeJetColors.success,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'I understand that releasing coins will complete this transaction and the crypto will be transferred to the buyer',
+                                        style: TextStyle(
+                                          color: isDark ? Colors.white : Colors.black,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 24),
+                          
+                          // Password field
+                          Text(
+                            'Confirm Your Password',
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: passwordController,
+                            obscureText: !isPasswordVisible,
+                            decoration: InputDecoration(
+                              hintText: 'Enter your password',
+                              filled: true,
+                              fillColor: isDark 
+                                ? Colors.black.withOpacity(0.3) 
+                                : Colors.grey[100],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[300]!,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: isDark
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[300]!,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: SafeJetColors.success,
+                                ),
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    isPasswordVisible = !isPasswordVisible;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: isDark 
+                                      ? Colors.white.withOpacity(0.1)
+                                      : Colors.grey[300]!,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              'Go Back',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: isSubmitting || !hasConfirmedReceipt || !hasConfirmedTerms || passwordController.text.isEmpty
+                              ? null 
+                              : () async {
+                                  setState(() {
+                                    isSubmitting = true;
+                                  });
+                                  try {
+                                    if (passwordController.text.isEmpty) {
+                                      throw Exception('Password is required to release coins');
+                                    }
+                                    
+                                    // Debug output to see what ID we're sending
+                                    print('Releasing order with ID: ${_orderDetails!['id']}');
+                                    print('Order tracking ID: ${_orderDetails!['trackingId']}');
+                                    
+                                    // Use the trackingId instead of id
+                                    await _p2pService.releaseOrder(
+                                      _orderDetails!['trackingId'],
+                                      passwordController.text.trim(),
+                                    );
+                                    if (mounted) {
+                                      Navigator.of(context).pop(true);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Coins released successfully')),
+                                      );
+                                      // Refresh order details
+                                      setState(() {
+                                        _isLoading = true;
+                                      });
+                                      _fetchOrderDetails();
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      setState(() {
+                                        isSubmitting = false;
+                                      });
+                                      String errorMessage = 'Failed to release coins';
+                                      if (e.toString().contains('password')) {
+                                        errorMessage = 'Invalid password. Please try again.';
+                                      } else if (e.toString().contains('network')) {
+                                        errorMessage = 'Network error. Please check your connection.';
+                                      } else if (e.toString().contains('not found')) {
+                                        errorMessage = 'Order not found or has been modified.';
+                                      } else {
+                                        // Extract the error message from the exception
+                                        final errorString = e.toString();
+                                        if (errorString.contains('Exception: ')) {
+                                          final startIndex = errorString.indexOf('Exception: ') + 'Exception: '.length;
+                                          errorMessage = errorString.substring(startIndex);
+                                        } else {
+                                          errorMessage = errorString;
+                                        }
+                                      }
+                                      
+                                      // Stay on the dialog and show error
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(errorMessage),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: SafeJetColors.success,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: isSubmitting
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                  ),
+                                )
+                              : const Text(
+                                  'Release Coins',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

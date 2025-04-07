@@ -1112,6 +1112,59 @@ export class EmailTemplatesService {
     return baseTemplate(content, isDark);
   }
 
+  p2pOrderCancelledEmail(
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    cancelledBy: 'buyer' | 'seller',
+    reason: string,
+    additionalDetails: string,
+    isUserCanceller: boolean,
+    isDark = true
+  ): string {
+    const content = `
+      <h1>P2P Order Cancelled ⚠️</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>${isUserCanceller ? 'You have cancelled' : 'The ' + cancelledBy + ' has cancelled'} the following P2P order:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total: ${currency}</p>
+          <p style="margin: 5px 0;">Cancelled By: ${cancelledBy.charAt(0).toUpperCase() + cancelledBy.slice(1)}</p>
+          <p style="margin: 5px 0;">Reason: ${reason}</p>
+          ${additionalDetails ? `<p style="margin: 5px 0;">Additional Details: ${additionalDetails}</p>` : ''}
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">What Happens Next 🚀</h2>
+        ${isUserCanceller ? `
+          <p>Since you cancelled this order:</p>
+          <ul>
+            <li>The counterparty has been notified</li>
+            <li>The trade is now marked as cancelled in your order history</li>
+            ${cancelledBy === 'seller' ? '<li>Your funds have been returned to your available balance</li>' : ''}
+          </ul>
+        ` : `
+          <p>Since the ${cancelledBy} cancelled this order:</p>
+          <ul>
+            <li>The trade is now marked as cancelled in your order history</li>
+            ${cancelledBy === 'seller' ? '<li>If you are the buyer, no action is required</li>' : '<li>If you are the seller, your funds have been returned to your available balance</li>'}
+          </ul>
+        `}
+      </div>
+
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
   private getNextStepsForStatus(status: string): string {
     status = status.toLowerCase();
     

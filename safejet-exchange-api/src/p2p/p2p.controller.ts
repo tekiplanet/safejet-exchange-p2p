@@ -212,8 +212,12 @@ export class P2PController {
   async releaseOrder(
     @Param('trackingId') trackingId: string,
     @GetUser('id') userId: string,
+    @Body() body: { password: string }
   ) {
-    return this.p2pService.releaseOrder(trackingId, userId);
+    if (!body.password) {
+      throw new BadRequestException('Password is required to release coins');
+    }
+    return this.p2pService.releaseOrder(trackingId, userId, body.password);
   }
 
   @Post('orders/:trackingId/cancel')
