@@ -211,13 +211,13 @@ export default function DisputeDetails() {
         // Check for messages with direct attachmentUrl
         const messagesWithAttachmentUrl = data.messages.filter((m: any) => m.attachmentUrl);
         if (messagesWithAttachmentUrl.length > 0) {
-          console.log(`Found ${messagesWithAttachmentUrl.length} messages with direct attachmentUrl:`, 
-            messagesWithAttachmentUrl.map((m: any) => ({ 
-              id: m.id, 
-              attachmentUrl: m.attachmentUrl, 
-              attachmentType: m.attachmentType 
-            }))
-          );
+          // console.log(`Found ${messagesWithAttachmentUrl.length} messages with direct attachmentUrl:`, 
+          //   messagesWithAttachmentUrl.map((m: any) => ({ 
+          //     id: m.id, 
+          //     attachmentUrl: m.attachmentUrl, 
+          //     attachmentType: m.attachmentType 
+          //   }))
+          // );
           
           // Extract all image path variants for testing
           const testImagePaths = [
@@ -227,11 +227,11 @@ export default function DisputeDetails() {
             `/uploads/${messagesWithAttachmentUrl[0].attachmentUrl}`,
             `/${messagesWithAttachmentUrl[0].attachmentUrl}`
           ];
-          console.log('Testing multiple image path formats:', testImagePaths);
+          // console.log('Testing multiple image path formats:', testImagePaths);
           
           // Check sample URL from Flutter app
           const sampleUrl = messagesWithAttachmentUrl[0].attachmentUrl;
-          console.log(`Sample attachment URL: ${sampleUrl} - is absolute: ${sampleUrl.startsWith('http')}`);
+          // console.log(`Sample attachment URL: ${sampleUrl} - is absolute: ${sampleUrl.startsWith('http')}`);
         }
         
         // Convert direct attachmentUrl to attachments array
@@ -241,10 +241,10 @@ export default function DisputeDetails() {
             // Use the exact filename without any path prefixes
             const fileName = message.attachmentUrl;
             
-            console.log(`Converting message ${message.id} attachmentUrl to attachments array:`, {
-              originalUrl: message.attachmentUrl,
-              fileName
-            });
+            // console.log(`Converting message ${message.id} attachmentUrl to attachments array:`, {
+            //   originalUrl: message.attachmentUrl,
+            //   fileName
+            // });
             
             const directImageUrl = `/api/p2p/chat/images/${fileName}`;  // Match the backend endpoint exactly
             return {
@@ -353,10 +353,15 @@ export default function DisputeDetails() {
         // Log the final messages with attachments
         const finalMessagesWithAttachments = data.messages.filter((m: any) => m.attachments && m.attachments.length > 0);
         if (finalMessagesWithAttachments.length > 0) {
-          console.log('Final messages with attachments after processing:', finalMessagesWithAttachments.length);
+          // console.log('Final messages with attachments after processing:', finalMessagesWithAttachments.length);
         }
       }
       
+      console.log('Fetched dispute data:', {
+        id: data.id,
+        status: data.status,
+        rawStatus: typeof data.status === 'string' ? data.status : 'not a string'
+      });
       setDispute(data);
       setNewStatus(data.status);
       setError(null);
@@ -371,6 +376,12 @@ export default function DisputeDetails() {
   const handleUpdateStatus = async () => {
     if (!dispute || newStatus === dispute.status) return;
 
+    console.log('Updating dispute status:', {
+      currentStatus: dispute.status,
+      newStatus: newStatus,
+      disputeId: dispute.id
+    });
+
     setUpdating(true);
     try {
       const token = localStorage.getItem('adminToken');
@@ -379,6 +390,7 @@ export default function DisputeDetails() {
         return;
       }
 
+      console.log('Making API request to update status');
       const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/status`, {
         method: 'PUT',
         headers: {
@@ -391,9 +403,16 @@ export default function DisputeDetails() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update dispute status');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error response from update status:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(`Failed to update dispute status: ${response.statusText}`);
       }
 
+      console.log('Status updated successfully, fetching updated dispute');
       await fetchDispute();
       setStatus('Status updated successfully');
     } catch (error) {
@@ -413,7 +432,7 @@ export default function DisputeDetails() {
       fetchDispute();
       
       // Log the domain for debugging purposes
-      console.log('Current domain:', window.location.origin);
+      // console.log('Current domain:', window.location.origin);
     }
     scrollToBottom();
   }, [router.query.id]);
@@ -678,6 +697,15 @@ export default function DisputeDetails() {
     }
   };
 
+  useEffect(() => {
+    if (dispute) {
+      console.log('Dispute status changed or component updated:', {
+        status: dispute.status,
+        newStatus: newStatus
+      });
+    }
+  }, [dispute, newStatus]);
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -902,7 +930,7 @@ export default function DisputeDetails() {
                               
                               // Try the Flutter approach of using a direct URL
                               const directImageUrl = `/api/p2p/chat/images/${fileName}`;  // Match the backend endpoint exactly
-                              console.log(`Rendering attachment with direct URL: ${fileName}, URL: ${directImageUrl}`);
+                              // console.log(`Rendering attachment with direct URL: ${fileName}, URL: ${directImageUrl}`);
                               
                               // More robust image type detection 
                               const isImage = 
@@ -976,7 +1004,29 @@ export default function DisputeDetails() {
               )}
               <div ref={messagesEndRef} />
             </Box>
-            {dispute.status !== 'CLOSED' && (
+            {dispute.status.toUpperCase() === 'PENDING' ? (
+              <Box display="flex" justifyContent="center" p={2}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="feather feather-user-plus">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="8.5" cy="7" r="4"></circle>
+                    <line x1="20" y1="8" x2="20" y2="14"></line>
+                    <line x1="23" y1="11" x2="17" y2="11"></line>
+                  </svg>}
+                  onClick={() => {
+                    console.log('Join Dispute button clicked');
+                    console.log('Current status:', dispute.status);
+                    setNewStatus('IN_PROGRESS');
+                    console.log('New status set to:', 'IN_PROGRESS');
+                    handleUpdateStatus();
+                  }}
+                >
+                  Join Dispute
+                </Button>
+              </Box>
+            ) : dispute.status.toUpperCase() !== 'CLOSED' && (
               <Box display="flex" gap={1}>
                 <TextField
                   fullWidth
