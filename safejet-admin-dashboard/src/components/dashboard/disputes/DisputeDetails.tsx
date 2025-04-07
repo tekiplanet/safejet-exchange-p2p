@@ -890,70 +890,48 @@ export default function DisputeDetails() {
       const messageToSend = newMessage.trim() || (selectedFiles.length > 0 ? 'File attachment' : '');
       console.log('Message to send:', messageToSend);
       
+      let response;
+      
       // For FormData, we'll use regular fetch
       if (selectedFiles.length > 0) {
-        // Use FormData to handle file uploads
-        const formData = new FormData();
-        formData.append('message', messageToSend);
-        
-        console.log('Using FormData with files');
-        console.log(`Sending ${selectedFiles.length} files:`, selectedFiles.map(f => f.name));
-        
-        // Add files to FormData
-        // Match exactly how Flutter is sending the attachment
-        const firstFile = selectedFiles[0];
-        
+        // Convert file to base64 string
+        const file = selectedFiles[0];
         try {
-          // Convert the first file to base64 for attachment
-          const base64 = await fileToBase64(firstFile);
-          const mimeType = firstFile.type || 'application/octet-stream';
+          // Read file as data URL
+          const fileReader = new FileReader();
+          const fileDataPromise = new Promise<string>((resolve, reject) => {
+            fileReader.onload = () => resolve(fileReader.result as string);
+            fileReader.onerror = reject;
+          });
+          fileReader.readAsDataURL(file);
+          const fileData = await fileDataPromise;
           
-          // Append with proper parameter name exactly as Flutter app does
-          formData.append('attachment', `data:${mimeType};base64,${base64}`);
-          console.log(`Attachment added as base64, MIME type: ${mimeType}, size: ${base64.length} chars`);
+          console.log(`File converted to data URL, type: ${file.type}, size: ${fileData.length}`);
+          
+          // Send as JSON with the base64 attachment
+          response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'ngrok-skip-browser-warning': 'true'
+            },
+            body: JSON.stringify({
+              message: messageToSend,
+              attachment: fileData  // Send the entire data URL including mime type
+            })
+          });
         } catch (error) {
-          console.error('Error converting file to base64:', error);
+          console.error('Error preparing file:', error);
           setStatus('Failed to prepare file for upload');
           setSendingMessage(false);
           return;
         }
-
-        console.log('Sending message with FormData to dispute:', dispute.id);
-        console.log('FormData keys:', [...formData.keys()].join(', '));
-        // Log FormData values for debugging (only safe for text, not for binary)
-        formData.forEach((value, key) => {
-          if (key === 'message') {
-            console.log(`FormData ${key}:`, value);
-          } else if (key === 'attachment') {
-            console.log(`FormData ${key}: [base64 data]`);
-          }
-        });
-        
-        const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-            // Note: Don't set Content-Type when using FormData, browser will set it automatically with boundary
-          },
-          body: formData
-        });
-
-        if (!response.ok) {
-          // Try to get response body for more error details
-          try {
-            const errorData = await response.json();
-            console.error('Error response from server:', errorData);
-            throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
-          } catch (jsonError) {
-            throw new Error(`Failed to send message: ${response.statusText}`);
-          }
-        }
       } else {
-        // No files, use JSON format for simpler message
+        // No files, use JSON format for message only
         console.log('Using JSON format for message only');
-        const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
+        response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -963,26 +941,21 @@ export default function DisputeDetails() {
           },
           body: JSON.stringify({ message: messageToSend })
         });
+      }
 
-        if (!response.ok) {
-          // Try to get response body for more error details
-          try {
-            const errorData = await response.json();
-            console.error('Error response from server:', errorData);
-            throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
-          } catch (jsonError) {
-            throw new Error(`Failed to send message: ${response.statusText}`);
-          }
+      if (!response.ok) {
+        // Try to get response body for more error details
+        try {
+          const errorData = await response.json();
+          console.error('Error response from server:', errorData);
+          throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
+        } catch (jsonError) {
+          throw new Error(`Failed to send message: ${response.statusText}`);
         }
       }
 
-      // Try to get response body for debugging
-      try {
-        console.log('Message sent successfully');
-      } catch (jsonError) {
-        console.log('Message sent successfully, no JSON response');
-      }
-
+      // Message sent successfully
+      console.log('Message sent successfully');
       await fetchDispute();
       setNewMessage('');
       setSelectedFiles([]);
@@ -993,21 +966,6 @@ export default function DisputeDetails() {
     } finally {
       setSendingMessage(false);
     }
-  };
-  
-  // Helper function to convert file to base64
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64String = reader.result as string;
-        // Remove the data:mime/type;base64, prefix
-        const base64 = base64String.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = error => reject(error);
-    });
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {

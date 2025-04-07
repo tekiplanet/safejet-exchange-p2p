@@ -438,11 +438,11 @@ export class AdminDisputesController {
         
         // Generic status update
         historyEntry = {
-          title: 'Status Updated',
+        title: 'Status Updated',
           details: `Status changed to ${formattedStatus}`,
-          timestamp: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
           addedBy: 'Admin'
-        };
+      };
       }
 
       // Add the history entry
@@ -621,6 +621,7 @@ export class AdminDisputesController {
     try {
       // Extract the message from the request body
       let message = '';
+      let attachment = null;
       
       // Handle both JSON body and FormData requests
       if (dto.message !== undefined) {
@@ -628,6 +629,12 @@ export class AdminDisputesController {
       } else if (typeof dto === 'object') {
         // Log the entire body for debugging
         this.logger.log(`Message DTO: ${JSON.stringify(dto)}`);
+      }
+
+      // Extract attachment if available (whether in FormData or JSON)
+      if (dto.attachment !== undefined) {
+        attachment = dto.attachment;
+        this.logger.log('Attachment found in request');
       }
       
       // Validate message input
@@ -638,7 +645,7 @@ export class AdminDisputesController {
 
       const dispute = await this.disputeRepository.findOne({
         where: { id: disputeId },
-        relations: ['initiator', 'respondent']
+        relations: ['initiator', 'respondent', 'order']
       });
 
       if (!dispute) {
@@ -659,10 +666,7 @@ export class AdminDisputesController {
       });
 
       // Check for attachments
-      if (dto.attachment) {
-        this.logger.log('Attachment found in request');
-        const attachment = dto.attachment;
-        
+      if (attachment) {
         // If the attachment is a base64 string, save it
         if (typeof attachment === 'string' && attachment.startsWith('data:')) {
           // Extract MIME type and base64 content
@@ -688,11 +692,11 @@ export class AdminDisputesController {
             fs.writeFileSync(filePath, buffer);
             this.logger.log(`Saved attachment to ${filePath}`);
             
-            // Update message with attachment details
-            disputeMessage.attachmentUrl = `/admin/p2p/chat/images/${filename}`;
+            // Update message with attachment details - save ONLY the filename, no path
+            disputeMessage.attachmentUrl = filename;
             disputeMessage.attachmentType = mimeType;
             
-            this.logger.log(`Set attachment URL to ${disputeMessage.attachmentUrl}`);
+            this.logger.log(`Set attachment filename to ${disputeMessage.attachmentUrl}`);
           } else {
             this.logger.error('Invalid base64 attachment format');
           }
@@ -796,7 +800,8 @@ export class AdminDisputesController {
   ) {
     try {
       const dispute = await this.disputeRepository.findOne({
-        where: { id }
+        where: { id },
+        relations: ['order']
       });
 
       if (!dispute) {
@@ -814,6 +819,32 @@ export class AdminDisputesController {
       
       dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
       await this.disputeRepository.save(dispute);
+
+      // Create a system message for the history entry
+      try {
+        const systemMessage = `Progress Update - ${historyEntry.title}: ${historyEntry.details}`;
+        
+        const disputeMessage = this.disputeMessageRepository.create({
+          disputeId: id,
+          senderId: null, // null sender indicates system message
+          senderType: DisputeMessageSenderType.SYSTEM,
+          message: systemMessage,
+          isRead: false,
+          isDelivered: true
+        });
+        
+        // Save the message
+        const savedMessage = await this.disputeMessageRepository.save(disputeMessage);
+        
+        // Emit real-time updates
+        await this.disputeGateway.emitDisputeMessageUpdate(id, savedMessage);
+        await this.disputeGateway.emitDisputeUpdate(id, dispute);
+        
+        this.logger.log(`System message created for history entry: ${systemMessage}`);
+      } catch (error) {
+        this.logger.error(`Error creating system message for history entry: ${error.message}`, error);
+        // Don't fail the whole request if message creation fails
+      }
 
       return { message: 'Progress entry added successfully' };
     } catch (error) {
