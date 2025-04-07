@@ -617,4 +617,34 @@ export class EmailService {
       console.error('P2P dispute message notification email error:', error);
     }
   }
+
+  async sendP2PDisputeStatusUpdateEmail(
+    email: string,
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    newStatus: string,
+    statusDetails: string
+  ): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        to: email,
+        subject: `Dispute Status Update - ${newStatus}`,
+        html: this.emailTemplatesService.p2pDisputeStatusUpdateEmail(
+          userName,
+          trackingId,
+          amount,
+          tokenSymbol,
+          currency,
+          newStatus,
+          statusDetails
+        ),
+      });
+    } catch (error) {
+      console.error('P2P dispute status update email error:', error);
+    }
+  }
 }

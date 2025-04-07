@@ -1070,4 +1070,77 @@ export class EmailTemplatesService {
 
     return baseTemplate(content, isDark);
   }
+
+  p2pDisputeStatusUpdateEmail(
+    userName: string,
+    trackingId: string,
+    amount: string,
+    tokenSymbol: string,
+    currency: string,
+    newStatus: string,
+    statusDetails: string,
+    isDark = true
+  ): string {
+    const content = `
+      <h1>Dispute Status Update ⚠️</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>There has been an update to your dispute:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">Order #${trackingId}</h3>
+          <p style="margin: 5px 0;">Amount: ${amount} ${tokenSymbol}</p>
+          <p style="margin: 5px 0;">Total: ${currency}</p>
+          <p style="margin: 5px 0; color: ${isDark ? '#ff9800' : '#e65100'}; font-weight: bold;">
+            Status: ${newStatus}
+          </p>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <h2 style="color: #ffc300;">Update Details</h2>
+        <p>${statusDetails}</p>
+        
+        ${this.getNextStepsForStatus(newStatus)}
+      </div>
+
+      <p>If you have any questions, please use the in-app messaging feature to communicate with the admin.</p>
+      <p>Thank you for using SafeJet Exchange!</p>
+      <p>Best regards,<br>The SafeJet Team</p>
+    `;
+
+    return baseTemplate(content, isDark);
+  }
+
+  private getNextStepsForStatus(status: string): string {
+    status = status.toLowerCase();
+    
+    if (status === 'in_progress') {
+      return `
+        <h2 style="color: #ffc300;">Next Steps 🚀</h2>
+        <p>An admin has joined your dispute and will assist in the resolution process. Please:</p>
+        <ol>
+          <li>Check for any admin messages in the dispute chat</li>
+          <li>Provide any additional information requested by the admin</li>
+          <li>Be responsive to ensure a quick resolution</li>
+        </ol>
+      `;
+    } else if (status.includes('resolved')) {
+      return `
+        <h2 style="color: #ffc300;">Resolution Outcome 🎯</h2>
+        <p>Your dispute has been resolved. Please check your wallet and order status for any changes.</p>
+        <p>If you believe this resolution was made in error, please contact our support team within 24 hours.</p>
+      `;
+    } else if (status === 'closed') {
+      return `
+        <h2 style="color: #ffc300;">Dispute Closed 📝</h2>
+        <p>This dispute has been closed. If you have any further concerns, please open a support ticket.</p>
+      `;
+    }
+    
+    return `
+      <h2 style="color: #ffc300;">Dispute Progress 🔄</h2>
+      <p>Your dispute is being processed. Please continue to monitor your account for further updates.</p>
+    `;
+  }
 }

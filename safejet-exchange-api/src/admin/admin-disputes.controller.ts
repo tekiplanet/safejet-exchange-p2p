@@ -3,13 +3,14 @@ import { AdminGuard } from '../auth/admin.guard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { P2PDispute, DisputeStatus, DisputeProgressItem } from '../p2p/entities/p2p-dispute.entity';
-import { P2PDisputeMessage } from '../p2p/entities/p2p-dispute-message.entity';
+import { P2PDisputeMessage, DisputeMessageSenderType } from '../p2p/entities/p2p-dispute-message.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetUser } from '../auth/get-user.decorator';
 import { User } from '../auth/entities/user.entity';
 import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
+import { EmailService } from '../email/email.service';
 
 interface PaymentMetadata {
   methodId?: string;
@@ -39,7 +40,8 @@ export class AdminDisputesController {
     @InjectRepository(P2PDispute)
     private disputeRepository: Repository<P2PDispute>,
     @InjectRepository(P2PDisputeMessage)
-    private disputeMessageRepository: Repository<P2PDisputeMessage>
+    private disputeMessageRepository: Repository<P2PDisputeMessage>,
+    private readonly emailService: EmailService
   ) {}
 
   @Get('disputes')
@@ -97,6 +99,48 @@ export class AdminDisputesController {
         }
       } else {
         dispute.status = DisputeStatus.PENDING;
+      }
+
+      // Process progress history to resolve user IDs to names
+      if (dispute.progressHistory && dispute.progressHistory.length > 0) {
+        dispute.progressHistory = await Promise.all(dispute.progressHistory.map(async (entry) => {
+          // If entry is already using "Admin", keep it
+          if (entry.addedBy === 'Admin') {
+            return entry;
+          }
+          
+          try {
+            // Check if the addedBy is a valid UUID
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entry.addedBy);
+            
+            if (isUUID) {
+              // Try to find the user
+              const userRepo = this.disputeRepository.manager.getRepository('users');
+              const user = await userRepo.findOne({
+                where: { id: entry.addedBy }
+              });
+              
+              if (user) {
+                // Use user's full name or username
+                entry.addedBy = user.fullName || user.username || 'User';
+              } else if (entry.addedBy === dispute.initiatorId) {
+                // If user not found but matches initiator ID
+                entry.addedBy = dispute.initiator?.fullName || 'Initiator';
+              } else if (entry.addedBy === dispute.respondentId) {
+                // If user not found but matches respondent ID
+                entry.addedBy = dispute.respondent?.fullName || 'Respondent';
+              } else {
+                // If we can't resolve the user but it's a UUID, show "User"
+                entry.addedBy = 'User';
+              }
+            }
+            
+            return entry;
+          } catch (error) {
+            this.logger.error(`Error processing history entry: ${error.message}`);
+            return entry;
+          }
+        }));
       }
 
       // Parse payment metadata
@@ -315,7 +359,7 @@ export class AdminDisputesController {
     try {
       const dispute = await this.disputeRepository.findOne({
         where: { id },
-        relations: ['initiator', 'respondent']
+        relations: ['initiator', 'respondent', 'order', 'order.offer', 'order.offer.token']
       });
 
       if (!dispute) {
@@ -372,6 +416,90 @@ export class AdminDisputesController {
       // Add the history entry
       dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
       await this.disputeRepository.save(dispute);
+      
+      // Add a system message to the dispute chat
+      try {
+        let systemMessage = '';
+        
+        if (oldStatus === 'pending' && newStatus === 'in_progress') {
+          systemMessage = 'Admin has joined the dispute';
+        } else if (newStatus.includes('resolved')) {
+          systemMessage = `Dispute has been resolved with status: ${formatStatus(newStatus)}`;
+        } else if (newStatus === 'closed') {
+          systemMessage = 'Dispute has been closed';
+        } else {
+          systemMessage = `Dispute status changed to ${formatStatus(newStatus)}`;
+        }
+        
+        const disputeMessage = this.disputeMessageRepository.create({
+          disputeId: id,
+          senderId: null, // null sender indicates system message
+          senderType: DisputeMessageSenderType.SYSTEM,
+          message: systemMessage,
+          isRead: false,
+          isDelivered: true
+        });
+        
+        await this.disputeMessageRepository.save(disputeMessage);
+        this.logger.log(`System message added for dispute ${id}: ${systemMessage}`);
+      } catch (messageError) {
+        // Log the error but don't fail the status update if message creation fails
+        this.logger.error(`Error creating system message: ${messageError.message}`, messageError);
+      }
+      
+      // Send email notifications to both users
+      try {
+        // Prepare email data
+        const formattedStatus = formatStatus(newStatus);
+        const trackingId = dispute.order?.trackingId || 'N/A';
+        const amount = dispute.order?.assetAmount?.toString() || 'N/A';
+        const tokenSymbol = dispute.order?.offer?.token?.symbol || 'N/A';
+        const currency = dispute.order?.offer?.currency || 'N/A';
+        
+        // Determine email subject and content based on status change
+        let statusDetails = `Status changed to ${formattedStatus}`;
+        
+        if (oldStatus === 'pending' && newStatus === 'in_progress') {
+          statusDetails = 'An admin has joined your dispute and will assist in the resolution process.';
+        } else if (newStatus.includes('resolved')) {
+          statusDetails = `Your dispute has been resolved with status: ${formattedStatus}`;
+        } else if (newStatus === 'closed') {
+          statusDetails = 'Your dispute has been closed.';
+        }
+        
+        // Send email to initiator
+        if (dispute.initiator?.email) {
+          await this.emailService.sendP2PDisputeStatusUpdateEmail(
+            dispute.initiator.email,
+            dispute.initiator.fullName || 'User',
+            trackingId,
+            amount,
+            tokenSymbol,
+            currency,
+            formattedStatus,
+            statusDetails
+          );
+          this.logger.log(`Dispute status change email sent to initiator: ${dispute.initiator.email}`);
+        }
+        
+        // Send email to respondent
+        if (dispute.respondent?.email) {
+          await this.emailService.sendP2PDisputeStatusUpdateEmail(
+            dispute.respondent.email,
+            dispute.respondent.fullName || 'User',
+            trackingId,
+            amount,
+            tokenSymbol,
+            currency,
+            formattedStatus,
+            statusDetails
+          );
+          this.logger.log(`Dispute status change email sent to respondent: ${dispute.respondent.email}`);
+        }
+      } catch (emailError) {
+        // Log the error but don't fail the status update if emails fail
+        this.logger.error(`Error sending dispute status change emails: ${emailError.message}`, emailError);
+      }
 
       return { message: 'Status updated successfully' };
     } catch (error) {

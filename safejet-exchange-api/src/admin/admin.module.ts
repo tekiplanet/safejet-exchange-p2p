@@ -24,6 +24,7 @@ import { AdminSweepTransactionsController } from './admin-sweep-transactions.con
 import { AdminDisputesController } from './admin-disputes.controller';
 import { P2PDispute } from '../p2p/entities/p2p-dispute.entity';
 import { P2PDisputeMessage } from '../p2p/entities/p2p-dispute-message.entity';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { P2PDisputeMessage } from '../p2p/entities/p2p-dispute-message.entity';
       }),
     }),
     WalletModule,
+    EmailModule,
   ],
   providers: [AdminAuthService, AdminGuard],
   controllers: [
