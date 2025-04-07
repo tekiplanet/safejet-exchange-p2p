@@ -69,6 +69,6 @@ import { P2PDisputeGateway } from './gateways/p2p-dispute.gateway';
     FileService,
     P2PDisputeGateway,
   ],
-  exports: [P2PService],
+  exports: [P2PService, P2PDisputeGateway],
 })
 export class P2PModule {} 

@@ -54,8 +54,9 @@ export class P2PDisputeGateway implements OnGatewayConnection, OnGatewayDisconne
       
       this.logger.debug('Token verified successfully');
       const userId = decoded.sub;
+      const userType = decoded.type;
 
-      this.logger.debug(`Client authenticated. UserID: ${userId}, SocketID: ${client.id}`);
+      this.logger.debug(`Client authenticated. UserID: ${userId}, UserType: ${userType}, SocketID: ${client.id}`);
       this.connectedClients.set(userId, client.id);
       this.logger.log(`Dispute client connected: ${userId}`);
 
@@ -63,20 +64,39 @@ export class P2PDisputeGateway implements OnGatewayConnection, OnGatewayDisconne
       client.join(`user_${userId}`);
       this.logger.debug(`Client joined user room: user_${userId}`);
 
-      // Join rooms for all disputes where user is initiator or respondent
-      const userDisputes = await this.disputeRepository.find({
-        where: [
-          { initiatorId: userId },
-          { respondentId: userId },
-          { adminId: userId },
-        ],
-      });
+      // Join dispute rooms based on user type
+      if (userType === 'admin') {
+        // For admin users, allow them to join all dispute rooms
+        this.logger.debug('Admin user detected, joining all dispute rooms');
+        
+        // Get all disputes
+        const allDisputes = await this.disputeRepository.find();
+        
+        if (allDisputes.length > 0) {
+          this.logger.debug(`Found ${allDisputes.length} dispute rooms for admin to join`);
+          
+          allDisputes.forEach(dispute => {
+            client.join(`dispute_${dispute.id}`);
+            this.logger.debug(`Admin joined dispute room: dispute_${dispute.id}`);
+          });
+        } else {
+          this.logger.debug('No dispute rooms found to join');
+        }
+      } else {
+        // Regular users only join their own disputes
+        const userDisputes = await this.disputeRepository.find({
+          where: [
+            { initiatorId: userId },
+            { respondentId: userId },
+            { adminId: userId },
+          ],
+        });
 
-      userDisputes.forEach(dispute => {
-        client.join(`dispute_${dispute.id}`);
-        this.logger.debug(`Client joined dispute room: dispute_${dispute.id}`);
-      });
-
+        userDisputes.forEach(dispute => {
+          client.join(`dispute_${dispute.id}`);
+          this.logger.debug(`Client joined dispute room: dispute_${dispute.id}`);
+        });
+      }
     } catch (error) {
       this.logger.error('Dispute connection error:', error);
       this.logger.error('Error stack:', error.stack);
@@ -118,19 +138,40 @@ export class P2PDisputeGateway implements OnGatewayConnection, OnGatewayDisconne
       const { disputeId } = data;
       this.logger.debug(`Client ${client.id} joining dispute room: ${disputeId}`);
       
-      // Get user ID from connected clients
-      let userId: string | undefined;
-      for (const [uid, socketId] of this.connectedClients.entries()) {
-        if (socketId === client.id) {
-          userId = uid;
-          break;
-        }
+      // Get token from client handshake
+      const token = client.handshake.query.token as string;
+      if (!token) {
+        this.logger.error(`No token provided for client ${client.id}`);
+        return { error: 'No token provided' };
       }
       
-      if (!userId) {
-        this.logger.error(`User not found for client ${client.id}`);
-        return { error: 'User not authenticated' };
+      // Verify token to get user details including type
+      let decoded;
+      try {
+        const jwtSecret = this.configService.get<string>('JWT_SECRET');
+        decoded = this.jwtService.verify(token, { secret: jwtSecret });
+        this.logger.debug(`Token verified for user: ${decoded.sub}, type: ${decoded.type}`);
+      } catch (error) {
+        this.logger.error(`Invalid token: ${error.message}`);
+        return { error: 'Invalid token' };
       }
+      
+      // If user is an admin, allow access to any dispute
+      if (decoded.type === 'admin') {
+        this.logger.debug(`Admin user ${decoded.sub} is joining dispute ${disputeId}`);
+        client.join(`dispute_${disputeId}`);
+        
+        // Track clients in room
+        if (!this.disputeRooms.has(disputeId)) {
+          this.disputeRooms.set(disputeId, new Set());
+        }
+        this.disputeRooms.get(disputeId).add(client.id);
+        
+        return { event: 'joinedDispute', disputeId };
+      }
+      
+      // For non-admin users, continue with the existing logic
+      let userId = decoded.sub;
       
       // Check if user is authorized to join this dispute room
       const dispute = await this.disputeRepository.findOne({

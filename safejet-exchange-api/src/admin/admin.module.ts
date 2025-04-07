@@ -25,6 +25,7 @@ import { AdminDisputesController } from './admin-disputes.controller';
 import { P2PDispute } from '../p2p/entities/p2p-dispute.entity';
 import { P2PDisputeMessage } from '../p2p/entities/p2p-dispute-message.entity';
 import { EmailModule } from '../email/email.module';
+import { P2PModule } from '../p2p/p2p.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { EmailModule } from '../email/email.module';
     }),
     WalletModule,
     EmailModule,
+    P2PModule,
   ],
   providers: [AdminAuthService, AdminGuard],
   controllers: [

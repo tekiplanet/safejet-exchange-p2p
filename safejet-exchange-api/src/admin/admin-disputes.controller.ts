@@ -11,6 +11,7 @@ import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
 import { EmailService } from '../email/email.service';
+import { P2PDisputeGateway } from '../p2p/gateways/p2p-dispute.gateway';
 
 interface PaymentMetadata {
   methodId?: string;
@@ -41,7 +42,8 @@ export class AdminDisputesController {
     private disputeRepository: Repository<P2PDispute>,
     @InjectRepository(P2PDisputeMessage)
     private disputeMessageRepository: Repository<P2PDisputeMessage>,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly disputeGateway: P2PDisputeGateway
   ) {}
 
   @Get('disputes')
@@ -65,6 +67,8 @@ export class AdminDisputesController {
   @Get('disputes/:id')
   async getDisputeById(@Param('id') id: string) {
     try {
+      this.logger.log(`Fetching dispute details for ID: ${id}`);
+      
       const dispute = await this.disputeRepository.findOne({
         where: { id },
         relations: [
@@ -79,8 +83,16 @@ export class AdminDisputesController {
       });
 
       if (!dispute) {
+        this.logger.error(`Dispute not found with ID: ${id}`);
         throw new HttpException('Dispute not found', HttpStatus.NOT_FOUND);
       }
+
+      this.logger.log(`Raw dispute from database: ${JSON.stringify({
+        id: dispute.id,
+        status: dispute.status,
+        statusType: typeof dispute.status,
+        progressHistory: dispute.progressHistory ? dispute.progressHistory.length : 0,
+      })}`);
 
       // Fetch messages separately with sender information
       const messages = await this.disputeMessageRepository.find({
@@ -91,16 +103,36 @@ export class AdminDisputesController {
 
       // Ensure status is a valid DisputeStatus enum value
       if (dispute.status) {
-        const upperStatus = dispute.status.toUpperCase();
-        if (Object.values(DisputeStatus).includes(upperStatus as DisputeStatus)) {
-          dispute.status = upperStatus as DisputeStatus;
+        this.logger.log(`Original status before processing: "${dispute.status}"`);
+        
+        // The enum values are lowercase in the DisputeStatus definition
+        const lowercaseStatus = dispute.status.toLowerCase();
+        this.logger.log(`Lowercase status for comparison: "${lowercaseStatus}"`);
+        
+        // Get all lowercase enum values for comparison
+        const validLowercaseStatuses = Object.values(DisputeStatus).map(s => s.toLowerCase());
+        this.logger.log(`Valid lowercase statuses: ${JSON.stringify(validLowercaseStatuses)}`);
+        
+        if (validLowercaseStatuses.includes(lowercaseStatus)) {
+          this.logger.log(`Status "${lowercaseStatus}" is a valid DisputeStatus enum value`);
+          // Use the original case from the enum to ensure consistency
+          const originalCaseStatus = Object.values(DisputeStatus).find(
+            s => s.toLowerCase() === lowercaseStatus
+          );
+          this.logger.log(`Setting status to enum value: "${originalCaseStatus}"`);
+          dispute.status = originalCaseStatus;
         } else {
+          this.logger.log(`Status "${lowercaseStatus}" is NOT a valid DisputeStatus enum value, defaulting to PENDING`);
           dispute.status = DisputeStatus.PENDING;
         }
       } else {
+        this.logger.log('No status found, defaulting to PENDING');
         dispute.status = DisputeStatus.PENDING;
       }
 
+      this.logger.log(`Final dispute status being returned: "${dispute.status}"`);
+      this.logger.log(`DisputeStatus enum values: ${JSON.stringify(Object.values(DisputeStatus))}`);
+      
       // Process progress history to resolve user IDs to names
       if (dispute.progressHistory && dispute.progressHistory.length > 0) {
         dispute.progressHistory = await Promise.all(dispute.progressHistory.map(async (entry) => {
@@ -148,8 +180,8 @@ export class AdminDisputesController {
       let completePaymentDetails = null;
       
       try {
-        this.logger.log(`Original payment metadata type: ${typeof dispute.order.paymentMetadata}`);
-        this.logger.log(`Original payment metadata: ${JSON.stringify(dispute.order.paymentMetadata)}`);
+        // this.logger.log(`Original payment metadata type: ${typeof dispute.order.paymentMetadata}`);
+        // this.logger.log(`Original payment metadata: ${JSON.stringify(dispute.order.paymentMetadata)}`);
         
         // Check if payment metadata is already an object or needs parsing
         if (dispute.order.paymentMetadata) {
@@ -165,7 +197,7 @@ export class AdminDisputesController {
           } else {
             // It's already an object
             paymentMetadata = dispute.order.paymentMetadata as PaymentMetadata;
-            this.logger.log(`Using object payment metadata: ${JSON.stringify(paymentMetadata)}`);
+            // this.logger.log(`Using object payment metadata: ${JSON.stringify(paymentMetadata)}`);
           }
           
           const methodId = paymentMetadata.methodId;
@@ -181,7 +213,7 @@ export class AdminDisputesController {
               });
               
               if (paymentMethod) {
-                this.logger.log(`Found payment method: ${JSON.stringify(paymentMethod)}`);
+                // this.logger.log(`Found payment method: ${JSON.stringify(paymentMethod)}`);
                 
                 // Get the payment method fields for this payment method type
                 const paymentMethodFieldRepo = this.disputeRepository.manager.getRepository('payment_method_fields');
@@ -213,7 +245,7 @@ export class AdminDisputesController {
                   fields: paymentMethodFields
                 };
                 
-                this.logger.log(`Complete payment details: ${JSON.stringify(completePaymentDetails)}`);
+                // this.logger.log(`Complete payment details: ${JSON.stringify(completePaymentDetails)}`);
               } else {
                 this.logger.warn(`Payment method not found for ID: ${methodId}`);
                 // Fallback to extracted details
@@ -233,7 +265,7 @@ export class AdminDisputesController {
                     }, {});
                 }
                 
-                this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
+                // this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
                 
                 completePaymentDetails = {
                   name: paymentMetadata.methodName || paymentMetadata.name || '',
@@ -263,7 +295,7 @@ export class AdminDisputesController {
                   }, {});
               }
               
-              this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
+              // this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
               
               completePaymentDetails = {
                 name: paymentMetadata.methodName || paymentMetadata.name || '',
@@ -292,7 +324,7 @@ export class AdminDisputesController {
                 }, {});
             }
             
-            this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
+            // this.logger.log(`Payment details after extraction: ${JSON.stringify(paymentDetails)}`);
             
             completePaymentDetails = {
               name: paymentMetadata.methodName || paymentMetadata.name || '',
@@ -357,42 +389,42 @@ export class AdminDisputesController {
     @GetUser() admin: User
   ) {
     try {
+      this.logger.log(`Attempting to update dispute status for ID: ${id} to ${dto.status}`);
+      
+      // First, ensure the input status is valid
+      const validStatus = this.validateDisputeStatus(dto.status);
+      this.logger.log(`Validated status: ${validStatus}`);
+      
       const dispute = await this.disputeRepository.findOne({
         where: { id },
         relations: ['initiator', 'respondent', 'order', 'order.offer', 'order.offer.token']
       });
 
       if (!dispute) {
+        this.logger.error(`Dispute not found with ID: ${id}`);
         throw new HttpException('Dispute not found', HttpStatus.NOT_FOUND);
       }
 
+      this.logger.log(`Found dispute: ${dispute.id} with current status: ${dispute.status}`);
+      
       // Get old status to check for status change
       const oldStatus = dispute.status?.toLowerCase();
+      this.logger.log(`Old status (normalized to lowercase): ${oldStatus}`);
       
-      // Format the status for display
-      const formatStatus = (status: string): string => {
-        return status
-          .toLowerCase()
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-      };
-      
-      // Convert status to lowercase for database
-      const newStatus = dto.status.toLowerCase();
-      
-      // Update the status (store as lowercase)
-      dispute.status = newStatus as DisputeStatus;
+      // Use the validated status
+      dispute.status = validStatus;
+      this.logger.log(`Updated status in dispute object: ${dispute.status}`);
       
       // If resolution statuses, set resolvedAt
-      if (newStatus.includes('resolved') || newStatus === 'closed') {
+      if (validStatus.includes('resolved') || validStatus === 'closed') {
         dispute.resolvedAt = new Date();
+        this.logger.log(`Set resolvedAt to ${dispute.resolvedAt}`);
       }
 
       // Create an appropriate history entry based on the status change
       let historyEntry: DisputeProgressItem;
       
-      if (oldStatus === 'pending' && newStatus === 'in_progress') {
+      if (oldStatus === 'pending' && validStatus === 'in_progress') {
         // Admin is joining the dispute
         historyEntry = {
           title: 'Admin Joined',
@@ -402,7 +434,7 @@ export class AdminDisputesController {
         };
       } else {
         // Get formatted status for the message
-        const formattedStatus = formatStatus(newStatus);
+        const formattedStatus = this.formatStatus(validStatus);
         
         // Generic status update
         historyEntry = {
@@ -415,20 +447,43 @@ export class AdminDisputesController {
 
       // Add the history entry
       dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
-      await this.disputeRepository.save(dispute);
+      this.logger.log(`Added history entry: ${JSON.stringify(historyEntry)}`);
+      this.logger.log(`Progress history now has ${dispute.progressHistory.length} entries`);
+      
+      // Save the updated dispute to the database
+      this.logger.log(`Attempting to save dispute with updated status: ${dispute.status}`);
+      try {
+        const savedDispute = await this.disputeRepository.save(dispute);
+        this.logger.log(`Dispute saved successfully with status: ${savedDispute.status}`);
+        
+        // Verify the save worked by fetching it again
+        const verifyDispute = await this.disputeRepository.findOne({
+          where: { id },
+        });
+        
+        if (verifyDispute) {
+          this.logger.log(`Verification fetch - Dispute ${id} now has status: ${verifyDispute.status}`);
+        } else {
+          this.logger.error(`Verification failed - Could not find dispute ${id} after save`);
+        }
+      } catch (saveError) {
+        this.logger.error(`Error saving dispute: ${saveError.message}`);
+        this.logger.error(`Save error stack: ${saveError.stack}`);
+        throw saveError;
+      }
       
       // Add a system message to the dispute chat
       try {
         let systemMessage = '';
         
-        if (oldStatus === 'pending' && newStatus === 'in_progress') {
+        if (oldStatus === 'pending' && validStatus === 'in_progress') {
           systemMessage = 'Admin has joined the dispute';
-        } else if (newStatus.includes('resolved')) {
-          systemMessage = `Dispute has been resolved with status: ${formatStatus(newStatus)}`;
-        } else if (newStatus === 'closed') {
+        } else if (validStatus.includes('resolved')) {
+          systemMessage = `Dispute has been resolved with status: ${this.formatStatus(validStatus)}`;
+        } else if (validStatus === 'closed') {
           systemMessage = 'Dispute has been closed';
         } else {
-          systemMessage = `Dispute status changed to ${formatStatus(newStatus)}`;
+          systemMessage = `Dispute status changed to ${this.formatStatus(validStatus)}`;
         }
         
         const disputeMessage = this.disputeMessageRepository.create({
@@ -440,8 +495,19 @@ export class AdminDisputesController {
           isDelivered: true
         });
         
-        await this.disputeMessageRepository.save(disputeMessage);
-        this.logger.log(`System message added for dispute ${id}: ${systemMessage}`);
+        // Save the message
+        const savedMessage = await this.disputeMessageRepository.save(disputeMessage);
+        
+        // Emit real-time update
+        await this.disputeGateway.emitDisputeMessageUpdate(id, savedMessage);
+        
+        // Also emit dispute status update
+        await this.disputeGateway.emitDisputeStatusUpdate(id, validStatus);
+        
+        // Emit full dispute update for comprehensive UI refresh
+        await this.disputeGateway.emitDisputeUpdate(id, dispute);
+        
+        this.logger.log(`System message added for dispute ${id} and broadcasted: ${systemMessage}`);
       } catch (messageError) {
         // Log the error but don't fail the status update if message creation fails
         this.logger.error(`Error creating system message: ${messageError.message}`, messageError);
@@ -450,7 +516,7 @@ export class AdminDisputesController {
       // Send email notifications to both users
       try {
         // Prepare email data
-        const formattedStatus = formatStatus(newStatus);
+        const formattedStatus = this.formatStatus(validStatus);
         const trackingId = dispute.order?.trackingId || 'N/A';
         const amount = dispute.order?.assetAmount?.toString() || 'N/A';
         const tokenSymbol = dispute.order?.offer?.token?.symbol || 'N/A';
@@ -459,11 +525,11 @@ export class AdminDisputesController {
         // Determine email subject and content based on status change
         let statusDetails = `Status changed to ${formattedStatus}`;
         
-        if (oldStatus === 'pending' && newStatus === 'in_progress') {
+        if (oldStatus === 'pending' && validStatus === 'in_progress') {
           statusDetails = 'An admin has joined your dispute and will assist in the resolution process.';
-        } else if (newStatus.includes('resolved')) {
+        } else if (validStatus.includes('resolved')) {
           statusDetails = `Your dispute has been resolved with status: ${formattedStatus}`;
-        } else if (newStatus === 'closed') {
+        } else if (validStatus === 'closed') {
           statusDetails = 'Your dispute has been closed.';
         }
         
@@ -511,6 +577,41 @@ export class AdminDisputesController {
     }
   }
 
+  /**
+   * Validates the dispute status and returns a proper DisputeStatus enum value
+   * @param status Status to validate
+   * @returns A valid DisputeStatus enum value
+   */
+  private validateDisputeStatus(status: string): DisputeStatus {
+    this.logger.log(`Validating status: ${status}`);
+    
+    if (!status) {
+      this.logger.log('No status provided, defaulting to PENDING');
+      return DisputeStatus.PENDING;
+    }
+    
+    // Normalize to lowercase for comparison
+    const lowercaseStatus = status.toLowerCase();
+    this.logger.log(`Normalized to lowercase: ${lowercaseStatus}`);
+    
+    // Get all valid enum values (in lowercase for comparison)
+    const validStatuses = Object.values(DisputeStatus).map(s => s.toLowerCase());
+    
+    // Check if the lowercase version matches any valid enum value
+    if (validStatuses.includes(lowercaseStatus)) {
+      // Find the original case version from the enum
+      const originalCaseStatus = Object.values(DisputeStatus).find(
+        s => s.toLowerCase() === lowercaseStatus
+      );
+      
+      this.logger.log(`Found matching enum value: ${originalCaseStatus}`);
+      return originalCaseStatus as DisputeStatus;
+    }
+    
+    this.logger.log(`Invalid status: ${status}, defaulting to PENDING`);
+    return DisputeStatus.PENDING;
+  }
+
   @Post('disputes/:id/message')
   async sendDisputeMessage(
     @Param('id') disputeId: string,
@@ -530,9 +631,19 @@ export class AdminDisputesController {
       const message = this.disputeMessageRepository.create({
         disputeId,
         senderId: admin.id,
-        message: dto.message
+        senderType: DisputeMessageSenderType.ADMIN,
+        message: dto.message,
+        isRead: false,
+        isDelivered: false
       });
 
+      // Save the message
+      const savedMessage = await this.disputeMessageRepository.save(message);
+      
+      // Emit real-time update through WebSocket
+      await this.disputeGateway.emitDisputeMessageUpdate(disputeId, savedMessage);
+      
+      // Add to dispute progress history
       const historyEntry: DisputeProgressItem = {
         title: 'Message Sent',
         details: dto.message,
@@ -542,8 +653,31 @@ export class AdminDisputesController {
 
       dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
       await this.disputeRepository.save(dispute);
+      
+      // Notify both users via email about the new message
+      try {
+        if (dispute.initiator?.email && dispute.initiator?.id !== admin.id) {
+          this.emailService.sendP2PNewMessageEmail(
+            dispute.initiator.email,
+            dispute.initiator.fullName || 'User',
+            dispute.order?.trackingId || disputeId,
+            true // isAdminMessage
+          );
+        }
+        
+        if (dispute.respondent?.email && dispute.respondent?.id !== admin.id) {
+          this.emailService.sendP2PNewMessageEmail(
+            dispute.respondent.email,
+            dispute.respondent.fullName || 'User',
+            dispute.order?.trackingId || disputeId,
+            true // isAdminMessage
+          );
+        }
+      } catch (emailError) {
+        this.logger.error(`Error sending message notification emails: ${emailError.message}`, emailError);
+      }
 
-      return this.disputeMessageRepository.save(message);
+      return savedMessage;
     } catch (error) {
       this.logger.error('Error sending dispute message:', error);
       throw new HttpException(
@@ -633,5 +767,13 @@ export class AdminDisputesController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  private formatStatus(status: string): string {
+    return status
+      .toLowerCase()
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 } 

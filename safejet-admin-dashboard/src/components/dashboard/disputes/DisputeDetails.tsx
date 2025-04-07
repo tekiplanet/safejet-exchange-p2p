@@ -19,6 +19,7 @@ import {
   IconButton,
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Send as SendIcon } from '@mui/icons-material';
+import { io, Socket } from 'socket.io-client';
 
 interface DisputeMessage {
   id: string;
@@ -175,8 +176,236 @@ export default function DisputeDetails() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [triedAltConnection, setTriedAltConnection] = useState(false);
 
   const API_BASE = '/api';
+
+  // Socket.io setup for real-time updates
+  useEffect(() => {
+    const disputeId = router.query.id as string;
+    if (!disputeId) return;
+    
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    
+    // Initialize socket connection
+    console.log('Connecting to WebSocket...');
+    
+    // Add debugging console log
+    console.log('Token (first 10 chars):', token ? token.substring(0, 10) + '...' : 'not found');
+    
+    // Get the base URL from API configuration
+    let socketUrl = '';
+    
+    if (window.location.hostname === 'localhost') {
+      socketUrl = 'http://localhost:3000/p2p/dispute';
+    } else {
+      // For production - explicitly use port 3000 which is where the backend is running
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      socketUrl = `${wsProtocol}://${window.location.hostname}:3000/p2p/dispute`;
+      console.log('Using WebSocket protocol with URL:', socketUrl);
+    }
+    
+    console.log('Socket URL:', socketUrl);
+    
+    // Configure Socket.io with proper options
+    const socket = io(socketUrl, {
+      query: { token },
+      transports: ['websocket'],
+      timeout: 10000,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000,
+      reconnection: true,
+      forceNew: true,
+      withCredentials: true,
+    });
+    
+    socket.on('connect', () => {
+      console.log('Socket connected successfully with ID:', socket.id);
+      console.log('Transport used:', socket.io.engine.transport.name);
+      setSocketConnected(true);
+      
+      // Join dispute room
+      socket.emit('joinDispute', { disputeId }, (response: any) => {
+        console.log('Joined dispute room response:', response);
+      });
+    });
+    
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error.message);
+      console.error('Connection details:', {
+        socketUrl,
+        transport: socket.io.engine?.transport?.name,
+        hostname: window.location.hostname
+      });
+      
+      // Check if we should try an alternative transport method
+      if (!triedAltConnection) {
+        setTriedAltConnection(true);
+        console.log('Trying alternative connection with polling transport...');
+        
+        // Close the current socket
+        socket.close();
+        
+        // Create new socket with polling transport
+        const newSocket = io(socketUrl, {
+          query: { token },
+          transports: ['polling'],
+          timeout: 10000,
+          reconnectionAttempts: 3,
+          reconnectionDelay: 1000,
+          reconnection: true,
+          forceNew: true,
+          withCredentials: true,
+        });
+        
+        // Set up basic handlers for the new socket
+        newSocket.on('connect', () => {
+          console.log('Alternative socket (polling) connected successfully!');
+          setSocketConnected(true);
+          
+          // Join dispute room with the new socket
+          newSocket.emit('joinDispute', { disputeId }, (response: any) => {
+            console.log('Joined dispute room with polling transport:', response);
+          });
+        });
+        
+        newSocket.on('connect_error', (altError) => {
+          console.error('Polling transport also failed:', altError.message);
+          setSocketConnected(false);
+        });
+        
+        // Replace the current socket reference
+        socketRef.current = newSocket;
+        return; // Exit early
+      }
+      
+      // Try to make a simple HTTP request to the backend to check connectivity
+      fetch(`${window.location.protocol}//${window.location.hostname}:3000/api/ping`, {
+        method: 'GET',
+        mode: 'no-cors' // Allow cross-origin request
+      })
+      .then(response => {
+        console.log('Backend connectivity test (no-cors):', response.type);
+      })
+      .catch(err => {
+        console.error('Backend HTTP connectivity test failed:', err.message);
+      });
+      
+      setSocketConnected(false);
+    });
+    
+    socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected reason:', reason);
+      setSocketConnected(false);
+    });
+    
+    socket.on('reconnect', (attemptNumber) => {
+      console.log(`Socket reconnected after ${attemptNumber} attempts`);
+    });
+    
+    socket.on('reconnect_attempt', (attemptNumber) => {
+      console.log(`Socket reconnection attempt #${attemptNumber}`);
+    });
+    
+    socket.on('reconnect_error', (error) => {
+      console.error('Socket reconnection error:', error.message);
+    });
+    
+    socket.on('reconnect_failed', () => {
+      console.error('Socket reconnection failed after all attempts');
+    });
+    
+    socket.on('error', (error) => {
+      console.error('Socket general error:', error);
+    });
+    
+    // Listen for dispute message updates
+    socket.on('disputeMessageUpdate', (data: any) => {
+      console.log('Received message update:', data);
+      if (data.disputeId === disputeId) {
+        setDispute((prevDispute) => {
+          if (!prevDispute) return null;
+          
+          // Check if message already exists
+          const messageExists = prevDispute.messages.some(m => m.id === data.message.id);
+          if (messageExists) return prevDispute;
+          
+          // Process the new message to match our existing formats
+          let newMessage = data.message;
+          
+          // Handle attachments if present
+          if (newMessage.attachmentUrl && (!newMessage.attachments || newMessage.attachments.length === 0)) {
+            const fileName = newMessage.attachmentUrl;
+            const directImageUrl = `/api/p2p/chat/images/${fileName}`;
+            
+            newMessage = {
+              ...newMessage,
+              attachments: [{
+                id: `${newMessage.id}-attachment`,
+                url: directImageUrl,
+                type: newMessage.attachmentType || 
+                    (newMessage.attachmentUrl.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image/jpeg' : 'application/octet-stream'),
+                fileName: fileName,
+                originalUrl: newMessage.attachmentUrl
+              }]
+            };
+          }
+          
+          return {
+            ...prevDispute,
+            messages: [...prevDispute.messages, newMessage],
+          };
+        });
+        
+        // Scroll to bottom to show new message
+        scrollToBottom();
+      }
+    });
+    
+    // Listen for dispute status updates
+    socket.on('disputeStatusUpdate', (data: any) => {
+      console.log('Received status update:', data);
+      if (data.disputeId === disputeId) {
+        // Normalize the status to lowercase for consistency
+        const normalizedStatus = data.status?.toString().toLowerCase();
+        console.log('Normalized status from WebSocket:', normalizedStatus);
+        
+        // Instead of setting state directly, mark it as pending verification
+        console.log('Status update from WebSocket received, will verify with API fetch');
+        
+        // Schedule a fetch to confirm the status from the server
+        setTimeout(() => {
+          console.log('Fetching dispute details to confirm WebSocket status update');
+          fetchDispute();
+        }, 500);
+      }
+    });
+    
+    // Listen for full dispute updates
+    socket.on('disputeUpdate', (data: any) => {
+      console.log('Received full dispute update:', data);
+      if (data.disputeId === disputeId) {
+        fetchDispute(); // Refresh the dispute data
+      }
+    });
+    
+    socketRef.current = socket;
+    
+    // Cleanup
+    return () => {
+      console.log('Cleaning up WebSocket connection...');
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [router.query.id, triedAltConnection]);
 
   const fetchDispute = async () => {
     try {
@@ -186,13 +415,37 @@ export default function DisputeDetails() {
         return;
       }
 
-      const response = await fetch(`${API_BASE}/admin/disputes/${router.query.id}`, {
+      console.log('Fetching dispute details...');
+      console.log('Dispute ID:', router.query.id);
+
+      // Add cache-busting parameter to prevent cached responses
+      const timestamp = new Date().getTime();
+      
+      // Use a special endpoint parameter to force a direct database query
+      const url = `${API_BASE}/admin/disputes/${router.query.id}?_t=${timestamp}&direct=true`;
+      console.log('Fetch URL:', url);
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
+          'ngrok-skip-browser-warning': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Disable-Cache': 'true',
+          'X-Requested-With': 'XMLHttpRequest',
+          'If-Modified-Since': '01 Jan 1970 00:00:00 GMT',
+          'X-Request-Timestamp': timestamp.toString()
         }
+      });
+
+      console.log('Fetch response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        contentType: response.headers.get('content-type')
       });
 
       if (!response.ok) {
@@ -205,6 +458,20 @@ export default function DisputeDetails() {
       }
 
       const data = await response.json();
+      
+      // Deep log the status information for debugging
+      console.log('Raw status from API:', data.status);
+      console.log('Status type:', typeof data.status);
+      console.log('Full dispute data from API:', {
+        id: data.id,
+        status: data.status,
+        progressHistory: data.progressHistory || []
+      });
+      
+      // Ensure status is a string and normalize to lowercase
+      if (data.status) {
+        data.status = data.status.toString().toLowerCase();
+      }
       
       // Check specifically for message attachments
       if (data.messages && data.messages.length > 0) {
@@ -366,6 +633,7 @@ export default function DisputeDetails() {
       // Ensure dispute data is properly set before setting state
       console.log('Setting dispute data with status:', data.status);
       setDispute(data);
+      // Always update newStatus to match the dispute status from the API
       setNewStatus(data.status);
       console.log('After setting dispute state:', {
         disputeStatus: data.status,
@@ -399,15 +667,39 @@ export default function DisputeDetails() {
       }
 
       console.log('Making API request to update status');
-      const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/status`, {
+      
+      // Log the exact request body being sent
+      const requestBody = JSON.stringify({ status: newStatus });
+      console.log('Request body:', requestBody);
+      
+      // Add cache-busting parameter to prevent cached responses
+      const timestamp = new Date().getTime();
+      const url = `${API_BASE}/admin/disputes/${dispute.id}/status?_t=${timestamp}&direct=true`;
+      console.log('Update URL:', url);
+      
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
+          'ngrok-skip-browser-warning': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'X-Disable-Cache': 'true',
+          'X-Requested-With': 'XMLHttpRequest',
+          'If-Modified-Since': '01 Jan 1970 00:00:00 GMT',
+          'X-Request-Timestamp': timestamp.toString()
         },
-        body: JSON.stringify({ status: newStatus })
+        body: requestBody
+      });
+
+      // Log the complete response for debugging
+      console.log('Status update response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
       });
 
       if (!response.ok) {
@@ -420,27 +712,38 @@ export default function DisputeDetails() {
         throw new Error(`Failed to update dispute status: ${response.statusText}`);
       }
 
+      // Try to get the response body for additional debugging
+      try {
+        const responseData = await response.json();
+        console.log('Status update response data:', responseData);
+      } catch (e) {
+        console.log('No JSON response from status update');
+      }
+
       console.log('Status updated successfully, fetching updated dispute');
       
-      // Force refetch the dispute details
-      await fetchDispute();
-      
-      // Force update local state to match new status
+      // Update local state immediately for better UI responsiveness
       setDispute(prevDispute => {
         if (prevDispute) {
-          console.log('Forcing dispute status update in UI from', prevDispute.status, 'to', newStatus);
+          console.log('Immediately updating dispute status in UI from', prevDispute.status, 'to', newStatus);
           return {
             ...prevDispute,
-            status: newStatus
+            status: newStatus.toLowerCase() // store status in lowercase for consistency
           };
         }
         return prevDispute;
       });
       
+      // Force a fresh fetch after a short delay to ensure backend processing is complete
+      setTimeout(() => {
+        console.log('Performing forced refresh after status update');
+        fetchDispute();
+      }, 1000); // Longer delay to ensure backend has processed the change
+      
       setStatus('Status updated successfully');
     } catch (error) {
       console.error('Error updating status:', error);
-      setStatus('Failed to update status');
+      setStatus(error instanceof Error ? error.message : 'Failed to update status');
     } finally {
       setUpdating(false);
     }
@@ -732,10 +1035,61 @@ export default function DisputeDetails() {
     if (dispute) {
       console.log('Dispute status changed or component updated:', {
         status: dispute.status,
-        newStatus: newStatus
+        newStatus: newStatus,
+        socketConnected: socketConnected
       });
     }
-  }, [dispute, newStatus]);
+  }, [dispute, newStatus, socketConnected]);
+
+  // Add diagnostic info for WebSocket connection
+  useEffect(() => {
+    console.log('=== WebSocket Connection Diagnostics ===');
+    console.log('Current hostname:', window.location.hostname);
+    console.log('Current origin:', window.location.origin);
+    console.log('API_BASE:', API_BASE);
+    console.log('Protocol:', window.location.protocol);
+    console.log('Port:', window.location.port);
+    console.log('Socket connected:', socketConnected);
+    
+    // Check if the socket instance exists and log its state
+    if (socketRef.current) {
+      console.log('Socket instance exists:', {
+        id: socketRef.current.id,
+        connected: socketRef.current.connected,
+        disconnected: socketRef.current.disconnected
+      });
+    }
+  }, [socketConnected]);
+
+  // Add a console log to display the actual status for debugging
+  useEffect(() => {
+    if (dispute) {
+      console.log('Current Dispute Status:', {
+        actual: dispute.status,
+        uppercased: dispute.status?.toUpperCase(),
+        isPending: dispute.status?.toUpperCase() === 'PENDING',
+        expectedInProgress: dispute.status?.toUpperCase() === 'IN_PROGRESS',
+        showJoinButton: dispute.status?.toUpperCase() === 'PENDING',
+        showMessageInput: dispute.status?.toUpperCase() !== 'PENDING' && dispute.status?.toUpperCase() !== 'CLOSED'
+      });
+    }
+  }, [dispute?.status]);
+
+  // Add a periodic refresh to fetch the latest dispute data
+  useEffect(() => {
+    if (!router.query.id) return;
+    
+    // Set up a periodic refresh (every 10 seconds)
+    const refreshInterval = setInterval(() => {
+      console.log('Performing periodic refresh of dispute data');
+      fetchDispute();
+    }, 10000); // 10 seconds
+    
+    // Clean up the interval on component unmount
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [router.query.id]);
 
   if (loading) {
     return (
@@ -774,6 +1128,45 @@ export default function DisputeDetails() {
         <Typography variant="h5" component="h1">
           Dispute Details
         </Typography>
+        
+        {/* Add refresh button */}
+        <Button 
+          sx={{ ml: 2 }}
+          onClick={() => {
+            console.log('Manual refresh triggered');
+            fetchDispute();
+          }}
+          disabled={loading}
+        >
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </Button>
+        
+        {/* WebSocket connection indicator */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            ml: 'auto',
+            backgroundColor: socketConnected ? '#e6f7e6' : '#ffe6e6',
+            color: socketConnected ? '#2e7d32' : '#d32f2f',
+            borderRadius: '4px',
+            px: 1,
+            py: 0.5,
+          }}
+        >
+          <Box 
+            sx={{ 
+              width: 10, 
+              height: 10, 
+              borderRadius: '50%', 
+              backgroundColor: socketConnected ? '#2e7d32' : '#d32f2f',
+              mr: 1 
+            }} 
+          />
+          <Typography variant="caption">
+            {socketConnected ? 'Connected' : 'Disconnected'}
+          </Typography>
+        </Box>
       </Box>
 
       {status && (
@@ -1038,7 +1431,7 @@ export default function DisputeDetails() {
               )}
               <div ref={messagesEndRef} />
             </Box>
-            {dispute.status.toUpperCase() === 'PENDING' ? (
+            {(dispute.status?.toUpperCase() === 'PENDING') ? (
               <Box display="flex" justifyContent="center" p={2}>
                 <Button
                   variant="contained"
@@ -1060,7 +1453,7 @@ export default function DisputeDetails() {
                   Join Dispute
                 </Button>
               </Box>
-            ) : dispute.status.toUpperCase() !== 'CLOSED' && (
+            ) : (dispute.status?.toUpperCase() !== 'CLOSED') && (
               <Box display="flex" gap={1}>
                 <TextField
                   fullWidth
