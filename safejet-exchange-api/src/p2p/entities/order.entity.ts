@@ -77,4 +77,12 @@ export class Order {
 
   @Column('decimal', { precision: 24, scale: 8, nullable: true })
   price: number;
+
+  @Column('jsonb', { nullable: true })
+  cancellationMetadata: {
+    cancelledBy: 'buyer' | 'seller';
+    reason: string;
+    additionalDetails: string;
+    cancelledAt: string;
+  };
 } 

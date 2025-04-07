@@ -448,10 +448,19 @@ class P2PService {
     }
   }
 
-  Future<void> cancelOrder(String trackingId) async {
+  Future<void> cancelOrder(
+    String trackingId, 
+    {String? reason, String? additionalDetails}
+  ) async {
     try {
       final response = await _dio.post(
         '/p2p/orders/$trackingId/cancel',
+        data: reason != null || additionalDetails != null 
+          ? {
+              'reason': reason,
+              'additionalDetails': additionalDetails
+            }
+          : null,
         options: Options(headers: await _getAuthHeaders()),
       );
       print('Cancel order response: ${response.data}');

@@ -221,8 +221,14 @@ export class P2PController {
   async cancelOrder(
     @Param('trackingId') trackingId: string,
     @GetUser('id') userId: string,
+    @Body() cancelData?: { reason?: string, additionalDetails?: string },
   ) {
-    return this.p2pService.cancelOrder(trackingId, userId);
+    return this.p2pService.cancelOrder(
+      trackingId, 
+      userId, 
+      cancelData?.reason,
+      cancelData?.additionalDetails
+    );
   }
 
   @Post('orders/:trackingId/dispute')

@@ -1211,7 +1211,12 @@ export class P2PService {
     return updatedOrder;
   }
 
-  async cancelOrder(trackingId: string, userId: string) {
+  async cancelOrder(
+    trackingId: string, 
+    userId: string, 
+    cancellationReason?: string,
+    additionalDetails?: string
+  ) {
     const order = await this.orderRepository.findOne({
       where: { trackingId },
       relations: ['buyer', 'seller', 'offer', 'offer.token'],
@@ -1226,27 +1231,43 @@ export class P2PService {
       throw new BadRequestException('Unauthorized to cancel this order');
     }
 
-    // Verify order is in cancellable state
-    if (order.buyerStatus === 'completed' || order.sellerStatus === 'completed') {
-      throw new BadRequestException('Cannot cancel completed order');
-    }
+    // If user is seller, check restrictions
+    if (order.sellerId === userId) {
+      if (order.buyerStatus === 'completed' || order.sellerStatus === 'completed') {
+        throw new BadRequestException('Seller cannot cancel completed order');
+      }
 
-    if (order.buyerStatus === 'disputed' || order.sellerStatus === 'disputed') {
-      throw new BadRequestException('Cannot cancel disputed order');
+      if (order.buyerStatus === 'disputed' || order.sellerStatus === 'disputed') {
+        throw new BadRequestException('Seller cannot cancel disputed order');
+      }
+
+      if (order.buyerStatus === 'paid') {
+        throw new BadRequestException('Seller cannot cancel after buyer has paid');
+      }
     }
 
     // Update order status
     order.buyerStatus = 'cancelled';
     order.sellerStatus = 'cancelled';
 
-    // If seller cancels or if buyer cancels before payment, return funds to seller
-    if (order.buyerStatus !== 'paid') {
-      await this.returnFundsToSeller(order);
-    }
+    // Save cancellation metadata
+    order.cancellationMetadata = {
+      cancelledBy: order.buyerId === userId ? 'buyer' : 'seller',
+      reason: cancellationReason || 'No reason provided',
+      additionalDetails: additionalDetails || '',
+      cancelledAt: new Date().toISOString(),
+    };
+
+    // Always return funds to seller when order is cancelled
+    await this.returnFundsToSeller(order);
 
     await this.orderRepository.save(order);
 
-    // TODO: Send notification to counterparty
+    // Add system message to chat
+    await this.createSystemMessage(
+      order.id,
+      `Order cancelled by ${order.buyerId === userId ? 'buyer' : 'seller'}${cancellationReason ? ': ' + cancellationReason : ''}`
+    );
 
     return { message: 'Order cancelled successfully' };
   }

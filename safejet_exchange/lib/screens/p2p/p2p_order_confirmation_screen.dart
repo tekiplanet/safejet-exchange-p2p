@@ -1619,7 +1619,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   // For seller: Release coins
                   try {
                     if (isBuyer) {
-                      await _p2pService.cancelOrder(widget.trackingId);
+                      _showCancelOrderDialog();
                     } else {
                       await _p2pService.releaseOrder(_orderDetails!['id']);
                     }
@@ -1689,15 +1689,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             Expanded(
               child: ElevatedButton(
                 onPressed: () async {
-                  try {
-                    await _p2pService.cancelOrder(widget.trackingId);
-                  } catch (e) {
-                    if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
-                    }
-                  }
+                  _showCancelOrderDialog();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: SafeJetColors.warning,
@@ -1759,15 +1751,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
             Expanded(
               child: ElevatedButton(
                 onPressed: () async {
-                  try {
-                    await _p2pService.cancelOrder(widget.trackingId);
-                  } catch (e) {
-                    if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
-                    }
-                  }
+                  _showCancelOrderDialog();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: SafeJetColors.warning,
@@ -2252,6 +2236,324 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
         ),
       ),        
       );
+  }
+
+  void _showCancelOrderDialog() {
+    final TextEditingController reasonController = TextEditingController();
+    bool isSubmitting = false;
+    bool hasConfirmedCancel = false;
+    String selectedReason = 'Other';
+
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = themeProvider.isDarkMode;
+
+    // List of cancellation reasons
+    final List<String> cancellationReasons = [
+      'Changed my mind',
+      'Found a better offer',
+      'Payment issues',
+      'Seller is unresponsive',
+      'Need funds for another purpose',
+      'Other',
+    ];
+
+    showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.close,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              'Cancel Order',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Please provide a reason for cancellation:',
+                style: TextStyle(
+                            color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: SafeJetColors.warning.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: SafeJetColors.warning.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: SafeJetColors.warning,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Cancelling an order may affect your completion rate. Are you sure you want to proceed?',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Add dropdown for selecting cancellation reason
+                        Text(
+                          'Reason for Cancellation',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: isDark 
+                              ? Colors.black.withOpacity(0.3) 
+                              : Colors.grey[100],
+                            border: Border.all(
+                              color: isDark
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.grey[300]!,
+                            ),
+                          ),
+                          child: DropdownButtonFormField<String>(
+                            value: selectedReason,
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              border: InputBorder.none,
+                            ),
+                            dropdownColor: isDark ? Colors.grey[800] : Colors.white,
+                            items: cancellationReasons.map((reason) {
+                              return DropdownMenuItem<String>(
+                                value: reason,
+                                child: Text(
+                                  reason,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                selectedReason = value!;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Text field for additional details
+                        Text(
+                          'Additional Details',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  hintText: 'Please provide more details (optional)...',
+                  filled: true,
+                  fillColor: isDark 
+                    ? Colors.black.withOpacity(0.3) 
+                    : Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: isDark
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.grey[300]!,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: isDark
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.grey[300]!,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: SafeJetColors.warning,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: Checkbox(
+                                  value: hasConfirmedCancel,
+                                  onChanged: (newValue) {
+                                    setState(() {
+                                      hasConfirmedCancel = newValue ?? false;
+                                    });
+                                  },
+                                  activeColor: SafeJetColors.warning,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'I understand that cancelling this order may affect my completion rate and confirm I want to proceed',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+            onPressed: () => Navigator.pop(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: isDark 
+                                    ? Colors.white.withOpacity(0.1)
+                                    : Colors.grey[300]!,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            'Go Back',
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                          onPressed: isSubmitting || !hasConfirmedCancel
+                            ? null 
+                            : () async {
+                                setState(() {
+                                  isSubmitting = true;
+                                });
+                        try {
+                          await _p2pService.cancelOrder(
+                            widget.trackingId,
+                            reason: selectedReason,
+                            additionalDetails: reasonController.text.trim(),
+                          );
+                          if (mounted) {
+                                    Navigator.of(context).pop(true);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Order cancelled successfully')),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                                    setState(() {
+                                      isSubmitting = false;
+                                    });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.toString())),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SafeJetColors.warning,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                          ),
+                          child: isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                                ),
+                              )
+                            : const Text(
+                                'Cancel Order',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                    ),
+          ),
+        ],
+                  ),
+              ),
+            ],
+            );
+          },
+          ),
+        ),
+      ),
+    );
   }
 
   // Helper method to determine if current user is the seller
