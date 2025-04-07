@@ -46,16 +46,25 @@ export class AdminWalletController {
         // Calculate USD totals
         const summary = balances.reduce((acc, balance) => {
             const amount = parseFloat(balance.balance) || 0;
+            const frozenAmount = parseFloat(balance.frozen) || 0;
             const price = tokenPrices[balance.baseSymbol] || 0;
             const usdValue = amount * price;
+            const frozenUsdValue = frozenAmount * price;
 
             if (balance.type === 'spot') {
                 acc.totalSpot += usdValue;
+                acc.totalSpotFrozen += frozenUsdValue;
             } else if (balance.type === 'funding') {
                 acc.totalFunding += usdValue;
+                acc.totalFundingFrozen += frozenUsdValue;
             }
             return acc;
-        }, { totalSpot: 0, totalFunding: 0 });
+        }, { 
+            totalSpot: 0, 
+            totalFunding: 0,
+            totalSpotFrozen: 0,
+            totalFundingFrozen: 0
+        });
 
         this.logger.debug('Balance summary with USD values:', summary);
         return summary;
@@ -96,19 +105,29 @@ export class AdminWalletController {
                     spot: '0', 
                     funding: '0',
                     spotUsdValue: 0,
-                    fundingUsdValue: 0
+                    fundingUsdValue: 0,
+                    spotFrozen: '0',
+                    fundingFrozen: '0',
+                    spotFrozenUsdValue: 0,
+                    fundingFrozenUsdValue: 0
                 };
             }
             const price = tokenPrices[balance.baseSymbol] || 0;
             const amount = parseFloat(balance.balance) || 0;
+            const frozenAmount = parseFloat(balance.frozen) || 0;
             const usdValue = amount * price;
+            const frozenUsdValue = frozenAmount * price;
 
             if (balance.type === 'spot') {
                 acc[balance.baseSymbol].spot = balance.balance;
                 acc[balance.baseSymbol].spotUsdValue = usdValue;
+                acc[balance.baseSymbol].spotFrozen = balance.frozen;
+                acc[balance.baseSymbol].spotFrozenUsdValue = frozenUsdValue;
             } else {
                 acc[balance.baseSymbol].funding = balance.balance;
                 acc[balance.baseSymbol].fundingUsdValue = usdValue;
+                acc[balance.baseSymbol].fundingFrozen = balance.frozen;
+                acc[balance.baseSymbol].fundingFrozenUsdValue = frozenUsdValue;
             }
             return acc;
         }, {} as Record<string, { 
@@ -116,6 +135,10 @@ export class AdminWalletController {
             funding: string;
             spotUsdValue: number;
             fundingUsdValue: number;
+            spotFrozen: string;
+            fundingFrozen: string;
+            spotFrozenUsdValue: number;
+            fundingFrozenUsdValue: number;
         }>);
 
         // Convert to array for easier filtering and pagination
@@ -169,6 +192,10 @@ export class AdminWalletController {
                 funding: balance.funding,
                 spotUsdValue: balance.spotUsdValue,
                 fundingUsdValue: balance.fundingUsdValue,
+                spotFrozen: balance.spotFrozen,
+                fundingFrozen: balance.fundingFrozen,
+                spotFrozenUsdValue: balance.spotFrozenUsdValue,
+                fundingFrozenUsdValue: balance.fundingFrozenUsdValue,
                 metadata: token?.metadata || {}
             };
             return acc;
@@ -322,7 +349,7 @@ export class AdminWalletController {
         @Body() adjustmentDto: {
             baseSymbol: string;
             type: 'spot' | 'funding';
-            action: 'add' | 'deduct';
+            action: 'add' | 'deduct' | 'freeze' | 'unfreeze';
             amount: string;
         }
     ) {
@@ -341,21 +368,63 @@ export class AdminWalletController {
         }
 
         const currentBalance = new Decimal(balance.balance);
+        const currentFrozen = new Decimal(balance.frozen || '0');
         const adjustAmount = new Decimal(adjustmentDto.amount);
 
-        if (adjustmentDto.action === 'deduct' && currentBalance.lessThan(adjustAmount)) {
-            throw new BadRequestException('Insufficient balance for deduction');
-        }
+        switch (adjustmentDto.action) {
+            case 'add':
+                balance.balance = currentBalance.plus(adjustAmount).toString();
+                break;
 
-        balance.balance = adjustmentDto.action === 'add' 
-            ? currentBalance.plus(adjustAmount).toString()
-            : currentBalance.minus(adjustAmount).toString();
+            case 'deduct':
+                // Calculate available balance (total - frozen)
+                const availableBalance = currentBalance.minus(currentFrozen);
+                
+                if (availableBalance.lessThan(adjustAmount)) {
+                    throw new BadRequestException('Insufficient available balance for deduction');
+                }
+                
+                balance.balance = currentBalance.minus(adjustAmount).toString();
+                break;
+
+            case 'freeze':
+                // Check if there's enough available balance to freeze
+                const availableToFreeze = currentBalance.minus(currentFrozen);
+                
+                if (availableToFreeze.lessThan(adjustAmount)) {
+                    throw new BadRequestException('Insufficient available balance to freeze');
+                }
+                
+                // Move amount from balance to frozen
+                balance.balance = currentBalance.minus(adjustAmount).toString();
+                balance.frozen = currentFrozen.plus(adjustAmount).toString();
+                break;
+
+            case 'unfreeze':
+                // Check if there's enough frozen balance to unfreeze
+                if (currentFrozen.lessThan(adjustAmount)) {
+                    throw new BadRequestException('Insufficient frozen balance to unfreeze');
+                }
+                
+                // Move amount from frozen back to balance
+                balance.balance = currentBalance.plus(adjustAmount).toString();
+                balance.frozen = currentFrozen.minus(adjustAmount).toString();
+                break;
+        }
 
         await this.walletBalanceRepository.save(balance);
 
+        const actionMap = {
+            add: 'added',
+            deduct: 'deducted',
+            freeze: 'frozen',
+            unfreeze: 'unfrozen'
+        };
+
         return {
-            message: `Successfully ${adjustmentDto.action}ed ${adjustmentDto.amount} ${adjustmentDto.baseSymbol} to ${adjustmentDto.type} balance`,
-            newBalance: balance.balance
+            message: `Successfully ${actionMap[adjustmentDto.action]} ${adjustmentDto.amount} ${adjustmentDto.baseSymbol} ${adjustmentDto.type === 'spot' ? 'spot' : 'funding'} balance`,
+            newBalance: balance.balance,
+            newFrozen: balance.frozen
         };
     }
 } 

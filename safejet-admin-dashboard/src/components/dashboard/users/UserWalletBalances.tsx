@@ -44,10 +44,14 @@ interface WalletBalance {
     spot: {
         balance: string;
         usdValue: number;
+        frozen?: string;
+        frozenUsdValue?: number;
     };
     funding: {
         balance: string;
         usdValue: number;
+        frozen?: string;
+        frozenUsdValue?: number;
     };
     metadata?: {
         icon: string;
@@ -115,13 +119,19 @@ export function UserWalletBalances() {
     const [adjustBalanceData, setAdjustBalanceData] = useState({
         baseSymbol: '',
         type: 'spot' as 'spot' | 'funding',
-        action: 'add' as 'add' | 'deduct',
+        action: 'add' as 'add' | 'deduct' | 'freeze' | 'unfreeze',
         amount: ''
     });
     const [adjustingBalance, setAdjustingBalance] = useState(false);
     const [userName, setUserName] = useState('');
     const [missingWallets, setMissingWallets] = useState<Array<{blockchain: string; network: string}>>([]);
     const [creatingWallet, setCreatingWallet] = useState(false);
+    const [totalValues, setTotalValues] = useState({
+        spot: 0,
+        spotFrozen: 0,
+        funding: 0,
+        fundingFrozen: 0
+    });
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -186,11 +196,15 @@ export function UserWalletBalances() {
                 symbol,
                 spot: {
                     balance: balance.spot,
-                    usdValue: balance.spotUsdValue || 0
+                    usdValue: balance.spotUsdValue || 0,
+                    frozen: balance.spotFrozen || '0',
+                    frozenUsdValue: balance.spotFrozenUsdValue || 0
                 },
                 funding: {
                     balance: balance.funding,
-                    usdValue: balance.fundingUsdValue || 0
+                    usdValue: balance.fundingUsdValue || 0,
+                    frozen: balance.fundingFrozen || '0',
+                    frozenUsdValue: balance.fundingFrozenUsdValue || 0
                 },
                 metadata: balance.metadata || {}
             })));
@@ -401,6 +415,23 @@ export function UserWalletBalances() {
         }
     }, [id]);
 
+    useEffect(() => {
+        const totals = balances.reduce((acc, balance) => {
+            acc.spot += balance.spot.usdValue;
+            acc.spotFrozen += (balance.spot.frozenUsdValue || 0);
+            acc.funding += balance.funding.usdValue;
+            acc.fundingFrozen += (balance.funding.frozenUsdValue || 0);
+            return acc;
+        }, {
+            spot: 0,
+            spotFrozen: 0,
+            funding: 0,
+            fundingFrozen: 0
+        });
+        
+        setTotalValues(totals);
+    }, [balances]);
+
     const handleChangePage = (_: unknown, newPage: number) => {
         setPage(newPage);
     };
@@ -451,6 +482,13 @@ export function UserWalletBalances() {
                         {error}
                     </Alert>
                 )}
+                
+                {/* Add info alert about frozen balances */}
+                <Alert severity="info" sx={{ mt: 2 }} onClose={() => {}} className="mb-4">
+                    <Typography variant="body2">
+                        Balances now show both available and frozen amounts. Frozen balances are funds that are currently locked in trades, withdrawals, or other operations.
+                    </Typography>
+                </Alert>
             </div>
 
             <Paper className="p-6">
@@ -459,27 +497,55 @@ export function UserWalletBalances() {
                         <Typography variant="h6">
                             Wallet Balances
                         </Typography>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        
+                        <Box sx={{ display: 'flex', gap: 2 }}>
                             <Button
                                 variant="outlined"
+                                color="info"
+                                startIcon={<WalletIcon />}
                                 onClick={() => {
                                     fetchWalletAddresses();
                                     setShowAddresses(true);
                                 }}
-                                startIcon={<WalletIcon />}
                                 disabled={loadingAddresses}
                             >
-                                View Addresses
+                                View Wallet Addresses
                             </Button>
+                            
                             <Button
                                 variant="contained"
+                                color="primary"
                                 onClick={handleSync}
                                 disabled={isSyncing}
-                                startIcon={isSyncing ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
+                                startIcon={isSyncing ? <CircularProgress size={20} /> : <SyncIcon />}
                             >
-                                {isSyncing ? 'Syncing...' : 'Sync Wallets'}
+                                {isSyncing ? 'Syncing...' : 'Sync Balances'}
                             </Button>
-                        </div>
+                        </Box>
+                    </Box>
+
+                    {/* Legend for frozen balances */}
+                    <Box 
+                        sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 1, 
+                            bgcolor: 'background.paper',
+                            p: 1,
+                            border: '1px solid rgba(0, 0, 0, 0.12)',
+                            borderRadius: 1,
+                            mb: 2
+                        }}
+                    >
+                        <Box sx={{ 
+                            width: 16, 
+                            height: 16, 
+                            bgcolor: 'warning.main', 
+                            borderRadius: '50%' 
+                        }} />
+                        <Typography variant="caption">
+                            <strong>Frozen balance</strong> - Funds that are locked and cannot be used for trading or withdrawals
+                        </Typography>
                     </Box>
 
                     {syncMessage && (
@@ -488,19 +554,22 @@ export function UserWalletBalances() {
                             onClose={() => setSyncMessage(null)}
                             sx={{ mb: 2 }}
                         >
-                            <div>
-                                <div>{syncMessage.text}</div>
-                                {syncMessage.type === 'success' && syncMessage.details && syncMessage.details.totalCreated > 0 && (
-                                    <div style={{ marginTop: '8px' }}>
-                                        <Typography variant="body2" component="div">
-                                            Created {syncMessage.details.spotBalances} spot and {syncMessage.details.fundingBalances} funding balances for tokens:
+                            <Typography variant="body2">{syncMessage.text}</Typography>
+                            {syncMessage.details && (
+                                <Box sx={{ mt: 1 }}>
+                                    <Typography variant="caption" component="div">
+                                        • Created {syncMessage.details.totalCreated} new wallets
+                                    </Typography>
+                                    {syncMessage.details.newTokens.length > 0 && (
+                                        <Typography variant="caption" component="div">
+                                            • Added support for new tokens: {syncMessage.details.newTokens.join(', ')}
                                         </Typography>
-                                        <Typography variant="body2" component="div" sx={{ mt: 1 }}>
-                                            {syncMessage.details.newTokens.join(', ')}
-                                        </Typography>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                    <Typography variant="caption" component="div">
+                                        • Updated {syncMessage.details.spotBalances} spot balances and {syncMessage.details.fundingBalances} funding balances
+                                    </Typography>
+                                </Box>
+                            )}
                         </Alert>
                     )}
 
@@ -590,66 +659,188 @@ export function UserWalletBalances() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {balances.map((balance) => (
-                                <TableRow key={balance.symbol}>
-                                    <TableCell>
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <Avatar 
-                                                src={balance.metadata?.icon}
-                                                alt={balance.symbol}
-                                                sx={{ 
-                                                    width: 28,
-                                                    height: 28,
-                                                    backgroundColor: 'transparent',
-                                                    border: '1px solid #e0e0e0',
-                                                    padding: '2px'
+                            {balances.map((balance) => {
+                                // Calculate if there are any frozen balances
+                                const hasSpotFrozen = parseFloat(balance.spot.frozen || '0') > 0;
+                                const hasFundingFrozen = parseFloat(balance.funding.frozen || '0') > 0;
+                                const hasFrozen = hasSpotFrozen || hasFundingFrozen;
+                                
+                                return (
+                                    <TableRow 
+                                        key={balance.symbol}
+                                        sx={{ 
+                                            // Add a subtle background color if there are frozen funds
+                                            ...(hasFrozen && { 
+                                                backgroundColor: 'rgba(255, 152, 0, 0.05)' 
+                                            })
+                                        }}
+                                    >
+                                        <TableCell>
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                <Avatar 
+                                                    src={balance.metadata?.icon}
+                                                    alt={balance.symbol}
+                                                    sx={{ 
+                                                        width: 28,
+                                                        height: 28,
+                                                        backgroundColor: 'transparent',
+                                                        border: '1px solid #e0e0e0',
+                                                        padding: '2px'
+                                                    }}
+                                                >
+                                                    {balance.symbol.charAt(0)}
+                                                </Avatar>
+                                                <Typography 
+                                                    variant="body2" 
+                                                    sx={{ 
+                                                        fontWeight: 500,
+                                                        color: 'text.primary',
+                                                        fontSize: '0.875rem'
+                                                    }}
+                                                >
+                                                    {balance.symbol}
+                                                </Typography>
+                                            </Box>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Typography variant="body2">{formatCrypto(balance.spot.balance)}</Typography>
+                                            {hasSpotFrozen && (
+                                                <Tooltip title="Frozen balances are temporarily locked funds that cannot be withdrawn or traded. These may be reserved for open orders, pending transactions, or security holds.">
+                                                    <Box component="div" sx={{ 
+                                                        color: 'warning.main', 
+                                                        mt: 0.5, 
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'medium',
+                                                        borderTop: '1px dashed rgba(255, 152, 0, 0.5)',
+                                                        pt: 0.5,
+                                                        cursor: 'help'
+                                                    }}>
+                                                        {formatCrypto(balance.spot.frozen || '0')} frozen
+                                                    </Box>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Typography variant="body2">{formatUSD(balance.spot.usdValue)}</Typography>
+                                            {hasSpotFrozen && (
+                                                <Tooltip title="USD value of the frozen balance">
+                                                    <Box component="div" sx={{ 
+                                                        color: 'warning.main', 
+                                                        mt: 0.5, 
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'medium',
+                                                        borderTop: '1px dashed rgba(255, 152, 0, 0.5)',
+                                                        pt: 0.5,
+                                                        cursor: 'help'
+                                                    }}>
+                                                        {formatUSD(balance.spot.frozenUsdValue || 0)} frozen
+                                                    </Box>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Typography variant="body2">{formatCrypto(balance.funding.balance)}</Typography>
+                                            {hasFundingFrozen && (
+                                                <Tooltip title="Frozen balances are temporarily locked funds that cannot be withdrawn or traded. These may be reserved for open orders, pending transactions, or security holds.">
+                                                    <Box component="div" sx={{ 
+                                                        color: 'warning.main', 
+                                                        mt: 0.5, 
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'medium',
+                                                        borderTop: '1px dashed rgba(255, 152, 0, 0.5)',
+                                                        pt: 0.5,
+                                                        cursor: 'help'
+                                                    }}>
+                                                        {formatCrypto(balance.funding.frozen || '0')} frozen
+                                                    </Box>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Typography variant="body2">{formatUSD(balance.funding.usdValue)}</Typography>
+                                            {hasFundingFrozen && (
+                                                <Tooltip title="USD value of the frozen balance">
+                                                    <Box component="div" sx={{ 
+                                                        color: 'warning.main', 
+                                                        mt: 0.5, 
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 'medium',
+                                                        borderTop: '1px dashed rgba(255, 152, 0, 0.5)',
+                                                        pt: 0.5,
+                                                        cursor: 'help'
+                                                    }}>
+                                                        {formatUSD(balance.funding.frozenUsdValue || 0)} frozen
+                                                    </Box>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="center">
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                onClick={() => {
+                                                    setAdjustBalanceData(prev => ({
+                                                        ...prev,
+                                                        baseSymbol: balance.symbol,
+                                                        amount: ''  // Reset amount
+                                                    }));
+                                                    setAdjustBalanceOpen(true);
                                                 }}
+                                                startIcon={<AddCircleOutline />}
                                             >
-                                                {balance.symbol.charAt(0)}
-                                            </Avatar>
-                                            <Typography 
-                                                variant="body2" 
-                                                sx={{ 
-                                                    fontWeight: 500,
-                                                    color: 'text.primary',
-                                                    fontSize: '0.875rem'
-                                                }}
-                                            >
-                                                {balance.symbol}
-                                            </Typography>
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {formatCrypto(balance.spot.balance)}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {formatUSD(balance.spot.usdValue)}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {formatCrypto(balance.funding.balance)}
-                                    </TableCell>
-                                    <TableCell align="right">
-                                        {formatUSD(balance.funding.usdValue)}
-                                    </TableCell>
-                                    <TableCell align="center">
-                                        <Button
-                                            size="small"
-                                            variant="outlined"
-                                            onClick={() => {
-                                                setAdjustBalanceData(prev => ({
-                                                    ...prev,
-                                                    baseSymbol: balance.symbol,
-                                                    amount: ''  // Reset amount
-                                                }));
-                                                setAdjustBalanceOpen(true);
-                                            }}
-                                            startIcon={<AddCircleOutline />}
-                                        >
-                                            Adjust
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                                                Adjust
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                            <TableRow 
+                                sx={{ 
+                                    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+                                    '& td': { fontWeight: 'bold' }
+                                }}
+                            >
+                                <TableCell>Total</TableCell>
+                                <TableCell align="right">-</TableCell>
+                                <TableCell align="right">
+                                    <Typography variant="body2">{formatUSD(totalValues.spot)}</Typography>
+                                    {totalValues.spotFrozen > 0 && (
+                                        <Tooltip title="Total USD value of all frozen spot balances">
+                                            <Box component="div" sx={{ 
+                                                color: 'warning.main', 
+                                                mt: 0.5, 
+                                                fontSize: '0.75rem',
+                                                fontWeight: 'medium',
+                                                borderTop: '1px dashed rgba(255, 152, 0, 0.5)',
+                                                pt: 0.5,
+                                                cursor: 'help'
+                                            }}>
+                                                {formatUSD(totalValues.spotFrozen)} frozen
+                                            </Box>
+                                        </Tooltip>
+                                    )}
+                                </TableCell>
+                                <TableCell align="right">-</TableCell>
+                                <TableCell align="right">
+                                    <Typography variant="body2">{formatUSD(totalValues.funding)}</Typography>
+                                    {totalValues.fundingFrozen > 0 && (
+                                        <Tooltip title="Total USD value of all frozen funding balances">
+                                            <Box component="div" sx={{ 
+                                                color: 'warning.main', 
+                                                mt: 0.5, 
+                                                fontSize: '0.75rem',
+                                                fontWeight: 'medium',
+                                                borderTop: '1px dashed rgba(255, 152, 0, 0.5)',
+                                                pt: 0.5,
+                                                cursor: 'help'
+                                            }}>
+                                                {formatUSD(totalValues.fundingFrozen)} frozen
+                                            </Box>
+                                        </Tooltip>
+                                    )}
+                                </TableCell>
+                                <TableCell align="center">-</TableCell>
+                            </TableRow>
                         </TableBody>
                     </Table>
                 </TableContainer>
@@ -766,6 +957,17 @@ export function UserWalletBalances() {
                             Token: {adjustBalanceData.baseSymbol}
                         </Typography>
 
+                        {/* Information about frozen balances */}
+                        {(adjustBalanceData.action === 'freeze' || adjustBalanceData.action === 'unfreeze') && (
+                            <Alert severity="info" sx={{ mb: 1 }}>
+                                <Typography variant="caption">
+                                    {adjustBalanceData.action === 'freeze' 
+                                        ? 'Freezing balances will make them unavailable for trading or withdrawal. Use this for security holds or dispute resolution.' 
+                                        : 'Unfreezing will make previously locked funds available again for trading and withdrawal.'}
+                                </Typography>
+                            </Alert>
+                        )}
+
                         <FormControl fullWidth>
                             <InputLabel>Balance Type</InputLabel>
                             <Select
@@ -787,12 +989,14 @@ export function UserWalletBalances() {
                                 value={adjustBalanceData.action}
                                 onChange={(e) => setAdjustBalanceData(prev => ({
                                     ...prev,
-                                    action: e.target.value as 'add' | 'deduct'
+                                    action: e.target.value as 'add' | 'deduct' | 'freeze' | 'unfreeze'
                                 }))}
                                 label="Action"
                             >
                                 <MenuItem value="add">Add</MenuItem>
                                 <MenuItem value="deduct">Deduct</MenuItem>
+                                <MenuItem value="freeze" sx={{ color: 'warning.main' }}>Freeze</MenuItem>
+                                <MenuItem value="unfreeze" sx={{ color: 'success.main' }}>Unfreeze</MenuItem>
                             </Select>
                         </FormControl>
 
@@ -808,6 +1012,13 @@ export function UserWalletBalances() {
                             InputProps={{
                                 inputProps: { min: 0, step: "any" }
                             }}
+                            helperText={
+                                adjustBalanceData.action === 'freeze' 
+                                    ? 'Amount to freeze from available balance' 
+                                    : adjustBalanceData.action === 'unfreeze'
+                                        ? 'Amount to unfreeze and return to available balance'
+                                        : undefined
+                            }
                         />
                     </Box>
                 </DialogContent>
@@ -821,9 +1032,15 @@ export function UserWalletBalances() {
                     <Button
                         onClick={handleAdjustBalance}
                         variant="contained"
+                        color={adjustBalanceData.action === 'freeze' ? 'warning' : 
+                              adjustBalanceData.action === 'unfreeze' ? 'success' : 'primary'}
                         disabled={adjustingBalance || !adjustBalanceData.baseSymbol || !adjustBalanceData.amount}
                     >
-                        {adjustingBalance ? 'Adjusting...' : 'Adjust Balance'}
+                        {adjustingBalance ? 'Processing...' : (
+                            adjustBalanceData.action === 'add' ? 'Add Balance' :
+                            adjustBalanceData.action === 'deduct' ? 'Deduct Balance' :
+                            adjustBalanceData.action === 'freeze' ? 'Freeze Balance' : 'Unfreeze Balance'
+                        )}
                     </Button>
                 </DialogActions>
             </Dialog>
