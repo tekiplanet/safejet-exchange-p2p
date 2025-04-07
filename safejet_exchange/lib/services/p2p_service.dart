@@ -1259,35 +1259,44 @@ class P2PService {
   }
 
   // Get user's dispute history
-  Future<List<Map<String, dynamic>>> getUserDisputes({int page = 1, int limit = 10}) async {
+  Future<List<Map<String, dynamic>>> getUserDisputes() async {
     try {
       print('Fetching user disputes history...');
+      
+      // Add parameters to include relations and filter fields
       final response = await _dio.get(
         '/p2p/disputes',
         queryParameters: {
-          'page': page,
-          'limit': limit,
+          'includeRelations': 'true',
+          'includeOrder': 'true',
+          'includeBuyer': 'true',
+          'includeSeller': 'true',
+          'includeToken': 'true',
+          'page': '1',
+          'limit': '50'
         },
-        options: Options(headers: await _getAuthHeaders()),
       );
       
+      print('Got dispute response with status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
-        print('Got ${response.data.length} disputes');
-        return List<Map<String, dynamic>>.from(response.data);
+        // Log the response structure for debugging
+        print('Response data type: ${response.data.runtimeType}');
+        if (response.data is List) {
+          print('Got ${response.data.length} disputes');
+          return List<Map<String, dynamic>>.from(response.data);
+        } else if (response.data is Map && response.data['items'] != null) {
+          print('Got ${response.data['items'].length} disputes');
+          return List<Map<String, dynamic>>.from(response.data['items']);
+        } else {
+          print('Unexpected response format: ${response.data}');
+          return [];
+        }
       }
-      
-      // If the endpoint returns an object with items array
-      if (response.statusCode == 200 && 
-          response.data is Map && 
-          response.data.containsKey('items')) {
-        print('Got ${response.data['items'].length} disputes from items array');
-        return List<Map<String, dynamic>>.from(response.data['items']);
-      }
-      
-      throw Exception('Failed to load dispute history');
+      print('Failed to load disputes: ${response.statusCode}');
+      return [];
     } catch (e) {
-      print('Error fetching dispute history: $e');
-      // Return empty list on error instead of throwing
+      print('Error loading disputes: $e');
       return [];
     }
   }

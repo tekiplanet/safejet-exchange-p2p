@@ -1959,6 +1959,13 @@ export class P2PService {
         { buyerId: userId },
         { sellerId: userId }
       ],
+      relations: {
+        buyer: true,
+        seller: true,
+        offer: {
+          token: true
+        }
+      },
       order: {
         createdAt: 'DESC'
       },

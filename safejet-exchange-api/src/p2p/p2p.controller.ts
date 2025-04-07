@@ -440,8 +440,11 @@ export class P2PController {
     @GetUser('id') userId: string,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
+    @Query('includeRelations') includeRelations = 'true',
   ) {
     console.log('Getting disputes for user:', userId);
+    console.log('Include relations:', includeRelations);
+    
     // Get all orders for the user
     const orders = await this.p2pService.getOrdersByUser(userId);
     
@@ -449,9 +452,29 @@ export class P2PController {
     const disputes = [];
     for (const order of orders) {
       try {
-        // Try to get dispute for every order (service will return null if no dispute exists)
+        // Try to get dispute for every order with full relations
         const dispute = await this.p2pService.getDisputeByOrderId(order.id, userId);
         if (dispute) {
+          // Make sure order is fully populated with token and user information
+          if (order.buyer) {
+            console.log(`Order ${order.id} has buyer: ${order.buyer['username'] || order.buyer['fullName'] || 'No username'}`);
+          } else {
+            console.log(`Order ${order.id} missing buyer information`);
+          }
+          
+          if (order.seller) {
+            console.log(`Order ${order.id} has seller: ${order.seller['username'] || order.seller['fullName'] || 'No username'}`);
+          } else {
+            console.log(`Order ${order.id} missing seller information`);
+          }
+          
+          // Check for token information
+          if (order.offer && order.offer.token) {
+            console.log(`Order ${order.id} has token info: ${order.offer.token.symbol || 'No symbol'}`);
+          } else {
+            console.log(`Order ${order.id} missing token information`);
+          }
+          
           // Add additional info needed for listing
           dispute.order = order;
           disputes.push(dispute);
