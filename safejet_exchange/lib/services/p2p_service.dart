@@ -335,11 +335,57 @@ class P2PService {
         print('Order submitted successfully');
         return response.data;
       } else {
-        throw Exception('Failed to submit order');
+        // Parse the error message from the response
+        String errorMessage = 'Failed to submit order';
+        print('Error response: ${response.data}');
+        
+        if (response.data is Map) {
+          errorMessage = response.data['message'] ?? 'Failed to submit order';
+        } else if (response.data is String) {
+          errorMessage = response.data;
+        }
+        
+        print('Error message extracted: $errorMessage');
+        throw Exception(errorMessage);
       }
     } catch (e) {
       print('Error submitting order: $e');
-      throw Exception('Error submitting order');
+      print('Error type: ${e.runtimeType}');
+      
+      // If we already have a properly formatted exception, just rethrow it
+      if (e is Exception && e.toString().contains('Exception: ')) {
+        print('Rethrowing existing exception with message');
+        rethrow;
+      }
+      
+      // Check if it's a DioError to get the actual error message
+      if (e is DioException) {
+        final response = e.response;
+        if (response != null) {
+          print('DioError response data: ${response.data}');
+          String errorMessage = 'Failed to submit order';
+          
+          if (response.data is Map) {
+            errorMessage = response.data['message'] ?? errorMessage;
+          } else if (response.data is String) {
+            // Sometimes the error might come as a string
+            errorMessage = response.data;
+          }
+          
+          print('Final error message: $errorMessage');
+          throw Exception(errorMessage);
+        }
+      }
+      
+      // For any other type of error, create a clear exception
+      String errorMsg = e.toString();
+      // Remove any leading "Exception: " to avoid duplication
+      if (errorMsg.startsWith('Exception: ')) {
+        errorMsg = errorMsg.substring('Exception: '.length);
+      }
+      
+      print('Throwing formatted exception: $errorMsg');
+      throw Exception(errorMsg);
     }
   }
 

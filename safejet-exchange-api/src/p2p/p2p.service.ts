@@ -686,133 +686,136 @@ export class P2PService {
   }
 
   async createOrder(createOrderDto: CreateOrderDto): Promise<Order> {
-    // Check if required fields are provided
-    if (!createOrderDto.offerId) {
-      throw new BadRequestException('Offer ID is required');
-    }
-    
-    if (!createOrderDto.buyerId) {
-      throw new BadRequestException('Buyer ID is required');
-    }
-    
-    if (!createOrderDto.sellerId) {
-      throw new BadRequestException('Seller ID is required');
-    }
-
-    // Check if the offer exists
-    const offer = await this.p2pOfferRepository.findOne({
-      where: { id: createOrderDto.offerId }
-    });
-
-    if (!offer) {
-      throw new NotFoundException(`Offer with ID ${createOrderDto.offerId} not found`);
-    }
-
-    // Check if the buyer exists
-    const buyer = await this.userRepository.findOne({
-      where: { id: createOrderDto.buyerId }
-    });
-
-    if (!buyer) {
-      throw new NotFoundException(`Buyer with ID ${createOrderDto.buyerId} not found`);
-    }
-
-    // Check if the seller exists
-    const seller = await this.userRepository.findOne({
-      where: { id: createOrderDto.sellerId }
-    });
-
-    if (!seller) {
-      throw new NotFoundException(`Seller with ID ${createOrderDto.sellerId} not found`);
-    }
-
-    // Parse the payment metadata if it's a string
-    let paymentMetadata = createOrderDto.paymentMetadata;
-    if (typeof paymentMetadata === 'string') {
-      try {
-        paymentMetadata = JSON.parse(paymentMetadata);
-      } catch (e) {
-        // If it's not valid JSON, keep it as is
+    try {
+      // Check if required fields are provided
+      if (!createOrderDto.offerId) {
+        throw new BadRequestException('Offer ID is required');
       }
-    }
-
-    // Calculate payment deadline (30 minutes from now)
-    const now = new Date();
-    const paymentDeadline = new Date(now);
-    paymentDeadline.setMinutes(paymentDeadline.getMinutes() + 15);
-    
-    // Generate a user-friendly tracking ID (10 characters alphanumeric)
-    const generateTrackingId = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let result = '';
-      for (let i = 0; i < 10; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return result;
-    };
-
-    // Ensure the tracking ID is unique
-    let trackingId = generateTrackingId();
-    let existingOrder = await this.orderRepository.findOne({ where: { trackingId } });
-    
-    // If a collision occurs, regenerate until we get a unique ID
-    while (existingOrder) {
-      trackingId = generateTrackingId();
-      existingOrder = await this.orderRepository.findOne({ where: { trackingId } });
-    }
-
-    const order = this.orderRepository.create({
-      ...createOrderDto,
-      paymentMetadata,
-      trackingId,
-      paymentDeadline,
-      price: createOrderDto.calculatedPrice, // Store the price user saw and agreed to
-    });
-
-    const savedOrder = await this.orderRepository.save(order);
-
-    // Get the complete offer with relations
-    const offerWithRelations = await this.p2pOfferRepository.findOne({
-      where: { id: offer.id },
-      relations: ['token']
-    });
-
-    if (!offerWithRelations || !offerWithRelations.token) {
-      console.error('Token not found for offer:', offer.id);
-      return savedOrder;
-    }
-
-    // Get the token directly from the relations
-    const token = offerWithRelations.token;
-
-    // Format amounts with proper comma separation
-    const formatAmount = (amount: number | string): string => {
-      // Convert to number if it's a string
-      const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
       
-      // Format with commas for thousands
-      return numAmount.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 8
-      });
-    };
-
-    // Format amounts
-    const assetAmount = formatAmount(createOrderDto.assetAmount);
-    const currencyAmount = `${offer.currency} ${formatAmount(createOrderDto.currencyAmount)}`;
-
-    // Find the seller's funding wallet balance for this token
-    const sellerWalletBalance = await this.walletBalanceRepository.findOne({
-      where: {
-        userId: seller.id,
-        type: 'funding',
-        baseSymbol: token.symbol
+      if (!createOrderDto.buyerId) {
+        throw new BadRequestException('Buyer ID is required');
       }
-    });
+      
+      if (!createOrderDto.sellerId) {
+        throw new BadRequestException('Seller ID is required');
+      }
 
-    if (!sellerWalletBalance) {
-      console.error(`Seller does not have a funding wallet balance for ${token.symbol}`);
-    } else {
+      // Check if the offer exists
+      const offer = await this.p2pOfferRepository.findOne({
+        where: { id: createOrderDto.offerId }
+      });
+
+      if (!offer) {
+        throw new NotFoundException(`Offer with ID ${createOrderDto.offerId} not found`);
+      }
+
+      // Check if the buyer exists
+      const buyer = await this.userRepository.findOne({
+        where: { id: createOrderDto.buyerId }
+      });
+
+      if (!buyer) {
+        throw new NotFoundException(`Buyer with ID ${createOrderDto.buyerId} not found`);
+      }
+
+      // Check if the seller exists
+      const seller = await this.userRepository.findOne({
+        where: { id: createOrderDto.sellerId }
+      });
+
+      if (!seller) {
+        throw new NotFoundException(`Seller with ID ${createOrderDto.sellerId} not found`);
+      }
+
+      // Parse the payment metadata if it's a string
+      let paymentMetadata = createOrderDto.paymentMetadata;
+      if (typeof paymentMetadata === 'string') {
+        try {
+          paymentMetadata = JSON.parse(paymentMetadata);
+        } catch (e) {
+          // If it's not valid JSON, keep it as is
+        }
+      }
+
+      // Calculate payment deadline (30 minutes from now)
+      const now = new Date();
+      const paymentDeadline = new Date(now);
+      paymentDeadline.setMinutes(paymentDeadline.getMinutes() + 15);
+      
+      // Generate a user-friendly tracking ID (10 characters alphanumeric)
+      const generateTrackingId = () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 10; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+      };
+
+      // Ensure the tracking ID is unique
+      let trackingId = generateTrackingId();
+      let existingOrder = await this.orderRepository.findOne({ where: { trackingId } });
+      
+      // If a collision occurs, regenerate until we get a unique ID
+      while (existingOrder) {
+        trackingId = generateTrackingId();
+        existingOrder = await this.orderRepository.findOne({ where: { trackingId } });
+      }
+
+      const order = this.orderRepository.create({
+        ...createOrderDto,
+        paymentMetadata,
+        trackingId,
+        paymentDeadline,
+        price: createOrderDto.calculatedPrice, // Store the price user saw and agreed to
+      });
+
+      const savedOrder = await this.orderRepository.save(order);
+
+      // Get the complete offer with relations
+      const offerWithRelations = await this.p2pOfferRepository.findOne({
+        where: { id: offer.id },
+        relations: ['token']
+      });
+
+      if (!offerWithRelations || !offerWithRelations.token) {
+        console.error('Token not found for offer:', offer.id);
+        return savedOrder;
+      }
+
+      // Get the token directly from the relations
+      const token = offerWithRelations.token;
+
+      // Format amounts with proper comma separation
+      const formatAmount = (amount: number | string): string => {
+        // Convert to number if it's a string
+        const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+        
+        // Format with commas for thousands
+        return numAmount.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 8
+        });
+      };
+
+      // Format amounts
+      const assetAmount = formatAmount(createOrderDto.assetAmount);
+      const currencyAmount = `${offer.currency} ${formatAmount(createOrderDto.currencyAmount)}`;
+
+      // Find the seller's funding wallet balance for this token
+      const sellerWalletBalance = await this.walletBalanceRepository.findOne({
+        where: {
+          userId: seller.id,
+          type: 'funding',
+          baseSymbol: token.symbol
+        }
+      });
+
+      if (!sellerWalletBalance) {
+        console.error(`Seller does not have a funding wallet balance for ${token.symbol}`);
+        throw new BadRequestException(`Seller does not have a funding wallet balance for ${token.symbol}`);
+      }
+
       // Update the seller's wallet balance - move funds from available to frozen
       const currentBalance = parseFloat(sellerWalletBalance.balance.toString());
       const orderAmount = parseFloat(createOrderDto.assetAmount.toString());
@@ -820,7 +823,7 @@ export class P2PService {
       
       // Ensure seller has enough balance
       if (currentBalance < orderAmount) {
-        throw new BadRequestException(`Seller does not have enough ${token.symbol} balance`);
+        throw new BadRequestException(`Seller does not have enough ${token.symbol} balance to complete this transaction`);
       }
       
       // Update the balance - convert numbers to strings
@@ -831,72 +834,79 @@ export class P2PService {
       await this.walletBalanceRepository.save(sellerWalletBalance);
       
       console.log(`Updated seller's wallet balance: ${orderAmount} ${token.symbol} moved to frozen`);
-    }
 
-    // Send appropriate emails based on the offer type and user roles
-    if (offer.type === 'sell') {
-      // Frontend displays this as a buy offer:
-      // - The offer creator is the seller
-      // - The order creator is the buyer
-      
-      // Send buyer email to the order creator (buyer)
-      this.emailService.sendP2POrderCreatedBuyerEmail(
-        buyer.email,
-        buyer.fullName,
-        trackingId,
-        assetAmount,
-        currencyAmount,
-        token.symbol,
-        paymentDeadline
-      );
-      
-      // Send seller email to the offer creator (seller)
-      this.emailService.sendP2POrderReceivedSellerEmail(
-        seller.email,
-        seller.fullName,
-        trackingId,
-        assetAmount,
-        token.symbol,
-        currencyAmount,
-        paymentDeadline
-      );
-    } else {
-      // Frontend displays this as a sell offer:
-      // - The offer creator is the buyer
-      // - The order creator is the seller
-      
-      // Send seller email to the order creator (seller)
-      this.emailService.sendP2POrderCreatedSellerEmail(
-        seller.email,
-        seller.fullName,
-        trackingId,
-        assetAmount,
-        token.symbol,
-        currencyAmount,
-        paymentDeadline
-      );
-      
-      // Send buyer email to the offer creator (buyer)
-      this.emailService.sendP2POrderReceivedBuyerEmail(
-        buyer.email,
-        buyer.fullName,
-        trackingId,
-        assetAmount,
-        currencyAmount,
-        token.symbol,
-        paymentDeadline
-      );
-    }
+      // Send appropriate emails based on the offer type and user roles
+      if (offer.type === 'sell') {
+        // Frontend displays this as a buy offer:
+        // - The offer creator is the seller
+        // - The order creator is the buyer
+        
+        // Send buyer email to the order creator (buyer)
+        this.emailService.sendP2POrderCreatedBuyerEmail(
+          buyer.email,
+          buyer.fullName,
+          trackingId,
+          assetAmount,
+          currencyAmount,
+          token.symbol,
+          paymentDeadline
+        );
+        
+        // Send seller email to the offer creator (seller)
+        this.emailService.sendP2POrderReceivedSellerEmail(
+          seller.email,
+          seller.fullName,
+          trackingId,
+          assetAmount,
+          token.symbol,
+          currencyAmount,
+          paymentDeadline
+        );
+      } else {
+        // Frontend displays this as a sell offer:
+        // - The offer creator is the buyer
+        // - The order creator is the seller
+        
+        // Send seller email to the order creator (seller)
+        this.emailService.sendP2POrderCreatedSellerEmail(
+          seller.email,
+          seller.fullName,
+          trackingId,
+          assetAmount,
+          token.symbol,
+          currencyAmount,
+          paymentDeadline
+        );
+        
+        // Send buyer email to the offer creator (buyer)
+        this.emailService.sendP2POrderReceivedBuyerEmail(
+          buyer.email,
+          buyer.fullName,
+          trackingId,
+          assetAmount,
+          currencyAmount,
+          token.symbol,
+          paymentDeadline
+        );
+      }
 
-    // Create initial system message with offer terms
-    if (order) {
-      await this.createSystemMessage(
-        order.id,
-        offer.terms || 'No specific terms provided.'
-      );
-    }
+      // Create initial system message with offer terms
+      if (order) {
+        await this.createSystemMessage(
+          order.id,
+          offer.terms || 'No specific terms provided.'
+        );
+      }
 
-    return savedOrder;
+      return savedOrder;
+    } catch (error) {
+      console.error('Error creating order:', error);
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error; // Keep the specific error message
+      } else {
+        throw new BadRequestException('Failed to create order. Please try again later.');
+      }
+    }
   }
 
   async getOrderByTrackingId(trackingId: string) {

@@ -1747,13 +1747,39 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
         );
       }
     } catch (e) {
-      // Handle error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to submit order. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Log complete error
+      print('Error submitting order: $e');
+      print('Error type: ${e.runtimeType}');
+      print('Full error toString: ${e.toString()}');
+      
+      // Extract the error message
+      String errorMessage = 'Failed to submit order';
+      
+      // Get raw error string
+      final errorString = e.toString();
+      
+      // Extract the message based on common error formats
+      if (errorString.contains('Exception: ')) {
+        final parts = errorString.split('Exception: ');
+        errorMessage = parts.length > 1 ? parts[1].trim() : errorString;
+        print('Extracted error message: $errorMessage');
+      } else {
+        // Use the full error string if it's not too long
+        errorMessage = errorString.length < 100 ? errorString : errorMessage;
+        print('Using error string: $errorMessage');
+      }
+      
+      // Show the error message to user
+      if (mounted) {
+        print('Showing snackbar with message: $errorMessage');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     } finally {
       // Reset loading state
       if (mounted) {
