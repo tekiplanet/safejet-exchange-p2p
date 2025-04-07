@@ -1517,7 +1517,7 @@ export default function DisputeDetails() {
                   Join Dispute
                 </Button>
               </Box>
-            ) : (dispute.status?.toUpperCase() !== 'CLOSED') && (
+            ) : (!['CLOSED', 'RESOLVED_BUYER', 'RESOLVED_SELLER'].includes(dispute.status?.toUpperCase())) && (
               <Box display="flex" gap={1}>
                 <TextField
                   fullWidth
