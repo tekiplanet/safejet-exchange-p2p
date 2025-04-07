@@ -860,7 +860,13 @@ export default function DisputeDetails() {
   };
 
   const handleSendMessage = async () => {
-    if (!dispute || (!newMessage.trim() && selectedFiles.length === 0)) return;
+    if (!dispute) return;
+    
+    // Check if both message and files are empty
+    if (!newMessage.trim() && selectedFiles.length === 0) {
+      setStatus('Please enter a message or attach a file');
+      return;
+    }
 
     setSendingMessage(true);
     try {
@@ -870,12 +876,17 @@ export default function DisputeDetails() {
         return;
       }
 
-      // Use FormData to handle file uploads
-      const formData = new FormData();
-      formData.append('message', newMessage.trim());
+      // Always include a message - if it's empty but there are files, use a placeholder
+      const messageToSend = newMessage.trim() || (selectedFiles.length > 0 ? 'File attachment' : '');
+      console.log('Message to send:', messageToSend);
       
-      // If we have files, add them
+      // For FormData, we'll use regular fetch
       if (selectedFiles.length > 0) {
+        // Use FormData to handle file uploads
+        const formData = new FormData();
+        formData.append('message', messageToSend);
+        
+        console.log('Using FormData with files');
         console.log(`Sending ${selectedFiles.length} files:`, selectedFiles.map(f => f.name));
         
         // Add files to FormData
@@ -896,37 +907,68 @@ export default function DisputeDetails() {
           setSendingMessage(false);
           return;
         }
-      }
 
-      console.log('Sending message to dispute:', dispute.id);
-      console.log('FormData keys:', [...formData.keys()]);
-      
-      const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-          // Note: Don't set Content-Type when using FormData, browser will set it automatically with boundary
-        },
-        body: formData
-      });
+        console.log('Sending message with FormData to dispute:', dispute.id);
+        console.log('FormData keys:', [...formData.keys()].join(', '));
+        // Log FormData values for debugging (only safe for text, not for binary)
+        formData.forEach((value, key) => {
+          if (key === 'message') {
+            console.log(`FormData ${key}:`, value);
+          } else if (key === 'attachment') {
+            console.log(`FormData ${key}: [base64 data]`);
+          }
+        });
+        
+        const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+            // Note: Don't set Content-Type when using FormData, browser will set it automatically with boundary
+          },
+          body: formData
+        });
 
-      if (!response.ok) {
-        // Try to get response body for more error details
-        try {
-          const errorData = await response.json();
-          console.error('Error response from server:', errorData);
-          throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
-        } catch (jsonError) {
-          throw new Error(`Failed to send message: ${response.statusText}`);
+        if (!response.ok) {
+          // Try to get response body for more error details
+          try {
+            const errorData = await response.json();
+            console.error('Error response from server:', errorData);
+            throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
+          } catch (jsonError) {
+            throw new Error(`Failed to send message: ${response.statusText}`);
+          }
+        }
+      } else {
+        // No files, use JSON format for simpler message
+        console.log('Using JSON format for message only');
+        const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/message`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ message: messageToSend })
+        });
+
+        if (!response.ok) {
+          // Try to get response body for more error details
+          try {
+            const errorData = await response.json();
+            console.error('Error response from server:', errorData);
+            throw new Error(`Failed to send message: ${errorData.message || response.statusText}`);
+          } catch (jsonError) {
+            throw new Error(`Failed to send message: ${response.statusText}`);
+          }
         }
       }
 
       // Try to get response body for debugging
       try {
-        const responseData = await response.json();
-        console.log('Message sent successfully, response:', responseData);
+        console.log('Message sent successfully');
       } catch (jsonError) {
         console.log('Message sent successfully, no JSON response');
       }

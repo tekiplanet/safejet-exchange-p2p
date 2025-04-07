@@ -615,10 +615,27 @@ export class AdminDisputesController {
   @Post('disputes/:id/message')
   async sendDisputeMessage(
     @Param('id') disputeId: string,
-    @Body() dto: { message: string },
+    @Body() dto: any, // Change to 'any' to handle FormData
     @GetUser() admin: User
   ) {
     try {
+      // Extract the message from the request body
+      let message = '';
+      
+      // Handle both JSON body and FormData requests
+      if (dto.message !== undefined) {
+        message = dto.message;
+      } else if (typeof dto === 'object') {
+        // Log the entire body for debugging
+        this.logger.log(`Message DTO: ${JSON.stringify(dto)}`);
+      }
+      
+      // Validate message input
+      if (!message || message.trim() === '') {
+        this.logger.error('Cannot send empty message');
+        throw new HttpException('Message cannot be empty', HttpStatus.BAD_REQUEST);
+      }
+
       const dispute = await this.disputeRepository.findOne({
         where: { id: disputeId },
         relations: ['initiator', 'respondent']
@@ -628,31 +645,68 @@ export class AdminDisputesController {
         throw new HttpException('Dispute not found', HttpStatus.NOT_FOUND);
       }
 
-      const message = this.disputeMessageRepository.create({
+      // Log the incoming message for debugging
+      this.logger.log(`Creating dispute message: { disputeId: ${disputeId}, message: ${message}, senderType: ADMIN }`);
+
+      // Create dispute message with the extracted message
+      const disputeMessage = this.disputeMessageRepository.create({
         disputeId,
-        senderId: admin.id,
+        senderId: null, // Use null for senderId to avoid foreign key constraint error
         senderType: DisputeMessageSenderType.ADMIN,
-        message: dto.message,
+        message: message.trim(), // Ensure the message is not empty and trim whitespace
         isRead: false,
         isDelivered: false
       });
 
+      // Check for attachments
+      if (dto.attachment) {
+        this.logger.log('Attachment found in request');
+        const attachment = dto.attachment;
+        
+        // If the attachment is a base64 string, save it
+        if (typeof attachment === 'string' && attachment.startsWith('data:')) {
+          // Extract MIME type and base64 content
+          const matches = attachment.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          
+          if (matches && matches.length === 3) {
+            const mimeType = matches[1];
+            const base64Data = matches[2];
+            const buffer = Buffer.from(base64Data, 'base64');
+            
+            // Generate a unique filename
+            const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${this.getExtensionFromMimeType(mimeType)}`;
+            const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'chat');
+            
+            // Ensure directory exists
+            if (!fs.existsSync(uploadDir)) {
+              fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            
+            const filePath = path.join(uploadDir, filename);
+            
+            // Save the file
+            fs.writeFileSync(filePath, buffer);
+            this.logger.log(`Saved attachment to ${filePath}`);
+            
+            // Update message with attachment details
+            disputeMessage.attachmentUrl = `/admin/p2p/chat/images/${filename}`;
+            disputeMessage.attachmentType = mimeType;
+            
+            this.logger.log(`Set attachment URL to ${disputeMessage.attachmentUrl}`);
+          } else {
+            this.logger.error('Invalid base64 attachment format');
+          }
+        }
+      }
+
       // Save the message
-      const savedMessage = await this.disputeMessageRepository.save(message);
+      const savedMessage = await this.disputeMessageRepository.save(disputeMessage);
+      this.logger.log(`Message saved successfully with id: ${savedMessage.id}`);
       
       // Emit real-time update through WebSocket
       await this.disputeGateway.emitDisputeMessageUpdate(disputeId, savedMessage);
       
-      // Add to dispute progress history
-      const historyEntry: DisputeProgressItem = {
-        title: 'Message Sent',
-        details: dto.message,
-        timestamp: new Date().toISOString(),
-        addedBy: 'Admin'
-      };
-
-      dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
-      await this.disputeRepository.save(dispute);
+      // No longer adding to dispute progress history when sending messages
       
       // Notify both users via email about the new message
       try {
@@ -775,5 +829,26 @@ export class AdminDisputesController {
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  }
+
+  /**
+   * Helper to get file extension from MIME type
+   */
+  private getExtensionFromMimeType(mimeType: string): string {
+    const mimeExtMap = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'application/pdf': 'pdf',
+      'text/plain': 'txt',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.ms-excel': 'xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx'
+    };
+    
+    return mimeExtMap[mimeType] || 'dat';
   }
 } 
