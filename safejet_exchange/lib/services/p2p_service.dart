@@ -1258,6 +1258,40 @@ class P2PService {
     });
   }
 
+  // Get user's dispute history
+  Future<List<Map<String, dynamic>>> getUserDisputes({int page = 1, int limit = 10}) async {
+    try {
+      print('Fetching user disputes history...');
+      final response = await _dio.get(
+        '/p2p/disputes',
+        queryParameters: {
+          'page': page,
+          'limit': limit,
+        },
+        options: Options(headers: await _getAuthHeaders()),
+      );
+      
+      if (response.statusCode == 200) {
+        print('Got ${response.data.length} disputes');
+        return List<Map<String, dynamic>>.from(response.data);
+      }
+      
+      // If the endpoint returns an object with items array
+      if (response.statusCode == 200 && 
+          response.data is Map && 
+          response.data.containsKey('items')) {
+        print('Got ${response.data['items'].length} disputes from items array');
+        return List<Map<String, dynamic>>.from(response.data['items']);
+      }
+      
+      throw Exception('Failed to load dispute history');
+    } catch (e) {
+      print('Error fetching dispute history: $e');
+      // Return empty list on error instead of throwing
+      return [];
+    }
+  }
+
   void dispose() {
     print('=== DISPOSING P2P SERVICE ===');
     _chatSocket?.disconnect();

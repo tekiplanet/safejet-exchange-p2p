@@ -433,4 +433,36 @@ export class P2PController {
       adminId
     );
   }
+
+  @Get('disputes')
+  @UseGuards(JwtAuthGuard)
+  async getUserDisputes(
+    @GetUser('id') userId: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    console.log('Getting disputes for user:', userId);
+    // Get all orders for the user
+    const orders = await this.p2pService.getOrdersByUser(userId);
+    
+    // For each order, try to get dispute
+    const disputes = [];
+    for (const order of orders) {
+      try {
+        // Try to get dispute for every order (service will return null if no dispute exists)
+        const dispute = await this.p2pService.getDisputeByOrderId(order.id, userId);
+        if (dispute) {
+          // Add additional info needed for listing
+          dispute.order = order;
+          disputes.push(dispute);
+        }
+      } catch (error) {
+        // Just log error and continue with next order
+        console.error(`Error getting dispute for order ${order.id}:`, error);
+      }
+    }
+    
+    console.log(`Found ${disputes.length} disputes for user ${userId}`);
+    return disputes;
+  }
 } 
