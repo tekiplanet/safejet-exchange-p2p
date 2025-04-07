@@ -256,12 +256,27 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                message['message'],
-                style: TextStyle(
-                  color: SafeJetColors.warning,
-                  fontSize: 12,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message['message'],
+                    style: TextStyle(
+                      color: SafeJetColors.warning,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('MMM dd, yyyy HH:mm').format(
+                      DateTime.parse(message['createdAt']),
+                    ),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -302,125 +317,125 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
           ],
           Flexible(
             child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSender
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isSender
                     ? SafeJetColors.primary
                     : isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
                         : SafeJetColors.lightCardBackground,
                 borderRadius: BorderRadius.circular(12),
-          border: !isSender
-              ? Border.all(
-                  color: isDark
-                      ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                      : SafeJetColors.lightCardBorder,
-                )
-              : null,
-        ),
-        child: Column(
+                border: !isSender
+                    ? Border.all(
+                        color: isDark
+                            ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                            : SafeJetColors.lightCardBorder,
+                      )
+                    : null,
+              ),
+              child: Column(
                 crossAxisAlignment:
                     isSender ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                              if (message['attachmentUrl'] != null) ...[
-                                Container(
-                                  margin: EdgeInsets.only(bottom: 8),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => ImageViewer(
-                                              imageUrl: '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      child: Hero(
-                                        tag: message['attachmentUrl'],
-                                        child: Image.network(
-                                          '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
-                                          width: 200,
-                            fit: BoxFit.cover,
-                                          loadingBuilder: (context, child, progress) {
-                                            if (progress == null) return child;
-                              return Container(
-                                              width: 200,
-                                              height: 150,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                                  value: progress.expectedTotalBytes != null
-                                                      ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
-                                        : null,
-                                  ),
+                  if (message['attachmentUrl'] != null) ...[
+                    Container(
+                      margin: EdgeInsets.only(bottom: 8),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ImageViewer(
+                                  imageUrl: '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
                                 ),
-                              );
-                            },
-                                          errorBuilder: (context, error, stackTrace) {
-                                            print('Error loading image: $error');
-                                            return Container(
-                                              width: 200,
-                                              height: 150,
-                                              color: Colors.grey[300],
-                                              child: Icon(Icons.error),
-                                            );
-                                          },
+                              ),
+                            );
+                          },
+                          child: Hero(
+                            tag: message['attachmentUrl'],
+                            child: Image.network(
+                              '${_p2pService.apiUrl}/p2p/chat/images/${message['attachmentUrl']}',
+                              width: 200,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return Container(
+                                  width: 200,
+                                  height: 150,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value: progress.expectedTotalBytes != null
+                                          ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                          : null,
+                                    ),
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                print('Error loading image: $error');
+                                return Container(
+                                  width: 200,
+                                  height: 150,
+                                  color: Colors.grey[300],
+                                  child: Icon(Icons.error),
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ),
                     ),
-              ),
-            ],
-            Text(
+                  ],
+                  Text(
                     message['message'],
-              style: TextStyle(
-                color: isSender
+                    style: TextStyle(
+                      color: isSender
                           ? Colors.white
                           : isDark
                               ? Colors.white
                               : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                        DateFormat('HH:mm').format(
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('MMM dd, yyyy HH:mm').format(
                           DateTime.parse(message['createdAt']),
                         ),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: isSender
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isSender
                               ? Colors.white70
                               : isDark
                                   ? Colors.grey[400]
                                   : SafeJetColors.lightTextSecondary,
-                  ),
-                ),
-                if (isSender) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                        message['isRead']
-                            ? Icons.done_all
-                            : message['isDelivered']
-                                ? Icons.done_all
-                                : Icons.done,
-                    size: 12,
-                    color: message['isRead']
-                        ? SafeJetColors.success
-                        : isSender
-                            ? Colors.white70
-                            : Colors.grey[400],
+                        ),
+                      ),
+                      if (isSender) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          message['isRead']
+                              ? Icons.done_all
+                              : message['isDelivered']
+                                  ? Icons.done_all
+                                  : Icons.done,
+                          size: 12,
+                          color: message['isRead']
+                              ? SafeJetColors.success
+                              : isSender
+                                  ? Colors.white70
+                                  : Colors.grey[400],
+                        ),
+                      ],
+                    ],
                   ),
                 ],
-              ],
+              ),
             ),
-          ],
-        ),
-      ),
           ),
           if (isSender) ...[
             const SizedBox(width: 8),
