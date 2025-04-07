@@ -18,6 +18,7 @@ import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'p2p_screen.dart';
+import '../main/home_screen.dart';
 
 // Add this enum at the top of the file after the imports
 enum DisputeReasonType {
@@ -717,12 +718,16 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
     final String buyerStatus = _orderDetails?['buyerStatus']?.toString().toLowerCase() ?? '';
     final bool isCompleted = buyerStatus == 'completed';
     final String trackingId = _orderDetails?['trackingId'] ?? '';
+    
+    // Format dates in a more readable way
     final String createdAt = _orderDetails?['createdAt'] != null 
-        ? DateTime.parse(_orderDetails!['createdAt']).toLocal().toString().substring(0, 16)
+        ? _formatDateReadable(DateTime.parse(_orderDetails!['createdAt']))
         : 'Unknown';
+    
     final String completedOrCancelledAt = _orderDetails?[isCompleted ? 'completedAt' : 'cancelledAt'] != null
-        ? DateTime.parse(_orderDetails![isCompleted ? 'completedAt' : 'cancelledAt']).toLocal().toString().substring(0, 16)
-        : DateTime.now().toString().substring(0, 16);
+        ? _formatDateReadable(DateTime.parse(_orderDetails![isCompleted ? 'completedAt' : 'cancelledAt']))
+        : _formatDateReadable(DateTime.now());
+    
     final String counterpartyName = _isCurrentUserBuyer()
         ? _orderDetails?['seller']?['fullName'] ?? 'Seller'
         : _orderDetails?['buyer']?['fullName'] ?? 'Buyer';
@@ -1124,10 +1129,13 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
-                      // Navigate to wallet/assets screen
-                      // This is a placeholder - implement the actual navigation
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Navigate to wallet/assets (to be implemented)')),
+                      // Navigate to wallet/assets screen (index 3 is Wallets tab)
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HomeScreen(initialIndex: 3),
+                        ),
+                        (route) => false,
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -1153,9 +1161,12 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
                   child: ElevatedButton(
                     onPressed: () {
                       // Navigate to new trade screen
-                      Navigator.pushReplacement(
+                      Navigator.pushAndRemoveUntil(
                         context,
-                        MaterialPageRoute(builder: (context) => const P2PScreen()),
+                        MaterialPageRoute(
+                          builder: (context) => const P2PScreen(),
+                        ),
+                        (route) => false,
                       );
                     },
                     style: ElevatedButton.styleFrom(
@@ -3587,5 +3598,31 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
 
   bool _isCurrentUserBuyer() {
     return _orderDetails?['buyerId'] == _userId;
+  }
+
+  // Helper method to format dates in a more readable way
+  String _formatDateReadable(DateTime date) {
+    // Get today and yesterday dates for comparison
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateToCheck = DateTime(date.year, date.month, date.day);
+    
+    // Format time with proper AM/PM
+    final timeFormat = DateFormat('h:mm a'); // e.g., "2:30 PM"
+    final timeStr = timeFormat.format(date);
+    
+    // Format full date with month name
+    final dateFormat = DateFormat('MMM d, yyyy'); // e.g., "Jan 15, 2023"
+    final dateStr = dateFormat.format(date);
+    
+    // Check if date is today, yesterday, or earlier
+    if (dateToCheck == today) {
+      return 'Today, $timeStr';
+    } else if (dateToCheck == yesterday) {
+      return 'Yesterday, $timeStr';
+    } else {
+      return '$dateStr, $timeStr';
+    }
   }
 } 

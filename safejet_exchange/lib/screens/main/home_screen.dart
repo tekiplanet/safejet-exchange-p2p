@@ -11,14 +11,23 @@ import 'tabs/wallets_tab.dart';
 import 'tabs/profile_tab.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final int initialIndex;
+
+  const HomeScreen({super.key, this.initialIndex = 2});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 2;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    // Use the initialIndex provided by the constructor
+    _currentIndex = widget.initialIndex;
+  }
 
   final List<Widget> _screens = [
     const MarketsTab(),
