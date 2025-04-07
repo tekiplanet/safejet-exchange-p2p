@@ -594,7 +594,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        DateFormat('HH:mm').format(
+                        DateFormat('MMM dd, yyyy HH:mm').format(
                           DateTime.parse(message['createdAt']),
                         ),
                         style: TextStyle(
@@ -777,7 +777,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        DateFormat('HH:mm').format(
+                        DateFormat('MMM dd, yyyy HH:mm').format(
                           DateTime.parse(message['createdAt']),
                         ),
                         style: TextStyle(
