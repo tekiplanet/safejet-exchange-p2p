@@ -1308,8 +1308,57 @@ export class P2PService {
   }
 
   private async returnFundsToSeller(order: Order) {
-    // Implementation for returning funds from escrow to seller
-    // This would involve your actual business logic for handling the return
+    try {
+      console.log('Returning funds to seller:', {
+        orderId: order.id,
+        sellerId: order.sellerId,
+        amount: order.assetAmount,
+        token: order.offer.token.symbol
+      });
+
+      // Find the seller's funding wallet balance for this token
+      const sellerWalletBalance = await this.walletBalanceRepository.findOne({
+        where: {
+          userId: order.sellerId,
+          type: 'funding',
+          baseSymbol: order.offer.token.symbol
+        }
+      });
+
+      if (!sellerWalletBalance) {
+        console.error(`Seller does not have a funding wallet balance for ${order.offer.token.symbol}`);
+        throw new Error('Seller wallet balance not found');
+      }
+
+      // Parse current balances
+      const currentBalance = parseFloat(sellerWalletBalance.balance.toString());
+      const currentFrozen = parseFloat(sellerWalletBalance.frozen?.toString() || '0');
+      const orderAmount = parseFloat(order.assetAmount.toString());
+
+      // Verify there are enough frozen funds
+      if (currentFrozen < orderAmount) {
+        console.error('Insufficient frozen balance:', {
+          frozen: currentFrozen,
+          required: orderAmount
+        });
+        throw new Error('Insufficient frozen balance');
+      }
+
+      // Update the balances - move from frozen to available
+      sellerWalletBalance.frozen = (currentFrozen - orderAmount).toString();
+      sellerWalletBalance.balance = (currentBalance + orderAmount).toString();
+
+      // Save the updated balance
+      await this.walletBalanceRepository.save(sellerWalletBalance);
+
+      console.log('Successfully returned funds to seller:', {
+        newBalance: sellerWalletBalance.balance,
+        newFrozen: sellerWalletBalance.frozen
+      });
+    } catch (error) {
+      console.error('Error returning funds to seller:', error);
+      throw error;
+    }
   }
 
   // New methods for chat functionality
