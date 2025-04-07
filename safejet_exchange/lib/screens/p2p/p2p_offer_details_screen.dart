@@ -1737,7 +1737,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       
       // Navigate to confirmation screen with the tracking ID from the response
       if (mounted) {
-        Navigator.push(
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => P2POrderConfirmationScreen(

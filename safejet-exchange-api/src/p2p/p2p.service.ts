@@ -742,6 +742,44 @@ export class P2PService {
       const paymentDeadline = new Date(now);
       paymentDeadline.setMinutes(paymentDeadline.getMinutes() + 15);
       
+      // Get the complete offer with relations
+      const offerWithRelations = await this.p2pOfferRepository.findOne({
+        where: { id: offer.id },
+        relations: ['token']
+      });
+
+      if (!offerWithRelations || !offerWithRelations.token) {
+        console.error('Token not found for offer:', offer.id);
+        throw new BadRequestException('Token information not found for this offer');
+      }
+
+      // Get the token directly from the relations
+      const token = offerWithRelations.token;
+
+      // Find the seller's funding wallet balance for this token
+      const sellerWalletBalance = await this.walletBalanceRepository.findOne({
+        where: {
+          userId: seller.id,
+          type: 'funding',
+          baseSymbol: token.symbol
+        }
+      });
+
+      if (!sellerWalletBalance) {
+        console.error(`Seller does not have a funding wallet balance for ${token.symbol}`);
+        throw new BadRequestException(`Seller does not have a funding wallet balance for ${token.symbol}`);
+      }
+
+      // Check if seller has enough balance before creating the order
+      const currentBalance = parseFloat(sellerWalletBalance.balance.toString());
+      const orderAmount = parseFloat(createOrderDto.assetAmount.toString());
+      const currentFrozen = parseFloat(sellerWalletBalance.frozen?.toString() || '0');
+      
+      // Ensure seller has enough balance
+      if (currentBalance < orderAmount) {
+        throw new BadRequestException(`Seller does not have enough ${token.symbol} balance to complete this transaction`);
+      }
+      
       // Generate a user-friendly tracking ID (10 characters alphanumeric)
       const generateTrackingId = () => {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -772,20 +810,6 @@ export class P2PService {
 
       const savedOrder = await this.orderRepository.save(order);
 
-      // Get the complete offer with relations
-      const offerWithRelations = await this.p2pOfferRepository.findOne({
-        where: { id: offer.id },
-        relations: ['token']
-      });
-
-      if (!offerWithRelations || !offerWithRelations.token) {
-        console.error('Token not found for offer:', offer.id);
-        return savedOrder;
-      }
-
-      // Get the token directly from the relations
-      const token = offerWithRelations.token;
-
       // Format amounts with proper comma separation
       const formatAmount = (amount: number | string): string => {
         // Convert to number if it's a string
@@ -801,30 +825,6 @@ export class P2PService {
       // Format amounts
       const assetAmount = formatAmount(createOrderDto.assetAmount);
       const currencyAmount = `${offer.currency} ${formatAmount(createOrderDto.currencyAmount)}`;
-
-      // Find the seller's funding wallet balance for this token
-      const sellerWalletBalance = await this.walletBalanceRepository.findOne({
-        where: {
-          userId: seller.id,
-          type: 'funding',
-          baseSymbol: token.symbol
-        }
-      });
-
-      if (!sellerWalletBalance) {
-        console.error(`Seller does not have a funding wallet balance for ${token.symbol}`);
-        throw new BadRequestException(`Seller does not have a funding wallet balance for ${token.symbol}`);
-      }
-
-      // Update the seller's wallet balance - move funds from available to frozen
-      const currentBalance = parseFloat(sellerWalletBalance.balance.toString());
-      const orderAmount = parseFloat(createOrderDto.assetAmount.toString());
-      const currentFrozen = parseFloat(sellerWalletBalance.frozen?.toString() || '0');
-      
-      // Ensure seller has enough balance
-      if (currentBalance < orderAmount) {
-        throw new BadRequestException(`Seller does not have enough ${token.symbol} balance to complete this transaction`);
-      }
       
       // Update the balance - convert numbers to strings
       sellerWalletBalance.balance = (currentBalance - orderAmount).toString();
