@@ -923,7 +923,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '98%',  // Completion rate
+                            '${offer['orderStats']?['completionRate'] ?? 98}%',
                         style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -934,7 +934,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '300+ orders',  // Total orders
+                        '${offer['orderStats']?['totalOrders'] ?? 0} orders',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark ? Colors.grey[400] : Colors.grey[600],

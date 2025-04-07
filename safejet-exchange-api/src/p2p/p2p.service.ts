@@ -378,6 +378,60 @@ export class P2PService {
     });
   }
 
+  /**
+   * Get order statistics for a specific user
+   * @param userId ID of the user to get stats for
+   * @returns Order statistics including total orders, completed orders, and completion rate
+   */
+  async getUserOrderStats(userId: string): Promise<{
+    totalOrders: number;
+    completedOrders: number;
+    completionRate: number;
+  }> {
+    try {
+      // Count total orders where the user was either buyer or seller
+      const totalOrders = await this.orderRepository.count({
+        where: [
+          { sellerId: userId },
+          { buyerId: userId },
+        ],
+      });
+
+      // Count completed orders where the user was either buyer or seller
+      const completedOrders = await this.orderRepository.count({
+        where: [
+          {
+            sellerId: userId,
+            sellerStatus: 'completed',
+          },
+          {
+            buyerId: userId,
+            buyerStatus: 'completed',
+          },
+        ],
+      });
+
+      // Calculate completion rate (default to 100% if no orders)
+      const completionRate = totalOrders > 0 
+        ? Math.round((completedOrders / totalOrders) * 100) 
+        : 100;
+
+      return {
+        totalOrders,
+        completedOrders,
+        completionRate,
+      };
+    } catch (error) {
+      console.error('Error calculating user order stats:', error);
+      // Return default values in case of error to avoid breaking the UI
+      return {
+        totalOrders: 0,
+        completedOrders: 0,
+        completionRate: 100,
+      };
+    }
+  }
+
   async getPublicOffers(
     filters: {
       type: 'buy' | 'sell';
@@ -456,9 +510,18 @@ export class P2PService {
         relations: ['paymentMethodType'],
       });
 
+      // Get order stats for all sellers in the result set
+      const orderStatsPromises = offers.map(async (offer) => {
+        const stats = await this.getUserOrderStats(offer.userId);
+        return { userId: offer.userId, orderStats: stats };
+      });
+      
+      const orderStats = await Promise.all(orderStatsPromises);
+
       console.log('Fetched offers:', offers);
       console.log('Payment method types:', paymentMethodTypes);
       console.log('Sellers payment methods:', sellersPaymentMethods);
+      console.log('Seller order stats:', orderStats);
 
       return {
         offers: await Promise.all(offers.map(async offer => {
@@ -471,6 +534,13 @@ export class P2PService {
             offer.type
           );
 
+          // Get order stats for this seller
+          const userOrderStats = orderStats.find(stats => stats.userId === offer.userId)?.orderStats || {
+            totalOrders: 0,
+            completedOrders: 0,
+            completionRate: 100,
+          };
+
           console.log('Calculated price for offer:', {
             offerId: offer.id,
             price: calculatedPrice.price,
@@ -481,6 +551,7 @@ export class P2PService {
             ...offer,
             calculatedPrice: calculatedPrice.price,
             marketPrice: calculatedPrice.marketPrice,
+            orderStats: userOrderStats, // Add the order stats to the offer
             paymentMethods: offer.paymentMethods.map(method => {
               if (offer.type === 'buy') {
                 const foundType = paymentMethodTypes.find(type => type.id === method.typeId);
@@ -628,6 +699,9 @@ export class P2PService {
       where: { level: user.kycLevel },
     });
 
+    // Get the user's order stats
+    const orderStats = await this.getUserOrderStats(offer.userId);
+
     const paymentMethodTypes = await this.paymentMethodTypeRepository.find();
     const paymentMethods = await this.paymentMethodRepository.find({
       where: { id: In(offer.paymentMethods.map(pm => pm.methodId)) },
@@ -667,6 +741,7 @@ export class P2PService {
       user: {
         ...user,
         kycLevel: kycLevel?.title || 'Unverified',
+        orderStats, // Add the order stats to the user object
       },
       calculatedPrice: calculatedPrice.toFixed(2), // Include calculated price
       paymentMethods: offer.paymentMethods.map(method => {

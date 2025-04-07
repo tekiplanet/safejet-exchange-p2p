@@ -657,6 +657,12 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
   }
 
   Widget _buildProfileSection(bool isDark, String userName, String userInitials, String kycLevel) {
+    // Get the user order stats from the user object
+    final user = offerDetails?['user'] ?? {};
+    final orderStats = user['orderStats'] ?? {'totalOrders': 0, 'completedOrders': 0, 'completionRate': 98};
+    final totalOrders = orderStats['totalOrders'] ?? 0;
+    final completionRate = orderStats['completionRate'] ?? 98;
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -725,7 +731,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '245 orders • 98.5% completion',
+                  '$totalOrders orders • $completionRate% completion',
                   style: TextStyle(
                     color: isDark
                         ? Colors.grey[400]
