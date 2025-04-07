@@ -440,10 +440,14 @@ export class P2PController {
     @GetUser('id') userId: string,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
+    @Query('status') status?: string,
+    @Query('search') search?: string,
     @Query('includeRelations') includeRelations = 'true',
   ) {
     console.log('Getting disputes for user:', userId);
     console.log('Include relations:', includeRelations);
+    console.log('Filter by status:', status);
+    console.log('Search query:', search);
     
     // Get all orders for the user
     const orders = await this.p2pService.getOrdersByUser(userId);
@@ -485,7 +489,62 @@ export class P2PController {
       }
     }
     
-    console.log(`Found ${disputes.length} disputes for user ${userId}`);
-    return disputes;
+    // Apply filters
+    let filteredDisputes = [...disputes];
+    
+    // Filter by status if provided
+    if (status && status.toLowerCase() !== 'all') {
+      filteredDisputes = filteredDisputes.filter(dispute => 
+        dispute.status.toLowerCase() === status.toLowerCase()
+      );
+      console.log(`Filtered to ${filteredDisputes.length} disputes with status: ${status}`);
+    }
+    
+    // Apply search if provided
+    if (search && search.trim()) {
+      const searchLower = search.trim().toLowerCase();
+      filteredDisputes = filteredDisputes.filter(dispute => {
+        // Search in dispute ID
+        if (dispute.id.toLowerCase().includes(searchLower)) return true;
+        
+        // Search in order tracking ID
+        if (dispute.order?.trackingId?.toLowerCase().includes(searchLower)) return true;
+        
+        // Search in buyer/seller username/fullName
+        const buyer = dispute.order?.buyer;
+        const seller = dispute.order?.seller;
+        
+        if (buyer) {
+          if (buyer.username?.toLowerCase().includes(searchLower)) return true;
+          if (buyer.fullName?.toLowerCase().includes(searchLower)) return true;
+        }
+        
+        if (seller) {
+          if (seller.username?.toLowerCase().includes(searchLower)) return true;
+          if (seller.fullName?.toLowerCase().includes(searchLower)) return true;
+        }
+        
+        return false;
+      });
+      console.log(`Filtered to ${filteredDisputes.length} disputes after search: ${search}`);
+    }
+    
+    // Apply pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const startIndex = (pageNum - 1) * limitNum;
+    const endIndex = pageNum * limitNum;
+    const paginatedDisputes = filteredDisputes.slice(startIndex, endIndex);
+    
+    // Return with pagination info
+    return {
+      disputes: paginatedDisputes,
+      pagination: {
+        total: filteredDisputes.length,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(filteredDisputes.length / limitNum),
+      }
+    };
   }
 } 

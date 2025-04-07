@@ -1259,22 +1259,38 @@ class P2PService {
   }
 
   // Get user's dispute history
-  Future<List<Map<String, dynamic>>> getUserDisputes() async {
+  Future<List<Map<String, dynamic>>> getUserDisputes({
+    String? status,
+    String? searchQuery,
+    int page = 1,
+    int limit = 10,
+  }) async {
     try {
       print('Fetching user disputes history...');
       
-      // Add parameters to include relations and filter fields
+      // Build query parameters
+      final Map<String, dynamic> queryParams = {
+        'includeRelations': 'true',
+        'includeOrder': 'true',
+        'includeBuyer': 'true',
+        'includeSeller': 'true',
+        'includeToken': 'true',
+        'page': page.toString(),
+        'limit': limit.toString(),
+      };
+      
+      // Add optional parameters if provided
+      if (status != null && status.toLowerCase() != 'all') {
+        queryParams['status'] = status;
+      }
+      
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        queryParams['search'] = searchQuery;
+      }
+      
       final response = await _dio.get(
         '/p2p/disputes',
-        queryParameters: {
-          'includeRelations': 'true',
-          'includeOrder': 'true',
-          'includeBuyer': 'true',
-          'includeSeller': 'true',
-          'includeToken': 'true',
-          'page': '1',
-          'limit': '50'
-        },
+        queryParameters: queryParams,
       );
       
       print('Got dispute response with status: ${response.statusCode}');
@@ -1282,12 +1298,22 @@ class P2PService {
       if (response.statusCode == 200) {
         // Log the response structure for debugging
         print('Response data type: ${response.data.runtimeType}');
+        
+        // Handle both direct list and paginated response formats
         if (response.data is List) {
           print('Got ${response.data.length} disputes');
           return List<Map<String, dynamic>>.from(response.data);
-        } else if (response.data is Map && response.data['items'] != null) {
-          print('Got ${response.data['items'].length} disputes');
-          return List<Map<String, dynamic>>.from(response.data['items']);
+        } else if (response.data is Map) {
+          if (response.data['disputes'] != null) {
+            print('Got ${response.data['disputes'].length} disputes from paginated response');
+            return List<Map<String, dynamic>>.from(response.data['disputes']);
+          } else if (response.data['items'] != null) {
+            print('Got ${response.data['items'].length} disputes');
+            return List<Map<String, dynamic>>.from(response.data['items']);
+          } else {
+            print('Unexpected response format: ${response.data}');
+            return [];
+          }
         } else {
           print('Unexpected response format: ${response.data}');
           return [];

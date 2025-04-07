@@ -22,13 +22,47 @@ class _P2PDisputeHistoryScreenState extends State<P2PDisputeHistoryScreen> {
   bool _hasError = false;
   String _errorMessage = '';
   String? _currentUserId;
+  
+  // Pagination and search state
+  int _currentPage = 1;
+  int _totalPages = 1;
+  bool _hasMoreData = true;
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  String _selectedStatus = 'All';
+  
+  // Status filter options
+  final List<String> _statusFilters = ['All', 'Pending', 'In_Progress', 'Resolved_Buyer', 'Resolved_Seller', 'Closed'];
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     _init();
   }
   
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+  
+  void _handleScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8 &&
+        !_isLoading &&
+        _hasMoreData) {
+      _loadMoreDisputes();
+    }
+  }
+  
+  Future<void> _loadMoreDisputes() async {
+    if (_currentPage < _totalPages) {
+      setState(() => _currentPage++);
+      await _loadDisputes(refresh: false);
+    }
+  }
+
   Future<void> _init() async {
     try {
       // Get current user ID first to help with determining counterparty
@@ -41,18 +75,45 @@ class _P2PDisputeHistoryScreenState extends State<P2PDisputeHistoryScreen> {
     _loadDisputes();
   }
 
-  Future<void> _loadDisputes() async {
+  Future<void> _loadDisputes({bool refresh = true}) async {
+    if (refresh) {
+      setState(() {
+        if (_currentPage == 1) {
+          _disputes = [];
+        }
+        _hasMoreData = true;
+      });
+    }
+
     setState(() {
       _isLoading = true;
       _hasError = false;
     });
 
     try {
-      final disputes = await _p2pService.getUserDisputes();
+      print('Searching disputes with text: ${_searchController.text}');
+      print('Status filter: $_selectedStatus');
+      
+      final disputes = await _p2pService.getUserDisputes(
+        status: _selectedStatus == 'All' ? null : _selectedStatus,
+        searchQuery: _searchController.text.trim(),
+        page: _currentPage,
+      );
+      
+      // In a real implementation, the backend would return pagination info
+      // For now, we'll simulate it by assuming 10 items per page
       setState(() {
-        _disputes = disputes;
+        if (refresh && _currentPage == 1) {
+          _disputes = disputes;
+        } else {
+          _disputes.addAll(disputes);
+        }
+        
+        // Assume we don't have more data if we received fewer items than requested
+        _hasMoreData = disputes.length >= 10;
         _isLoading = false;
       });
+      
       print('Loaded ${disputes.length} disputes');
       
       // More detailed logging for debugging
@@ -152,124 +213,267 @@ class _P2PDisputeHistoryScreenState extends State<P2PDisputeHistoryScreen> {
         title: 'Dispute History',
         hasNotification: false,
       ),
-      body: _isLoading
-          ? const Center(child: LoadingIndicator())
-          : _hasError
-              ? _buildErrorView()
-              : _disputes.isEmpty
-                  ? _buildEmptyView(isDark)
-                  : RefreshIndicator(
-                      onRefresh: _loadDisputes,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _disputes.length,
-                        itemBuilder: (context, index) {
-                          final dispute = _disputes[index];
-                          final order = dispute['order'] ?? {};
-                          final buyer = order['buyer'] ?? {};
-                          final seller = order['seller'] ?? {};
-                          
-                          // Extract amount and crypto asset with extensive fallbacks
-                          dynamic amount = null;
-                          // Try multiple possible paths for amount
-                          if (order['assetAmount'] != null) amount = order['assetAmount'];
-                          else if (order['amount'] != null) amount = order['amount'];
-                          else if (dispute['assetAmount'] != null) amount = dispute['assetAmount'];
-                          else if (dispute['amount'] != null) amount = dispute['amount'];
-                          
-                          // Extract token symbol using the new helper method
-                          final cryptoAsset = _extractTokenSymbol(order, dispute);
-                          
-                          // Format the amount 
-                          final formattedAmount = _formatCryptoAmount(amount);
-                          
-                          // Now try to determine counterparty name more aggressively
-                          print('\nDetermining counterparty for dispute ${dispute['id']}');
-                          print('Current user ID: $_currentUserId');
-                          print('Buyer ID: ${buyer['id']}');
-                          print('Seller ID: ${seller['id']}');
-                          
-                          // Get counsterparty name with improved logic
-                          String counterpartyName = '';
-                          
-                          // Check if we're the buyer
-                          if (_currentUserId == buyer['id']) {
-                            print('User is buyer, counterparty is seller');
-                            // Get seller name with detailed fallbacks
-                            if (seller['username'] != null && seller['username'].toString().isNotEmpty) {
-                              counterpartyName = seller['username'].toString();
-                              print('Using seller username: $counterpartyName');
-                            } else if (seller['fullName'] != null && seller['fullName'].toString().isNotEmpty) {
-                              counterpartyName = seller['fullName'].toString();
-                              print('Using seller fullName: $counterpartyName');
-                            } else if (seller['name'] != null && seller['name'].toString().isNotEmpty) {
-                              counterpartyName = seller['name'].toString();
-                              print('Using seller name: $counterpartyName');
-                            } else {
-                              counterpartyName = 'Seller';
-                              print('No seller name found, using default: $counterpartyName');
-                            }
-                          } 
-                          // Check if we're the seller
-                          else if (_currentUserId == seller['id']) {
-                            print('User is seller, counterparty is buyer');
-                            // Get buyer name with detailed fallbacks
-                            if (buyer['username'] != null && buyer['username'].toString().isNotEmpty) {
-                              counterpartyName = buyer['username'].toString();
-                              print('Using buyer username: $counterpartyName');
-                            } else if (buyer['fullName'] != null && buyer['fullName'].toString().isNotEmpty) {
-                              counterpartyName = buyer['fullName'].toString();
-                              print('Using buyer fullName: $counterpartyName');
-                            } else if (buyer['name'] != null && buyer['name'].toString().isNotEmpty) {
-                              counterpartyName = buyer['name'].toString();
-                              print('Using buyer name: $counterpartyName');
-                            } else {
-                              counterpartyName = 'Buyer';
-                              print('No buyer name found, using default: $counterpartyName');
-                            }
-                          } 
-                          // If we can't determine our role
-                          else {
-                            print('Cannot determine user role, using seller data');
-                            // Default to seller info since that's more common
-                            if (seller['username'] != null && seller['username'].toString().isNotEmpty) {
-                              counterpartyName = seller['username'].toString();
-                              print('Using seller username as fallback: $counterpartyName');
-                            } else if (seller['fullName'] != null && seller['fullName'].toString().isNotEmpty) {
-                              counterpartyName = seller['fullName'].toString();
-                              print('Using seller fullName as fallback: $counterpartyName');
-                            } else {
-                              counterpartyName = 'Unknown';
-                              print('No counterparty name found, using default: $counterpartyName');
-                            }
-                          }
+      body: Column(
+        children: [
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _searchController,
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Search by Order ID or Counterparty',
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+                filled: true,
+                fillColor: isDark 
+                    ? Colors.white.withOpacity(0.05) 
+                    : Colors.grey[100],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _currentPage = 1;
+                });
+                _loadDisputes(refresh: true);
+              },
+            ),
+          ),
 
-                          // Process dates and order ID
-                          final createdAt = dispute['createdAt'] ?? order['createdAt'] ?? '';
-                          final formattedDate = _formatDateWithAmPm(createdAt);
-                          
-                          final orderId = order['trackingId'] ?? dispute['id'] ?? 'Unknown';
-                          
-                          // Get the dispute status
-                          final status = dispute['status'] ?? 'Pending';
-                          final formattedStatus = _formatStatus(status);
-                          
-                          print('Final asset symbol: $cryptoAsset');
-                          print('Final counterparty name: $counterpartyName');
+          // Status Filters
+          _buildStatusFilters(isDark),
 
-                          return _buildDisputeCard(
-                            context,
-                            isDark,
-                            orderId: orderId,
-                            status: formattedStatus,
-                            date: formattedDate,
-                            amount: "$formattedAmount $cryptoAsset",
-                            counterparty: counterpartyName,
-                          );
-                        },
-                      ),
-                    ),
+          // Disputes List or loading/error states
+          Expanded(
+            child: _isLoading && _disputes.isEmpty
+                ? const Center(child: LoadingIndicator())
+                : _hasError
+                    ? _buildErrorView()
+                    : _disputes.isEmpty
+                        ? _buildEmptyView(isDark)
+                        : RefreshIndicator(
+                            onRefresh: () {
+                              setState(() {
+                                _currentPage = 1;
+                              });
+                              return _loadDisputes(refresh: true);
+                            },
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _disputes.length + (_hasMoreData ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index == _disputes.length) {
+                                  return _isLoading
+                                      ? Center(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(16),
+                                            child: CircularProgressIndicator(
+                                              color: SafeJetColors.secondaryHighlight,
+                                            ),
+                                          ),
+                                        )
+                                      : const SizedBox();
+                                }
+                                
+                                final dispute = _disputes[index];
+                                final order = dispute['order'] ?? {};
+                                final buyer = order['buyer'] ?? {};
+                                final seller = order['seller'] ?? {};
+                                
+                                // Extract amount and crypto asset with extensive fallbacks
+                                dynamic amount = null;
+                                // Try multiple possible paths for amount
+                                if (order['assetAmount'] != null) amount = order['assetAmount'];
+                                else if (order['amount'] != null) amount = order['amount'];
+                                else if (dispute['assetAmount'] != null) amount = dispute['assetAmount'];
+                                else if (dispute['amount'] != null) amount = dispute['amount'];
+                                
+                                // Extract token symbol using the helper method
+                                final cryptoAsset = _extractTokenSymbol(order, dispute);
+                                
+                                // Format the amount 
+                                final formattedAmount = _formatCryptoAmount(amount);
+                                
+                                // Now try to determine counterparty name
+                                print('\nDetermining counterparty for dispute ${dispute['id']}');
+                                print('Current user ID: $_currentUserId');
+                                print('Buyer ID: ${buyer['id']}');
+                                print('Seller ID: ${seller['id']}');
+                                
+                                // Get counsterparty name with improved logic
+                                String counterpartyName = '';
+                                
+                                // Check if we're the buyer
+                                if (_currentUserId == buyer['id']) {
+                                  print('User is buyer, counterparty is seller');
+                                  // Get seller name with detailed fallbacks
+                                  if (seller['username'] != null && seller['username'].toString().isNotEmpty) {
+                                    counterpartyName = seller['username'].toString();
+                                    print('Using seller username: $counterpartyName');
+                                  } else if (seller['fullName'] != null && seller['fullName'].toString().isNotEmpty) {
+                                    counterpartyName = seller['fullName'].toString();
+                                    print('Using seller fullName: $counterpartyName');
+                                  } else if (seller['name'] != null && seller['name'].toString().isNotEmpty) {
+                                    counterpartyName = seller['name'].toString();
+                                    print('Using seller name: $counterpartyName');
+                                  } else {
+                                    counterpartyName = 'Seller';
+                                    print('No seller name found, using default: $counterpartyName');
+                                  }
+                                } 
+                                // Check if we're the seller
+                                else if (_currentUserId == seller['id']) {
+                                  print('User is seller, counterparty is buyer');
+                                  // Get buyer name with detailed fallbacks
+                                  if (buyer['username'] != null && buyer['username'].toString().isNotEmpty) {
+                                    counterpartyName = buyer['username'].toString();
+                                    print('Using buyer username: $counterpartyName');
+                                  } else if (buyer['fullName'] != null && buyer['fullName'].toString().isNotEmpty) {
+                                    counterpartyName = buyer['fullName'].toString();
+                                    print('Using buyer fullName: $counterpartyName');
+                                  } else if (buyer['name'] != null && buyer['name'].toString().isNotEmpty) {
+                                    counterpartyName = buyer['name'].toString();
+                                    print('Using buyer name: $counterpartyName');
+                                  } else {
+                                    counterpartyName = 'Buyer';
+                                    print('No buyer name found, using default: $counterpartyName');
+                                  }
+                                } 
+                                // If we can't determine our role
+                                else {
+                                  print('Cannot determine user role, using seller data');
+                                  // Default to seller info since that's more common
+                                  if (seller['username'] != null && seller['username'].toString().isNotEmpty) {
+                                    counterpartyName = seller['username'].toString();
+                                    print('Using seller username as fallback: $counterpartyName');
+                                  } else if (seller['fullName'] != null && seller['fullName'].toString().isNotEmpty) {
+                                    counterpartyName = seller['fullName'].toString();
+                                    print('Using seller fullName as fallback: $counterpartyName');
+                                  } else {
+                                    counterpartyName = 'Unknown';
+                                    print('No counterparty name found, using default: $counterpartyName');
+                                  }
+                                }
+
+                                // Process dates and order ID
+                                final createdAt = dispute['createdAt'] ?? order['createdAt'] ?? '';
+                                final formattedDate = _formatDateWithAmPm(createdAt);
+                                
+                                final orderId = order['trackingId'] ?? dispute['id'] ?? 'Unknown';
+                                
+                                // Get the dispute status
+                                final status = dispute['status'] ?? 'Pending';
+                                final formattedStatus = _formatStatus(status);
+                                
+                                print('Final asset symbol: $cryptoAsset');
+                                print('Final counterparty name: $counterpartyName');
+
+                                return _buildDisputeCard(
+                                  context,
+                                  isDark,
+                                  orderId: orderId,
+                                  status: formattedStatus,
+                                  date: formattedDate,
+                                  amount: "$formattedAmount $cryptoAsset",
+                                  counterparty: counterpartyName,
+                                );
+                              },
+                            ),
+                          ),
+          ),
+        ],
+      ),
     );
+  }
+  
+  // Status filter widget
+  Widget _buildStatusFilters(bool isDark) {
+    return Container(
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _statusFilters.length,
+        itemBuilder: (context, index) {
+          final status = _statusFilters[index];
+          final isSelected = status == _selectedStatus;
+          
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedStatus = status;
+                    _currentPage = 1;  // Reset to first page
+                    _disputes = [];    // Clear current disputes
+                  });
+                  _loadDisputes(refresh: true);  // Reload with new status
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? SafeJetColors.secondaryHighlight 
+                        : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100]),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _formatFilterLabel(status),
+                    style: TextStyle(
+                      color: isSelected 
+                          ? Colors.black 
+                          : (isDark ? Colors.white : Colors.black),
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+  
+  // Helper to format filter labels for display
+  String _formatFilterLabel(String status) {
+    // Convert from filter value to user-friendly display
+    switch (status.toUpperCase()) {
+      case 'ALL':
+        return 'All';
+      case 'PENDING':
+        return 'Pending';
+      case 'IN_PROGRESS':
+        return 'In Progress';
+      case 'RESOLVED_BUYER':
+        return 'Resolved (Buyer)';
+      case 'RESOLVED_SELLER':
+        return 'Resolved (Seller)';
+      case 'CLOSED':
+        return 'Closed';
+      default:
+        return status.replaceAll('_', ' ');
+    }
   }
   
   // Helper method to format crypto amounts with 8 decimal places max, no trailing zeros
