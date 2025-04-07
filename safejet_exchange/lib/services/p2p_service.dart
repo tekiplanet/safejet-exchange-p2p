@@ -1036,6 +1036,19 @@ class P2PService {
       }
     });
 
+    // Add listener for dispute status updates
+    _disputeChatSocket?.on('disputeStatusUpdate', (data) {
+      print('=== DISPUTE STATUS UPDATE RECEIVED ===');
+      print('Data: $data');
+      if (!_disputeChatUpdateController.isClosed) {
+        // Make sure the data includes the type for our stream listeners
+        if (data is Map && !data.containsKey('type')) {
+          data['type'] = 'disputeStatusUpdate';
+        }
+        _disputeChatUpdateController.add(data);
+      }
+    });
+
     _disputeChatSocket?.onError((error) {
       print('=== DISPUTE SOCKET ERROR ===');
       print(error);
@@ -1229,6 +1242,18 @@ class P2PService {
         onRead(data['messageId']);
       } else {
         print('✗ Read status mismatch');
+      }
+    });
+  }
+
+  // Add new method to listen for dispute status updates
+  StreamSubscription listenToDisputeStatusUpdates(String disputeId, Function(Map<String, dynamic>) onStatusUpdate) {
+    print('Setting up dispute status update listener for dispute: $disputeId');
+    return _disputeChatUpdateController.stream.listen((data) {
+      if (data['type'] == 'disputeStatusUpdate' && 
+          data['disputeId'] == disputeId) {
+        print('Received dispute status update: ${data['status']}');
+        onStatusUpdate(data);
       }
     });
   }

@@ -238,8 +238,32 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
           }
         });
       }),
+      // Add listener for dispute status updates
+      _p2pService.listenToDisputeStatusUpdates(widget.disputeId, (statusData) {
+        print('=== DISPUTE STATUS UPDATE RECEIVED ===');
+        print('New status: ${statusData['status']}');
+        
+        // Refresh dispute details to get the latest status
+        _refreshDisputeDetails();
+      }),
     ]);
     print('Dispute message listeners set up');
+  }
+
+  Future<void> _refreshDisputeDetails() async {
+    print('Refreshing dispute details after status update');
+    try {
+      final details = await _p2pService.getDisputeByOrderId(widget.orderId);
+      
+      if (mounted) {
+        setState(() {
+          _disputeDetails = details;
+          print('Dispute details refreshed with status: ${details['status']}');
+        });
+      }
+    } catch (e) {
+      print('Error refreshing dispute details: $e');
+    }
   }
 
   void _scrollToBottom() {
@@ -257,6 +281,12 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
+
+    // Check if the dispute is closed or resolved
+    final String disputeStatus = _disputeDetails?['status']?.toString().toLowerCase() ?? '';
+    final bool isDisputeClosedOrResolved = disputeStatus == 'closed' || 
+                                          disputeStatus == 'resolved_buyer' || 
+                                          disputeStatus == 'resolved_seller';
 
     return Scaffold(
       appBar: P2PAppBar(
@@ -294,7 +324,9 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
                       },
                     ),
             ),
-            _buildMessageInput(isDark),
+            // Only show message input if dispute is not closed or resolved
+            if (!isDisputeClosedOrResolved)
+              _buildMessageInput(isDark),
           ],
         ),
     );
