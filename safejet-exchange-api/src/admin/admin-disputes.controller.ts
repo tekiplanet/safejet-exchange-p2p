@@ -791,7 +791,7 @@ export class AdminDisputesController {
   @Post('disputes/:id/progress')
   async addDisputeProgress(
     @Param('id') id: string,
-    @Body() dto: { title: string; details: string },
+    @Body() dto: { title: string; details: string; addedBy?: string },
     @GetUser() admin: User
   ) {
     try {
@@ -807,9 +807,11 @@ export class AdminDisputesController {
         title: dto.title,
         details: dto.details,
         timestamp: new Date().toISOString(),
-        addedBy: 'Admin'
+        addedBy: dto.addedBy || 'Admin'  // Use provided addedBy or default to Admin
       };
 
+      this.logger.log(`Adding progress entry: ${JSON.stringify(historyEntry)}`);
+      
       dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
       await this.disputeRepository.save(dispute);
 

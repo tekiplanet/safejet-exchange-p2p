@@ -17,6 +17,11 @@ import {
   CircularProgress,
   TextField,
   IconButton,
+  Modal,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Send as SendIcon } from '@mui/icons-material';
 import { io, Socket } from 'socket.io-client';
@@ -179,6 +184,11 @@ export default function DisputeDetails() {
   const socketRef = useRef<Socket | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [triedAltConnection, setTriedAltConnection] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyTitle, setHistoryTitle] = useState('');
+  const [historyDetails, setHistoryDetails] = useState('');
+  const [historyAddedBy, setHistoryAddedBy] = useState('Admin');
+  const [addingHistory, setAddingHistory] = useState(false);
 
   const API_BASE = '/api';
 
@@ -1133,6 +1143,60 @@ export default function DisputeDetails() {
     };
   }, [router.query.id]);
 
+  // Add function to handle adding history
+  const handleAddHistory = async () => {
+    if (!dispute) return;
+    if (!historyTitle.trim() || !historyDetails.trim()) {
+      setStatus('Please fill in both title and details');
+      return;
+    }
+
+    setAddingHistory(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/admin/disputes/${dispute.id}/progress`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify({
+          title: historyTitle.trim(),
+          details: historyDetails.trim(),
+          addedBy: historyAddedBy
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to add history: ${response.statusText}`);
+      }
+
+      // Close modal and reset form
+      setHistoryModalOpen(false);
+      setHistoryTitle('');
+      setHistoryDetails('');
+      setHistoryAddedBy('Admin');
+      
+      // Refresh dispute data
+      await fetchDispute();
+      setStatus('History entry added successfully');
+    } catch (error) {
+      console.error('Error adding history:', error);
+      setStatus(error instanceof Error ? error.message : 'Failed to add history');
+    } finally {
+      setAddingHistory(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
@@ -1584,6 +1648,18 @@ export default function DisputeDetails() {
 
         <TabPanel value={tabValue} index={1}>
           <Box>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="h6">Dispute History</Typography>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={() => setHistoryModalOpen(true)}
+                disabled={dispute?.status === 'closed'}
+              >
+                Add History Entry
+              </Button>
+            </Box>
+            
             {!dispute.progressHistory?.length ? (
               <Typography variant="body1" color="text.secondary" textAlign="center">
                 No history entries yet
@@ -1846,6 +1922,75 @@ export default function DisputeDetails() {
           </Grid>
         </TabPanel>
       </Paper>
+
+      {/* Add History Modal */}
+      <Dialog 
+        open={historyModalOpen} 
+        onClose={() => setHistoryModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Add History Entry</DialogTitle>
+        <DialogContent>
+          <Box mt={2}>
+            <TextField
+              label="Title"
+              fullWidth
+              value={historyTitle}
+              onChange={(e) => setHistoryTitle(e.target.value)}
+              margin="normal"
+              variant="outlined"
+              placeholder="e.g., Evidence Reviewed, Decision Made"
+            />
+            
+            <TextField
+              label="Details"
+              fullWidth
+              value={historyDetails}
+              onChange={(e) => setHistoryDetails(e.target.value)}
+              margin="normal"
+              variant="outlined"
+              multiline
+              rows={4}
+              placeholder="Enter details about this history entry..."
+            />
+            
+            <FormControl fullWidth margin="normal" variant="outlined">
+              <InputLabel>Added By</InputLabel>
+              <Select
+                value={historyAddedBy}
+                onChange={(e) => setHistoryAddedBy(e.target.value as string)}
+                label="Added By"
+              >
+                <MenuItem value="Admin">Admin</MenuItem>
+                {dispute?.initiator && (
+                  <MenuItem value={dispute.initiator.fullName || 'Initiator'}>
+                    {dispute.initiator.fullName || 'Initiator'} (Buyer)
+                  </MenuItem>
+                )}
+                {dispute?.respondent && (
+                  <MenuItem value={dispute.respondent.fullName || 'Respondent'}>
+                    {dispute.respondent.fullName || 'Respondent'} (Seller)
+                  </MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setHistoryModalOpen(false)} color="inherit">
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleAddHistory} 
+            color="primary" 
+            variant="contained"
+            disabled={addingHistory || !historyTitle.trim() || !historyDetails.trim()}
+          >
+            {addingHistory ? <CircularProgress size={24} /> : 'Add Entry'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 } 
