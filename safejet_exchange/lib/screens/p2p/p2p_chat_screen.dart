@@ -42,12 +42,14 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
   final _numberFormat = NumberFormat("#,##0.00", "en_US");
   List<StreamSubscription> _subscriptions = [];
   File? _selectedImage;
+  bool _isChatDisabled = false;
 
   @override
   void initState() {
     super.initState();
     _initializeChat();
     _setupMessageStatusListeners();
+    _loadOrderDetails();
   }
 
   Future<void> _initializeChat() async {
@@ -131,12 +133,27 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
 
   Future<void> _loadOrderDetails() async {
     try {
-      // print('Attempting to load order details for trackingId: ${widget.trackingId}');
+      print('Attempting to load order details for trackingId: ${widget.trackingId}');
       // Get order details from the API
       final orderDetails = await _p2pService.getOrderDetails(widget.trackingId);
       if (orderDetails != null) {
         setState(() {
           _orderDetails = orderDetails;
+          
+          // Check if the chat should be disabled based on order status
+          final buyerStatus = orderDetails['buyerStatus']?.toString().toLowerCase() ?? '';
+          final sellerStatus = orderDetails['sellerStatus']?.toString().toLowerCase() ?? '';
+          
+          // Disable chat if order is completed or cancelled
+          _isChatDisabled = 
+            buyerStatus == 'completed' || 
+            sellerStatus == 'completed' ||
+            buyerStatus == 'cancelled' || 
+            sellerStatus == 'cancelled';
+            
+          print('Chat disabled status: $_isChatDisabled');
+          print('Order buyer status: $buyerStatus');
+          print('Order seller status: $sellerStatus');
         });
       } else {
         print('Failed to load order details');
@@ -229,7 +246,33 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
               },
             ),
           ),
-          _buildMessageInput(isDark),
+          if (!_isChatDisabled) _buildMessageInput(isDark),
+          if (_isChatDisabled)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? SafeJetColors.primaryBackground
+                    : SafeJetColors.lightBackground,
+                border: Border(
+                  top: BorderSide(
+                    color: isDark
+                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  "This order has been completed or cancelled. You can no longer send messages.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
