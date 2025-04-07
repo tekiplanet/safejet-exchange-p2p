@@ -4,6 +4,7 @@ import 'package:animate_do/animate_do.dart';
 import '../../../services/token_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:auto_size_text/auto_size_text.dart';
+import '../home_screen.dart';  // Import home screen
 
 class MarketsTab extends StatefulWidget {
   const MarketsTab({super.key});
@@ -209,13 +210,14 @@ class _MarketsTabState extends State<MarketsTab> {
                       textAlign: TextAlign.right,
                     ),
                   ),
-                  Expanded(
+                  Container(
+                    width: 70,
                     child: Text(
                       '24h Change',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                       ),
-                      textAlign: TextAlign.right,
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ],
@@ -306,16 +308,15 @@ class _MarketsTabState extends State<MarketsTab> {
                 ),
                 
                 // Change
-                Expanded(
-                  child: Container(
-                    width: 60,
-                    height: 25,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[500],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    alignment: Alignment.center,
+                Container(
+                  width: 70,
+                  height: 25,
+                  margin: const EdgeInsets.only(left: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[500],
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  alignment: Alignment.center,
                 ),
               ],
             ),
@@ -412,7 +413,12 @@ class _MarketsTabState extends State<MarketsTab> {
           delay: Duration(milliseconds: 400 + (index * 50)),
           child: InkWell(
             onTap: () {
-              // TODO: Navigate to trading pair when ready
+              // Navigate to trade tab by replacing current screen with HomeScreen with initialIndex set to 1
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => const HomeScreen(initialIndex: 1),
+                )
+              );
             },
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -518,30 +524,30 @@ class _MarketsTabState extends State<MarketsTab> {
                   ),
                   
                   // 24h Change
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                  Container(
+                    width: 70, // Fixed width instead of Expanded
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    margin: const EdgeInsets.only(left: 4),
+                    decoration: BoxDecoration(
+                      color: (_filteredTokens[index].changePercent24h >= 0 
+                            ? SafeJetColors.success 
+                            : SafeJetColors.error)
+                          .withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _formatPercentage(_filteredTokens[index].changePercent24h),
+                      style: TextStyle(
+                        color: _filteredTokens[index].changePercent24h >= 0 
+                            ? SafeJetColors.success 
+                            : SafeJetColors.error,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
                       ),
-                      decoration: BoxDecoration(
-                        color: (_filteredTokens[index].changePercent24h >= 0 
-                              ? SafeJetColors.success 
-                              : SafeJetColors.error)
-                            .withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _formatPercentage(_filteredTokens[index].changePercent24h),
-                        style: TextStyle(
-                          color: _filteredTokens[index].changePercent24h >= 0 
-                              ? SafeJetColors.success 
-                              : SafeJetColors.error,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.right,
-                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
                 ],

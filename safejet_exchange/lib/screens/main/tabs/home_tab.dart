@@ -18,7 +18,6 @@ class _HomeTabState extends State<HomeTab> {
   final List<String> _categories = ['All', 'Favorites', 'Gainers', 'Losers', 'Volume'];
   int _selectedCategoryIndex = 0;
   bool _isRefreshing = false;
-  final _searchController = TextEditingController();
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
 
   @override
@@ -40,14 +39,6 @@ class _HomeTabState extends State<HomeTab> {
         },
         child: CustomScrollView(
           slivers: [
-            // Search Bar (moved to top)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: _buildSearchBar(),
-              ),
-            ),
-            
             // Portfolio Summary Card
             SliverToBoxAdapter(
               child: PortfolioSummaryCard(),
@@ -579,95 +570,5 @@ class _HomeTabState extends State<HomeTab> {
 
   List<double> _generateDummyData() {
     return List.generate(20, (i) => 0.5 + 0.5 * sin(i * 0.5));
-  }
-
-  Widget _buildSearchBar() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: isDark 
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-              : SafeJetColors.lightCardBorder,
-        ),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 16),
-          Icon(
-            Icons.search_rounded,
-            color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-            size: 24,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              style: theme.textTheme.bodyLarge,
-              decoration: InputDecoration(
-                hintText: 'Search coins...',
-                hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                  color: isDark ? Colors.grey[600] : SafeJetColors.lightTextSecondary,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                isDense: true,
-              ),
-              onChanged: (value) {
-                // TODO: Implement search functionality
-              },
-            ),
-          ),
-          if (_searchController.text.isNotEmpty)
-            IconButton(
-              icon: Icon(
-                Icons.close_rounded,
-                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                size: 20,
-              ),
-              onPressed: () {
-                setState(() {
-                  _searchController.clear();
-                });
-              },
-            ),
-          const SizedBox(width: 8),
-          Container(
-            height: 56,
-            width: 56,
-            decoration: BoxDecoration(
-              color: isDark 
-                  ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                  : SafeJetColors.lightCardBackground.withOpacity(0.8),
-              borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
-              border: Border(
-                left: BorderSide(
-                  color: isDark
-                      ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                      : SafeJetColors.lightCardBorder,
-                ),
-              ),
-            ),
-            child: IconButton(
-              icon: Icon(
-                Icons.tune_rounded,
-                color: isDark ? Colors.white : SafeJetColors.lightText,
-                size: 24,
-              ),
-              onPressed: () {
-                // TODO: Show filter options
-              },
-            ),
-          ),
-        ],
-      ),
-    );
   }
 } 
