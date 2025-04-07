@@ -362,8 +362,16 @@ export default function DisputeDetails() {
         status: data.status,
         rawStatus: typeof data.status === 'string' ? data.status : 'not a string'
       });
+      
+      // Ensure dispute data is properly set before setting state
+      console.log('Setting dispute data with status:', data.status);
       setDispute(data);
       setNewStatus(data.status);
+      console.log('After setting dispute state:', {
+        disputeStatus: data.status,
+        newStatusState: data.status
+      });
+      
       setError(null);
     } catch (error) {
       console.error('Error fetching dispute:', error);
@@ -413,7 +421,22 @@ export default function DisputeDetails() {
       }
 
       console.log('Status updated successfully, fetching updated dispute');
+      
+      // Force refetch the dispute details
       await fetchDispute();
+      
+      // Force update local state to match new status
+      setDispute(prevDispute => {
+        if (prevDispute) {
+          console.log('Forcing dispute status update in UI from', prevDispute.status, 'to', newStatus);
+          return {
+            ...prevDispute,
+            status: newStatus
+          };
+        }
+        return prevDispute;
+      });
+      
       setStatus('Status updated successfully');
     } catch (error) {
       console.error('Error updating status:', error);
@@ -484,6 +507,14 @@ export default function DisputeDetails() {
     return new Date(date).toLocaleString();
   };
 
+  const formatStatus = (status: string) => {
+    return status
+      .toLowerCase()
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   const formatCryptoAmount = (amount: number) => {
     // Format with up to 8 decimal places, no trailing zeros
     return new Intl.NumberFormat('en-US', {
@@ -517,7 +548,7 @@ export default function DisputeDetails() {
     }
   };
 
-  const formatStatus = (status: string) => {
+  const formatOrderStatus = (status: string) => {
     return status
       .toLowerCase()
       .split('_')
@@ -772,16 +803,19 @@ export default function DisputeDetails() {
                 Status
               </Typography>
               <Box display="flex" alignItems="center" gap={2}>
+                <Typography variant="body1" sx={{ minWidth: 120 }}>
+                  {formatStatus(dispute.status)}
+                </Typography>
                 <FormControl size="small" sx={{ minWidth: 150 }}>
                   <Select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value)}
                   >
-                    <MenuItem value="PENDING">Pending</MenuItem>
-                    <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
-                    <MenuItem value="RESOLVED_BUYER">Resolved (Buyer)</MenuItem>
-                    <MenuItem value="RESOLVED_SELLER">Resolved (Seller)</MenuItem>
-                    <MenuItem value="CLOSED">Closed</MenuItem>
+                    <MenuItem value="pending">Pending</MenuItem>
+                    <MenuItem value="in_progress">In Progress</MenuItem>
+                    <MenuItem value="resolved_buyer">Resolved (Buyer)</MenuItem>
+                    <MenuItem value="resolved_seller">Resolved (Seller)</MenuItem>
+                    <MenuItem value="closed">Closed</MenuItem>
                   </Select>
                 </FormControl>
                 <Button
@@ -1018,8 +1052,8 @@ export default function DisputeDetails() {
                   onClick={() => {
                     console.log('Join Dispute button clicked');
                     console.log('Current status:', dispute.status);
-                    setNewStatus('IN_PROGRESS');
-                    console.log('New status set to:', 'IN_PROGRESS');
+                    setNewStatus('in_progress');
+                    console.log('New status set to:', 'in_progress');
                     handleUpdateStatus();
                   }}
                 >
@@ -1173,7 +1207,7 @@ export default function DisputeDetails() {
                 Order Status
               </Typography>
               <Typography variant="body1">
-                {formatStatus(dispute.order.status)}
+                {formatOrderStatus(dispute.order.status)}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -1181,7 +1215,7 @@ export default function DisputeDetails() {
                 Buyer Status
               </Typography>
               <Typography variant="body1">
-                {formatStatus(dispute.order.buyerStatus)}
+                {formatOrderStatus(dispute.order.buyerStatus)}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -1189,7 +1223,7 @@ export default function DisputeDetails() {
                 Seller Status
               </Typography>
               <Typography variant="body1">
-                {formatStatus(dispute.order.sellerStatus)}
+                {formatOrderStatus(dispute.order.sellerStatus)}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>

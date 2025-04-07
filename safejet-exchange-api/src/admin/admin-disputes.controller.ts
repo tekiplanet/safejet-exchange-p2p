@@ -322,18 +322,54 @@ export class AdminDisputesController {
         throw new HttpException('Dispute not found', HttpStatus.NOT_FOUND);
       }
 
-      dispute.status = dto.status;
-      if (dto.status === DisputeStatus.RESOLVED_BUYER || dto.status === DisputeStatus.RESOLVED_SELLER || dto.status === DisputeStatus.CLOSED) {
+      // Get old status to check for status change
+      const oldStatus = dispute.status?.toLowerCase();
+      
+      // Format the status for display
+      const formatStatus = (status: string): string => {
+        return status
+          .toLowerCase()
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      };
+      
+      // Convert status to lowercase for database
+      const newStatus = dto.status.toLowerCase();
+      
+      // Update the status (store as lowercase)
+      dispute.status = newStatus as DisputeStatus;
+      
+      // If resolution statuses, set resolvedAt
+      if (newStatus.includes('resolved') || newStatus === 'closed') {
         dispute.resolvedAt = new Date();
       }
 
-      const historyEntry: DisputeProgressItem = {
-        title: 'Status Updated',
-        details: `Status changed to ${dto.status}`,
-        timestamp: new Date().toISOString(),
-        addedBy: admin.email
-      };
+      // Create an appropriate history entry based on the status change
+      let historyEntry: DisputeProgressItem;
+      
+      if (oldStatus === 'pending' && newStatus === 'in_progress') {
+        // Admin is joining the dispute
+        historyEntry = {
+          title: 'Admin Joined',
+          details: 'Admin joined the dispute',
+          timestamp: new Date().toISOString(),
+          addedBy: 'Admin'
+        };
+      } else {
+        // Get formatted status for the message
+        const formattedStatus = formatStatus(newStatus);
+        
+        // Generic status update
+        historyEntry = {
+          title: 'Status Updated',
+          details: `Status changed to ${formattedStatus}`,
+          timestamp: new Date().toISOString(),
+          addedBy: 'Admin'
+        };
+      }
 
+      // Add the history entry
       dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
       await this.disputeRepository.save(dispute);
 
@@ -373,7 +409,7 @@ export class AdminDisputesController {
         title: 'Message Sent',
         details: dto.message,
         timestamp: new Date().toISOString(),
-        addedBy: admin.email
+        addedBy: 'Admin'
       };
 
       dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
@@ -431,6 +467,41 @@ export class AdminDisputesController {
       this.logger.error(`Error serving chat image ${filename}:`, error);
       throw new HttpException(
         'Failed to serve image',
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('disputes/:id/progress')
+  async addDisputeProgress(
+    @Param('id') id: string,
+    @Body() dto: { title: string; details: string },
+    @GetUser() admin: User
+  ) {
+    try {
+      const dispute = await this.disputeRepository.findOne({
+        where: { id }
+      });
+
+      if (!dispute) {
+        throw new HttpException('Dispute not found', HttpStatus.NOT_FOUND);
+      }
+
+      const historyEntry: DisputeProgressItem = {
+        title: dto.title,
+        details: dto.details,
+        timestamp: new Date().toISOString(),
+        addedBy: 'Admin'
+      };
+
+      dispute.progressHistory = [...(dispute.progressHistory || []), historyEntry];
+      await this.disputeRepository.save(dispute);
+
+      return { message: 'Progress entry added successfully' };
+    } catch (error) {
+      this.logger.error(`Error adding progress entry to dispute ${id}:`, error);
+      throw new HttpException(
+        error.message || 'Failed to add progress entry',
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
