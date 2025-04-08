@@ -264,4 +264,23 @@ class HomeService {
       throw Exception('Failed to load news details: $e');
     }
   }
+
+  Future<Map<String, dynamic>> getMarketTokens({int limit = 10}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/home/market-tokens?limit=$limit'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load market tokens');
+      }
+    } catch (e) {
+      throw Exception('Failed to load market tokens: $e');
+    }
+  }
 } 

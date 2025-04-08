@@ -7,6 +7,7 @@ import { ExchangeService } from '../exchange/exchange.service';
 import { MarketOverviewResponse } from './dto/market-overview.dto';
 import { TrendingTokensResponse } from './dto/trending-tokens.dto';
 import { NewsResponse } from './dto/news.dto';
+import { MarketListResponse } from './dto/market-list.dto';
 import { News } from '../news/entities/news.entity';
 
 @Injectable()
@@ -460,6 +461,70 @@ export class HomeService {
     } catch (error) {
       this.logger.error('Error getting recent news:', error);
       throw new BadRequestException(`Failed to get recent news: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get market tokens with unified networks
+   * @param limit - Number of tokens to return (default: 10)
+   */
+  async getMarketTokens(): Promise<any> {
+    try {
+      this.logger.log('Fetching market tokens...');
+      const tokens = await this.tokenRepository.find({
+        where: { isActive: true },
+        order: { volume24h: 'DESC' },
+      });
+
+      this.logger.log(`Found ${tokens.length} tokens`);
+      if (tokens.length > 0) {
+        this.logger.log('Sample token data:', {
+          id: tokens[0].id,
+          symbol: tokens[0].symbol,
+          baseSymbol: tokens[0].baseSymbol,
+          name: tokens[0].name,
+          currentPrice: tokens[0].currentPrice,
+          price24h: tokens[0].price24h,
+          volume24h: tokens[0].volume24h,
+        });
+      }
+
+      // Group tokens by baseSymbol and use the highest volume variant
+      const tokenGroups = new Map();
+      
+      tokens.forEach(token => {
+        const baseSymbol = token.baseSymbol || token.symbol;
+        const currentPrice = parseFloat(token.currentPrice?.toString() || '0');
+        const price24h = parseFloat(token.price24h?.toString() || '0');
+        const priceChange = price24h > 0 
+          ? ((currentPrice - price24h) / price24h) * 100 
+          : 0;
+
+        if (!tokenGroups.has(baseSymbol) || 
+            (token.volume24h || 0) > (tokenGroups.get(baseSymbol).volume24h || 0)) {
+          tokenGroups.set(baseSymbol, {
+            id: token.id,
+            symbol: token.symbol,
+            baseSymbol: baseSymbol,
+            name: token.name.replace(/ \([^)]+\)$/, ''),
+            currentPrice: currentPrice.toString(),
+            priceChange24h: priceChange,
+            volume24h: token.volume24h?.toString() || '0',
+            metadata: token.metadata,
+          });
+        }
+      });
+
+      const marketTokens = Array.from(tokenGroups.values());
+      this.logger.log(`Processed ${marketTokens.length} market tokens`);
+      if (marketTokens.length > 0) {
+        this.logger.log('Sample processed token:', marketTokens[0]);
+      }
+
+      return { tokens: marketTokens };
+    } catch (error) {
+      this.logger.error('Error fetching market tokens:', error);
+      throw new BadRequestException('Failed to fetch market tokens');
     }
   }
 } 

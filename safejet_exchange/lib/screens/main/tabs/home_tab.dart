@@ -18,6 +18,7 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
+  final TextEditingController _searchController = TextEditingController();
   final List<String> _categories = ['All', 'Favorites', 'Gainers', 'Losers', 'Volume'];
   int _selectedCategoryIndex = 0;
   bool _isRefreshing = false;
@@ -27,12 +28,23 @@ class _HomeTabState extends State<HomeTab> {
   Map<String, dynamic>? _marketData;
   List<double> _chartPoints = [];
   List<Map<String, dynamic>> _trendingTokens = [];
+  List<Map<String, dynamic>> _marketTokens = [];
+  List<Map<String, dynamic>> _filteredMarketTokens = [];
+  bool _isLoadingMarketTokens = false;
+  String? _marketTokensError;
 
   @override
   void initState() {
     super.initState();
     _loadMarketData();
     _loadTrendingTokens();
+    _loadMarketTokens();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadMarketData() async {
@@ -65,13 +77,63 @@ class _HomeTabState extends State<HomeTab> {
     }
   }
 
-  String _formatPrice(String value) {
-    final number = double.tryParse(value) ?? 0;
-    // Format with commas
-    return '\$${number.toStringAsFixed(2).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]},'
-    )}';
+  Future<void> _loadMarketTokens() async {
+    try {
+      setState(() {
+        _isLoadingMarketTokens = true;
+        _marketTokensError = null;
+      });
+
+      final response = await _homeService.getMarketTokens();
+      if (mounted) {
+        final tokens = List<Map<String, dynamic>>.from(response['tokens'] ?? []);
+        // Sort tokens alphabetically by baseSymbol
+        tokens.sort((a, b) => (a['baseSymbol'] as String).compareTo(b['baseSymbol'] as String));
+        
+        setState(() {
+          _marketTokens = tokens;
+          _filteredMarketTokens = tokens;
+          _isLoadingMarketTokens = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _marketTokensError = e.toString();
+          _isLoadingMarketTokens = false;
+        });
+      }
+    }
+  }
+
+  void _filterMarketTokens(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredMarketTokens = _marketTokens;
+      } else {
+        _filteredMarketTokens = _marketTokens.where((token) {
+          final baseSymbol = (token['baseSymbol'] as String).toLowerCase();
+          final name = (token['name'] as String?)?.toLowerCase() ?? '';
+          final searchQuery = query.toLowerCase();
+          return baseSymbol.contains(searchQuery) || name.contains(searchQuery);
+        }).toList();
+      }
+    });
+  }
+
+  String _formatPrice(double price) {
+    if (price >= 1000) {
+      return price.toStringAsFixed(2).replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+    } else if (price >= 1) {
+      return price.toStringAsFixed(2);
+    } else if (price >= 0.01) {
+      return price.toStringAsFixed(4);
+    } else if (price >= 0.0001) {
+      return price.toStringAsFixed(6);
+    } else {
+      return price.toStringAsFixed(8);
+    }
   }
 
   String _formatVolume(String value) {
@@ -129,6 +191,7 @@ class _HomeTabState extends State<HomeTab> {
           await Future.wait([
             _loadMarketData(),
             _loadTrendingTokens(),
+            _loadMarketTokens(),
           ]);
           setState(() => _isRefreshing = false);
         },
@@ -157,16 +220,57 @@ class _HomeTabState extends State<HomeTab> {
               child: _buildTrendingSection(),
             ),
 
-            // Categories
+            // Search Bar
             SliverToBoxAdapter(
-              child: Container(
-                height: 50,
-                margin: const EdgeInsets.symmetric(vertical: 24),
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _categories.length,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemBuilder: (context, index) => _buildCategoryChip(index),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isDark 
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        : SafeJetColors.lightCardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                          : SafeJetColors.lightCardBorder,
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: theme.textTheme.bodyLarge,
+                    onChanged: _filterMarketTokens,
+                    decoration: InputDecoration(
+                      hintText: 'Search tokens',
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[600] : SafeJetColors.lightTextSecondary,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: isDark ? Colors.grey[600] : Colors.grey[400],
+                        size: 20,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.clear,
+                                color: isDark ? Colors.grey[600] : Colors.grey[400],
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                                _filterMarketTokens('');
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -174,12 +278,7 @@ class _HomeTabState extends State<HomeTab> {
             // Market List
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _buildMarketListItem(index),
-                  childCount: 10,
-                ),
-              ),
+              sliver: _buildMarketList(),
             ),
 
             // Bottom Padding for nav bar
@@ -215,124 +314,124 @@ class _HomeTabState extends State<HomeTab> {
     final isPositiveChange = priceChange >= 0;
 
     return FadeInDown(
-      duration: const Duration(milliseconds: 600),
-      child: Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDark
-                ? [
-                    SafeJetColors.secondaryHighlight.withOpacity(0.15),
-                    SafeJetColors.primaryAccent.withOpacity(0.05),
-                  ]
-                : [
-                    SafeJetColors.lightCardBackground,
-                    SafeJetColors.lightCardBackground,
-                  ],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isDark
-                ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
-                : SafeJetColors.lightCardBorder,
-          ),
-        ),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
+                duration: const Duration(milliseconds: 600),
+                child: Container(
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isDark
+                          ? [
+                              SafeJetColors.secondaryHighlight.withOpacity(0.15),
+                              SafeJetColors.primaryAccent.withOpacity(0.05),
+                            ]
+                          : [
+                              SafeJetColors.lightCardBackground,
+                              SafeJetColors.lightCardBackground,
+                            ],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark
+                          ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
+                          : SafeJetColors.lightCardBorder,
+                    ),
+                  ),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                Expanded(
+                  child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
                             'Bitcoin Price',
                             style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
                               color: (isPositiveChange ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
+                                      children: [
+                                        Icon(
                                   isPositiveChange ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
                                   color: isPositiveChange ? SafeJetColors.success : SafeJetColors.error,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
+                                          size: 16,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
                                   '${isPositiveChange ? '+' : ''}${priceChange.toStringAsFixed(2)}%',
-                                  style: TextStyle(
+                                          style: TextStyle(
                                     color: isPositiveChange ? SafeJetColors.success : SafeJetColors.error,
-                                    fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.bold,
                                     fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                                ],
+                              ),
                       const SizedBox(height: 8),
                       Text(
-                        _formatPrice(price),
+                        _formatPrice(double.parse(price)),
                         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
-                ),
-                _buildMiniChart(),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: _buildQuickStat(
+                          ),
+                          _buildMiniChart(),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: _buildQuickStat(
                     'Market Cap',
                     _formatLargeNumber(marketCap),
-                    Icons.pie_chart_rounded,
-                    isDark,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickStat(
-                    '24h Vol.',
+                              Icons.pie_chart_rounded,
+                              isDark,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildQuickStat(
+                              '24h Vol.',
                     _formatVolume(volume),
-                    Icons.bar_chart_rounded,
-                    isDark,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildQuickStat(
+                              Icons.bar_chart_rounded,
+                              isDark,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildQuickStat(
                     'Supply',
                     _formatSupply(supply),
                     Icons.currency_bitcoin_rounded,
-                    isDark,
+                              isDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -448,7 +547,8 @@ class _HomeTabState extends State<HomeTab> {
   Widget _buildTrendingCoinCard(Map<String, dynamic> token) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final priceChange = token['priceChange24h'] as num? ?? 0;
+    final priceChange = double.tryParse(token['priceChange24h'].toString()) ?? 0.0;
+    final currentPrice = double.tryParse(token['currentPrice'].toString()) ?? 0.0;
     final metadata = token['metadata'] as Map<String, dynamic>? ?? {};
     final iconUrl = metadata['icon'] as String? ?? '';
     final baseSymbol = token['baseSymbol'] as String? ?? token['symbol'];
@@ -533,7 +633,7 @@ class _HomeTabState extends State<HomeTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _formatPrice(token['currentPrice'] ?? '0'),
+                '\$${_formatPrice(currentPrice)}',
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -626,6 +726,11 @@ class _HomeTabState extends State<HomeTab> {
   Widget _buildMarketListItem(int index) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final token = _filteredMarketTokens[index];
+    final priceChange = double.tryParse(token['priceChange24h'].toString()) ?? 0.0;
+    final metadata = token['metadata'] as Map<String, dynamic>? ?? {};
+    final iconUrl = metadata['icon'] as String? ?? '';
+    final baseSymbol = token['baseSymbol'] as String;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -648,15 +753,46 @@ class _HomeTabState extends State<HomeTab> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  SafeJetColors.secondaryHighlight,
-                  SafeJetColors.secondaryHighlight.withOpacity(0.8),
-                ],
-              ),
+              color: Colors.white,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.currency_bitcoin, color: Colors.black, size: 24),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: iconUrl.isNotEmpty
+                  ? Image.network(
+                      iconUrl,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        decoration: BoxDecoration(
+                          color: SafeJetColors.secondaryHighlight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Center(
+                          child: Text(
+                            baseSymbol.substring(0, 1),
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: SafeJetColors.secondaryHighlight,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Center(
+                        child: Text(
+                          baseSymbol.substring(0, 1),
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
           ),
           const SizedBox(width: 12),
           
@@ -667,7 +803,7 @@ class _HomeTabState extends State<HomeTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Bitcoin',
+                  baseSymbol,
                   style: theme.textTheme.bodyLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -675,8 +811,11 @@ class _HomeTabState extends State<HomeTab> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'BTC',
-                  style: theme.textTheme.bodyMedium,
+                  token['name'] ?? '',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -689,7 +828,7 @@ class _HomeTabState extends State<HomeTab> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '\$42,384.21',
+                  '\$${_formatPrice(double.parse(token['currentPrice'].toString()) ?? 0)}',
                   style: theme.textTheme.bodyLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -702,13 +841,14 @@ class _HomeTabState extends State<HomeTab> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: SafeJetColors.success.withOpacity(0.2),
+                    color: (priceChange >= 0 ? SafeJetColors.success : SafeJetColors.error)
+                        .withOpacity(0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '+2.34%',
+                    '${priceChange >= 0 ? '+' : ''}${priceChange.toStringAsFixed(2)}%',
                     style: TextStyle(
-                      color: SafeJetColors.success,
+                      color: priceChange >= 0 ? SafeJetColors.success : SafeJetColors.error,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -717,25 +857,52 @@ class _HomeTabState extends State<HomeTab> {
               ],
             ),
           ),
-
-          // Sparkline Chart
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 80,
-            height: 40,
-            child: CustomPaint(
-              painter: MiniSparklinePainter(
-                data: _generateDummyData(),
-                color: SafeJetColors.success,
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  List<double> _generateDummyData() {
-    return List.generate(20, (i) => 0.5 + 0.5 * sin(i * 0.5));
+  Widget _buildMarketList() {
+    if (_isLoadingMarketTokens) {
+      return SliverToBoxAdapter(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
+    if (_marketTokensError != null) {
+      return SliverToBoxAdapter(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Center(
+            child: Text(_marketTokensError!),
+          ),
+        ),
+      );
+    }
+
+    if (_filteredMarketTokens.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Center(
+            child: Text(_searchController.text.isEmpty 
+              ? 'No market data available'
+              : 'No tokens found matching "${_searchController.text}"'),
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _buildMarketListItem(index),
+        childCount: _filteredMarketTokens.length,
+      ),
+    );
   }
 } 

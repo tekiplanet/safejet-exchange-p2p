@@ -4,6 +4,7 @@ import { HomeService } from './home.service';
 import { MarketOverviewResponse } from './dto/market-overview.dto';
 import { TrendingTokensResponse } from './dto/trending-tokens.dto';
 import { NewsResponse } from './dto/news.dto';
+import { MarketListResponse } from './dto/market-list.dto';
 
 @Controller('home')
 export class HomeController {
@@ -32,5 +33,10 @@ export class HomeController {
   @Get('news')
   async getRecentNews(): Promise<NewsResponse> {
     return this.homeService.getRecentNews();
+  }
+
+  @Get('market-tokens')
+  async getMarketTokens() {
+    return this.homeService.getMarketTokens();
   }
 } 
