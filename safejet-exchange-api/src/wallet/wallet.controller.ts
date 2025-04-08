@@ -14,9 +14,12 @@ import { AddressBook } from './entities/address-book.entity';
 import { TransferDto } from './dto/transfer.dto';
 import { Transfer } from './entities/transfer.entity';
 import { ConvertTokenDto } from './dto/convert-token.dto';
+import { Logger } from '@nestjs/common';
 
 @Controller('wallets')
 export class WalletController {
+  private readonly logger = new Logger(WalletController.name);
+
   constructor(
     private readonly walletService: WalletService,
     private readonly authService: AuthService,
@@ -114,6 +117,28 @@ export class WalletController {
   ) {
     const rate = await this.walletService.getExchangeRate(fromTokenId, toTokenId);
     return { exchangeRate: rate };
+  }
+
+  @Get('transactions')
+  @UseGuards(JwtAuthGuard)
+  async getTransactionHistory(
+    @GetUser() user: User,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('type') type?: 'deposit' | 'withdrawal' | 'conversion' | 'transfer'
+  ) {
+    this.logger.debug(`Getting transaction history for user ${user.id}`);
+    this.logger.debug(`Query params: page=${page}, limit=${limit}, type=${type || 'all'}`);
+    
+    try {
+      const result = await this.walletService.getTransactionHistory(user.id, page, limit, type);
+      this.logger.debug(`Found ${result.transactions.length} transactions`);
+      return result;
+    } catch (error) {
+      this.logger.error(`Error getting transaction history: ${error.message}`);
+      this.logger.error(error.stack);
+      throw error;
+    }
   }
 
   @Get(':id')

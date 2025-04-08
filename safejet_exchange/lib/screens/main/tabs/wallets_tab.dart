@@ -713,28 +713,28 @@ class _WalletsTabState extends State<WalletsTab> {
                                     MaterialPageRoute(builder: (context) => const P2PScreen()),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                _buildQuickActionCard(
-                                  context,
-                                  icon: Icons.send_rounded,
-                                  label: 'Transfer',
-                                  description: 'Send crypto',
-                                  color: Colors.purple,
-                                  onTap: () {
-                                    // TODO: Add transfer screen
-                                  },
-                                ),
-                                const SizedBox(width: 12),
-                                _buildQuickActionCard(
-                                  context,
-                                  icon: Icons.currency_exchange_rounded,
-                                  label: 'Convert',
-                                  description: 'Swap coins',
-                                  color: Colors.blue,
-                                  onTap: () {
-                                    // TODO: Add convert screen
-                                  },
-                                ),
+                                // const SizedBox(width: 12),
+                                // _buildQuickActionCard(
+                                //   context,
+                                //   icon: Icons.send_rounded,
+                                //   label: 'Transfer',
+                                //   description: 'Send crypto',
+                                //   color: Colors.purple,
+                                //   onTap: () {
+                                //     // TODO: Add transfer screen
+                                //   },
+                                // ),
+                                // const SizedBox(width: 12),
+                                // _buildQuickActionCard(
+                                //   context,
+                                //   icon: Icons.currency_exchange_rounded,
+                                //   label: 'Convert',
+                                //   description: 'Swap coins',
+                                //   color: Colors.blue,
+                                //   onTap: () {
+                                //     // TODO: Add convert screen
+                                //   },
+                                // ),
                               ],
                             ),
                           ),

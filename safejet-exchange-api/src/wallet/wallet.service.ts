@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not, IsNull, Raw, In, MoreThanOrEqual, DataSource } from 'typeorm';
+import { Repository, Not, IsNull, Raw, In, MoreThanOrEqual, DataSource, SelectQueryBuilder } from 'typeorm';
 import { Wallet } from './entities/wallet.entity';
 import { KeyManagementService } from './key-management.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
@@ -1742,5 +1742,206 @@ export class WalletService {
 
       return conversion;
     });
+  }
+
+  async getTransactionHistory(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    type?: 'deposit' | 'withdrawal' | 'conversion' | 'transfer'
+  ) {
+    this.logger.debug(`[getTransactionHistory] Starting for user ${userId}`);
+    this.logger.debug(`[getTransactionHistory] Parameters: page=${page}, limit=${limit}, type=${type || 'all'}`);
+
+    const skip = (page - 1) * limit;
+    this.logger.debug(`[getTransactionHistory] Calculated skip: ${skip}`);
+
+    let query = `
+      SELECT
+        d.id,
+        'deposit' as type,
+        TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM d.amount::text)) as amount,
+        t.symbol as "tokenSymbol",
+        d.status::varchar as status,
+        d."createdAt" as "createdAt",
+        d.metadata
+      FROM deposits d
+      INNER JOIN tokens t ON d."tokenId" = t.id
+      WHERE d."userId" = $1
+
+        UNION ALL
+
+      SELECT
+        w.id,
+        'withdrawal' as type,
+        TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM w.amount::text)) as amount,
+        t.symbol as "tokenSymbol",
+        w.status::varchar as status,
+        w."createdAt" as "createdAt",
+        w.metadata
+      FROM withdrawals w
+      INNER JOIN tokens t ON w."tokenId" = t.id
+      WHERE w."userId" = $1
+
+        UNION ALL
+
+      SELECT
+        c.id,
+        'conversion' as type,
+        TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM c."fromAmount"::text)) as amount,
+        ft.symbol as "tokenSymbol",
+        c.status::varchar as status,
+        c."createdAt" as "createdAt",
+        json_build_object(
+          'toAmount', TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM c."toAmount"::text)),
+          'toToken', tt.symbol,
+          'exchangeRate', c."exchangeRate"
+        )::jsonb as metadata
+      FROM conversions c
+      INNER JOIN tokens ft ON c."fromTokenId" = ft.id
+      INNER JOIN tokens tt ON c."toTokenId" = tt.id
+      WHERE c."userId" = $1
+
+        UNION ALL
+
+      SELECT
+        tr.id,
+        'transfer' as type,
+        TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM tr.amount::text)) as amount,
+        t.symbol as "tokenSymbol",
+        tr.status::varchar as status,
+        tr."createdAt" as "createdAt",
+        json_build_object(
+          'fromType', tr."fromType",
+          'toType', tr."toType"
+        )::jsonb as metadata
+      FROM transfers tr
+      INNER JOIN tokens t ON tr."tokenId" = t.id
+      WHERE tr."userId" = $1
+    `;
+
+    if (type) {
+      switch (type) {
+        case 'deposit':
+          query = `
+            SELECT
+              d.id,
+              'deposit' as type,
+              TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM d.amount::text)) as amount,
+              t.symbol as "tokenSymbol",
+              d.status::varchar as status,
+              d."createdAt" as "createdAt",
+              d.metadata
+            FROM deposits d
+            INNER JOIN tokens t ON d."tokenId" = t.id
+            WHERE d."userId" = $1
+          `;
+          break;
+        case 'withdrawal':
+          query = `
+            SELECT
+              w.id,
+              'withdrawal' as type,
+              TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM w.amount::text)) as amount,
+              t.symbol as "tokenSymbol",
+              w.status::varchar as status,
+              w."createdAt" as "createdAt",
+              w.metadata
+            FROM withdrawals w
+            INNER JOIN tokens t ON w."tokenId" = t.id
+            WHERE w."userId" = $1
+          `;
+          break;
+        case 'conversion':
+          query = `
+            SELECT
+              c.id,
+              'conversion' as type,
+              TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM c."fromAmount"::text)) as amount,
+              ft.symbol as "tokenSymbol",
+              c.status::varchar as status,
+              c."createdAt" as "createdAt",
+              json_build_object(
+                'toAmount', TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM c."toAmount"::text)),
+                'toToken', tt.symbol,
+                'exchangeRate', c."exchangeRate"
+              )::jsonb as metadata
+            FROM conversions c
+            INNER JOIN tokens ft ON c."fromTokenId" = ft.id
+            INNER JOIN tokens tt ON c."toTokenId" = tt.id
+            WHERE c."userId" = $1
+          `;
+          break;
+        case 'transfer':
+          query = `
+            SELECT
+              tr.id,
+              'transfer' as type,
+              TRIM(TRAILING '0' FROM TRIM(TRAILING '.' FROM tr.amount::text)) as amount,
+              t.symbol as "tokenSymbol",
+              tr.status::varchar as status,
+              tr."createdAt" as "createdAt",
+              json_build_object(
+                'fromType', tr."fromType",
+                'toType', tr."toType"
+              )::jsonb as metadata
+            FROM transfers tr
+            INNER JOIN tokens t ON tr."tokenId" = t.id
+            WHERE tr."userId" = $1
+          `;
+          break;
+      }
+    }
+
+    query += ` ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`;
+
+    const countQuery = `
+      SELECT (
+        (SELECT COUNT(*) FROM deposits WHERE "userId" = $1) +
+        (SELECT COUNT(*) FROM withdrawals WHERE "userId" = $1) +
+        (SELECT COUNT(*) FROM conversions WHERE "userId" = $1) +
+        (SELECT COUNT(*) FROM transfers WHERE "userId" = $1)
+      ) as count
+    `;
+
+    this.logger.debug('[getTransactionHistory] Executing queries');
+
+    try {
+      const [transactions, countResult] = await Promise.all([
+        this.dataSource.query(query, [userId, limit, skip]),
+        this.dataSource.query(countQuery, [userId])
+      ]);
+
+      // Format the transactions
+      const formattedTransactions = transactions.map(tx => ({
+        ...tx,
+        amount: tx.amount || '0',
+        createdAt: new Date(tx.createdAt).toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        })
+      }));
+
+      const totalCount = parseInt(countResult[0].count);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      this.logger.debug(`[getTransactionHistory] Found ${formattedTransactions.length} transactions`);
+
+      return {
+        transactions: formattedTransactions,
+        totalCount,
+        totalPages,
+        currentPage: page
+      };
+    } catch (error) {
+      this.logger.error('[getTransactionHistory] Error executing queries:', error.message);
+      this.logger.error(error.stack);
+      throw error;
+    }
   }
 } 

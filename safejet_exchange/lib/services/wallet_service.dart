@@ -34,24 +34,40 @@ class WalletService {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final token = await storage.read(key: 'accessToken');
-          // print('Request URL: ${options.baseUrl}${options.path}');
-          // print('Request Headers: ${options.headers}');
+          print('\n=== Request Details ===');
+          print('URL: ${options.baseUrl}${options.path}');
+          print('Method: ${options.method}');
+          print('Query Parameters: ${options.queryParameters}');
+          print('Headers: ${options.headers}');
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           return handler.next(options);
         },
+        onResponse: (response, handler) {
+          print('\n=== Response Details ===');
+          print('Status Code: ${response.statusCode}');
+          print('Headers: ${response.headers}');
+          print('Data: ${response.data}');
+          return handler.next(response);
+        },
         onError: (DioException error, handler) async {
+          print('\n=== Error Details ===');
+          print('Error Type: ${error.type}');
+          print('Error Message: ${error.message}');
           print('Error Response: ${error.response?.data}');
           print('Error Status Code: ${error.response?.statusCode}');
           print('Error Headers: ${error.response?.headers}');
+          print('Request Path: ${error.requestOptions.path}');
+          print('Request Query Parameters: ${error.requestOptions.queryParameters}');
+          print('Request Headers: ${error.requestOptions.headers}');
           
           if (error.type == DioExceptionType.connectionError ||
               error.type == DioExceptionType.unknown) {
             RequestOptions requestOptions = error.requestOptions;
             
             try {
-              print('Retrying request to: ${requestOptions.path}');
+              print('\nRetrying request to: ${requestOptions.path}');
               final response = await _dio.request(
                 requestOptions.path,
                 data: requestOptions.data,
@@ -63,6 +79,7 @@ class WalletService {
               );
               return handler.resolve(response);
             } catch (e) {
+              print('Retry failed: $e');
               return handler.next(error);
             }
           }
@@ -553,6 +570,49 @@ class WalletService {
       final response = await _dio.get('/wallets/balances');
       return List<Map<String, dynamic>>.from(response.data['balances']);
     } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> getTransactionHistory({
+    int page = 1,
+    int limit = 10,
+    String? type,
+  }) async {
+    try {
+      print('\n=== Getting Transaction History ===');
+      print('Page: $page');
+      print('Limit: $limit');
+      print('Type: ${type ?? 'all'}');
+
+      final queryParams = {
+        'page': page.toString(),
+        'limit': limit.toString(),
+        if (type != null) 'type': type,
+      };
+
+      print('Query Parameters: $queryParams');
+      print('Endpoint: /wallets/transactions');
+
+      final response = await _dio.get(
+        '/wallets/transactions',
+        queryParameters: queryParams,
+      );
+
+      print('\n=== Transaction History Response ===');
+      print('Status Code: ${response.statusCode}');
+      print('Response Data: ${response.data}');
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        print('Error: Non-200 status code received');
+        throw Exception('Failed to fetch transaction history');
+      }
+    } catch (e) {
+      print('\n=== Transaction History Error ===');
+      print('Error Type: ${e.runtimeType}');
+      print('Error Details: $e');
       rethrow;
     }
   }

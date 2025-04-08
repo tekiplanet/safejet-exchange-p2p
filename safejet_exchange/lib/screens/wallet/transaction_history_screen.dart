@@ -4,6 +4,9 @@ import 'package:animate_do/animate_do.dart';
 import '../../widgets/custom_app_bar.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme/theme_provider.dart';
+import '../../services/wallet_service.dart';
+import '../../models/transaction.dart';
+import '../../widgets/shimmer_loading.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   const TransactionHistoryScreen({super.key});
@@ -14,7 +17,116 @@ class TransactionHistoryScreen extends StatefulWidget {
 
 class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Deposits', 'Withdrawals', 'Trades'];
+  final List<String> _filters = ['All', 'Deposits', 'Withdrawals', 'Conversions', 'Transfers'];
+  final _walletService = WalletService();
+  
+  bool _isLoading = false;
+  List<Transaction> _transactions = [];
+  int _currentPage = 1;
+  final int _pageSize = 20;
+  bool _hasMore = true;
+  String? _error;
+
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTransactions();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent * 0.8 &&
+        !_isLoading &&
+        _hasMore) {
+      _loadMoreTransactions();
+    }
+  }
+
+  String? _getFilterType(String filter) {
+    switch (filter.toLowerCase()) {
+      case 'deposits':
+        return 'deposit';
+      case 'withdrawals':
+        return 'withdrawal';
+      case 'conversions':
+        return 'conversion';
+      case 'transfers':
+        return 'transfer';
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _loadTransactions() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final type = _getFilterType(_selectedFilter);
+      final result = await _walletService.getTransactionHistory(
+        page: 1,
+        limit: _pageSize,
+        type: type,
+      );
+
+      setState(() {
+        _transactions = (result['transactions'] as List)
+            .map((json) => Transaction.fromJson(json))
+            .toList();
+        _currentPage = 1;
+        _hasMore = _transactions.length >= _pageSize;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load transactions';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMoreTransactions() async {
+    if (_isLoading || !_hasMore) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final type = _getFilterType(_selectedFilter);
+      final result = await _walletService.getTransactionHistory(
+        page: _currentPage + 1,
+        limit: _pageSize,
+        type: type,
+      );
+
+      final newTransactions = (result['transactions'] as List)
+          .map((json) => Transaction.fromJson(json))
+          .toList();
+
+      setState(() {
+        _transactions.addAll(newTransactions);
+        _currentPage++;
+        _hasMore = newTransactions.length >= _pageSize;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load more transactions';
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +173,10 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       itemBuilder: (context, index) {
                         final isSelected = _filters[index] == _selectedFilter;
                         return GestureDetector(
-                          onTap: () => setState(() => _selectedFilter = _filters[index]),
+                          onTap: () {
+                            setState(() => _selectedFilter = _filters[index]);
+                            _loadTransactions();
+                          },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -95,17 +210,62 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   ),
                 ),
 
-                // Transactions List
+                // Transactions List or Loading State
                 Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: 20,
-                    itemBuilder: (context, index) => FadeInDown(
-                      duration: const Duration(milliseconds: 600),
-                      delay: Duration(milliseconds: 100 * index),
-                      child: _buildTransactionItem(index, isDark, theme),
-                    ),
-                  ),
+                  child: _error != null
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _error!,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: SafeJetColors.error,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadTransactions,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _isLoading && _transactions.isEmpty
+                          ? ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: 5,
+                              itemBuilder: (context, index) => FadeInDown(
+                                duration: const Duration(milliseconds: 600),
+                                delay: Duration(milliseconds: 100 * index),
+                                child: ShimmerCard(height: 120, isDark: isDark),
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _loadTransactions,
+                              child: ListView.builder(
+                                controller: _scrollController,
+                                padding: const EdgeInsets.all(16),
+                                itemCount: _transactions.length + (_hasMore ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (index == _transactions.length) {
+                                    return const Padding(
+                                      padding: EdgeInsets.all(16.0),
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    );
+                                  }
+
+                                  final transaction = _transactions[index];
+                                  return FadeInDown(
+                                    duration: const Duration(milliseconds: 600),
+                                    delay: Duration(milliseconds: 100 * index),
+                                    child: _buildTransactionItem(transaction, isDark, theme),
+                                  );
+                                },
+                              ),
+                            ),
                 ),
               ],
             ),
@@ -115,10 +275,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     );
   }
 
-  Widget _buildTransactionItem(int index, bool isDark, ThemeData theme) {
-    final isDeposit = index % 3 == 0;
-    final isWithdraw = index % 3 == 1;
-    
+  Widget _buildTransactionItem(Transaction transaction, bool isDark, ThemeData theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -140,12 +297,12 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: _getTransactionColor(isDeposit, isWithdraw).withOpacity(0.2),
+              color: transaction.statusColor.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              _getTransactionIcon(isDeposit, isWithdraw),
-              color: _getTransactionColor(isDeposit, isWithdraw),
+              transaction.typeIcon,
+              color: transaction.statusColor,
               size: 20,
             ),
           ),
@@ -157,13 +314,14 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _getTransactionType(isDeposit, isWithdraw),
+                  transaction.displayType,
                   style: theme.textTheme.bodyLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  '2024-02-${10 + index}  14:${30 + index}',
+                  transaction.createdAt,
                   style: TextStyle(
                     color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                     fontSize: 12,
@@ -178,25 +336,26 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                _getTransactionAmount(isDeposit, isWithdraw, index),
+                transaction.displayAmount,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: _getTransactionColor(isDeposit, isWithdraw),
+                  color: transaction.statusColor,
                 ),
               ),
+              const SizedBox(height: 4),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: _getStatusColor(index).withOpacity(0.2),
+                  color: transaction.statusColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _getTransactionStatus(index),
+                  transaction.status,
                   style: TextStyle(
-                    color: _getStatusColor(index),
+                    color: transaction.statusColor,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
@@ -207,55 +366,5 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         ],
       ),
     );
-  }
-
-  IconData _getTransactionIcon(bool isDeposit, bool isWithdraw) {
-    if (isDeposit) return Icons.arrow_downward_rounded;
-    if (isWithdraw) return Icons.arrow_upward_rounded;
-    return Icons.sync_alt_rounded;
-  }
-
-  Color _getTransactionColor(bool isDeposit, bool isWithdraw) {
-    if (isDeposit) return SafeJetColors.success;
-    if (isWithdraw) return SafeJetColors.error;
-    return Colors.blue;
-  }
-
-  String _getTransactionType(bool isDeposit, bool isWithdraw) {
-    if (isDeposit) return 'Deposit BTC';
-    if (isWithdraw) return 'Withdraw BTC';
-    return 'Trade BTC';
-  }
-
-  String _getTransactionAmount(bool isDeposit, bool isWithdraw, int index) {
-    if (isDeposit) return '+0.0${index + 1} BTC';
-    if (isWithdraw) return '-0.0${index + 1} BTC';
-    return '0.0${index + 1} BTC';
-  }
-
-  Color _getStatusColor(int index) {
-    switch (index % 4) {
-      case 0:
-        return SafeJetColors.success;
-      case 1:
-        return Colors.orange;
-      case 2:
-        return SafeJetColors.error;
-      default:
-        return Colors.blue;
-    }
-  }
-
-  String _getTransactionStatus(int index) {
-    switch (index % 4) {
-      case 0:
-        return 'Completed';
-      case 1:
-        return 'Pending';
-      case 2:
-        return 'Failed';
-      default:
-        return 'Processing';
-    }
   }
 } 
