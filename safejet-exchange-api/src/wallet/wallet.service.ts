@@ -2012,6 +2012,7 @@ export class WalletService {
         address: withdrawal.address,
         memo: withdrawal.memo,
         fee: withdrawal.fee?.toString(),
+        txHash: withdrawal.txHash,
       };
     }
 
