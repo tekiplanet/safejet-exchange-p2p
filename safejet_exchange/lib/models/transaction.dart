@@ -32,10 +32,25 @@ class Transaction {
       final suffix = _getDaySuffix(day);
       final formattedDate = DateFormat("d'$suffix' MMM, yyyy. h:mm a").format(dateTime);
 
+      // Format the amount
+      String formattedAmount = json['amount'].toString();
+      try {
+        final double amountValue = double.parse(formattedAmount);
+        if (amountValue == amountValue.truncateToDouble()) {
+          // If it's a whole number, show no decimals
+          formattedAmount = amountValue.toInt().toString();
+        } else {
+          // For decimals, limit to max 8 places and remove trailing zeros
+          formattedAmount = amountValue.toStringAsFixed(8).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+        }
+      } catch (e) {
+        print('Error formatting amount: $formattedAmount');
+      }
+
       return Transaction(
         id: json['id'],
         type: json['type'],
-        amount: json['amount'],
+        amount: formattedAmount,
         tokenSymbol: json['tokenSymbol'],
         status: json['status'],
         createdAt: formattedDate,
@@ -48,7 +63,7 @@ class Transaction {
       return Transaction(
         id: json['id'],
         type: json['type'],
-        amount: json['amount'],
+        amount: json['amount'].toString(),
         tokenSymbol: json['tokenSymbol'],
         status: json['status'],
         createdAt: json['createdAt'],
