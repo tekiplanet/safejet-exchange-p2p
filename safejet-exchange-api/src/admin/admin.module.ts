@@ -26,6 +26,9 @@ import { P2PDispute } from '../p2p/entities/p2p-dispute.entity';
 import { P2PDisputeMessage } from '../p2p/entities/p2p-dispute-message.entity';
 import { EmailModule } from '../email/email.module';
 import { P2PModule } from '../p2p/p2p.module';
+import { News } from '../news/entities/news.entity';
+import { NewsController } from './news.controller';
+import { NewsService } from './news.service';
 
 @Module({
   imports: [
@@ -41,6 +44,7 @@ import { P2PModule } from '../p2p/p2p.module';
       SweepTransaction,
       P2PDispute,
       P2PDisputeMessage,
+      News,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -53,7 +57,7 @@ import { P2PModule } from '../p2p/p2p.module';
     EmailModule,
     P2PModule,
   ],
-  providers: [AdminAuthService, AdminGuard],
+  providers: [AdminAuthService, AdminGuard, NewsService],
   controllers: [
     AdminAuthController, 
     AdminDepositController,
@@ -63,6 +67,7 @@ import { P2PModule } from '../p2p/p2p.module';
     AdminDepositManagementController,
     AdminSweepTransactionsController,
     AdminDisputesController,
+    NewsController,
   ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
