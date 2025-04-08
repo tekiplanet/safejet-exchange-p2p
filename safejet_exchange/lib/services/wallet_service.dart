@@ -105,41 +105,37 @@ class WalletService {
         },
       );
 
-      // print('\n=== Raw Response Data ===');
-      // print(response.data);
-      
       final balances = response.data['balances'] as List<dynamic>;
       balances.forEach((balance) {
         final token = balance['token'] as Map<String, dynamic>?;
         if (token == null) {
-          print('Warning: Token data missing for balance: $balance');
+          debugPrint('Warning: Token data missing for balance: $balance');
           return;
         }
         
         final networks = balance['networks'] as List<dynamic>?;
-        
-        // print('\n=== Token Balance ===');
-        // print('Symbol: ${token['symbol']}');
-        // print('Type: ${balance['type']}');
-        // print('Available: ${balance['balance']}');
-        // print('Frozen: ${balance['frozen']}');
-        
-        // Process networks with new structure
         if (networks != null) {
-          // print('\nNetwork Breakdown:');
           networks.forEach((network) {
             if (network is Map<String, dynamic>) {
-              // print('  ${network['blockchain']} (${network['networkVersion']}): '
-                  //'${_formatBalance(network['balance'].toString(), token['decimals'] ?? 18)}');
+              // Process network data silently
             }
           });
         }
       });
 
       return response.data;
+    } on DioException catch (e) {
+      debugPrint('Network error in getBalances: ${e.message}');
+      if (e.response?.statusCode == 502) {
+        throw 'Service is temporarily unavailable. Please try again in a few moments.';
+      } else if (e.type == DioExceptionType.connectionTimeout) {
+        throw 'Connection timed out. Please check your internet connection.';
+      } else {
+        throw 'Unable to load balances. Please try again.';
+      }
     } catch (e) {
-      print('Error in getBalances: $e');
-      rethrow;
+      debugPrint('Error in getBalances: $e');
+      throw 'Unable to load balances. Please try again.';
     }
   }
 

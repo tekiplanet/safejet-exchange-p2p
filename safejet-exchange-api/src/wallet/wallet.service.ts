@@ -1983,7 +1983,6 @@ export class WalletService {
         from: deposit.metadata?.from,
       };
     }
-
     // Try to find in withdrawals
     const withdrawal = await this.withdrawalRepository.findOne({
       where: { id: transactionId, userId },
@@ -2074,4 +2073,4 @@ export class WalletService {
 
     throw new NotFoundException('Transaction not found');
   }
-} 
+}

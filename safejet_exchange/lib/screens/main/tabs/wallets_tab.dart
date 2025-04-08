@@ -129,8 +129,13 @@ class _WalletsTabState extends State<WalletsTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading settings: ${e.toString()}'),
+            content: Text('Unable to load your preferences. Please check your internet connection and try again.'),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: _loadUserSettings,
+            ),
           ),
         );
       }
@@ -1454,8 +1459,13 @@ class _WalletsTabState extends State<WalletsTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error loading exchange rates: ${e.toString()}'),
+            content: Text('Unable to update exchange rates. Your balances may not show the correct currency conversion.'),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: _loadRates,
+            ),
           ),
         );
       }
@@ -1463,6 +1473,9 @@ class _WalletsTabState extends State<WalletsTab> {
   }
 
   Widget _buildErrorState() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -1470,32 +1483,29 @@ class _WalletsTabState extends State<WalletsTab> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.error_outline_rounded,
+              _getErrorIcon(),
               size: 64,
-              color: SafeJetColors.error,
+              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
             ),
             const SizedBox(height: 16),
             Text(
-              _errorMessage,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: SafeJetColors.error,
+              _getErrorTitle(),
+              style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Please check your connection and try again',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.grey[400]
-                    : SafeJetColors.lightTextSecondary,
+              _errorMessage,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: _loadBalances,
+              onPressed: () => _loadBalances(showLoading: true),
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
@@ -1514,6 +1524,28 @@ class _WalletsTabState extends State<WalletsTab> {
         ),
       ),
     );
+  }
+
+  IconData _getErrorIcon() {
+    if (_errorMessage.toLowerCase().contains('internet') || 
+        _errorMessage.toLowerCase().contains('connection')) {
+      return Icons.wifi_off_rounded;
+    } else if (_errorMessage.toLowerCase().contains('unavailable')) {
+      return Icons.engineering_rounded;
+    } else {
+      return Icons.error_outline_rounded;
+    }
+  }
+
+  String _getErrorTitle() {
+    if (_errorMessage.toLowerCase().contains('internet') || 
+        _errorMessage.toLowerCase().contains('connection')) {
+      return 'No Internet Connection';
+    } else if (_errorMessage.toLowerCase().contains('unavailable')) {
+      return 'Service Unavailable';
+    } else {
+      return 'Something Went Wrong';
+    }
   }
 
   Widget _buildEmptyState() {
