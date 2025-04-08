@@ -2,8 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import '../services/service_locator.dart';
-import 'package:intl/intl.dart';
-import '../config/api_config.dart';
 
 class HomeService {
   late final Dio _dio;
@@ -134,33 +132,43 @@ class HomeService {
 
   String formatCurrency(double value, String currency) {
     if (value == 0) {
-      return '${_getCurrencySymbol(currency)}0.00';
+      return '\$0.00';
     }
     
     // Format based on currency
-    final formatter = NumberFormat.currency(
-      locale: 'en_US',
-      symbol: _getCurrencySymbol(currency),
-      decimalDigits: currency.toUpperCase() == 'BTC' ? 8 : 2,
-    );
-    
-    return formatter.format(value);
-  }
-  
-  String _getCurrencySymbol(String currency) {
     switch (currency.toUpperCase()) {
       case 'USD':
-        return '\$';
+        return '\$${_formatNumber(value)}';
       case 'EUR':
-        return '€';
+        return '€${_formatNumber(value)}';
       case 'GBP':
-        return '£';
+        return '£${_formatNumber(value)}';
       case 'NGN':
-        return '₦';
+        return '₦${_formatNumber(value)}';
       case 'BTC':
-        return '';  // Symbol will be added after the number
+        // Show more decimal places for BTC
+        return '${value.toStringAsFixed(8)} BTC';
       default:
-        return currency;
+        return '${_formatNumber(value)} $currency';
     }
+  }
+  
+  String _formatNumber(double value) {
+    // For large values, use K/M/B notation
+    if (value >= 1000000000) {
+      return '${(value / 1000000000).toStringAsFixed(2)}B';
+    }
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(2)}M';
+    }
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(2)}K';
+    }
+    
+    // Standard formatting for values under 1000
+    if (value < 0.01) {
+      return value.toStringAsFixed(6);
+    }
+    return value.toStringAsFixed(2);
   }
 } 

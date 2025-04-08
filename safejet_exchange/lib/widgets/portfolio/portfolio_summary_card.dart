@@ -132,7 +132,13 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
     final currency = _showInUSD ? 'USD' : _userCurrency;
     final amount = _showInUSD ? value : value * _userCurrencyRate;
     
-    return _homeService.formatCurrency(amount, currency);
+    // Format with commas and 2 decimal places
+    final formattedNumber = amount.toStringAsFixed(2).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},'
+    );
+    
+    return currency == 'USD' ? '\$$formattedNumber' : '$formattedNumber $currency';
   }
 
   @override
