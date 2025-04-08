@@ -8,6 +8,7 @@ import 'api_client.dart';
 import 'wallet_service.dart';
 import 'auth_service.dart';
 import './p2p_service.dart';
+import './home_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -53,4 +54,7 @@ Future<void> setupServices() async {
 
   // Register P2PService
   getIt.registerSingleton<P2PService>(P2PService());
+  
+  // Register HomeService
+  getIt.registerSingleton<HomeService>(HomeService());
 } 

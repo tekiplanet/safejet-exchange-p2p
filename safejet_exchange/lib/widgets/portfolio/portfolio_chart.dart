@@ -1,202 +1,261 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../config/theme/colors.dart';
-import 'dart:math' show sin, pi, min, max, Random;
 
-class PortfolioChart extends StatefulWidget {
+class PortfolioChart extends StatelessWidget {
   final bool isDark;
   final String timeframe;
+  final List<Map<String, dynamic>> chartData;
 
   const PortfolioChart({
     super.key,
     required this.isDark,
     required this.timeframe,
+    this.chartData = const [],
   });
 
   @override
-  State<PortfolioChart> createState() => _PortfolioChartState();
-}
-
-class _PortfolioChartState extends State<PortfolioChart> {
-  // Dummy data - replace with real data later
-  List<FlSpot> get spotData {
-    switch (widget.timeframe) {
-      case '24h':
-        return List.generate(24, (i) {
-          return FlSpot(i.toDouble(), 
-            10000 + 2000 * sin(i * pi / 12) + Random().nextDouble() * 500);
-        });
-      case '7d':
-        return List.generate(7, (i) {
-          return FlSpot(i.toDouble(), 
-            11000 + 1500 * sin(i * pi / 3.5) + Random().nextDouble() * 300);
-        });
-      case '30d':
-        return List.generate(30, (i) {
-          return FlSpot(i.toDouble(), 
-            12000 + 3000 * sin(i * pi / 15) + Random().nextDouble() * 1000);
-        });
-      default:
-        return [];
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1.70,
-      child: Padding(
-        padding: const EdgeInsets.only(
-          right: 18,
-          left: 12,
-          top: 24,
-          bottom: 12,
-        ),
-        child: LineChart(
-          mainData(),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Portfolio Performance',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            'Last ${_getTimeframeText()}',
+            style: TextStyle(
+              color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: chartData.isEmpty
+                ? _buildEmptyChart(context)
+                : _buildChart(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyChart(BuildContext context) {
+    return Center(
+      child: Text(
+        'No data available',
+        style: TextStyle(
+          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
         ),
       ),
     );
   }
 
-  Widget bottomTitleWidgets(double value, TitleMeta meta) {
-    const style = TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.bold,
-      color: Colors.grey,
-    );
-
-    String text;
-    switch (widget.timeframe) {
-      case '24h':
-        if (value % 6 == 0) {
-          text = '${value.toInt()}:00';
-        } else {
-          return Container();
-        }
-        break;
-      case '7d':
-        text = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][value.toInt() % 7];
-        break;
-      case '30d':
-        if (value % 5 == 0) {
-          text = '${value.toInt() + 1}d';
-        } else {
-          return Container();
-        }
-        break;
-      default:
-        return Container();
-    }
-
-    return SideTitleWidget(
-      axisSide: meta.axisSide,
-      child: Text(text, style: style),
-    );
-  }
-
-  LineChartData mainData() {
-    return LineChartData(
-      gridData: FlGridData(
-        show: true,
-        drawVerticalLine: true,
-        horizontalInterval: 1000,
-        verticalInterval: widget.timeframe == '24h' ? 6 : 1,
-        getDrawingHorizontalLine: (value) {
-          return FlLine(
-            color: widget.isDark 
-                ? Colors.white.withOpacity(0.05)
-                : Colors.black.withOpacity(0.05),
-            strokeWidth: 1,
-          );
-        },
-        getDrawingVerticalLine: (value) {
-          return FlLine(
-            color: widget.isDark 
-                ? Colors.white.withOpacity(0.05)
-                : Colors.black.withOpacity(0.05),
-            strokeWidth: 1,
-          );
-        },
-      ),
-      titlesData: FlTitlesData(
-        show: true,
-        rightTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
+  Widget _buildChart() {
+    // Process chart data
+    final spots = _processChartData();
+    
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: 1,
+          getDrawingHorizontalLine: (value) {
+            return FlLine(
+              color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+              strokeWidth: 1,
+            );
+          },
         ),
-        topTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
-        ),
-        bottomTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 30,
-            interval: 1,
-            getTitlesWidget: bottomTitleWidgets,
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles: AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
           ),
-        ),
-        leftTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
-        ),
-      ),
-      borderData: FlBorderData(
-        show: false,
-      ),
-      minX: 0,
-      maxX: widget.timeframe == '24h' 
-          ? 23 
-          : widget.timeframe == '7d' 
-              ? 6 
-              : 29,
-      minY: spotData.map((e) => e.y).reduce(min) - 500,
-      maxY: spotData.map((e) => e.y).reduce(max) + 500,
-      lineBarsData: [
-        LineChartBarData(
-          spots: spotData,
-          isCurved: true,
-          gradient: LinearGradient(
-            colors: [
-              SafeJetColors.secondaryHighlight,
-              SafeJetColors.secondaryHighlight.withOpacity(0.8),
-            ],
+          topTitles: AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
           ),
-          barWidth: 2,
-          isStrokeCapRound: true,
-          dotData: const FlDotData(
-            show: false,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: _bottomTitleWidgets,
+              reservedSize: 30,
+            ),
           ),
-          belowBarData: BarAreaData(
-            show: true,
-            gradient: LinearGradient(
-              colors: [
-                SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                SafeJetColors.secondaryHighlight.withOpacity(0.0),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: _leftTitleWidgets,
+              reservedSize: 42,
+              interval: 1,
             ),
           ),
         ),
-      ],
-      lineTouchData: LineTouchData(
-        touchTooltipData: LineTouchTooltipData(
-          tooltipBgColor: widget.isDark 
-              ? SafeJetColors.primaryAccent
-              : Colors.white,
-          tooltipRoundedRadius: 8,
-          getTooltipItems: (touchedSpots) {
-            return touchedSpots.map((LineBarSpot touchedSpot) {
-              return LineTooltipItem(
-                '\$${touchedSpot.y.toStringAsFixed(2)}',
-                TextStyle(
-                  color: widget.isDark ? Colors.white : Colors.black,
-                  fontWeight: FontWeight.bold,
-                ),
-              );
-            }).toList();
-          },
+        borderData: FlBorderData(
+          show: false,
+        ),
+        minX: 0,
+        maxX: spots.isEmpty ? 10 : (spots.length - 1).toDouble(),
+        minY: spots.isEmpty ? 0 : _getMinY(spots),
+        maxY: spots.isEmpty ? 100 : _getMaxY(spots),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            gradient: LinearGradient(
+              colors: [
+                SafeJetColors.secondaryHighlight,
+                SafeJetColors.secondaryHighlight.withOpacity(0.8),
+              ],
+            ),
+            barWidth: 2.5,
+            isStrokeCapRound: true,
+            dotData: FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [
+                  SafeJetColors.secondaryHighlight.withOpacity(0.3),
+                  SafeJetColors.secondaryHighlight.withOpacity(0.0),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            tooltipBgColor: isDark ? Colors.black.withOpacity(0.8) : Colors.white.withOpacity(0.8),
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((spot) {
+                return LineTooltipItem(
+                  '\$${spot.y.toStringAsFixed(2)}',
+                  TextStyle(
+                    color: isDark ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                );
+              }).toList();
+            },
+          ),
         ),
       ),
     );
+  }
+
+  List<FlSpot> _processChartData() {
+    if (chartData.isEmpty) return [];
+    
+    // Convert data to spots
+    final spots = <FlSpot>[];
+    for (int i = 0; i < chartData.length; i++) {
+      final value = double.tryParse(chartData[i]['value'].toString()) ?? 0.0;
+      spots.add(FlSpot(i.toDouble(), value));
+    }
+    
+    return spots;
+  }
+
+  double _getMinY(List<FlSpot> spots) {
+    final values = spots.map((spot) => spot.y).toList();
+    final min = values.reduce((a, b) => a < b ? a : b);
+    // Return 95% of min value to give some padding to the chart
+    return min * 0.95;
+  }
+
+  double _getMaxY(List<FlSpot> spots) {
+    final values = spots.map((spot) => spot.y).toList();
+    final max = values.reduce((a, b) => a > b ? a : b);
+    // Return 105% of max value to give some padding to the chart
+    return max * 1.05;
+  }
+
+  Widget _bottomTitleWidgets(double value, TitleMeta meta) {
+    if (chartData.isEmpty) return Container();
+    
+    final style = TextStyle(
+      color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+      fontWeight: FontWeight.bold,
+      fontSize: 10,
+    );
+    
+    Widget text;
+    final index = value.toInt();
+    if (index < 0 || index >= chartData.length) {
+      return Container();
+    }
+    
+    String label = '';
+    final timestamp = DateTime.parse(chartData[index]['timestamp']);
+    
+    switch (timeframe) {
+      case '24h':
+        // Show hours
+        if (index % 6 == 0 || index == chartData.length - 1) {
+          label = '${timestamp.hour}:00';
+        }
+        break;
+      case '7d':
+        // Show days
+        if (index % 1 == 0 || index == chartData.length - 1) {
+          label = '${timestamp.day}/${timestamp.month}';
+        }
+        break;
+      case '30d':
+        // Show days
+        if (index % 5 == 0 || index == chartData.length - 1) {
+          label = '${timestamp.day}/${timestamp.month}';
+        }
+        break;
+      default:
+        label = '';
+    }
+    
+    text = Text(label, style: style);
+
+    return SideTitleWidget(
+      axisSide: meta.axisSide,
+      child: text,
+    );
+  }
+
+  Widget _leftTitleWidgets(double value, TitleMeta meta) {
+    const style = TextStyle(
+      color: Colors.grey,
+      fontWeight: FontWeight.bold,
+      fontSize: 10,
+    );
+    
+    // Format value to K/M for better readability
+    String text;
+    if (value >= 1000000) {
+      text = '\$${(value / 1000000).toStringAsFixed(1)}M';
+    } else if (value >= 1000) {
+      text = '\$${(value / 1000).toStringAsFixed(1)}K';
+    } else {
+      text = '\$${value.toStringAsFixed(0)}';
+    }
+
+    return Text(text, style: style, textAlign: TextAlign.center);
+  }
+  
+  String _getTimeframeText() {
+    switch (timeframe) {
+      case '24h':
+        return '24 hours';
+      case '7d':
+        return '7 days';
+      case '30d':
+        return '30 days';
+      default:
+        return timeframe;
+    }
   }
 } 
