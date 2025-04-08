@@ -102,15 +102,12 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
           final change = portfolio['change'] ?? {};
           _changePercent = double.tryParse(change['percent']?.toString() ?? '0') ?? 0.0;
           
-          // Extract spot and funding balances from the balances array
-          final balances = data['balances'] ?? [];
-          _spotUsdValue = balances
-              .where((b) => b['sourceType'] == 'spot')
-              .fold(0.0, (sum, b) => sum + (double.tryParse(b['usdValue']?.toString() ?? '0') ?? 0.0));
-              
-          _fundingUsdValue = balances
-              .where((b) => b['sourceType'] == 'funding')
-              .fold(0.0, (sum, b) => sum + (double.tryParse(b['usdValue']?.toString() ?? '0') ?? 0.0));
+          // Use the totals directly from the API response
+          final spotBalances = data['spotBalances'] ?? {};
+          final fundingBalances = data['fundingBalances'] ?? {};
+          
+          _spotUsdValue = double.tryParse(spotBalances['total']?.toString() ?? '0') ?? 0.0;
+          _fundingUsdValue = double.tryParse(fundingBalances['total']?.toString() ?? '0') ?? 0.0;
         });
       }
     } catch (e) {

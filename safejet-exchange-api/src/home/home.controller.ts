@@ -13,6 +13,6 @@ export class HomeController {
     @Query('currency') currency: string = 'USD',
     @Query('timeframe') timeframe: string = '24h',
   ) {
-    return this.homeService.getPortfolioSummary(req.user.userId, currency, timeframe);
+    return this.homeService.getPortfolioSummary(req.user.id, currency, timeframe);
   }
 } 

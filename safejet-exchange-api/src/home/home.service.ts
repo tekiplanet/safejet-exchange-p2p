@@ -26,6 +26,20 @@ export class HomeService {
     try {
       this.logger.log(`Getting portfolio summary for user ${userId} with currency ${currency} and timeframe ${timeframe}`);
       
+      // Check if user has any wallets
+      const wallets = await this.walletService.getWallets(userId);
+      this.logger.log(`User ${userId} has ${wallets.length} wallets`);
+      
+      if (wallets.length === 0) {
+        this.logger.warn(`No wallets found for user ${userId}`);
+        return this._getEmptyPortfolioResponse(currency, timeframe);
+      }
+      
+      // Ensure wallet balances are initialized
+      for (const wallet of wallets) {
+        await this.walletService.ensureWalletBalances(wallet.id);
+      }
+      
       // Get exchange rate first (like in WalletsTab)
       let exchangeRate = 1.0;
       if (currency.toUpperCase() !== 'USD') {
@@ -158,6 +172,14 @@ export class HomeService {
             timeframe,
           },
         },
+        spotBalances: {
+          total: parseFloat(spotBalancesResponse.total || '0'),
+          change24h: parseFloat(spotBalancesResponse.change24h || '0'),
+        },
+        fundingBalances: {
+          total: parseFloat(fundingBalancesResponse.total || '0'),
+          change24h: parseFloat(fundingBalancesResponse.change24h || '0'),
+        },
         allocation,
         balances: combinedBalances,
         marketStats: await this._getMarketStats(currency),
@@ -167,6 +189,33 @@ export class HomeService {
       this.logger.error('Error in getPortfolioSummary:', error);
       throw new BadRequestException(`Failed to get portfolio summary: ${error.message}`);
     }
+  }
+
+  private _getEmptyPortfolioResponse(currency: string, timeframe: string) {
+    return {
+      portfolio: {
+        usdValue: 0,
+        localCurrencyValue: 0,
+        currency,
+        exchangeRate: 1,
+        change: {
+          value: 0,
+          valueInLocalCurrency: 0,
+          percent: 0,
+          timeframe,
+        },
+      },
+      allocation: [],
+      balances: [],
+      marketStats: {
+        totalMarketCap: 0,
+        marketCapChange24h: 0,
+        btcDominance: 0,
+        volume24h: 0,
+        activePairs: 0,
+      },
+      chartData: [],
+    };
   }
 
   /**
