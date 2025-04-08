@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Token } from './token.entity';
 
 @Entity('deposits')
 export class Deposit {
@@ -57,4 +58,8 @@ export class Deposit {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @ManyToOne(() => Token)
+  @JoinColumn({ name: 'tokenId' })
+  token: Token;
 } 

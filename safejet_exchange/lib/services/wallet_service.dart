@@ -616,6 +616,32 @@ class WalletService {
       rethrow;
     }
   }
+
+  Future<Map<String, dynamic>> getTransactionDetails(String transactionId) async {
+    try {
+      print('\n=== Getting Transaction Details ===');
+      print('Transaction ID: $transactionId');
+      print('Endpoint: /wallets/transactions/$transactionId');
+
+      final response = await _dio.get('/wallets/transactions/$transactionId');
+
+      print('\n=== Transaction Details Response ===');
+      print('Status Code: ${response.statusCode}');
+      print('Response Data: ${response.data}');
+
+      if (response.statusCode == 200) {
+        return response.data;
+      } else {
+        print('Error: Non-200 status code received');
+        throw Exception('Failed to fetch transaction details');
+      }
+    } catch (e) {
+      print('\n=== Transaction Details Error ===');
+      print('Error Type: ${e.runtimeType}');
+      print('Error Details: $e');
+      rethrow;
+    }
+  }
 }
 
 class CacheEntry {

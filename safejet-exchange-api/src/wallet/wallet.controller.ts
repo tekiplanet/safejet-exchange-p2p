@@ -318,4 +318,22 @@ export class WalletController {
   ) {
     return this.walletService.convertToken(userId, convertTokenDto);
   }
+
+  @Get('transactions/:id')
+  @UseGuards(JwtAuthGuard)
+  async getTransactionDetails(
+    @GetUser() user: User,
+    @Param('id') transactionId: string
+  ) {
+    this.logger.debug(`Getting transaction details for ID: ${transactionId}`);
+    
+    try {
+      const result = await this.walletService.getTransactionDetails(user.id, transactionId);
+      return result;
+    } catch (error) {
+      this.logger.error(`Error getting transaction details: ${error.message}`);
+      this.logger.error(error.stack);
+      throw error;
+    }
+  }
 } 

@@ -28,6 +28,7 @@ import { EmailService } from '../email/email.service';
 import { Transfer } from './entities/transfer.entity';
 import { TransferDto } from './dto/transfer.dto';
 import { Conversion } from './entities/conversion.entity';
+import { Deposit } from './entities/deposit.entity';
 
 interface PaginationParams {
   page: number;
@@ -116,6 +117,8 @@ export class WalletService {
     private kycLevelRepository: Repository<KYCLevel>,
     @InjectRepository(Withdrawal)
     private withdrawalRepository: Repository<Withdrawal>,
+    @InjectRepository(Deposit)
+    private depositRepository: Repository<Deposit>,
     private keyManagementService: KeyManagementService,
     private readonly exchangeService: ExchangeService,
     private connection: Connection,
@@ -1943,5 +1946,131 @@ export class WalletService {
       this.logger.error(error.stack);
       throw error;
     }
+  }
+
+  async getTransactionDetails(userId: string, transactionId: string) {
+    this.logger.debug(`[getTransactionDetails] Getting details for transaction ${transactionId}`);
+
+    // Try to find in deposits
+    const deposit = await this.depositRepository.findOne({
+      where: { id: transactionId, userId },
+      relations: ['token'],
+    });
+
+    if (deposit) {
+      return {
+        id: deposit.id,
+        type: 'deposit',
+        amount: deposit.amount,
+        tokenSymbol: deposit.token.symbol,
+        status: deposit.status,
+        createdAt: deposit.createdAt.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }),
+        metadata: deposit.metadata,
+        txHash: deposit.txHash,
+        blockchain: deposit.blockchain,
+        network: deposit.network,
+        networkVersion: deposit.networkVersion,
+        blockNumber: deposit.blockNumber,
+        fee: deposit.metadata?.fee,
+        from: deposit.metadata?.from,
+      };
+    }
+
+    // Try to find in withdrawals
+    const withdrawal = await this.withdrawalRepository.findOne({
+      where: { id: transactionId, userId },
+      relations: ['token'],
+    });
+
+    if (withdrawal) {
+      return {
+        id: withdrawal.id,
+        type: 'withdrawal',
+        amount: withdrawal.amount,
+        tokenSymbol: withdrawal.token.symbol,
+        status: withdrawal.status,
+        createdAt: withdrawal.createdAt.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }),
+        metadata: withdrawal.metadata,
+        networkVersion: withdrawal.networkVersion,
+        network: withdrawal.network,
+        address: withdrawal.address,
+        memo: withdrawal.memo,
+        fee: withdrawal.fee?.toString(),
+      };
+    }
+
+    // Try to find in conversions
+    const conversion = await this.conversionRepository.findOne({
+      where: { id: transactionId, userId },
+      relations: ['fromToken', 'toToken'],
+    });
+
+    if (conversion) {
+      return {
+        id: conversion.id,
+        type: 'conversion',
+        amount: conversion.fromAmount,
+        tokenSymbol: conversion.fromToken.symbol,
+        status: conversion.status,
+        createdAt: conversion.createdAt.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }),
+        toAmount: conversion.toAmount,
+        toToken: conversion.toToken.symbol,
+        exchangeRate: conversion.exchangeRate,
+      };
+    }
+
+    // Try to find in transfers
+    const transfer = await this.transferRepository.findOne({
+      where: { id: transactionId, userId },
+      relations: ['token'],
+    });
+
+    if (transfer) {
+      return {
+        id: transfer.id,
+        type: 'transfer',
+        amount: transfer.amount,
+        tokenSymbol: transfer.token.symbol,
+        status: transfer.status,
+        createdAt: transfer.createdAt.toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }),
+        metadata: transfer.metadata,
+        fromType: transfer.fromType,
+        toType: transfer.toType,
+      };
+    }
+
+    throw new NotFoundException('Transaction not found');
   }
 } 
