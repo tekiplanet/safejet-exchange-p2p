@@ -49,7 +49,7 @@ class P2PSettingsService {
       // print('Response: ${response.data}');
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
-      print('Error fetching currencies: $e');
+      print('Error fetching currencies');
       rethrow;
     }
   }
@@ -61,7 +61,7 @@ class P2PSettingsService {
       // print('Response: ${response.data}');
       return Map<String, dynamic>.from(response.data);
     } catch (e) {
-      print('Error fetching settings: $e');
+      print('Error fetching settings');
       rethrow;
     }
   }
@@ -80,7 +80,7 @@ class P2PSettingsService {
       print('Update response: ${response.data}');
       return Map<String, dynamic>.from(response.data);
     } catch (e) {
-      print('Error updating settings: $e');
+      print('Error updating settings');
       rethrow;
     }
   }
@@ -90,7 +90,7 @@ class P2PSettingsService {
       final settings = await getSettings();
       return List<Map<String, dynamic>>.from(settings['autoResponses'] ?? []);
     } catch (e) {
-      print('Error fetching auto responses: $e');
+      print('Error fetching auto responses');
       rethrow;
     }
   }
@@ -108,7 +108,7 @@ class P2PSettingsService {
         },
       );
     } catch (e) {
-      print('Error updating auto responses: $e');
+      print('Error updating auto responses');
       rethrow;
     }
   }

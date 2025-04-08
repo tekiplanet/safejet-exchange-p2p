@@ -49,7 +49,7 @@ class ExchangeService {
       print('Rate response: ${response.data}');
       return response.data;
     } catch (e) {
-      print('Error fetching rates: $e');
+      print('Error fetching rates');
       rethrow;
     }
   }
@@ -72,7 +72,7 @@ class ExchangeService {
       final price = response.data['price'];
       return price is num ? price.toDouble() : 0.0;
     } catch (e) {
-      print('Error getting crypto price: $e');
+      print('Error getting crypto price');
       return 0.0;
     }
   }
@@ -82,7 +82,7 @@ class ExchangeService {
       final price = await getCryptoPrice(cryptoSymbol, fiatCurrency);
       return amount * price;
     } catch (e) {
-      print('Error converting crypto to fiat: $e');
+      print('Error converting crypto to fiat');
       rethrow;
     }
   }

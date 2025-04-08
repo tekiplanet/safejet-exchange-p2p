@@ -69,7 +69,7 @@ class _P2PDisputeHistoryScreenState extends State<P2PDisputeHistoryScreen> {
       _currentUserId = await _p2pService.extractUserIdFromToken();
       print('Current user ID: $_currentUserId');
     } catch (e) {
-      print('Error getting user ID: $e');
+      print('Error getting user ID');
     }
     
     _loadDisputes();
@@ -171,7 +171,7 @@ class _P2PDisputeHistoryScreenState extends State<P2PDisputeHistoryScreen> {
         }
       }
     } catch (e) {
-      print('Error loading disputes: $e');
+      print('Error loading disputes');
       setState(() {
         _isLoading = false;
         _hasError = true;
@@ -516,7 +516,7 @@ class _P2PDisputeHistoryScreenState extends State<P2PDisputeHistoryScreen> {
       final formatter = DateFormat('MMM d, yyyy h:mm a');
       return formatter.format(date);
     } catch (e) {
-      print('Error formatting date: $e');
+      print('Error formatting date');
       return dateString;
     }
   }

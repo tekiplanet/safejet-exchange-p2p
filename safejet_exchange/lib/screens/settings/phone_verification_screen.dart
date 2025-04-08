@@ -59,7 +59,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         _currentPhone = user['phone'];
       });
     } catch (e) {
-      print('Error loading user phone: $e');
+      print('Error loading user phone');
     }
   }
 
@@ -449,7 +449,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error updating phone: $e'),
+          content: Text('Error updating phone'),
           backgroundColor: SafeJetColors.error,
         ),
       );
@@ -482,7 +482,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error sending code: $e'),
+          content: Text('Error sending code'),
           backgroundColor: SafeJetColors.error,
         ),
       );
@@ -509,7 +509,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error verifying code: $e'),
+          content: Text('Error verifying code'),
           backgroundColor: SafeJetColors.error,
         ),
       );

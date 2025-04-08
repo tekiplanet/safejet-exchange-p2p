@@ -485,7 +485,7 @@ class _AddPaymentMethodScreenState extends State<AddPaymentMethodScreen> {
 
       Navigator.of(context).pop();
     } catch (e) {
-      print('Error submitting form: $e');
+      print('Error submitting form');
       if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(

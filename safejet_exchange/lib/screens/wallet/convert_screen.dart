@@ -87,7 +87,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading funding balance: $e');
+      print('Error loading funding balance');
       setState(() => _isLoading = false);
     }
   }
@@ -126,7 +126,7 @@ class _ConvertScreenState extends State<ConvertScreen> {
         _isLoading = false;
         _exchangeRate = 0;
       });
-      print('Error updating exchange rate: $e');
+      print('Error updating exchange rate');
     }
   }
 

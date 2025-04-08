@@ -121,7 +121,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> with 
       }
     } catch (e) {
       // Only handle actual errors
-      print('Verification Error: $e');
+      print('Verification Error');
       if (!mounted) return;
       _playShakeAnimation();
       

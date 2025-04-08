@@ -52,7 +52,7 @@ class KYCProvider extends ChangeNotifier {
       await _kycService.startDocumentVerification();
       await loadKYCDetails();
     } catch (e) {
-      print('Error starting verification: $e');
+      print('Error starting verification');
       rethrow;
     } finally {
       _loading = false;
@@ -164,7 +164,7 @@ class KYCProvider extends ChangeNotifier {
       final token = await _kycService.startAdvancedVerification();
       return token;
     } catch (e) {
-      print('Error in advanced verification: $e');
+      print('Error in advanced verification');
       rethrow;
     } finally {
       _loading = false;

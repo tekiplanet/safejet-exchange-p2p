@@ -120,7 +120,7 @@ class HomeService {
       
       return data;
     } catch (e, stack) {
-      print('Error fetching portfolio summary: $e');
+      print('Error fetching portfolio summary');
       print('Stack trace: $stack');
       
       if (e is DioException) {
@@ -191,7 +191,7 @@ class HomeService {
         throw Exception('Failed to load market overview');
       }
     } catch (e) {
-      throw Exception('Error getting market overview: $e');
+      throw Exception('Error getting market overview');
     }
   }
 
@@ -211,7 +211,7 @@ class HomeService {
         throw Exception('Failed to load trending tokens');
       }
     } catch (e) {
-      throw Exception('Error getting trending tokens: $e');
+      throw Exception('Error getting trending tokens');
     }
   }
 
@@ -229,7 +229,7 @@ class HomeService {
         throw Exception('Failed to load news');
       }
     } catch (e) {
-      throw Exception('Failed to load news: $e');
+      throw Exception('Failed to load news');
     }
   }
 
@@ -248,7 +248,7 @@ class HomeService {
         throw Exception('Failed to load news');
       }
     } catch (e) {
-      throw Exception('Failed to load news: $e');
+      throw Exception('Failed to load news');
     }
   }
 
@@ -267,7 +267,7 @@ class HomeService {
         throw Exception('Failed to load news details');
       }
     } catch (e) {
-      throw Exception('Failed to load news details: $e');
+      throw Exception('Failed to load news details');
     }
   }
 
@@ -287,7 +287,7 @@ class HomeService {
         throw Exception('Failed to load market tokens');
       }
     } catch (e) {
-      throw Exception('Error getting market tokens: $e');
+      throw Exception('Error getting market tokens');
     }
   }
 
@@ -307,7 +307,7 @@ class HomeService {
         throw Exception('Failed to load contact information');
       }
     } catch (e) {
-      throw Exception('Error getting contact information: $e');
+      throw Exception('Error getting contact information');
     }
   }
 } 

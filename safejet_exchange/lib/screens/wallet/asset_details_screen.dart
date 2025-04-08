@@ -137,7 +137,7 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error updating chart data: $e');
+      debugPrint('Error updating chart data');
     } finally {
       setState(() {
         _isLoadingChart = false;

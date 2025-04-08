@@ -90,7 +90,7 @@ class P2PService {
       }
       throw Exception('Failed to load assets');
     } catch (e) {
-      throw Exception('Failed to load assets: $e');
+      throw Exception('Failed to load assets');
     }
   }
 
@@ -105,8 +105,8 @@ class P2PService {
       }
       throw Exception('Failed to load trader settings');
     } catch (e) {
-      print('Error in getTraderSettings: $e');
-      throw Exception('Failed to load trader settings: $e');
+      print('Error in getTraderSettings');
+      throw Exception('Failed to load trader settings');
     }
   }
 
@@ -127,8 +127,8 @@ class P2PService {
       }
       throw Exception('Failed to load market price');
     } catch (e) {
-      print('Error getting market price: $e');
-      throw Exception('Failed to load market price: $e');
+      print('Error getting market price');
+      throw Exception('Failed to load market price');
     }
   }
 
@@ -144,7 +144,7 @@ class P2PService {
       }
       throw Exception('Failed to load payment methods');
     } catch (e) {
-      throw Exception('Failed to load payment methods: $e');
+      throw Exception('Failed to load payment methods');
     }
   }
 
@@ -161,7 +161,7 @@ class P2PService {
 
       return response.data;
     } catch (e) {
-      throw Exception('Failed to process offer: $e');
+      throw Exception('Failed to process offer');
     }
   }
 
@@ -173,7 +173,7 @@ class P2PService {
       }
       throw Exception('Failed to load KYC level');
     } catch (e) {
-      throw Exception('Failed to load KYC level: $e');
+      throw Exception('Failed to load KYC level');
     }
   }
 
@@ -205,7 +205,7 @@ class P2PService {
       print('Failed to get user profile through all methods');
       return null;
     } catch (e) {
-      print('Error fetching profile: $e');
+      print('Error fetching profile');
       
       // Last resort: try to get ID from token
       try {
@@ -249,7 +249,7 @@ class P2PService {
       print('Token payload: $data');
       return userId?.toString();
     } catch (e) {
-      print('Error parsing JWT token: $e');
+      print('Error parsing JWT token');
       return null;
     }
   }
@@ -268,7 +268,7 @@ class P2PService {
       }
       throw Exception('Failed to load offers');
     } catch (e) {
-      throw Exception('Failed to load offers: $e');
+      throw Exception('Failed to load offers');
     }
   }
 
@@ -349,7 +349,7 @@ class P2PService {
         throw Exception(errorMessage);
       }
     } catch (e) {
-      print('Error submitting order: $e');
+      print('Error submitting order');
       print('Error type: ${e.runtimeType}');
       
       // If we already have a properly formatted exception, just rethrow it
@@ -406,7 +406,7 @@ class P2PService {
         throw Exception('Failed to load order details');
       }
     } catch (e) {
-      print('Error fetching order details: $e');
+      print('Error fetching order details');
       rethrow;
     }
   }
@@ -428,7 +428,7 @@ class P2PService {
         throw Exception('Failed to load payment method details');
       }
     } catch (e) {
-      print('Error fetching payment method details: $e');
+      print('Error fetching payment method details');
       rethrow;
     }
   }
@@ -460,7 +460,7 @@ class P2PService {
       // print('Search response: ${response.data}');
       return response.data;
     } catch (e) {
-      print('Error in getOrders: $e');
+      print('Error in getOrders');
       _handleError(e);
       rethrow;
     }
@@ -474,7 +474,7 @@ class P2PService {
       );
       print('Payment confirmation response: ${response.data}');
     } catch (e) {
-      print('Error confirming payment: $e');
+      print('Error confirming payment');
       _handleError(e);
       rethrow;
     }
@@ -495,7 +495,7 @@ class P2PService {
         throw Exception(errorMessage);
       }
     } catch (e) {
-      print('Error releasing order: $e');
+      print('Error releasing order');
       _handleError(e);
       rethrow;
     }
@@ -518,7 +518,7 @@ class P2PService {
       );
       print('Cancel order response: ${response.data}');
     } catch (e) {
-      print('Error cancelling order: $e');
+      print('Error cancelling order');
       _handleError(e);
       rethrow;
     }
@@ -540,8 +540,8 @@ class P2PService {
         throw Exception('Failed to dispute order');
       }
     } catch (e) {
-      print('Error disputing order: $e');
-      throw Exception('Failed to dispute order: $e');
+      print('Error disputing order');
+      throw Exception('Failed to dispute order');
     }
   }
 
@@ -583,7 +583,7 @@ class P2PService {
         _orderUpdateController.add(response.data);
       }
     } catch (e) {
-      print('Error fetching order details: $e');
+      print('Error fetching order details');
     }
   }
 
@@ -600,7 +600,7 @@ class P2PService {
       print('Token retrieved: ${token != null ? 'Yes' : 'No'}');
       return token;
     } catch (e) {
-      print('Error getting token: $e');
+      print('Error getting token');
       return null;
     }
   }
@@ -691,7 +691,7 @@ class P2PService {
           print('Warning: Attempted to add data to closed controller');
         }
       } catch (e) {
-        print('Error adding data to stream: $e');
+        print('Error adding data to stream');
       }
     });
 
@@ -801,7 +801,7 @@ class P2PService {
       );
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
-      print('Error getting order messages: $e');
+      print('Error getting order messages');
       rethrow;
     }
   }
@@ -830,7 +830,7 @@ class P2PService {
       print('Message sent successfully');
     } catch (e) {
       print('=== MESSAGE SEND ERROR ===');
-      print('Error sending message: $e');
+      print('Error sending message');
       print(StackTrace.current);
     }
   }
@@ -850,7 +850,7 @@ class P2PService {
       });
       print('Delivery status emitted for message: $messageId');
     } catch (e) {
-      print('Error marking message as delivered: $e');
+      print('Error marking message as delivered');
     }
   }
 
@@ -869,7 +869,7 @@ class P2PService {
       });
       print('Read status emitted for message: $messageId');
     } catch (e) {
-      print('Error marking message as read: $e');
+      print('Error marking message as read');
     }
   }
 
@@ -921,7 +921,7 @@ class P2PService {
         throw Exception('Failed to load dispute details');
       }
     } catch (e) {
-      print('Error fetching dispute details: $e');
+      print('Error fetching dispute details');
       throw _handleError(e);
     }
   }
@@ -948,7 +948,7 @@ class P2PService {
         return '$monthName ${date.day}, ${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
       }
     } catch (e) {
-      print('Error formatting date: $e');
+      print('Error formatting date');
       return dateString; // Return original string if parsing fails
     }
   }
@@ -1070,7 +1070,7 @@ class P2PService {
           print('Warning: Attempted to add data to closed dispute controller');
         }
       } catch (e) {
-        print('Error adding dispute data to stream: $e');
+        print('Error adding dispute data to stream');
       }
     });
 
@@ -1138,7 +1138,7 @@ class P2PService {
       // print('Fetched dispute messages: ${response.data}');
       return List<Map<String, dynamic>>.from(response.data);
     } catch (e) {
-      print('Error getting dispute messages: $e');
+      print('Error getting dispute messages');
       rethrow;
     }
   }
@@ -1200,7 +1200,7 @@ class P2PService {
       return response.data;
     } catch (e) {
       print('=== DISPUTE MESSAGE SEND ERROR ===');
-      print('Error sending dispute message: $e');
+      print('Error sending dispute message');
       print('Error type: ${e.runtimeType}');
       print(StackTrace.current);
       rethrow;
@@ -1222,7 +1222,7 @@ class P2PService {
       });
       print('Delivery status emitted for dispute message: $messageId');
     } catch (e) {
-      print('Error marking dispute message as delivered: $e');
+      print('Error marking dispute message as delivered');
     }
   }
 
@@ -1241,7 +1241,7 @@ class P2PService {
       });
       print('Read status emitted for dispute message: $messageId');
     } catch (e) {
-      print('Error marking dispute message as read: $e');
+      print('Error marking dispute message as read');
     }
   }
 
@@ -1384,7 +1384,7 @@ class P2PService {
       print('Failed to load disputes: ${response.statusCode}');
       return [];
     } catch (e) {
-      print('Error loading disputes: $e');
+      print('Error loading disputes');
       return [];
     }
   }

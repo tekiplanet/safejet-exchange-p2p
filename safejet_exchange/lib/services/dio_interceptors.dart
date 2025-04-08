@@ -26,7 +26,7 @@ class AuthInterceptor extends Interceptor {
         final response = await Dio().fetch(options);
         return handler.resolve(response);
       } catch (e) {
-        print('❌ Auth Interceptor: Token refresh failed: $e');
+        print('❌ Auth Interceptor: Token refresh failed');
         if (context != null && context!.mounted) {
           await authProvider.handleUnauthorized(context!);
         } else {

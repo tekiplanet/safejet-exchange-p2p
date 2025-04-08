@@ -54,7 +54,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
     } catch (e) {
       // Handle error
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading settings: $e')),
+        SnackBar(content: Text('Error loading settings')),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -101,7 +101,7 @@ class _P2PTradingPreferencesScreenState extends State<P2PTradingPreferencesScree
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating setting: $e')),
+        SnackBar(content: Text('Error updating setting')),
       );
     }
   }

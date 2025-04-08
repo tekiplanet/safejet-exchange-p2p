@@ -84,7 +84,7 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
         });
       }
     } catch (e) {
-      print('Error loading user settings: $e');
+      print('Error loading user settings');
       // Default to USD if there's an error
     }
   }
@@ -124,7 +124,7 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
         });
       }
     } catch (e) {
-      print('Error loading portfolio data: $e');
+      print('Error loading portfolio data');
       if (mounted) {
         setState(() {
           _isLoading = false;

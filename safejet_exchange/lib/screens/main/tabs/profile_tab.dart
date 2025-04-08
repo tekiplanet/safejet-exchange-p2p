@@ -53,7 +53,7 @@ class _ProfileTabState extends State<ProfileTab> {
         _is2FAEnabled = user['twoFactorEnabled'] ?? false;
       });
     } catch (e) {
-      print('Error checking 2FA status: $e');
+      print('Error checking 2FA status');
     }
   }
 

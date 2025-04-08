@@ -98,7 +98,7 @@ class _DepositScreenState extends State<DepositScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetching network variants: $e');
+      debugPrint('Error fetching network variants');
       // Continue with current network data if fetch fails
     }
   }
@@ -120,7 +120,7 @@ class _DepositScreenState extends State<DepositScreen> {
             'Sending any other coin or token may result in permanent loss.';
       });
     } catch (e) {
-      debugPrint('Error getting deposit address: $e');
+      debugPrint('Error getting deposit address');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to get deposit address: ${e.toString()}')),
       );

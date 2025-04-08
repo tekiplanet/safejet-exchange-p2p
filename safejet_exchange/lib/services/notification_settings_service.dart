@@ -45,7 +45,7 @@ class NotificationSettingsService {
         return MapEntry(key, innerMap);
       });
     } catch (e) {
-      print('Error fetching notification settings: $e');
+      print('Error fetching notification settings');
       rethrow;
     }
   }
@@ -61,7 +61,7 @@ class NotificationSettingsService {
         },
       );
     } catch (e) {
-      print('Error updating notification settings: $e');
+      print('Error updating notification settings');
       rethrow;
     }
   }

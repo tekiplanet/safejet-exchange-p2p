@@ -50,13 +50,13 @@ class PaymentMethodsService {
           try {
             return PaymentMethod.fromJson(json);
           } catch (e) {
-            print('Error parsing payment method: $e');
+            print('Error parsing payment method');
             return null;
           }
         }).whereType<PaymentMethod>().toList();
         
       } catch (e) {
-        print('Error parsing payment methods: $e');
+        print('Error parsing payment methods');
         print('Response data: ${response.data}');
         throw 'Failed to parse payment methods data';
       }
@@ -70,7 +70,7 @@ class PaymentMethodsService {
         final message = e.response?.data['message'];
         throw message ?? 'Failed to fetch payment methods';
       }
-      print('Error getting payment methods: $e');
+      print('Error getting payment methods');
       throw 'Failed to fetch payment methods';
     }
   }
@@ -241,7 +241,7 @@ class PaymentMethodsService {
       final base64Image = base64.encode(bytes);
       return 'data:image/jpeg;base64,$base64Image';
     } catch (e) {
-      print('Image loading error: $e');
+      print('Image loading error');
       if (e is DioException) {
         if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
           await Provider.of<AuthProvider>(context, listen: false)
@@ -275,7 +275,7 @@ class PaymentMethodsService {
       final compressedBase64 = base64.encode(compressedBytes);
       return 'data:$mimeType;base64,$compressedBase64';
     } catch (e) {
-      print('Error compressing image: $e');
+      print('Error compressing image');
       return base64Image; // Return original if compression fails
     }
   }

@@ -44,7 +44,7 @@ class _TwoFactorManageScreenState extends State<TwoFactorManageScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading backup codes: $e'); // Debug log
+      print('Error loading backup codes'); // Debug log
       if (!mounted) return;
       setState(() => _isLoading = false);
       

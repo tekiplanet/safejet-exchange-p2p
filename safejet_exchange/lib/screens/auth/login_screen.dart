@@ -58,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     } catch (e) {
-      print('Error checking biometric availability: $e');
+      print('Error checking biometric availability');
     }
   }
 
@@ -106,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      print('Error in biometric login: $e');
+      print('Error in biometric login');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

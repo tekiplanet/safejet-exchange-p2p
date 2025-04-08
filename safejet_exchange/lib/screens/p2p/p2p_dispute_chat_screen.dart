@@ -109,7 +109,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
           }
         }
       } catch (e) {
-        print('Error loading dispute details: $e');
+        print('Error loading dispute details');
       }
       
       // Fetch initial messages
@@ -155,7 +155,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
       });
     } catch (e) {
       print('=== DISPUTE CHAT INITIALIZATION ERROR ===');
-      print('Error initializing dispute chat: $e');
+      print('Error initializing dispute chat');
       print(StackTrace.current);
       setState(() {
         _isLoading = false;
@@ -184,7 +184,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
         print('⚠ Image endpoint may have configuration issues: ${response.statusCode}');
       }
     } catch (e) {
-      print('⚠ Error testing image endpoint: $e');
+      print('⚠ Error testing image endpoint');
     }
   }
 
@@ -262,7 +262,7 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
         });
       }
     } catch (e) {
-      print('Error refreshing dispute details: $e');
+      print('Error refreshing dispute details');
     }
   }
 
@@ -948,10 +948,10 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
         print('Image encoded successfully, length: ${base64Image.length}');
         print('MIME type: $mimeType');
       } catch (e) {
-        print('Error encoding image: $e');
+        print('Error encoding image');
         print(StackTrace.current);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to process image: $e')),
+          SnackBar(content: Text('Failed to process image')),
         );
         return;
       }
@@ -979,10 +979,10 @@ class _P2PDisputeChatScreenState extends State<P2PDisputeChatScreen> {
         _selectedImage = null;
       });
     } catch (e) {
-      print('Error sending message with attachment: $e');
+      print('Error sending message with attachment');
       print(StackTrace.current);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send message: $e')),
+        SnackBar(content: Text('Failed to send message')),
       );
     }
   }

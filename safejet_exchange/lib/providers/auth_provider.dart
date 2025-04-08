@@ -96,7 +96,7 @@ class AuthProvider with ChangeNotifier {
           );
         }
       } catch (e) {
-        print('Error handling biometric storage: $e');
+        print('Error handling biometric storage');
       }
 
       // Store user data only if 2FA is not required or after 2FA verification
@@ -136,7 +136,7 @@ class AuthProvider with ChangeNotifier {
       print('Logout complete - auth tokens cleared');
       notifyListeners();
     } catch (e) {
-      print('Error during logout: $e');
+      print('Error during logout');
       rethrow;
     }
   }
@@ -163,7 +163,7 @@ class AuthProvider with ChangeNotifier {
         _isLoggedIn = true;
       }
     } catch (e) {
-      print('Error checking auth status: $e');
+      print('Error checking auth status');
       _isLoggedIn = false;
       _user = null;
     } finally {
@@ -190,7 +190,7 @@ class AuthProvider with ChangeNotifier {
       _user = User.fromJson(userData);
       _isLoggedIn = true;
     } catch (e) {
-      print('Error fetching fresh user data: $e');
+      print('Error fetching fresh user data');
       if (e is DioException && e.response?.statusCode == 401) {
         _isLoggedIn = false;
         _user = null;
@@ -300,7 +300,7 @@ class AuthProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      print('❌ Auth Provider: 2FA verification failed: $e');
+      print('❌ Auth Provider: 2FA verification failed');
       _error = e.toString()
           .replaceAll('Exception: ', '')
           .replaceAll('Error: ', '');
@@ -517,7 +517,7 @@ class AuthProvider with ChangeNotifier {
       final response = await _authService.verifyCurrentPassword(currentPassword);
       return response;
     } catch (e) {
-      print('Error verifying password: $e');
+      print('Error verifying password');
       rethrow;
     }
   }
@@ -529,7 +529,7 @@ class AuthProvider with ChangeNotifier {
     try {
       await _authService.changePassword(currentPassword, newPassword);
     } catch (e) {
-      print('Error changing password: $e');
+      print('Error changing password');
       rethrow;
     }
   }
@@ -540,7 +540,7 @@ class AuthProvider with ChangeNotifier {
       _user = User.fromJson(userData); // You'll need to create this model
       notifyListeners();
     } catch (e) {
-      print('Error loading user: $e');
+      print('Error loading user');
       rethrow;
     }
   }
@@ -590,7 +590,7 @@ class AuthProvider with ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print('Error loading user data: $e');
+      print('Error loading user data');
       rethrow;
     }
   }
@@ -611,9 +611,9 @@ class AuthProvider with ChangeNotifier {
         // Let the interceptor handle it
         rethrow;
       }
-      print('Error refreshing user data: $e');
+      print('Error refreshing user data');
     } catch (e) {
-      print('Error refreshing user data: $e');
+      print('Error refreshing user data');
     }
   }
 
@@ -642,7 +642,7 @@ class AuthProvider with ChangeNotifier {
       // Schedule token refresh 5 minutes before expiration
       _scheduleTokenRefresh();
     } catch (e) {
-      print('Error parsing token: $e');
+      print('Error parsing token');
     }
   }
 
@@ -682,12 +682,12 @@ class AuthProvider with ChangeNotifier {
             await handleSessionExpiration();
           }
         } catch (e) {
-          print('Error during scheduled token refresh: $e');
+          print('Error during scheduled token refresh');
           await handleSessionExpiration();
         }
       });
     } catch (e) {
-      print('Error scheduling token refresh: $e');
+      print('Error scheduling token refresh');
       handleSessionExpiration();
     }
   }
@@ -748,7 +748,7 @@ class AuthProvider with ChangeNotifier {
       
       print('Biometric login successful');
     } catch (e) {
-      print('Error in biometric login: $e');
+      print('Error in biometric login');
       rethrow;
     }
   }

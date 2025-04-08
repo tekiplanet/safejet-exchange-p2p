@@ -126,7 +126,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
       print('Message listener set up');
     } catch (e) {
       print('=== CHAT INITIALIZATION ERROR ===');
-      print('Error initializing chat: $e');
+      print('Error initializing chat');
       print(StackTrace.current);
     }
   }
@@ -159,7 +159,7 @@ class _P2PChatScreenState extends State<P2PChatScreen> {
         print('Failed to load order details');
       }
     } catch (e) {
-      print('Error loading order details: $e');
+      print('Error loading order details');
       // For now, let's create a simple order details object so the UI works
       setState(() {
         _orderDetails = {

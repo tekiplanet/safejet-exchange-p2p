@@ -693,7 +693,7 @@ class _P2PPaymentMethodsScreenState extends State<P2PPaymentMethodsScreen> {
               ),
             );
           } catch (e) {
-            print('Error finding option: $e');
+            print('Error finding option');
             return Text(detail.value);
           }
         }

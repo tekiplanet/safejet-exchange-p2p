@@ -63,7 +63,7 @@ class _HomeTabState extends State<HomeTab> {
         });
       }
     } catch (e) {
-      print('Error loading market data: $e');
+      print('Error loading market data');
     }
   }
 
@@ -76,7 +76,7 @@ class _HomeTabState extends State<HomeTab> {
         });
       }
     } catch (e) {
-      print('Error loading trending tokens: $e');
+      print('Error loading trending tokens');
     }
   }
 

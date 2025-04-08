@@ -52,7 +52,7 @@ class _SumsubVerificationScreenState extends State<SumsubVerificationScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error initializing verification: $e'),
+            content: Text('Error initializing verification'),
             backgroundColor: SafeJetColors.error,
           ),
         );

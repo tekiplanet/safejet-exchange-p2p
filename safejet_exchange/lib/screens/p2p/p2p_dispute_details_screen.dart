@@ -116,7 +116,7 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error fetching dispute details: $e');
+      print('Error fetching dispute details');
       setState(() {
         _errorMessage = 'Failed to load dispute details: $e';
         _isLoading = false;
@@ -447,7 +447,7 @@ class _P2PDisputeDetailsScreenState extends State<P2PDisputeDetailsScreen> {
         print('Current user ID from token: $userId');
         return userId ?? '';
       } catch (e) {
-        print('Error getting user ID: $e');
+        print('Error getting user ID');
         return '';
       }
     }

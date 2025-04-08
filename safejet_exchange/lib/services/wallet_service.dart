@@ -79,7 +79,7 @@ class WalletService {
               );
               return handler.resolve(response);
             } catch (e) {
-              print('Retry failed: $e');
+              print('Retry failed');
               return handler.next(error);
             }
           }
@@ -134,7 +134,7 @@ class WalletService {
         throw 'Unable to load balances. Please try again.';
       }
     } catch (e) {
-      debugPrint('Error in getBalances: $e');
+      debugPrint('Error in getBalances');
       throw 'Unable to load balances. Please try again.';
     }
   }
@@ -166,7 +166,7 @@ class WalletService {
       return result;
     } catch (e) {
       // print('Error formatting balance: $balance with decimals: $decimals');
-      // print('Error details: $e');
+      // print('Error details');
       return '0.0';
     }
   }
@@ -214,7 +214,7 @@ class WalletService {
       );
       return response.data;
     } catch (e) {
-      debugPrint('Error getting deposit address: $e');
+      debugPrint('Error getting deposit address');
       rethrow;
     }
   }
@@ -259,7 +259,7 @@ class WalletService {
         );
       }).toList();
     } catch (e) {
-      debugPrint('Error getting available coins: $e');
+      debugPrint('Error getting available coins');
       rethrow;
     }
   }
@@ -333,7 +333,7 @@ class WalletService {
       );
       return response.data;
     } catch (e) {
-      print('Error creating withdrawal: $e');
+      print('Error creating withdrawal');
       rethrow;
     }
   }
@@ -400,7 +400,7 @@ class WalletService {
       }
       return false;
     } catch (e) {
-      print('Error checking address: $e');
+      print('Error checking address');
       return false;
     }
   }
@@ -419,7 +419,7 @@ class WalletService {
       );
       return response.data;  // Assuming the response contains the list of addresses
     } catch (e) {
-      print('Error fetching address book: $e');
+      print('Error fetching address book');
       throw e;  // Rethrow the error for handling in the UI
     }
   }
@@ -461,7 +461,7 @@ class WalletService {
         'funding': fundingBalance.toString(),
       };
     } catch (e) {
-      print('Error getting wallet balances: $e');
+      print('Error getting wallet balances');
       throw 'Failed to load balances';
     }
   }
@@ -515,7 +515,7 @@ class WalletService {
       print('Calculated exchange rate: $rate');
       return rate;
     } catch (e) {
-      print('Error getting exchange rate: $e');
+      print('Error getting exchange rate');
       return 0.0;
     }
   }
@@ -553,7 +553,7 @@ class WalletService {
         'value': response.data['value']?.toString() ?? '0',
       };
     } catch (e) {
-      print('Error getting conversion fee: $e');
+      print('Error getting conversion fee');
       return {
         'type': 'percentage',
         'value': '0',
@@ -608,7 +608,7 @@ class WalletService {
     } catch (e) {
       print('\n=== Transaction History Error ===');
       print('Error Type: ${e.runtimeType}');
-      print('Error Details: $e');
+      print('Error Details');
       rethrow;
     }
   }
@@ -634,7 +634,7 @@ class WalletService {
     } catch (e) {
       print('\n=== Transaction Details Error ===');
       print('Error Type: ${e.runtimeType}');
-      print('Error Details: $e');
+      print('Error Details');
       rethrow;
     }
   }

@@ -58,7 +58,7 @@ class Transaction {
       );
     } catch (e) {
       print('Error parsing date: ${json['createdAt']}');
-      print('Error details: $e');
+      print('Error details');
       // Return the original date string if parsing fails
       return Transaction(
         id: json['id'],

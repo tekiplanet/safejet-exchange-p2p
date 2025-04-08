@@ -57,7 +57,7 @@ class _TwoFactorScreenState extends State<TwoFactorScreen> {
         print('Updated state - QR URL: $_qrCodeUrl');
       }
     } catch (e) {
-      print('Generate 2FA secret error: $e');
+      print('Generate 2FA secret error');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

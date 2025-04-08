@@ -27,7 +27,7 @@ class ThemeProvider with ChangeNotifier {
       await _prefs?.setBool(_themeKey, _isDarkMode);
       notifyListeners();
     } catch (e) {
-      debugPrint('Error saving theme mode: $e');
+      debugPrint('Error saving theme mode');
     }
   }
 

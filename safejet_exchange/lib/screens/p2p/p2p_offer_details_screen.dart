@@ -155,7 +155,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
         offerDetails = details;
       });
     } catch (e) {
-      print('Error fetching offer details: $e');
+      print('Error fetching offer details');
     }
   }
 
@@ -1666,7 +1666,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       print('Fetched payment methods: $paymentMethods');
       return paymentMethods;
     } catch (e) {
-      print('Error fetching user payment methods: $e');
+      print('Error fetching user payment methods');
       // Return empty list on error
       return [];
     }
@@ -1754,7 +1754,7 @@ class _P2POfferDetailsScreenState extends State<P2POfferDetailsScreen> with Sing
       }
     } catch (e) {
       // Log complete error
-      print('Error submitting order: $e');
+      print('Error submitting order');
       print('Error type: ${e.runtimeType}');
       print('Full error toString: ${e.toString()}');
       

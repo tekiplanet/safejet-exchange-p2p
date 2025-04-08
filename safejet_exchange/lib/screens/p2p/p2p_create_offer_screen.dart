@@ -129,7 +129,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
       // Load payment methods
       await _loadPaymentMethods();
     } catch (e) {
-      print('Error in _loadInitialData: $e');
+      print('Error in _loadInitialData');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString()),
@@ -181,7 +181,7 @@ class _P2PCreateOfferScreenState extends State<P2PCreateOfferScreen> {
         // );
       });
     } catch (e) {
-      print('Error loading market price: $e');
+      print('Error loading market price');
     } finally {
       setState(() => _isPriceLoading = false);
     }

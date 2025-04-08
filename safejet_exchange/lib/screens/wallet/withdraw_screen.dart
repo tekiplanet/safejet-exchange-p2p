@@ -258,7 +258,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         _receiveAmount = double.parse(feeDetails['receiveAmount']);
       });
     } catch (e) {
-      print('Error calculating fee: $e');
+      print('Error calculating fee');
       setState(() {
         _feeDetails = null;
         _receiveAmount = null;
@@ -982,7 +982,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
       });
       print('Updated _isAddressInAddressBook to: $_isAddressInAddressBook');
     } catch (e) {
-      print('Error checking address: $e');
+      print('Error checking address');
     }
   }
 

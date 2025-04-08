@@ -169,7 +169,7 @@ class PaymentMethodsProvider with ChangeNotifier {
         await loadPaymentMethods();
       }
     } catch (e) {
-      print('Provider error updating payment method: $e');
+      print('Provider error updating payment method');
       rethrow;
     }
   }

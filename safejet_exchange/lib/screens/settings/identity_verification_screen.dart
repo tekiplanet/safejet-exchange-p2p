@@ -42,7 +42,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading KYC details: $e')),
+          SnackBar(content: Text('Error loading KYC details')),
         );
       }
     }
@@ -60,7 +60,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
         _lastNameController.text = names.length > 1 ? names.sublist(1).join(' ') : '';
       });
     } catch (e) {
-      print('Error loading user details: $e');
+      print('Error loading user details');
     }
   }
 
@@ -108,7 +108,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
         }
       }
     } catch (e) {
-      print('Error loading saved form data: $e');
+      print('Error loading saved form data');
     }
   }
 
@@ -130,7 +130,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       await prefs.setString(_storageKey, json.encode(data));
       print('Form data saved successfully: $data'); // Debug log
     } catch (e) {
-      print('Error saving form data: $e');
+      print('Error saving form data');
     }
   }
 
@@ -140,7 +140,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
       await prefs.remove(_storageKey);
       print('Form data cleared successfully'); // Debug log
     } catch (e) {
-      print('Error clearing saved form data: $e');
+      print('Error clearing saved form data');
     }
   }
 
@@ -443,7 +443,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
           ),
         );
       }
-      print('Technical error details: $e');
+      print('Technical error details');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -481,7 +481,7 @@ class _IdentityVerificationScreenState extends State<IdentityVerificationScreen>
         );
       }
     } catch (e) {
-      print('Technical error details: $e'); // Keep technical details in logs
+      print('Technical error details'); // Keep technical details in logs
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

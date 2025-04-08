@@ -51,7 +51,7 @@ class BiometricSettingsService {
       final isDeviceSupported = await _localAuth.isDeviceSupported();
       return isAvailable && isDeviceSupported;
     } catch (e) {
-      print('Error checking biometric availability: $e');
+      print('Error checking biometric availability');
       return false;
     }
   }
@@ -60,7 +60,7 @@ class BiometricSettingsService {
     try {
       return await _localAuth.getAvailableBiometrics();
     } catch (e) {
-      print('Error getting available biometrics: $e');
+      print('Error getting available biometrics');
       return [];
     }
   }
@@ -77,7 +77,7 @@ class BiometricSettingsService {
         ),
       );
     } catch (e) {
-      print('Error in authenticate(): $e');
+      print('Error in authenticate()');
       return false;
     }
   }
@@ -87,7 +87,7 @@ class BiometricSettingsService {
       final response = await _dio.get('/me');
       return response.data['biometricEnabled'] as bool;
     } catch (e) {
-      print('Error fetching biometric status: $e');
+      print('Error fetching biometric status');
       rethrow;
     }
   }
@@ -115,7 +115,7 @@ class BiometricSettingsService {
       
       print('Token storage verified successfully');
     } catch (e) {
-      print('Error storing biometric tokens: $e');
+      print('Error storing biometric tokens');
       await clearBiometricTokens();
       rethrow;
     }
@@ -146,7 +146,7 @@ class BiometricSettingsService {
         'refreshToken': refreshToken,
       };
     } catch (e) {
-      print('Error getting biometric tokens: $e');
+      print('Error getting biometric tokens');
       await clearBiometricTokens();
       return {'token': null, 'refreshToken': null};
     }
@@ -159,7 +159,7 @@ class BiometricSettingsService {
       await _storage.delete(key: _refreshTokenKey);
       print('Biometric tokens cleared successfully');
     } catch (e) {
-      print('Error clearing biometric tokens: $e');
+      print('Error clearing biometric tokens');
     }
   }
 
@@ -177,7 +177,7 @@ class BiometricSettingsService {
       final expiry = DateTime.fromMillisecondsSinceEpoch(payload['exp'] * 1000);
       return Future.value(DateTime.now().isBefore(expiry));
     } catch (e) {
-      print('Error checking token validity: $e');
+      print('Error checking token validity');
       return Future.value(false);
     }
   }
@@ -212,7 +212,7 @@ class BiometricSettingsService {
 
       return true;
     } catch (e) {
-      print('Error in authenticateAndGetTokens: $e');
+      print('Error in authenticateAndGetTokens');
       return false;
     }
   }
@@ -270,7 +270,7 @@ class BiometricSettingsService {
       }
 
     } catch (e) {
-      print('Error in updateBiometricStatus: $e');
+      print('Error in updateBiometricStatus');
       if (!enabled) {
         await clearBiometricTokens();
       }
@@ -287,7 +287,7 @@ class BiometricSettingsService {
         await storeBiometricTokens(token, refreshToken);
       }
     } catch (e) {
-      print('Error storing tokens after login: $e');
+      print('Error storing tokens after login');
     }
   }
 } 

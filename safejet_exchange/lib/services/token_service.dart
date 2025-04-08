@@ -167,8 +167,8 @@ class TokenService {
         throw Exception('Failed to load tokens: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error fetching market tokens: $e');
-      throw Exception('Failed to load tokens: $e');
+      print('Error fetching market tokens');
+      throw Exception('Failed to load tokens');
     }
   }
 
@@ -219,8 +219,8 @@ class TokenService {
         throw Exception('Failed to load tokens: ${response.statusCode}');
       }
     } catch (e) {
-      print('Error fetching tokens: $e');
-      throw Exception('Failed to load tokens: $e');
+      print('Error fetching tokens');
+      throw Exception('Failed to load tokens');
     }
   }
 } 

@@ -64,7 +64,7 @@ class AuthService {
 
       return data;
     } catch (e) {
-      print('❌ Auth Service: Login error: $e');
+      print('❌ Auth Service: Login error');
       
       if (e is DioException) {
         // Handle connection timeouts
@@ -143,7 +143,7 @@ class AuthService {
       // Clear all stored data
       await storage.deleteAll();
     } catch (e) {
-      print('Logout error: $e');
+      print('Logout error');
       // Still clear local storage even if backend call fails
       await storage.deleteAll();
       rethrow;
@@ -226,7 +226,7 @@ class AuthService {
 
       throw data['message'] ?? 'Email verification failed';
     } catch (e) {
-      print('Verification error: $e');
+      print('Verification error');
       if (e.toString().contains('verified successfully')) {
         return {'status': 'success', 'message': e.toString()};
       }
@@ -310,7 +310,7 @@ class AuthService {
         throw errorMessage ?? 'Failed to verify 2FA code';
       }
     } catch (e) {
-      print('❌ 2FA Service: Error: $e');
+      print('❌ 2FA Service: Error');
       rethrow;
     }
   }
@@ -334,7 +334,7 @@ class AuthService {
 
       throw data['message'] ?? 'Failed to send reset code';
     } catch (e) {
-      print('Forgot password error: $e');
+      print('Forgot password error');
       rethrow;
     }
   }
@@ -360,7 +360,7 @@ class AuthService {
 
       throw data['message'] ?? 'Failed to reset password';
     } catch (e) {
-      print('Reset password error: $e');
+      print('Reset password error');
       rethrow;
     }
   }
@@ -382,7 +382,7 @@ class AuthService {
 
       throw data['message'] ?? 'Failed to generate 2FA secret';
     } catch (e) {
-      print('Generate 2FA secret error: $e');
+      print('Generate 2FA secret error');
       rethrow;
     }
   }
@@ -419,7 +419,7 @@ class AuthService {
 
       throw data['message'] ?? 'Failed to enable 2FA';
     } catch (e) {
-      print('Enable 2FA error: $e');
+      print('Enable 2FA error');
       rethrow;
     }
   }
@@ -464,7 +464,7 @@ class AuthService {
         print('User data refreshed after disabling 2FA');
       }
     } catch (e) {
-      print('Disable 2FA error: $e');
+      print('Disable 2FA error');
       if (e is DioException) {
         print('DioError type: ${e.type}');
         print('DioError message: ${e.message}');
@@ -506,7 +506,7 @@ class AuthService {
         throw response.data['message'] ?? 'Failed to get backup codes';
       }
     } catch (e) {
-      print('Get backup codes error: $e');
+      print('Get backup codes error');
       if (e is DioException) {
         // Handle specific error cases
         switch (e.type) {
@@ -550,7 +550,7 @@ class AuthService {
           await storage.write(key: 'user', value: json.encode(freshUserData));
           return freshUserData;
         } catch (e) {
-          print('Error fetching fresh user data: $e');
+          print('Error fetching fresh user data');
           // Return cached data if server request fails
           return localUser;
         }
@@ -566,7 +566,7 @@ class AuthService {
       await storage.write(key: 'user', value: json.encode(userData));
       return userData;
     } catch (e) {
-      print('Get current user error: $e');
+      print('Get current user error');
       rethrow;
     }
   }
@@ -623,7 +623,7 @@ class AuthService {
       
       throw data['message'] ?? 'Failed to update phone number';
     } catch (e) {
-      print('Update phone error: $e');
+      print('Update phone error');
       rethrow;
     }
   }
@@ -654,7 +654,7 @@ class AuthService {
         throw data['message'] ?? 'Failed to send verification code';
       }
     } catch (e) {
-      print('Send phone verification error: $e');
+      print('Send phone verification error');
       rethrow;
     }
   }
@@ -688,7 +688,7 @@ class AuthService {
 
       return data;
     } catch (e) {
-      print('Verify phone error: $e');
+      print('Verify phone error');
       rethrow;
     }
   }
@@ -841,7 +841,7 @@ class AuthService {
 
       return response.data;
     } catch (e) {
-      print('Error refreshing token: $e');
+      print('Error refreshing token');
       if (e is DioException) {
         print('Response data: ${e.response?.data}');
         print('Status code: ${e.response?.statusCode}');
@@ -882,7 +882,7 @@ class AuthService {
         value: refreshResponse['accessToken'],
       );
     } catch (e) {
-      print('Token refresh failed: $e');
+      print('Token refresh failed');
       await storage.deleteAll(); // Clear all stored data
       throw 'Session expired. Please login again.';
     }
@@ -905,7 +905,7 @@ class AuthService {
       }
       return null;
     } catch (e) {
-      print('Get user ID error: $e');
+      print('Get user ID error');
       return null;
     }
   }
@@ -918,7 +918,7 @@ class AuthService {
       final savedToken = await storage.read(key: 'token');
       print('Verified saved token: ${savedToken != null ? 'Yes' : 'No'}');
     } catch (e) {
-      print('Error saving token: $e');
+      print('Error saving token');
       throw Exception('Failed to save authentication token');
     }
   }

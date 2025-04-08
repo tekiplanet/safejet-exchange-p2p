@@ -114,7 +114,7 @@ class _P2POrderHistoryScreenState extends State<P2POrderHistoryScreen> with Sing
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading orders: $e'); // Debug log
+      print('Error loading orders'); // Debug log
       setState(() {
         _isLoading = false;
         _hasError = true;

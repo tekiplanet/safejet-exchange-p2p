@@ -37,7 +37,7 @@ class LanguageSettingsService {
       final response = await _dio.get('/me');
       return response.data['language'] as String;
     } catch (e) {
-      print('Error fetching language setting: $e');
+      print('Error fetching language setting');
       rethrow;
     }
   }
@@ -51,7 +51,7 @@ class LanguageSettingsService {
         },
       );
     } catch (e) {
-      print('Error updating language: $e');
+      print('Error updating language');
       rethrow;
     }
   }

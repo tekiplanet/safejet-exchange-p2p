@@ -66,7 +66,7 @@ class _CustomLocationPickerState extends State<CustomLocationPicker> {
         _countryData = decoded;
       });
     } catch (e, stackTrace) {
-      print('Error loading country data: $e');
+      print('Error loading country data');
       print('Stack trace: $stackTrace');
       print('Current directory: ${Directory.current}');
     }
@@ -109,7 +109,7 @@ class _CustomLocationPickerState extends State<CustomLocationPicker> {
       states.sort((a, b) => a.compareTo(b));
       return states;
     } catch (e, stackTrace) {
-      print('Error getting states: $e');
+      print('Error getting states');
       print('Stack trace: $stackTrace');
       return [];
     }
@@ -140,7 +140,7 @@ class _CustomLocationPickerState extends State<CustomLocationPicker> {
       cities.sort((a, b) => a.compareTo(b));
       return cities;
     } catch (e) {
-      print('Error getting cities: $e');
+      print('Error getting cities');
       return [];
     }
   }

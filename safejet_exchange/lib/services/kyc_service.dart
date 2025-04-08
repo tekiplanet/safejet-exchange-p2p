@@ -65,7 +65,7 @@ class KYCService {
         throw Exception('Failed to load KYC levels');
       }
     } catch (e) {
-      print('Error getting KYC levels: $e');
+      print('Error getting KYC levels');
       rethrow;
     }
   }
@@ -80,7 +80,7 @@ class KYCService {
         'message': 'Please complete your verification',
       };
     } catch (e) {
-      print('Error starting document verification: $e');
+      print('Error starting document verification');
       rethrow;
     }
   }
@@ -99,7 +99,7 @@ class KYCService {
       
       throw Exception('Failed to get access token');
     } catch (e) {
-      print('Address verification error: $e');
+      print('Address verification error');
       rethrow;
     }
   }
@@ -121,7 +121,7 @@ class KYCService {
         'message': response.data['message'],
       };
     } catch (e) {
-      print('Error getting verification status: $e');
+      print('Error getting verification status');
       rethrow;
     }
   }
@@ -168,7 +168,7 @@ class KYCService {
 
       return response.data;
     } catch (e) {
-      print('Technical error details: $e');
+      print('Technical error details');
       
       if (e is DioException) {
         // Add detailed error logging
@@ -206,7 +206,7 @@ class KYCService {
       
       return response.data['token'];
     } catch (e) {
-      print('Error getting access token: $e');
+      print('Error getting access token');
       rethrow;
     }
   }

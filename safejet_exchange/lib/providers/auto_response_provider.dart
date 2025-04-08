@@ -43,7 +43,7 @@ class AutoResponseProvider with ChangeNotifier {
       await _service.updateAutoResponses(cleanedResponses);
       _responses = responses;
     } catch (e) {
-      print('Error updating responses: $e');
+      print('Error updating responses');
       _error = e.toString();
     } finally {
       _isLoading = false;

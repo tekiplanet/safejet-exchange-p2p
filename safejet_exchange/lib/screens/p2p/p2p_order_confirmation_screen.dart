@@ -484,7 +484,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       // Then fetch order details
       await _fetchOrderDetails();
     } catch (e) {
-      print('Error loading user ID: $e');
+      print('Error loading user ID');
       // Still try to fetch order details even if user ID loading fails
       _fetchOrderDetails();
     }
@@ -514,7 +514,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
           // Merge the payment method details with the order details
           orderDetails['completePaymentDetails'] = paymentMethodDetails;
         } catch (e) {
-          print('Error fetching payment method details: $e');
+          print('Error fetching payment method details');
           // Continue even if payment details fetch fails
         }
       }
@@ -529,7 +529,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       // Start timer to update countdown
       _startTimer();
     } catch (e) {
-      print('Error in _fetchOrderDetails: $e');
+      print('Error in _fetchOrderDetails');
       setState(() {
         _errorMessage = 'Failed to load order details: ${e.toString()}';
         _isLoading = false;
@@ -1455,7 +1455,7 @@ class _P2POrderConfirmationScreenState extends State<P2POrderConfirmationScreen>
       try {
         paymentMap = json.decode(paymentData);
       } catch (e) {
-        print('Error parsing payment data: $e');
+        print('Error parsing payment data');
         return Text('Invalid payment data: $paymentData');
       }
     } else if (paymentData is Map) {

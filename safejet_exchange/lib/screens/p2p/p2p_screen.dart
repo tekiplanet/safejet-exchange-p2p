@@ -267,7 +267,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         await _loadInitialData();
       }
     } catch (e) {
-      print('Error checking KYC level: $e');
+      print('Error checking KYC level');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -318,7 +318,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         await _loadOffers();
       }
     } catch (e) {
-      print('Error in _loadInitialData: $e');  // Debug print
+      print('Error in _loadInitialData');  // Debug print
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -388,7 +388,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
         _currentPage++;
       });
     } catch (e) {
-      print('Error loading offers: $e');
+      print('Error loading offers');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1315,7 +1315,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                             ),
                           );
                         } catch (e) {
-                          print('Error building payment method item: $e');
+                          print('Error building payment method item');
                           print('Raw option data: $option');
                           return const SizedBox.shrink();
                         }
@@ -1426,7 +1426,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
                             ),
                           );
                         } catch (e) {
-                          print('Error building token item: $e');
+                          print('Error building token item');
                           print('Raw option data: $option');
                           return const SizedBox.shrink(); // Return empty widget on error
                         }
@@ -1955,7 +1955,7 @@ class _P2PScreenState extends State<P2PScreen> with SingleTickerProviderStateMix
       ),
     );
     } catch (e) {
-      print('Error loading balances: $e');
+      print('Error loading balances');
       // Show error snackbar if needed
     }
   }

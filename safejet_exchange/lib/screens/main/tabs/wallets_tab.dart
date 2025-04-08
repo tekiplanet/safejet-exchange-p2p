@@ -117,7 +117,7 @@ class _WalletsTabState extends State<WalletsTab> {
 
       print('Settings updated - Currency: $_userCurrency, Rate: $_userCurrencyRate');
     } catch (e, stackTrace) {
-      print('Error loading settings: $e');
+      print('Error loading settings');
       print('Stack trace: $stackTrace');
       
       setState(() {
@@ -273,7 +273,7 @@ class _WalletsTabState extends State<WalletsTab> {
         });
       }
     } catch (e, stackTrace) {
-      print('Error in _loadBalances: $e');
+      print('Error in _loadBalances');
       print('Stack trace: $stackTrace');
       
       if (!mounted) return;
@@ -1454,7 +1454,7 @@ class _WalletsTabState extends State<WalletsTab> {
         });
       }
     } catch (e) {
-      print('Error loading rates: $e');
+      print('Error loading rates');
       // Optionally show error to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1777,7 +1777,7 @@ class _WalletsTabState extends State<WalletsTab> {
       _tokenPrices.addAll(newPrices);
 
     } catch (e) {
-      print('Error loading more balances: $e');
+      print('Error loading more balances');
       if (!mounted) return;
       
       setState(() {
@@ -1832,7 +1832,7 @@ class _WalletsTabState extends State<WalletsTab> {
         print('Loaded exchange rate: $_userCurrencyRate for $_userCurrency');
       });
     } catch (e) {
-      print('Error loading exchange rate: $e');
+      print('Error loading exchange rate');
       // Set a fallback rate
       _userCurrencyRate = 1.0;
     }

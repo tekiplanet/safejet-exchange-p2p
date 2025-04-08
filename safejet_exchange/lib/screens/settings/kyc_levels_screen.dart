@@ -568,7 +568,7 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Verification failed: $e'),
+                    content: Text('Verification failed'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -593,7 +593,7 @@ class _KYCLevelsScreenState extends State<KYCLevelsScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error starting verification: $e')),
+          SnackBar(content: Text('Error starting verification')),
         );
       }
     } finally {
