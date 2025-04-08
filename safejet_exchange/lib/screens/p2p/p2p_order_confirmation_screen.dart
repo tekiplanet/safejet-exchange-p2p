@@ -19,6 +19,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'p2p_screen.dart';
 import '../main/home_screen.dart';
+import '../../widgets/shimmer_loading.dart';
 
 // Add this enum at the top of the file after the imports
 enum DisputeReasonType {

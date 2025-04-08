@@ -14,6 +14,7 @@ import '../../services/p2p_service.dart';
 import 'package:shimmer/shimmer.dart';
 import '../settings/kyc_levels_screen.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/shimmer_loading.dart';
 
 class P2PScreen extends StatefulWidget {
   const P2PScreen({super.key});

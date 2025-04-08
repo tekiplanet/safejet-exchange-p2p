@@ -9,6 +9,7 @@ import '../../../widgets/news/news_carousel.dart';
 import '../../../services/home_service.dart';
 import '../../../screens/main/home_screen.dart';
 import './markets_tab.dart';
+import 'package:shimmer/shimmer.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -500,7 +501,6 @@ class _HomeTabState extends State<HomeTab> {
               ),
               TextButton(
                 onPressed: () {
-                  // Navigate to Markets tab as a new screen
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => const MarketsTab(),
@@ -530,9 +530,7 @@ class _HomeTabState extends State<HomeTab> {
           SizedBox(
             height: 160,
             child: _trendingTokens.isEmpty
-                ? const Center(
-                    child: CircularProgressIndicator(),
-                  )
+                ? _buildTrendingShimmer()
                 : ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: _trendingTokens.length,
@@ -540,6 +538,90 @@ class _HomeTabState extends State<HomeTab> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTrendingShimmer() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: 5,
+      itemBuilder: (context, index) => Shimmer.fromColors(
+        baseColor: isDark ? Colors.grey[900]! : Colors.grey[300]!,
+        highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+        child: Container(
+          width: 140,
+          margin: const EdgeInsets.only(right: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark 
+                ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                : SafeJetColors.lightCardBackground,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                  : SafeJetColors.lightCardBorder,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 60,
+                          height: 14,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          width: 40,
+                          height: 10,
+                          color: Colors.white,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 14,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: 60,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -864,12 +946,10 @@ class _HomeTabState extends State<HomeTab> {
 
   Widget _buildMarketList() {
     if (_isLoadingMarketTokens) {
-      return SliverToBoxAdapter(
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: const Center(
-            child: CircularProgressIndicator(),
-          ),
+      return SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => _buildMarketListShimmer(),
+          childCount: 10,
         ),
       );
     }
@@ -902,6 +982,83 @@ class _HomeTabState extends State<HomeTab> {
       delegate: SliverChildBuilderDelegate(
         (context, index) => _buildMarketListItem(index),
         childCount: _filteredMarketTokens.length,
+      ),
+    );
+  }
+
+  Widget _buildMarketListShimmer() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[900]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[800]! : Colors.grey[100]!,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark 
+              ? SafeJetColors.primaryAccent.withOpacity(0.1)
+              : SafeJetColors.lightCardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                : SafeJetColors.lightCardBorder,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 14,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: 60,
+                    height: 10,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    width: 80,
+                    height: 14,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(height: 4),
+                  Container(
+                    width: 60,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
