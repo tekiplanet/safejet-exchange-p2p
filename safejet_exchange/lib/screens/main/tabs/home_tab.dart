@@ -8,6 +8,7 @@ import '../../../widgets/portfolio/portfolio_summary_card.dart';
 import '../../../widgets/news/news_carousel.dart';
 import '../../../services/home_service.dart';
 import '../../../screens/main/home_screen.dart';
+import '../../../screens/p2p/p2p_screen.dart';
 import './markets_tab.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -201,6 +202,11 @@ class _HomeTabState extends State<HomeTab> {
             // Portfolio Summary Card
             SliverToBoxAdapter(
               child: PortfolioSummaryCard(),
+            ),
+            
+            // Quick Actions Section
+            SliverToBoxAdapter(
+              child: _buildQuickActions(isDark),
             ),
             
             // Market Overview Card
@@ -1056,6 +1062,452 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Quick Actions',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickActionCard(
+                  'Gift Cards',
+                  Icons.card_giftcard_rounded,
+                  SafeJetColors.success,
+                  isDark,
+                  onTap: () {
+                    _showGiftCardComingSoonDialog();
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickActionCard(
+                  'P2P Trading',
+                  Icons.people_alt_rounded,
+                  SafeJetColors.secondaryHighlight,
+                  isDark,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const P2PScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickActionCard(
+                  'Support',
+                  Icons.headset_mic_rounded,
+                  SafeJetColors.info,
+                  isDark,
+                  onTap: () {
+                    // TODO: Navigate to Support screen
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGiftCardComingSoonDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: Icon(
+                Icons.close,
+                color: isDark ? Colors.white : Colors.black,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          body: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header Section
+                  FadeInDown(
+                    duration: const Duration(milliseconds: 600),
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [
+                                  SafeJetColors.success.withOpacity(0.15),
+                                  SafeJetColors.success.withOpacity(0.05),
+                                ]
+                              : [
+                                  SafeJetColors.success.withOpacity(0.1),
+                                  SafeJetColors.success.withOpacity(0.05),
+                                ],
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: SafeJetColors.success.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: SafeJetColors.success.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.card_giftcard_rounded,
+                              color: SafeJetColors.success,
+                              size: 32,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Gift Cards Trading',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : Colors.black,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Coming Soon',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Features Section
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 800),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Get Ready for Amazing Features',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildFeatureItem(
+                          isDark,
+                          Icons.swap_horiz_rounded,
+                          'Instant Gift Card Trading',
+                          'Trade gift cards seamlessly with other users',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildFeatureItem(
+                          isDark,
+                          Icons.verified_rounded,
+                          'Verified Merchants',
+                          'Trade with confidence using our verified merchant system',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildFeatureItem(
+                          isDark,
+                          Icons.security_rounded,
+                          'Secure Escrow',
+                          'Your trades are protected by our secure escrow service',
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Current Features Section
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 1000),
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Meanwhile, Explore Our Current Features',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'While you wait for our gift card trading feature, you can enjoy:',
+                            style: TextStyle(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildCurrentFeatureItem(
+                            isDark,
+                            Icons.account_balance_wallet_rounded,
+                            'Secure Wallet',
+                            'Store and manage your digital assets safely',
+                          ),
+                          _buildCurrentFeatureItem(
+                            isDark,
+                            Icons.swap_vert_rounded,
+                            'Asset Swapping',
+                            'Convert between different cryptocurrencies instantly',
+                          ),
+                          _buildCurrentFeatureItem(
+                            isDark,
+                            Icons.people_rounded,
+                            'P2P Trading',
+                            'Trade directly with other users securely',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          bottomNavigationBar: FadeInUp(
+            duration: const Duration(milliseconds: 1200),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.black.withOpacity(0.3)
+                    : Colors.white,
+                border: Border(
+                  top: BorderSide(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.grey[200]!,
+                  ),
+                ),
+              ),
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SafeJetColors.secondaryHighlight,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Got it',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureItem(bool isDark, IconData icon, String title, String description) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.grey[100],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: SafeJetColors.success.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: SafeJetColors.success,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCurrentFeatureItem(bool isDark, IconData icon, String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: SafeJetColors.secondaryHighlight.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: SafeJetColors.secondaryHighlight,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                Text(
+                  description,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionCard(
+    String title,
+    IconData icon,
+    Color accentColor,
+    bool isDark, {
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              accentColor.withOpacity(isDark ? 0.15 : 0.1),
+              accentColor.withOpacity(isDark ? 0.05 : 0.05),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: accentColor.withOpacity(isDark ? 0.2 : 0.15),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: accentColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
