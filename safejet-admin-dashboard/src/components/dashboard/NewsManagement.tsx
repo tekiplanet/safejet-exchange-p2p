@@ -49,24 +49,110 @@ const MenuBar = ({ editor }: { editor: Editor | null }) => {
     if (!editor) return null;
     
     return (
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4 p-2 border-b border-gray-200">
             <button
                 onClick={() => editor.chain().focus().toggleBold().run()}
-                className={editor.isActive('bold') ? 'is-active' : ''}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('bold') 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+                title="Bold"
             >
-                Bold
+                <strong>B</strong>
             </button>
             <button
                 onClick={() => editor.chain().focus().toggleItalic().run()}
-                className={editor.isActive('italic') ? 'is-active' : ''}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('italic') 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+                title="Italic"
             >
-                Italic
+                <em>I</em>
             </button>
             <button
                 onClick={() => editor.chain().focus().toggleUnderline().run()}
-                className={editor.isActive('underline') ? 'is-active' : ''}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('underline') 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+                title="Underline"
             >
-                Underline
+                <u>U</u>
+            </button>
+            <div className="w-px h-6 bg-gray-200 mx-2"></div>
+            <button
+                onClick={() => editor.chain().focus().setParagraph().run()}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('paragraph') 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+            >
+                P
+            </button>
+            <button
+                onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('heading', { level: 1 }) 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+            >
+                H1
+            </button>
+            <button
+                onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('heading', { level: 2 }) 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+            >
+                H2
+            </button>
+            <div className="w-px h-6 bg-gray-200 mx-2"></div>
+            <button
+                onClick={() => editor.chain().focus().toggleBulletList().run()}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('bulletList') 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+                title="Bullet List"
+            >
+                • List
+            </button>
+            <button
+                onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                className={`px-3 py-1 rounded ${
+                    editor.isActive('orderedList') 
+                    ? 'bg-gray-700 text-white' 
+                    : 'bg-gray-100 hover:bg-gray-200'
+                }`}
+                title="Numbered List"
+            >
+                1. List
+            </button>
+            <div className="w-px h-6 bg-gray-200 mx-2"></div>
+            <button
+                onClick={() => editor.chain().focus().undo().run()}
+                disabled={!editor.can().undo()}
+                className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                title="Undo"
+            >
+                ↶
+            </button>
+            <button
+                onClick={() => editor.chain().focus().redo().run()}
+                disabled={!editor.can().redo()}
+                className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
+                title="Redo"
+            >
+                ↷
             </button>
         </div>
     );
@@ -80,6 +166,8 @@ interface News {
     shortDescription: string;
     content: string;
     isActive: boolean;
+    imageUrl?: string;
+    externalLink?: string;
     createdAt: string;
     updatedAt: string;
     createdBy: string;
@@ -100,13 +188,54 @@ export default function NewsManagement() {
     const router = useRouter();
 
     const editor = useEditor({
-        extensions: [StarterKit, Underline, Link],
+        extensions: [
+            StarterKit.configure({
+                heading: {
+                    levels: [1, 2]
+                },
+                bulletList: {
+                    keepMarks: true,
+                    keepAttributes: false
+                },
+                orderedList: {
+                    keepMarks: true,
+                    keepAttributes: false
+                },
+                paragraph: {
+                    HTMLAttributes: {
+                        class: 'my-2'
+                    }
+                }
+            }),
+            Underline,
+            Link.configure({
+                openOnClick: false,
+            }),
+        ],
         content: editNews?.content || '',
+        editable: true,
+        autofocus: true,
+        editorProps: {
+            attributes: {
+                class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl focus:outline-none min-h-[200px] w-full max-w-none',
+                spellcheck: 'true',
+            },
+            handleDOMEvents: {
+                keydown: (_view, event) => {
+                    // Handle space key normally
+                    if (event.key === ' ') {
+                        return false;
+                    }
+                    return false;
+                }
+            }
+        },
         onUpdate: ({ editor }) => {
-            setEditNews(prev => ({
+            const html = editor.getHTML();
+            setEditNews(prev => prev ? {
                 ...prev,
-                content: editor.getHTML()
-            }));
+                content: html
+            } : null);
         },
     });
 
@@ -203,19 +332,30 @@ export default function NewsManagement() {
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (!editNews) return;
+        if (!editNews || !editNews.content) return;
 
         setLoading(true);
         try {
+            const newsData = {
+                title: editNews.title,
+                content: editNews.content,
+                shortDescription: editNews.shortDescription || editNews.content.substring(0, 255),
+                type: editNews.type,
+                priority: editNews.priority,
+                isActive: editNews.isActive,
+                imageUrl: editNews.imageUrl,
+                externalLink: editNews.externalLink
+            };
+
             if (editNews.id) {
-                await fetchWithRetry(`/news/${editNews.id}`, {
+                await fetchWithRetry(`/news/admin/${editNews.id}`, {
                     method: 'PATCH',
-                    body: JSON.stringify(editNews)
+                    body: JSON.stringify(newsData)
                 });
             } else {
-                await fetchWithRetry('/news', {
+                await fetchWithRetry('/news/admin', {
                     method: 'POST',
-                    body: JSON.stringify(editNews)
+                    body: JSON.stringify(newsData)
                 });
             }
             setEditNews(null);
@@ -231,7 +371,7 @@ export default function NewsManagement() {
 
     const handleDelete = async (id: string) => {
         try {
-            await fetchWithRetry(`/news/${id}`, {
+            await fetchWithRetry(`/news/admin/${id}`, {
                 method: 'DELETE'
             });
             await fetchNews();
@@ -440,6 +580,24 @@ export default function NewsManagement() {
                                 required
                             />
 
+                            <TextField
+                                fullWidth
+                                label="Image URL"
+                                value={editNews?.imageUrl || ''}
+                                onChange={(e) => setEditNews({ ...editNews, imageUrl: e.target.value })}
+                                placeholder="https://example.com/image.jpg"
+                                helperText="Optional: URL for the news image"
+                            />
+
+                            <TextField
+                                fullWidth
+                                label="External Link"
+                                value={editNews?.externalLink || ''}
+                                onChange={(e) => setEditNews({ ...editNews, externalLink: e.target.value })}
+                                placeholder="https://example.com/article"
+                                helperText="Optional: URL for additional information"
+                            />
+
                             <FormControl fullWidth>
                                 <InputLabel>Type</InputLabel>
                                 <Select
@@ -464,14 +622,15 @@ export default function NewsManagement() {
                                 </Select>
                             </FormControl>
 
-                            <div className="mb-4">
-                                <Typography variant="subtitle2" gutterBottom>
-                                    Content
-                                </Typography>
-                                <div className="border rounded-md">
+                            <div className="space-y-2">
+                                <Typography variant="subtitle1">Content</Typography>
+                                <div className="border rounded-md overflow-hidden">
                                     <MenuBar editor={editor} />
-                                    <div className="p-4 min-h-[200px]">
-                                        <EditorContent editor={editor} className="min-h-[200px] border rounded p-4" />
+                                    <div className="p-4">
+                                        <EditorContent 
+                                            editor={editor} 
+                                            className="min-h-[200px] focus:outline-none prose prose-sm sm:prose lg:prose-lg xl:prose-xl w-full max-w-none"
+                                        />
                                     </div>
                                 </div>
                             </div>

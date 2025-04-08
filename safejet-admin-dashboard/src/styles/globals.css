@@ -2,6 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* TipTap Editor Styles */
+.ProseMirror {
+    @apply p-4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+}
+
+.ProseMirror:focus {
+    @apply outline-none;
+}
+
+.ProseMirror > * + * {
+    @apply mt-4;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+    @apply pl-4;
+}
+
+.ProseMirror ul {
+    @apply list-disc;
+}
+
+.ProseMirror ol {
+    @apply list-decimal;
+}
+
+.ProseMirror h1 {
+    @apply text-2xl font-bold mb-4;
+}
+
+.ProseMirror h2 {
+    @apply text-xl font-bold mb-3;
+}
+
+.ProseMirror p {
+    @apply leading-7 mb-2;
+    min-height: 1.5em;
+}
+
+.ProseMirror-focused {
+    @apply outline-none;
+}
+
+/* Editor placeholder */
+.ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    @apply text-gray-400 float-left h-0 pointer-events-none;
+    height: 0;
+    pointer-events: none;
+}
+
+/* Ensure proper spacing */
+.ProseMirror p:empty::before {
+    content: '\00a0';
+    white-space: pre;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

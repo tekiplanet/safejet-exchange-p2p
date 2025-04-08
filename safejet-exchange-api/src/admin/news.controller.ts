@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { NewsService } from './news.service';
 import { CreateNewsDto } from './dto/news.dto';
 import { UpdateNewsDto } from './dto/news.dto';
@@ -29,6 +29,14 @@ export class NewsController {
 
     @Put(':id')
     async update(
+        @Param('id') id: string,
+        @Body() updateNewsDto: UpdateNewsDto,
+    ) {
+        return await this.newsService.update(id, updateNewsDto);
+    }
+
+    @Patch(':id')
+    async patch(
         @Param('id') id: string,
         @Body() updateNewsDto: UpdateNewsDto,
     ) {

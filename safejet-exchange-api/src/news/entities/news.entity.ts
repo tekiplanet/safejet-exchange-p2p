@@ -42,6 +42,12 @@ export class News {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ nullable: true })
+  imageUrl: string;
+
+  @Column({ nullable: true })
+  externalLink: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
