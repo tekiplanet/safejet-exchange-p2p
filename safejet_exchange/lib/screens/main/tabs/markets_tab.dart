@@ -76,167 +76,170 @@ class _MarketsTabState extends State<MarketsTab> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return SafeArea(
-      child: Column(
-        children: [
-          // Search Bar
-          FadeInDown(
-            duration: const Duration(milliseconds: 600),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isDark 
-                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                      : SafeJetColors.lightCardBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
+    return Scaffold(
+      backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Search Bar
+            FadeInDown(
+              duration: const Duration(milliseconds: 600),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isDark 
+                        ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                        : SafeJetColors.lightCardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                          : SafeJetColors.lightCardBorder,
+                    ),
                   ),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: theme.textTheme.bodyLarge,
-                  onChanged: (_) => _filterTokens(),
-                  decoration: InputDecoration(
-                    hintText: 'Search coin',
-                    hintStyle: TextStyle(
-                      color: isDark ? Colors.grey[600] : SafeJetColors.lightTextSecondary,
+                  child: TextField(
+                    controller: _searchController,
+                    style: theme.textTheme.bodyLarge,
+                    onChanged: (_) => _filterTokens(),
+                    decoration: InputDecoration(
+                      hintText: 'Search coin',
+                      hintStyle: TextStyle(
+                        color: isDark ? Colors.grey[600] : SafeJetColors.lightTextSecondary,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: isDark ? Colors.grey[600] : Colors.grey[400],
+                        size: 20,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(
+                                Icons.clear,
+                                color: isDark ? Colors.grey[600] : Colors.grey[400],
+                                size: 20,
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                                _filterTokens();
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      isDense: true,
                     ),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      color: isDark ? Colors.grey[600] : Colors.grey[400],
-                      size: 20,
-                    ),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(
-                              Icons.clear,
-                              color: isDark ? Colors.grey[600] : Colors.grey[400],
-                              size: 20,
-                            ),
-                            onPressed: () {
-                              _searchController.clear();
-                              _filterTokens();
-                            },
-                          )
-                        : null,
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    isDense: true,
                   ),
                 ),
               ),
             ),
-          ),
 
-          // Category Selector
-          FadeInDown(
-            duration: const Duration(milliseconds: 600),
-            delay: const Duration(milliseconds: 200),
-            child: Container(
-              height: 40,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _categories.length,
-                itemBuilder: (context, index) {
-                  final isSelected = _categories[index] == _selectedCategory;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedCategory = _categories[index]),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? SafeJetColors.secondaryHighlight
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
+            // Category Selector
+            FadeInDown(
+              duration: const Duration(milliseconds: 600),
+              delay: const Duration(milliseconds: 200),
+              child: Container(
+                height: 40,
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  itemBuilder: (context, index) {
+                    final isSelected = _categories[index] == _selectedCategory;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedCategory = _categories[index]),
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
                           color: isSelected
                               ? SafeJetColors.secondaryHighlight
-                              : (isDark
-                                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                                  : SafeJetColors.lightCardBorder),
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? SafeJetColors.secondaryHighlight
+                                : (isDark
+                                    ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                    : SafeJetColors.lightCardBorder),
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          _categories[index],
+                          style: TextStyle(
+                            color: isSelected
+                                ? Colors.black
+                                : (isDark ? Colors.white : SafeJetColors.lightText),
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
                         ),
                       ),
-                      alignment: Alignment.center,
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Column Headers
+            FadeInDown(
+              duration: const Duration(milliseconds: 600),
+              delay: const Duration(milliseconds: 300),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
                       child: Text(
-                        _categories[index],
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.black
-                              : (isDark ? Colors.white : SafeJetColors.lightText),
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        'Pair',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
                         ),
                       ),
                     ),
-                  );
-                },
+                    Expanded(
+                      child: Text(
+                        'Price',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                        ),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                    Container(
+                      width: 70,
+                      child: Text(
+                        '24h Change',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
-          // Column Headers
-          FadeInDown(
-            duration: const Duration(milliseconds: 600),
-            delay: const Duration(milliseconds: 300),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      'Pair',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Price',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
-                  ),
-                  Container(
-                    width: 70,
-                    child: Text(
-                      '24h Change',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: isDark ? Colors.grey[400] : SafeJetColors.lightTextSecondary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
+            // Market Pairs List or Error/Loading State
+            Expanded(
+              child: _isLoading
+                  ? _buildLoadingState(isDark)
+                  : _errorMessage != null
+                      ? _buildErrorState(_errorMessage!, isDark)
+                      : _filteredTokens.isEmpty
+                          ? _buildEmptyState(isDark)
+                          : _buildTokenList(context, isDark),
             ),
-          ),
-          const SizedBox(height: 8),
-
-          // Market Pairs List or Error/Loading State
-          Expanded(
-            child: _isLoading
-                ? _buildLoadingState(isDark)
-                : _errorMessage != null
-                    ? _buildErrorState(_errorMessage!, isDark)
-                    : _filteredTokens.isEmpty
-                        ? _buildEmptyState(isDark)
-                        : _buildTokenList(context, isDark),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

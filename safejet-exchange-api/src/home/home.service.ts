@@ -5,6 +5,7 @@ import { Token } from '../wallet/entities/token.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { ExchangeService } from '../exchange/exchange.service';
 import { MarketOverviewResponse } from './dto/market-overview.dto';
+import { TrendingTokensResponse } from './dto/trending-tokens.dto';
 
 @Injectable()
 export class HomeService {
@@ -362,6 +363,81 @@ export class HomeService {
         volume24h: 0,
         activePairs: 0,
       };
+    }
+  }
+
+  /**
+   * Get trending tokens sorted by 24h price change
+   */
+  async getTrendingTokens(): Promise<TrendingTokensResponse> {
+    try {
+      const tokens = await this.tokenRepository.find({
+        where: { isActive: true },
+      });
+
+      // Calculate price change for each token
+      const tokensWithPriceChange = tokens.map(token => {
+        const priceChange = token.currentPrice && token.price24h
+          ? ((token.currentPrice - token.price24h) / token.price24h) * 100
+          : 0;
+
+        return {
+          id: token.id,
+          symbol: token.symbol,
+          name: token.name,
+          baseSymbol: token.baseSymbol || token.symbol,
+          networkVersion: token.networkVersion,
+          blockchain: token.blockchain,
+          currentPrice: token.currentPrice?.toString() || '0',
+          priceChange24h: priceChange,
+          metadata: token.metadata,
+        };
+      });
+
+      // Group tokens by baseSymbol
+      const tokenGroups = new Map();
+      
+      tokensWithPriceChange.forEach(token => {
+        const baseSymbol = token.baseSymbol;
+        
+        if (!tokenGroups.has(baseSymbol)) {
+          tokenGroups.set(baseSymbol, {
+            symbol: token.symbol,
+            name: token.name.replace(/ \([^)]+\)$/, ''), // Remove network suffix from name
+            baseSymbol: baseSymbol,
+            variants: [],
+            currentPrice: token.currentPrice,
+            priceChange24h: token.priceChange24h,
+            metadata: token.metadata,
+          });
+        }
+        
+        const group = tokenGroups.get(baseSymbol);
+        group.variants.push({
+          id: token.id,
+          symbol: token.symbol,
+          name: token.name,
+          networkVersion: token.networkVersion,
+          blockchain: token.blockchain,
+        });
+        
+        // Update group if this variant has a higher price change
+        if (token.priceChange24h > group.priceChange24h) {
+          group.priceChange24h = token.priceChange24h;
+          group.currentPrice = token.currentPrice;
+        }
+      });
+      
+      // Convert to array, filter positive changes, sort, and slice
+      const trendingTokens = Array.from(tokenGroups.values())
+        .filter(group => group.priceChange24h > 0) // Only positive price changes
+        .sort((a, b) => b.priceChange24h - a.priceChange24h) // Sort by price change DESC
+        .slice(0, 10); // Get top 10
+
+      return { tokens: trendingTokens };
+    } catch (error) {
+      this.logger.error('Error getting trending tokens:', error);
+      throw new BadRequestException(`Failed to get trending tokens: ${error.message}`);
     }
   }
 } 

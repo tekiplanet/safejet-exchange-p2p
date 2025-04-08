@@ -7,6 +7,8 @@ import '../../../widgets/mini_sparkline_painter.dart';
 import '../../../widgets/portfolio/portfolio_summary_card.dart';
 import '../../../widgets/news/news_carousel.dart';
 import '../../../services/home_service.dart';
+import '../../../screens/main/home_screen.dart';
+import './markets_tab.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -24,11 +26,13 @@ class _HomeTabState extends State<HomeTab> {
   
   Map<String, dynamic>? _marketData;
   List<double> _chartPoints = [];
+  List<Map<String, dynamic>> _trendingTokens = [];
 
   @override
   void initState() {
     super.initState();
     _loadMarketData();
+    _loadTrendingTokens();
   }
 
   Future<void> _loadMarketData() async {
@@ -45,6 +49,19 @@ class _HomeTabState extends State<HomeTab> {
       }
     } catch (e) {
       print('Error loading market data: $e');
+    }
+  }
+
+  Future<void> _loadTrendingTokens() async {
+    try {
+      final response = await _homeService.getTrending();
+      if (mounted) {
+        setState(() {
+          _trendingTokens = List<Map<String, dynamic>>.from(response['tokens'] ?? []);
+        });
+      }
+    } catch (e) {
+      print('Error loading trending tokens: $e');
     }
   }
 
@@ -109,8 +126,10 @@ class _HomeTabState extends State<HomeTab> {
         backgroundColor: isDark ? SafeJetColors.primaryBackground : Colors.white,
         onRefresh: () async {
           setState(() => _isRefreshing = true);
-          // TODO: Implement actual refresh logic
-          await Future.delayed(const Duration(seconds: 1));
+          await Future.wait([
+            _loadMarketData(),
+            _loadTrendingTokens(),
+          ]);
           setState(() => _isRefreshing = false);
         },
         child: CustomScrollView(
@@ -135,55 +154,7 @@ class _HomeTabState extends State<HomeTab> {
 
             // Trending Section
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Trending',
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            // TODO: Show all trending
-                          },
-                          child: Row(
-                            children: [
-                              Text(
-                                'See All',
-                                style: TextStyle(
-                                  color: SafeJetColors.secondaryHighlight,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                color: SafeJetColors.secondaryHighlight,
-                                size: 16,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: 160,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 5,
-                        itemBuilder: (context, index) => _buildTrendingCoinCard(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              child: _buildTrendingSection(),
             ),
 
             // Categories
@@ -413,9 +384,75 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  Widget _buildTrendingCoinCard() {
+  Widget _buildTrendingSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Trending',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  // Navigate to Markets tab as a new screen
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const MarketsTab(),
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'See All',
+                      style: TextStyle(
+                        color: SafeJetColors.secondaryHighlight,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      color: SafeJetColors.secondaryHighlight,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 160,
+            child: _trendingTokens.isEmpty
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  )
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _trendingTokens.length,
+                    itemBuilder: (context, index) => _buildTrendingCoinCard(_trendingTokens[index]),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrendingCoinCard(Map<String, dynamic> token) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final priceChange = token['priceChange24h'] as num? ?? 0;
+    final metadata = token['metadata'] as Map<String, dynamic>? ?? {};
+    final iconUrl = metadata['icon'] as String? ?? '';
+    final baseSymbol = token['baseSymbol'] as String? ?? token['symbol'];
+    final variants = (token['variants'] as List<dynamic>?)?.map((v) => v as Map<String, dynamic>).toList() ?? [];
     
     return Container(
       width: 140,
@@ -449,31 +486,46 @@ class _HomeTabState extends State<HomeTab> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      SafeJetColors.secondaryHighlight,
-                      SafeJetColors.secondaryHighlight.withOpacity(0.8),
-                    ],
-                  ),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.currency_bitcoin, color: Colors.black),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: iconUrl.isNotEmpty
+                      ? Image.network(
+                          iconUrl,
+                          errorBuilder: (context, error, stackTrace) => const Icon(
+                            Icons.currency_bitcoin,
+                            color: Colors.black,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.currency_bitcoin,
+                          color: Colors.black,
+                        ),
+                ),
               ),
               const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'BTC',
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      baseSymbol,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  Text(
-                    'Bitcoin',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
+                    Text(
+                      token['name'] ?? '',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: isDark ? Colors.white70 : SafeJetColors.lightTextSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -481,26 +533,50 @@ class _HomeTabState extends State<HomeTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '\$42,384.21',
+                _formatPrice(token['currentPrice'] ?? '0'),
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: SafeJetColors.success.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '+2.34%',
-                  style: TextStyle(
-                    color: SafeJetColors.success,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: SafeJetColors.success.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '+${priceChange.toStringAsFixed(2)}%',
+                      style: TextStyle(
+                        color: SafeJetColors.success,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
+                  if (variants.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${variants.length}',
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : Colors.black54,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),

@@ -183,4 +183,16 @@ class HomeService {
       rethrow;
     }
   }
+
+  Future<Map<String, dynamic>> getTrending() async {
+    try {
+      final response = await _dio.get('/home/trending');
+      print('Response from /home/trending: Status ${response.statusCode}');
+      print('Response data: ${response.data}');
+      return response.data;
+    } catch (e) {
+      print('Error loading trending tokens: $e');
+      rethrow;
+    }
+  }
 } 

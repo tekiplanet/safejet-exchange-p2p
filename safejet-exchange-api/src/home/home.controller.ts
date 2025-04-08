@@ -2,6 +2,7 @@ import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HomeService } from './home.service';
 import { MarketOverviewResponse } from './dto/market-overview.dto';
+import { TrendingTokensResponse } from './dto/trending-tokens.dto';
 
 @Controller('home')
 export class HomeController {
@@ -20,5 +21,10 @@ export class HomeController {
   @Get('market-overview')
   async getBitcoinMarketOverview(): Promise<MarketOverviewResponse> {
     return this.homeService.getBitcoinMarketOverview();
+  }
+
+  @Get('trending')
+  async getTrendingTokens(): Promise<TrendingTokensResponse> {
+    return this.homeService.getTrendingTokens();
   }
 } 
