@@ -31,6 +31,8 @@ import { NewsController } from './news.controller';
 import { NewsService } from './news.service';
 import { PlatformSettings } from '../platform/entities/platform-settings.entity';
 import { AdminSettingsController } from './admin-settings.controller';
+import { AdminWithdrawalsController } from './admin-withdrawals.controller';
+import { Withdrawal } from '../wallet/entities/withdrawal.entity';
 
 @Module({
   imports: [
@@ -48,6 +50,7 @@ import { AdminSettingsController } from './admin-settings.controller';
       P2PDisputeMessage,
       News,
       PlatformSettings,
+      Withdrawal,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -72,6 +75,7 @@ import { AdminSettingsController } from './admin-settings.controller';
     AdminDisputesController,
     NewsController,
     AdminSettingsController,
+    AdminWithdrawalsController,
   ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })
