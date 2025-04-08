@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Token } from '../wallet/entities/token.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { ExchangeService } from '../exchange/exchange.service';
+import { MarketOverviewResponse } from './dto/market-overview.dto';
 
 @Injectable()
 export class HomeService {
@@ -15,6 +16,42 @@ export class HomeService {
     private readonly walletService: WalletService,
     private readonly exchangeService: ExchangeService,
   ) {}
+
+  /**
+   * Get Bitcoin market overview data
+   */
+  async getBitcoinMarketOverview(): Promise<MarketOverviewResponse> {
+    try {
+      const btc = await this.tokenRepository.findOne({
+        where: { symbol: 'BTC' }
+      });
+
+      if (!btc) {
+        throw new BadRequestException('Bitcoin data not found');
+      }
+
+      // Calculate price change percentage
+      const priceChange24h = btc.currentPrice && btc.price24h
+        ? ((btc.currentPrice - btc.price24h) / btc.price24h) * 100
+        : 0;
+
+      // Use the price history directly as it's already a parsed array
+      const chartData: Array<[number, number]> = btc.priceHistory || [];
+
+      return {
+        price: btc.currentPrice?.toString() || '0',
+        priceChange24h,
+        marketCap: btc.marketCap?.toString() || '0',
+        volume24h: btc.volume24h?.toString() || '0',
+        dominance: 45.2, // TODO: Calculate actual BTC dominance
+        circulatingSupply: btc.circulatingSupply?.toString() || '0',
+        chartData,
+      };
+    } catch (error) {
+      this.logger.error('Error getting Bitcoin market overview:', error);
+      throw new BadRequestException(`Failed to get Bitcoin market overview: ${error.message}`);
+    }
+  }
 
   /**
    * Get portfolio summary for a user

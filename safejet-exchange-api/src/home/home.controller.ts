@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HomeService } from './home.service';
+import { MarketOverviewResponse } from './dto/market-overview.dto';
 
 @Controller('home')
 export class HomeController {
@@ -14,5 +15,10 @@ export class HomeController {
     @Query('timeframe') timeframe: string = '24h',
   ) {
     return this.homeService.getPortfolioSummary(req.user.id, currency, timeframe);
+  }
+
+  @Get('market-overview')
+  async getBitcoinMarketOverview(): Promise<MarketOverviewResponse> {
+    return this.homeService.getBitcoinMarketOverview();
   }
 } 

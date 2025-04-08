@@ -171,4 +171,16 @@ class HomeService {
     }
     return value.toStringAsFixed(2);
   }
+
+  Future<Map<String, dynamic>> getMarketOverview() async {
+    try {
+      final response = await _dio.get('/home/market-overview');
+      print('Response from /home/market-overview: Status ${response.statusCode}');
+      print('Response data: ${response.data}');
+      return response.data;
+    } catch (e) {
+      print('Error loading market overview: $e');
+      rethrow;
+    }
+  }
 } 

@@ -6,6 +6,7 @@ import '../../../widgets/mini_chart_painter.dart';
 import '../../../widgets/mini_sparkline_painter.dart';
 import '../../../widgets/portfolio/portfolio_summary_card.dart';
 import '../../../widgets/news/news_carousel.dart';
+import '../../../services/home_service.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -19,6 +20,81 @@ class _HomeTabState extends State<HomeTab> {
   int _selectedCategoryIndex = 0;
   bool _isRefreshing = false;
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
+  final _homeService = HomeService();
+  
+  Map<String, dynamic>? _marketData;
+  List<double> _chartPoints = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMarketData();
+  }
+
+  Future<void> _loadMarketData() async {
+    try {
+      final data = await _homeService.getMarketOverview();
+      if (mounted) {
+        setState(() {
+          _marketData = data;
+          // Convert chart data to simple points array
+          _chartPoints = (data['chartData'] as List<dynamic>?)
+              ?.map((point) => (point[1] as num).toDouble())
+              .toList() ?? [];
+        });
+      }
+    } catch (e) {
+      print('Error loading market data: $e');
+    }
+  }
+
+  String _formatPrice(String value) {
+    final number = double.tryParse(value) ?? 0;
+    // Format with commas
+    return '\$${number.toStringAsFixed(2).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]},'
+    )}';
+  }
+
+  String _formatVolume(String value) {
+    final number = double.tryParse(value) ?? 0;
+    if (number >= 1e12) {
+      return '\$${(number / 1e12).toStringAsFixed(1)}T';
+    } else if (number >= 1e9) {
+      return '\$${(number / 1e9).toStringAsFixed(1)}B';
+    } else if (number >= 1e6) {
+      return '\$${(number / 1e6).toStringAsFixed(1)}M';
+    } else if (number >= 1e3) {
+      return '\$${(number / 1e3).toStringAsFixed(1)}K';
+    } else {
+      return '\$${number.toStringAsFixed(1)}';
+    }
+  }
+
+  String _formatLargeNumber(String value) {
+    final number = double.tryParse(value) ?? 0;
+    if (number >= 1e12) {
+      return '\$${(number / 1e12).toStringAsFixed(2)}T';
+    } else if (number >= 1e9) {
+      return '\$${(number / 1e9).toStringAsFixed(2)}B';
+    } else if (number >= 1e6) {
+      return '\$${(number / 1e6).toStringAsFixed(2)}M';
+    } else {
+      return '\$${number.toStringAsFixed(2)}';
+    }
+  }
+
+  String _formatSupply(String value) {
+    final supply = double.tryParse(value) ?? 0;
+    if (supply >= 1e6) {
+      return '${(supply / 1e6).toStringAsFixed(1)}M BTC';
+    } else if (supply >= 1e3) {
+      return '${(supply / 1e3).toStringAsFixed(1)}K BTC';
+    } else {
+      return '${supply.toStringAsFixed(1)} BTC';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,122 +122,7 @@ class _HomeTabState extends State<HomeTab> {
             
             // Market Overview Card
             SliverToBoxAdapter(
-              child: FadeInDown(
-                duration: const Duration(milliseconds: 600),
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isDark
-                          ? [
-                              SafeJetColors.secondaryHighlight.withOpacity(0.15),
-                              SafeJetColors.primaryAccent.withOpacity(0.05),
-                            ]
-                          : [
-                              SafeJetColors.lightCardBackground,
-                              SafeJetColors.lightCardBackground,
-                            ],
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: isDark
-                          ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
-                          : SafeJetColors.lightCardBorder,
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Total Market Cap',
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text(
-                                    '\$1.23T',
-                                    style: theme.textTheme.headlineMedium?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: SafeJetColors.success.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.arrow_upward_rounded,
-                                          color: SafeJetColors.success,
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '2.3%',
-                                          style: TextStyle(
-                                            color: SafeJetColors.success,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          _buildMiniChart(),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: _buildQuickStat(
-                              'BTC Dom.',
-                              '43.2%',
-                              Icons.pie_chart_rounded,
-                              isDark,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildQuickStat(
-                              '24h Vol.',
-                              '\$84.2B',
-                              Icons.bar_chart_rounded,
-                              isDark,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildQuickStat(
-                              'Pairs',
-                              '12,234',
-                              Icons.currency_exchange_rounded,
-                              isDark,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              child: _buildMarketOverviewCard(isDark),
             ),
 
             // News & Updates Section
@@ -261,7 +222,6 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Widget _buildMiniChart() {
-    // TODO: Implement actual chart
     return Container(
       width: 100,
       height: 50,
@@ -270,7 +230,138 @@ class _HomeTabState extends State<HomeTab> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: CustomPaint(
-        painter: MiniChartPainter(),
+        painter: MiniChartPainter(points: _chartPoints),
+      ),
+    );
+  }
+
+  Widget _buildMarketOverviewCard(bool isDark) {
+    final price = _marketData?['price'] ?? '0';
+    final priceChange = _marketData?['priceChange24h'] ?? 0.0;
+    final volume = _marketData?['volume24h'] ?? '0';
+    final marketCap = _marketData?['marketCap'] ?? '0';
+    final supply = _marketData?['circulatingSupply'] ?? '0';
+    final isPositiveChange = priceChange >= 0;
+
+    return FadeInDown(
+      duration: const Duration(milliseconds: 600),
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [
+                    SafeJetColors.secondaryHighlight.withOpacity(0.15),
+                    SafeJetColors.primaryAccent.withOpacity(0.05),
+                  ]
+                : [
+                    SafeJetColors.lightCardBackground,
+                    SafeJetColors.lightCardBackground,
+                  ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isDark
+                ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
+                : SafeJetColors.lightCardBorder,
+          ),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Bitcoin Price',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: (isPositiveChange ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isPositiveChange ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                                  color: isPositiveChange ? SafeJetColors.success : SafeJetColors.error,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${isPositiveChange ? '+' : ''}${priceChange.toStringAsFixed(2)}%',
+                                  style: TextStyle(
+                                    color: isPositiveChange ? SafeJetColors.success : SafeJetColors.error,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatPrice(price),
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _buildMiniChart(),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: _buildQuickStat(
+                    'Market Cap',
+                    _formatLargeNumber(marketCap),
+                    Icons.pie_chart_rounded,
+                    isDark,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildQuickStat(
+                    '24h Vol.',
+                    _formatVolume(volume),
+                    Icons.bar_chart_rounded,
+                    isDark,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildQuickStat(
+                    'Supply',
+                    _formatSupply(supply),
+                    Icons.currency_bitcoin_rounded,
+                    isDark,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
