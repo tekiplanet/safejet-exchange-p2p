@@ -24,6 +24,7 @@ import { TokensModule } from './tokens/tokens.module';
 import { P2PModule } from './p2p/p2p.module';
 import { JwtModule } from '@nestjs/jwt';
 import { HomeModule } from './home/home.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { HomeModule } from './home/home.module';
     TokenManagementModule,
     TokensModule,
     HomeModule,
+    AdminModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '60m' },

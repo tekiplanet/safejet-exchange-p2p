@@ -29,6 +29,8 @@ import { P2PModule } from '../p2p/p2p.module';
 import { News } from '../news/entities/news.entity';
 import { NewsController } from './news.controller';
 import { NewsService } from './news.service';
+import { PlatformSettings } from '../platform/entities/platform-settings.entity';
+import { AdminSettingsController } from './admin-settings.controller';
 
 @Module({
   imports: [
@@ -45,6 +47,7 @@ import { NewsService } from './news.service';
       P2PDispute,
       P2PDisputeMessage,
       News,
+      PlatformSettings,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -68,6 +71,7 @@ import { NewsService } from './news.service';
     AdminSweepTransactionsController,
     AdminDisputesController,
     NewsController,
+    AdminSettingsController,
   ],
   exports: [AdminAuthService, AdminGuard, JwtModule],
 })

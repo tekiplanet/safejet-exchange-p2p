@@ -8,8 +8,8 @@ import 'package:http/http.dart' as http;
 class HomeService {
   late final Dio _dio;
   final storage = const FlutterSecureStorage();
-  final AuthService _authService = getIt<AuthService>();
   late final String baseUrl;
+  final AuthService _authService = getIt<AuthService>();
 
   HomeService() {
     baseUrl = _authService.baseUrl.replaceAll('/auth', '');
@@ -179,7 +179,10 @@ class HomeService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/home/market-overview'),
-        headers: {'ngrok-skip-browser-warning': 'true'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
       );
 
       if (response.statusCode == 200) {
@@ -188,7 +191,7 @@ class HomeService {
         throw Exception('Failed to load market overview');
       }
     } catch (e) {
-      throw Exception('Failed to load market overview: $e');
+      throw Exception('Error getting market overview: $e');
     }
   }
 
@@ -196,7 +199,10 @@ class HomeService {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/home/trending'),
-        headers: {'ngrok-skip-browser-warning': 'true'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
       );
 
       if (response.statusCode == 200) {
@@ -205,7 +211,7 @@ class HomeService {
         throw Exception('Failed to load trending tokens');
       }
     } catch (e) {
-      throw Exception('Failed to load trending tokens: $e');
+      throw Exception('Error getting trending tokens: $e');
     }
   }
 
@@ -265,12 +271,13 @@ class HomeService {
     }
   }
 
-  Future<Map<String, dynamic>> getMarketTokens({int limit = 10}) async {
+  Future<Map<String, dynamic>> getMarketTokens() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/home/market-tokens?limit=$limit'),
+        Uri.parse('$baseUrl/home/market-tokens'),
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
       );
 
@@ -280,7 +287,27 @@ class HomeService {
         throw Exception('Failed to load market tokens');
       }
     } catch (e) {
-      throw Exception('Failed to load market tokens: $e');
+      throw Exception('Error getting market tokens: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getContactInfo() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/home/contact'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load contact information');
+      }
+    } catch (e) {
+      throw Exception('Error getting contact information: $e');
     }
   }
 } 

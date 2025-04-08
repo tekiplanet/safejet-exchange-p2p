@@ -11,6 +11,7 @@ import '../../../screens/main/home_screen.dart';
 import '../../../screens/p2p/p2p_screen.dart';
 import './markets_tab.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../../screens/support/support_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -439,7 +440,7 @@ class _HomeTabState extends State<HomeTab> {
                       ),
                     ],
                   ),
-      ),
+                ),
     );
   }
 
@@ -492,58 +493,58 @@ class _HomeTabState extends State<HomeTab> {
 
   Widget _buildTrendingSection() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Trending',
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Trending',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => const MarketsTab(),
                     ),
                   );
-                },
-                child: Row(
-                  children: [
-                    Text(
-                      'See All',
-                      style: TextStyle(
-                        color: SafeJetColors.secondaryHighlight,
-                      ),
+                          },
+                          child: Row(
+                            children: [
+                              Text(
+                                'See All',
+                                style: TextStyle(
+                                  color: SafeJetColors.secondaryHighlight,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color: SafeJetColors.secondaryHighlight,
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      color: SafeJetColors.secondaryHighlight,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 160,
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 160,
             child: _trendingTokens.isEmpty
                 ? _buildTrendingShimmer()
                 : ListView.builder(
-                    scrollDirection: Axis.horizontal,
+                        scrollDirection: Axis.horizontal,
                     itemCount: _trendingTokens.length,
                     itemBuilder: (context, index) => _buildTrendingCoinCard(_trendingTokens[index]),
-                  ),
-          ),
-        ],
+                      ),
+                    ),
+                  ],
       ),
     );
   }
@@ -560,21 +561,21 @@ class _HomeTabState extends State<HomeTab> {
           width: 140,
           margin: const EdgeInsets.only(right: 16),
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark 
-                ? SafeJetColors.primaryAccent.withOpacity(0.1)
-                : SafeJetColors.lightCardBackground,
+      decoration: BoxDecoration(
+        color: isDark
+            ? SafeJetColors.primaryAccent.withOpacity(0.1)
+            : SafeJetColors.lightCardBackground,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDark
-                  ? SafeJetColors.primaryAccent.withOpacity(0.2)
-                  : SafeJetColors.lightCardBorder,
-            ),
-          ),
-          child: Column(
+        border: Border.all(
+          color: isDark
+              ? SafeJetColors.primaryAccent.withOpacity(0.2)
+              : SafeJetColors.lightCardBorder,
+        ),
+      ),
+      child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+        children: [
               Row(
                 children: [
                   Container(
@@ -613,8 +614,8 @@ class _HomeTabState extends State<HomeTab> {
                     width: 80,
                     height: 14,
                     color: Colors.white,
-                  ),
-                  const SizedBox(height: 4),
+          ),
+          const SizedBox(height: 4),
                   Container(
                     width: 60,
                     height: 24,
@@ -702,10 +703,10 @@ class _HomeTabState extends State<HomeTab> {
                       baseSymbol,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
+                      overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
                       token['name'] ?? '',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: isDark ? Colors.white70 : SafeJetColors.lightTextSecondary,
@@ -852,8 +853,8 @@ class _HomeTabState extends State<HomeTab> {
                       errorBuilder: (context, error, stackTrace) => Container(
                         decoration: BoxDecoration(
                           color: SafeJetColors.secondaryHighlight,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+              borderRadius: BorderRadius.circular(12),
+            ),
                         child: Center(
                           child: Text(
                             baseSymbol.substring(0, 1),
@@ -1021,14 +1022,14 @@ class _HomeTabState extends State<HomeTab> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            const SizedBox(width: 12),
+          const SizedBox(width: 12),
             Expanded(
               flex: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 80,
+            width: 80,
                     height: 14,
                     color: Colors.white,
                   ),
@@ -1120,7 +1121,12 @@ class _HomeTabState extends State<HomeTab> {
                   SafeJetColors.info,
                   isDark,
                   onTap: () {
-                    // TODO: Navigate to Support screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SupportScreen(),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -1189,7 +1195,7 @@ class _HomeTabState extends State<HomeTab> {
                             ),
                             child: Icon(
                               Icons.card_giftcard_rounded,
-                              color: SafeJetColors.success,
+                color: SafeJetColors.success,
                               size: 32,
                             ),
                           ),
@@ -1212,9 +1218,9 @@ class _HomeTabState extends State<HomeTab> {
                                   style: TextStyle(
                                     fontSize: 16,
                                     color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                  ),
-                                ),
-                              ],
+            ),
+          ),
+        ],
                             ),
                           ),
                         ],

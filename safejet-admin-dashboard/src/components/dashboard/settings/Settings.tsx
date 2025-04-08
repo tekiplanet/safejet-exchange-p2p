@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { 
     AccountBalanceWallet as WalletIcon,
     LocalGasStation as GasStationIcon,
+    ContactSupport as ContactIcon,
     ArrowForward as ArrowForwardIcon 
 } from '@mui/icons-material';
 
@@ -22,7 +23,12 @@ export function Settings() {
             icon: <GasStationIcon />,
             href: '/dashboard/settings/gas-tank-wallets'
         },
-        // More categories will be added later
+        {
+            title: 'Contact Settings',
+            description: 'Manage platform contact information and support details',
+            icon: <ContactIcon />,
+            href: '/dashboard/settings/contact'
+        },
     ];
 
     return (

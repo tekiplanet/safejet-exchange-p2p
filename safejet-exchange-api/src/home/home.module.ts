@@ -7,10 +7,11 @@ import { News } from '../news/entities/news.entity';
 import { WalletModule } from '../wallet/wallet.module';
 import { ExchangeModule } from '../exchange/exchange.module';
 import { NewsModule } from '../news/news.module';
+import { PlatformSettings } from '../platform/entities/platform-settings.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Token, News]),
+    TypeOrmModule.forFeature([Token, News, PlatformSettings]),
     WalletModule,
     ExchangeModule,
     NewsModule,

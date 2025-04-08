@@ -5,6 +5,7 @@ import { MarketOverviewResponse } from './dto/market-overview.dto';
 import { TrendingTokensResponse } from './dto/trending-tokens.dto';
 import { NewsResponse } from './dto/news.dto';
 import { MarketListResponse } from './dto/market-list.dto';
+import { ContactInfoResponse } from './dto/contact-info.dto';
 
 @Controller('home')
 export class HomeController {
@@ -38,5 +39,10 @@ export class HomeController {
   @Get('market-tokens')
   async getMarketTokens() {
     return this.homeService.getMarketTokens();
+  }
+
+  @Get('contact')
+  async getContactInfo(): Promise<ContactInfoResponse> {
+    return this.homeService.getContactInfo();
   }
 } 

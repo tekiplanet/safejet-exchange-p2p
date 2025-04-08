@@ -9,6 +9,8 @@ import { TrendingTokensResponse } from './dto/trending-tokens.dto';
 import { NewsResponse } from './dto/news.dto';
 import { MarketListResponse } from './dto/market-list.dto';
 import { News } from '../news/entities/news.entity';
+import { PlatformSettings } from '../platform/entities/platform-settings.entity';
+import { ContactInfoResponse } from './dto/contact-info.dto';
 
 @Injectable()
 export class HomeService {
@@ -19,6 +21,8 @@ export class HomeService {
     private readonly tokenRepository: Repository<Token>,
     @InjectRepository(News)
     private readonly newsRepository: Repository<News>,
+    @InjectRepository(PlatformSettings)
+    private readonly platformSettingsRepository: Repository<PlatformSettings>,
     private readonly walletService: WalletService,
     private readonly exchangeService: ExchangeService,
   ) {}
@@ -525,6 +529,73 @@ export class HomeService {
     } catch (error) {
       this.logger.error('Error fetching market tokens:', error);
       throw new BadRequestException('Failed to fetch market tokens');
+    }
+  }
+
+  /**
+   * Get platform contact information
+   */
+  async getContactInfo(): Promise<ContactInfoResponse> {
+    try {
+      this.logger.log('Fetching contact information');
+      const settings = await this.platformSettingsRepository.find({
+        where: { category: 'contact' },
+      });
+
+      this.logger.log(`Found ${settings.length} contact settings`);
+
+      const getValue = (key: string) => {
+        const setting = settings.find(s => s.key === key);
+        return setting?.value || '';
+      };
+
+      const parseJsonValue = (key: string, defaultValue: any = {}) => {
+        try {
+          const value = getValue(key);
+          return value ? JSON.parse(value) : defaultValue;
+        } catch (error) {
+          this.logger.error(`Error parsing JSON for ${key}:`, error);
+          return defaultValue;
+        }
+      };
+
+      return {
+        contactEmail: getValue('contactEmail'),
+        supportPhone: getValue('supportPhone'),
+        emergencyContact: parseJsonValue('emergencyContact', {
+          phone: '',
+          email: '',
+          supportLine: '',
+        }),
+        companyAddress: parseJsonValue('companyAddress', {
+          street: '',
+          city: '',
+          state: '',
+          country: '',
+          postalCode: '',
+        }),
+        socialMedia: parseJsonValue('socialMedia', {
+          facebook: '',
+          twitter: '',
+          instagram: '',
+          tiktok: '',
+          telegram: '',
+          discord: '',
+          whatsapp: '',
+          wechat: '',
+          linkedin: '',
+          youtube: '',
+        }),
+        supportLinks: parseJsonValue('supportLinks', {
+          helpCenter: '',
+          supportTickets: '',
+          faq: '',
+          knowledgeBase: '',
+        }),
+      };
+    } catch (error) {
+      this.logger.error('Error getting contact information:', error);
+      throw new BadRequestException(`Failed to get contact information: ${error.message}`);
     }
   }
 } 
