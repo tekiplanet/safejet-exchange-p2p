@@ -1,224 +1,212 @@
 import 'package:flutter/material.dart';
-import 'package:animate_do/animate_do.dart';
+import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';
 import '../../config/theme/colors.dart';
+import '../../services/home_service.dart';
 
 class NewsCarousel extends StatefulWidget {
   final bool isDark;
 
   const NewsCarousel({
-    super.key,
+    Key? key,
     required this.isDark,
-  });
+  }) : super(key: key);
 
   @override
   State<NewsCarousel> createState() => _NewsCarouselState();
 }
 
 class _NewsCarouselState extends State<NewsCarousel> {
-  final List<Map<String, dynamic>> _news = [
-    {
-      'type': 'MARKET UPDATE',
-      'title': 'Bitcoin Surges Past \$45K as Market Sentiment Improves',
-      'time': '2h ago',
-      'impact': 'high',
-    },
-    {
-      'type': 'ANNOUNCEMENT',
-      'title': 'New Trading Pairs Added: DOT/USDT and LINK/USDT',
-      'time': '4h ago',
-      'impact': 'medium',
-    },
-    {
-      'type': 'ALERT',
-      'title': 'ETH Breaks Key Resistance Level at \$2,800',
-      'time': '5h ago',
-      'impact': 'high',
-    },
-  ];
+  final _homeService = HomeService();
+  List<Map<String, dynamic>> _news = [];
+  bool _isLoading = true;
+  String? _error;
 
-  Color _getImpactColor(String? impact) {
-    switch (impact?.toLowerCase()) {
-      case 'high':
-        return SafeJetColors.warning;
-      case 'medium':
-        return SafeJetColors.info;
+  @override
+  void initState() {
+    super.initState();
+    _loadNews();
+  }
+
+  Future<void> _loadNews() async {
+    try {
+      final news = await _homeService.getRecentNews();
+      if (mounted) {
+        setState(() {
+          _news = news;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Color _getTypeColor(String type) {
+    switch (type) {
+      case 'announcement':
+        return Colors.blue;
+      case 'marketUpdate':
+        return Colors.green;
+      case 'alert':
+        return Colors.red;
       default:
-        return SafeJetColors.success;
+        return Colors.grey;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Text(_error!),
+      );
+    }
+
+    if (_news.isEmpty) {
+      return const Center(
+        child: Text('No news available'),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'News & Updates',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  // TODO: Navigate to news page
-                },
-                child: Row(
-                  children: [
-                    Text(
-                      'See All',
-                      style: TextStyle(
-                        color: SafeJetColors.secondaryHighlight,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      color: SafeJetColors.secondaryHighlight,
-                      size: 16,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          child: Text(
+            'News & Updates',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         const SizedBox(height: 16),
         SizedBox(
-          height: 130,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: _news.length,
-            itemBuilder: (context, index) {
-              final news = _news[index];
-              return FadeInRight(
-                delay: Duration(milliseconds: index * 100),
-                child: _buildNewsCard(news),
+          height: 200,
+          child: FlutterCarousel(
+            items: _news.map((news) {
+              final type = news['type'] as String;
+              final typeColor = _getTypeColor(type);
+
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: widget.isDark
+                        ? [
+                            SafeJetColors.secondaryHighlight.withOpacity(0.15),
+                            SafeJetColors.primaryAccent.withOpacity(0.05),
+                          ]
+                        : [
+                            SafeJetColors.lightCardBackground,
+                            SafeJetColors.lightCardBackground,
+                          ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: widget.isDark
+                        ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
+                        : SafeJetColors.lightCardBorder,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: typeColor.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              type,
+                              style: TextStyle(
+                                color: typeColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatDate(news['createdAt']),
+                            style: TextStyle(
+                              color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        news['title'],
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        news['shortDescription'],
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               );
-            },
+            }).toList(),
+            options: CarouselOptions(
+              height: 200,
+              viewportFraction: 0.9,
+              enableInfiniteScroll: _news.length > 1,
+              autoPlay: _news.length > 1,
+              autoPlayInterval: const Duration(seconds: 5),
+              enlargeCenterPage: true,
+              slideIndicator: CircularSlideIndicator(),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildNewsCard(Map<String, dynamic> news) {
-    return Container(
-      width: MediaQuery.of(context).size.width * 0.75,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: widget.isDark
-            ? SafeJetColors.primaryAccent.withOpacity(0.1)
-            : SafeJetColors.lightCardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: widget.isDark
-              ? SafeJetColors.primaryAccent.withOpacity(0.2)
-              : SafeJetColors.lightCardBorder,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: _getImpactColor(news['impact'] as String?),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: SafeJetColors.secondaryHighlight.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        (news['type'] as String?) ?? 'UPDATE',
-                        style: TextStyle(
-                          color: SafeJetColors.secondaryHighlight,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getImpactColor(news['impact'] as String?)
-                            .withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.trending_up,
-                            color: _getImpactColor(news['impact'] as String?),
-                            size: 10,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            ((news['impact'] as String?) ?? 'LOW').toUpperCase(),
-                            style: TextStyle(
-                              color: _getImpactColor(news['impact'] as String?),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Text(
-                    (news['title'] as String?) ?? 'No title available',
-                    style: TextStyle(
-                      color: widget.isDark ? Colors.white : Colors.black,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  (news['time'] as String?) ?? '',
-                  style: TextStyle(
-                    color: widget.isDark
-                        ? Colors.grey[400]
-                        : SafeJetColors.lightTextSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatDate(String dateStr) {
+    final date = DateTime.parse(dateStr);
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 } 

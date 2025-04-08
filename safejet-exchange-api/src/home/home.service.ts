@@ -6,6 +6,8 @@ import { WalletService } from '../wallet/wallet.service';
 import { ExchangeService } from '../exchange/exchange.service';
 import { MarketOverviewResponse } from './dto/market-overview.dto';
 import { TrendingTokensResponse } from './dto/trending-tokens.dto';
+import { NewsResponse } from './dto/news.dto';
+import { News } from '../news/entities/news.entity';
 
 @Injectable()
 export class HomeService {
@@ -14,6 +16,8 @@ export class HomeService {
   constructor(
     @InjectRepository(Token)
     private readonly tokenRepository: Repository<Token>,
+    @InjectRepository(News)
+    private readonly newsRepository: Repository<News>,
     private readonly walletService: WalletService,
     private readonly exchangeService: ExchangeService,
   ) {}
@@ -438,6 +442,24 @@ export class HomeService {
     } catch (error) {
       this.logger.error('Error getting trending tokens:', error);
       throw new BadRequestException(`Failed to get trending tokens: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get recent news and updates
+   */
+  async getRecentNews(): Promise<NewsResponse> {
+    try {
+      const news = await this.newsRepository.find({
+        where: { isActive: true },
+        order: { createdAt: 'DESC' },
+        take: 4
+      });
+
+      return { news };
+    } catch (error) {
+      this.logger.error('Error getting recent news:', error);
+      throw new BadRequestException(`Failed to get recent news: ${error.message}`);
     }
   }
 } 

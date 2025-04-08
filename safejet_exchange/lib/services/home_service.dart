@@ -2,14 +2,17 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/auth_service.dart';
 import '../services/service_locator.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class HomeService {
   late final Dio _dio;
   final storage = const FlutterSecureStorage();
   final AuthService _authService = getIt<AuthService>();
+  late final String baseUrl;
 
   HomeService() {
-    final baseUrl = _authService.baseUrl.replaceAll('/auth', '');
+    baseUrl = _authService.baseUrl.replaceAll('/auth', '');
     print('HomeService initializing with base URL: $baseUrl');
     _dio = Dio(BaseOptions(
       baseUrl: baseUrl,
@@ -174,25 +177,53 @@ class HomeService {
 
   Future<Map<String, dynamic>> getMarketOverview() async {
     try {
-      final response = await _dio.get('/home/market-overview');
-      print('Response from /home/market-overview: Status ${response.statusCode}');
-      print('Response data: ${response.data}');
-      return response.data;
+      final response = await http.get(
+        Uri.parse('$baseUrl/home/market-overview'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load market overview');
+      }
     } catch (e) {
-      print('Error loading market overview: $e');
-      rethrow;
+      throw Exception('Failed to load market overview: $e');
     }
   }
 
   Future<Map<String, dynamic>> getTrending() async {
     try {
-      final response = await _dio.get('/home/trending');
-      print('Response from /home/trending: Status ${response.statusCode}');
-      print('Response data: ${response.data}');
-      return response.data;
+      final response = await http.get(
+        Uri.parse('$baseUrl/home/trending'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to load trending tokens');
+      }
     } catch (e) {
-      print('Error loading trending tokens: $e');
-      rethrow;
+      throw Exception('Failed to load trending tokens: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentNews() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/home/news'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return List<Map<String, dynamic>>.from(data['news']);
+      } else {
+        throw Exception('Failed to load news');
+      }
+    } catch (e) {
+      throw Exception('Failed to load news: $e');
     }
   }
 } 

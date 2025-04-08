@@ -508,12 +508,12 @@ class _HomeTabState extends State<HomeTab> {
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                       baseSymbol,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -521,10 +521,10 @@ class _HomeTabState extends State<HomeTab> {
                       token['name'] ?? '',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: isDark ? Colors.white70 : SafeJetColors.lightTextSecondary,
-                      ),
+                  ),
                       overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                  ),
+                ],
                 ),
               ),
             ],
@@ -542,20 +542,20 @@ class _HomeTabState extends State<HomeTab> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: SafeJetColors.success.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: SafeJetColors.success.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
                       '+${priceChange.toStringAsFixed(2)}%',
-                      style: TextStyle(
-                        color: SafeJetColors.success,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  style: TextStyle(
+                    color: SafeJetColors.success,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                   ),
                   if (variants.length > 1)
                     Padding(

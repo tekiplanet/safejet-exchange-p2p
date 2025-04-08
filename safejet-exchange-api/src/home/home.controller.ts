@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HomeService } from './home.service';
 import { MarketOverviewResponse } from './dto/market-overview.dto';
 import { TrendingTokensResponse } from './dto/trending-tokens.dto';
+import { NewsResponse } from './dto/news.dto';
 
 @Controller('home')
 export class HomeController {
@@ -26,5 +27,10 @@ export class HomeController {
   @Get('trending')
   async getTrendingTokens(): Promise<TrendingTokensResponse> {
     return this.homeService.getTrendingTokens();
+  }
+
+  @Get('news')
+  async getRecentNews(): Promise<NewsResponse> {
+    return this.homeService.getRecentNews();
   }
 } 
