@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { News } from './entities/news.entity';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
+import { PaginatedNewsResponse } from './dto/paginated-news.dto';
 
 @Injectable()
 export class NewsService {
@@ -65,5 +66,22 @@ export class NewsService {
   async remove(id: string): Promise<void> {
     const news = await this.findOne(id);
     await this.newsRepository.remove(news);
+  }
+
+  async getPaginatedNews(page: number = 1, limit: number = 10): Promise<PaginatedNewsResponse> {
+    const [items, total] = await this.newsRepository.findAndCount({
+      where: { isActive: true },
+      order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      hasMore: total > page * limit,
+    };
   }
 } 

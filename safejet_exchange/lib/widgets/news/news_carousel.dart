@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';
 import '../../config/theme/colors.dart';
 import '../../services/home_service.dart';
+import '../../screens/news/all_news_screen.dart';
 
 class NewsCarousel extends StatefulWidget {
   final bool isDark;
@@ -47,15 +48,28 @@ class _NewsCarouselState extends State<NewsCarousel> {
   }
 
   Color _getTypeColor(String type) {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'announcement':
         return Colors.blue;
-      case 'marketUpdate':
+      case 'marketupdate':
         return Colors.green;
       case 'alert':
         return Colors.red;
       default:
         return Colors.grey;
+    }
+  }
+
+  String _formatTypeLabel(String type) {
+    switch (type.toLowerCase()) {
+      case 'announcement':
+        return 'Announcement';
+      case 'marketupdate':
+        return 'Market Update';
+      case 'alert':
+        return 'Alert';
+      default:
+        return type;
     }
   }
 
@@ -84,11 +98,44 @@ class _NewsCarouselState extends State<NewsCarousel> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'News & Updates',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'News & Updates',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AllNewsScreen(
+                        isDark: widget.isDark,
+                      ),
+                    ),
+                  );
+                },
+                child: Row(
+                  children: [
+                    Text(
+                      'See All',
+                      style: TextStyle(
+                        color: SafeJetColors.secondaryHighlight,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: SafeJetColors.secondaryHighlight,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -98,6 +145,7 @@ class _NewsCarouselState extends State<NewsCarousel> {
             items: _news.map((news) {
               final type = news['type'] as String;
               final typeColor = _getTypeColor(type);
+              final typeLabel = _formatTypeLabel(type);
 
               return Container(
                 width: double.infinity,
@@ -138,7 +186,7 @@ class _NewsCarouselState extends State<NewsCarousel> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              type,
+                              typeLabel,
                               style: TextStyle(
                                 color: typeColor,
                                 fontSize: 12,
