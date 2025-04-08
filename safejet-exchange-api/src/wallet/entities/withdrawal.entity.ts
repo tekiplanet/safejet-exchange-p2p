@@ -42,6 +42,9 @@ export class Withdrawal {
   @Column({ nullable: true })
   tag?: string;
 
+  @Column({ nullable: true })
+  txHash?: string;
+
   @Column({ 
     type: 'enum', 
     enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
