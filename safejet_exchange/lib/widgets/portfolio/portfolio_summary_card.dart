@@ -19,6 +19,18 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
   final List<String> _currencies = ['USD', 'BTC', 'NGN'];
   bool _isBalanceHidden = false;
   
+  // Add currency symbols map
+  final Map<String, String> _currencySymbols = {
+    'USD': '\$',
+    'NGN': '₦',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': '¥',
+    'CNY': '¥',
+    'KRW': '₩',
+    'BTC': '₿',
+  };
+
   final HomeService _homeService = getIt<HomeService>();
   final P2PSettingsService _p2pSettingsService = getIt<P2PSettingsService>();
   final ExchangeService _exchangeService = getIt<ExchangeService>();
@@ -143,7 +155,16 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
       (Match m) => '${m[1]},'
     );
     
-    return currency == 'USD' ? '\$$formattedNumber' : '$formattedNumber $currency';
+    // Get currency symbol or use currency code if symbol not found
+    final symbol = _currencySymbols[currency] ?? '$currency ';
+    
+    // For EUR, symbol goes after with a space
+    if (currency == 'EUR') {
+      return '$formattedNumber €';
+    }
+    
+    // For all other currencies, symbol goes before without a space
+    return '$symbol$formattedNumber';
   }
 
   @override
