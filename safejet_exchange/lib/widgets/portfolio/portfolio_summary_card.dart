@@ -17,6 +17,7 @@ class PortfolioSummaryCard extends StatefulWidget {
 class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
   String _selectedCurrency = 'USD';
   final List<String> _currencies = ['USD', 'BTC', 'NGN'];
+  bool _isBalanceHidden = false;
   
   final HomeService _homeService = getIt<HomeService>();
   final P2PSettingsService _p2pSettingsService = getIt<P2PSettingsService>();
@@ -129,6 +130,10 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
   }
 
   String _formatCurrency(double value) {
+    if (_isBalanceHidden) {
+      return '∗∗∗∗∗∗';
+    }
+    
     final currency = _showInUSD ? 'USD' : _userCurrency;
     final amount = _showInUSD ? value : value * _userCurrencyRate;
     
@@ -196,54 +201,72 @@ class _PortfolioSummaryCardState extends State<PortfolioSummaryCard> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Portfolio Balance',
-              style: theme.textTheme.bodyMedium,
+            Row(
+              children: [
+                Text(
+                  'Portfolio Balance',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isBalanceHidden = !_isBalanceHidden;
+                    });
+                  },
+                  child: Icon(
+                    _isBalanceHidden ? Icons.visibility_off : Icons.visibility,
+                    size: 20,
+                    color: isDark ? Colors.white70 : SafeJetColors.lightTextSecondary,
+                  ),
+                ),
+              ],
             ),
             _buildCurrencySelector(isDark),
           ],
         ),
         const SizedBox(height: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _formatCurrency(_totalUsdValue),
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+        Center(
+          child: Column(
+            children: [
+              Text(
+                _formatCurrency(_totalUsdValue),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
-              decoration: BoxDecoration(
-                color: (_changePercent >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _changePercent >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                    color: _changePercent >= 0 ? SafeJetColors.success : SafeJetColors.error,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${_changePercent >= 0 ? '+' : ''}${_changePercent.toStringAsFixed(2)}%',
-                    style: TextStyle(
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: (_changePercent >= 0 ? SafeJetColors.success : SafeJetColors.error).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _changePercent >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
                       color: _changePercent >= 0 ? SafeJetColors.success : SafeJetColors.error,
-                      fontWeight: FontWeight.bold,
+                      size: 16,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Text(
+                      '${_changePercent >= 0 ? '+' : ''}${_changePercent.toStringAsFixed(2)}%',
+                      style: TextStyle(
+                        color: _changePercent >= 0 ? SafeJetColors.success : SafeJetColors.error,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
