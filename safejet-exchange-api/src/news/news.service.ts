@@ -84,4 +84,16 @@ export class NewsService {
       hasMore: total > page * limit,
     };
   }
+
+  async findOneById(id: string): Promise<News> {
+    const news = await this.newsRepository.findOne({
+      where: { id, isActive: true },
+    });
+
+    if (!news) {
+      throw new NotFoundException(`News with ID "${id}" not found`);
+    }
+
+    return news;
+  }
 } 

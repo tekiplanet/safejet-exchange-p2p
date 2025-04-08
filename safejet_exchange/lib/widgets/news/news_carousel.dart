@@ -3,6 +3,7 @@ import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';
 import '../../config/theme/colors.dart';
 import '../../services/home_service.dart';
 import '../../screens/news/all_news_screen.dart';
+import './news_detail_dialog.dart';
 
 class NewsCarousel extends StatefulWidget {
   final bool isDark;
@@ -19,7 +20,7 @@ class NewsCarousel extends StatefulWidget {
 class _NewsCarouselState extends State<NewsCarousel> {
   final _homeService = HomeService();
   List<Map<String, dynamic>> _news = [];
-  bool _isLoading = true;
+  bool _isLoading = false;
   String? _error;
 
   @override
@@ -30,10 +31,15 @@ class _NewsCarouselState extends State<NewsCarousel> {
 
   Future<void> _loadNews() async {
     try {
-      final news = await _homeService.getRecentNews();
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      final response = await _homeService.getRecentNews();
       if (mounted) {
         setState(() {
-          _news = news;
+          _news = response;
           _isLoading = false;
         });
       }
@@ -43,6 +49,30 @@ class _NewsCarouselState extends State<NewsCarousel> {
           _error = e.toString();
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _showNewsDetail(BuildContext context, Map<String, dynamic> news) async {
+    try {
+      final newsDetail = await _homeService.getNewsById(news['id']);
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => NewsDetailDialog(
+            news: newsDetail,
+            isDark: widget.isDark,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load news details: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -147,82 +177,85 @@ class _NewsCarouselState extends State<NewsCarousel> {
               final typeColor = _getTypeColor(type);
               final typeLabel = _formatTypeLabel(type);
 
-              return Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: widget.isDark
-                        ? [
-                            SafeJetColors.secondaryHighlight.withOpacity(0.15),
-                            SafeJetColors.primaryAccent.withOpacity(0.05),
-                          ]
-                        : [
-                            SafeJetColors.lightCardBackground,
-                            SafeJetColors.lightCardBackground,
-                          ],
+              return GestureDetector(
+                onTap: () => _showNewsDetail(context, news),
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: widget.isDark
+                          ? [
+                              SafeJetColors.secondaryHighlight.withOpacity(0.15),
+                              SafeJetColors.primaryAccent.withOpacity(0.05),
+                            ]
+                          : [
+                              SafeJetColors.lightCardBackground,
+                              SafeJetColors.lightCardBackground,
+                            ],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: widget.isDark
+                          ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
+                          : SafeJetColors.lightCardBorder,
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: widget.isDark
-                        ? SafeJetColors.secondaryHighlight.withOpacity(0.2)
-                        : SafeJetColors.lightCardBorder,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: typeColor.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              typeLabel,
-                              style: TextStyle(
-                                color: typeColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: typeColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                typeLabel,
+                                style: TextStyle(
+                                  color: typeColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatDate(news['createdAt']),
-                            style: TextStyle(
-                              color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                              fontSize: 12,
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatDate(news['createdAt']),
+                              style: TextStyle(
+                                color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                                fontSize: 12,
+                              ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          news['title'],
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        news['title'],
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        news['shortDescription'],
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                        const SizedBox(height: 8),
+                        Text(
+                          news['shortDescription'],
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );

@@ -18,7 +18,7 @@ class AllNewsScreen extends StatefulWidget {
 class _AllNewsScreenState extends State<AllNewsScreen> {
   final _homeService = HomeService();
   final _scrollController = ScrollController();
-  List<Map<String, dynamic>> _news = [];
+  List<dynamic> _news = [];
   bool _isLoading = false;
   bool _hasMore = true;
   int _page = 1;
@@ -55,8 +55,8 @@ class _AllNewsScreenState extends State<AllNewsScreen> {
       final response = await _homeService.getPaginatedNews();
       if (mounted) {
         setState(() {
-          _news = response['items'];
-          _hasMore = response['hasMore'];
+          _news = response['items'] as List<dynamic>;
+          _hasMore = response['hasMore'] as bool;
           _isLoading = false;
         });
       }
@@ -81,8 +81,8 @@ class _AllNewsScreenState extends State<AllNewsScreen> {
       final response = await _homeService.getPaginatedNews(page: _page + 1);
       if (mounted) {
         setState(() {
-          _news.addAll(response['items']);
-          _hasMore = response['hasMore'];
+          _news.addAll(response['items'] as List<dynamic>);
+          _hasMore = response['hasMore'] as bool;
           _page++;
           _isLoading = false;
         });
@@ -100,11 +100,20 @@ class _AllNewsScreenState extends State<AllNewsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: widget.isDark
+          ? SafeJetColors.primaryBackground
+          : SafeJetColors.lightBackground,
       appBar: AppBar(
         title: const Text('News & Updates'),
-        backgroundColor: widget.isDark
-            ? SafeJetColors.primaryBackground
-            : SafeJetColors.lightBackground,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: widget.isDark ? Colors.white : Colors.black,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: _error != null
           ? Center(

@@ -16,6 +16,7 @@ import { UpdateNewsDto } from './dto/update-news.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AdminGuard } from '../auth/admin.guard';
 import { PaginatedNewsResponse } from './dto/paginated-news.dto';
+import { NewsDto } from './dto/news.dto';
 
 @Controller('news')
 export class NewsController {
@@ -39,8 +40,8 @@ export class NewsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.newsService.findOne(id);
+  async findOne(@Param('id') id: string): Promise<NewsDto> {
+    return this.newsService.findOneById(id);
   }
 
   @Patch(':id')
