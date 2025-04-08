@@ -7,8 +7,8 @@ import { format } from 'date-fns';
 export class EmailTemplatesService {
   verificationEmail(code: string, isDark = true) {
     const content = `
-      <h1>Welcome to SafeJet Exchange! 🚀</h1>
-      <p>Thank you for joining SafeJet Exchange. To complete your registration, please use the verification code below:</p>
+      <h1>Welcome to NadiaPoint Exchange! 🚀</h1>
+      <p>Thank you for joining NadiaPoint Exchange. To complete your registration, please use the verification code below:</p>
       
       <div class="code-block">
         ${code}
@@ -16,9 +16,9 @@ export class EmailTemplatesService {
       
       <p>This code will expire in <span class="highlight">15 minutes</span>.</p>
       
-      <p>If you didn't create an account with SafeJet Exchange, you can safely ignore this email.</p>
+      <p>If you didn't create an account with NadiaPoint Exchange, you can safely ignore this email.</p>
       
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -60,7 +60,7 @@ export class EmailTemplatesService {
 
   welcomeEmail(userName: string, isDark = true) {
     const content = `
-      <h1>Welcome to SafeJet Exchange! 🎉</h1>
+      <h1>Welcome to NadiaPoint Exchange! 🎉</h1>
       <p>Congratulations on verifying your account! You're now part of a secure and innovative crypto trading platform.</p>
 
       <div style="margin: 30px 0;">
@@ -108,7 +108,7 @@ export class EmailTemplatesService {
 
       <div style="margin-top: 40px;">
         <p>Happy Trading! 📈</p>
-        <p>Best regards,<br>The SafeJet Team</p>
+        <p>Best regards,<br>The NadiaPoint Team</p>
       </div>
     `;
 
@@ -141,7 +141,7 @@ export class EmailTemplatesService {
 
       <div style="margin: 20px 0;">
         <p>If you need any assistance, our support team is available 24/7.</p>
-        <p>Best regards,<br>The SafeJet Team</p>
+        <p>Best regards,<br>The NadiaPoint Team</p>
       </div>
     `;
 
@@ -193,7 +193,7 @@ export class EmailTemplatesService {
   loginNotificationEmail(loginInfo: LoginInfoDto, isDark = true) {
     const content = `
       <h1>New Login Detected 🔔</h1>
-      <p>We detected a new login to your SafeJet Exchange account.</p>
+      <p>We detected a new login to your NadiaPoint Exchange account.</p>
       
       <div style="margin: 20px 0;">
         <h2 style="color: #ffc300;">Login Details</h2>
@@ -235,8 +235,8 @@ export class EmailTemplatesService {
         ${this.getNextStepsContent(newLevel)}
       </div>
 
-      <p>Thank you for choosing SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for choosing NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -326,7 +326,7 @@ export class EmailTemplatesService {
       </div>
 
       <p>If you need assistance, our support team is here to help!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -346,8 +346,8 @@ export class EmailTemplatesService {
         </ul>
       </div>
 
-      <p>Thank you for choosing SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for choosing NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -367,7 +367,7 @@ export class EmailTemplatesService {
         ${text}
       </div>
 
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -493,11 +493,11 @@ export class EmailTemplatesService {
       </div>
 
       <div style="margin: 20px 0;">
-        <p>You can now use these funds for trading or other services on SafeJet Exchange.</p>
+        <p>You can now use these funds for trading or other services on NadiaPoint Exchange.</p>
       </div>
 
       <p>Happy trading!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -516,8 +516,8 @@ export class EmailTemplatesService {
         <p>If you did not initiate this withdrawal, please contact our support team immediately.</p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -559,8 +559,8 @@ export class EmailTemplatesService {
         </div>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -600,8 +600,8 @@ export class EmailTemplatesService {
       <p>Need assistance? Contact our support team:</p>
       <p>📧 <a href="mailto:support@safejet.com" style="color: #ffc300;">support@safejet.com</a></p>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -633,8 +633,8 @@ export class EmailTemplatesService {
         </div>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, true);
@@ -679,8 +679,8 @@ export class EmailTemplatesService {
         </p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -725,8 +725,8 @@ export class EmailTemplatesService {
         </p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -771,8 +771,8 @@ export class EmailTemplatesService {
         </p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -817,8 +817,8 @@ export class EmailTemplatesService {
         </p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -842,11 +842,11 @@ export class EmailTemplatesService {
       </div>
 
       <div style="margin: 20px 0;">
-        <p>Please log in to your SafeJet Exchange account to view and respond to the message.</p>
+        <p>Please log in to your NadiaPoint Exchange account to view and respond to the message.</p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -891,8 +891,8 @@ export class EmailTemplatesService {
         </p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -932,7 +932,7 @@ export class EmailTemplatesService {
       <div style="margin: 20px 0;">
         <h2 style="color: #ffc300;">Next Steps 🚀</h2>
         <ol>
-          <li>Log in to your SafeJet Exchange account</li>
+          <li>Log in to your NadiaPoint Exchange account</li>
           <li>Navigate to the P2P Order Details page</li>
           <li>Respond to the dispute with any relevant information</li>
           <li>Our admin team will review the case and assist with resolution</li>
@@ -942,8 +942,8 @@ export class EmailTemplatesService {
         </p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -997,7 +997,7 @@ export class EmailTemplatesService {
       </div>
 
       <p>Thank you for your attention to this matter.</p>
-      <p>Best regards,<br>The SafeJet System</p>
+      <p>Best regards,<br>The NadiaPoint System</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -1024,11 +1024,11 @@ export class EmailTemplatesService {
       </div>
 
       <div style="margin: 20px 0;">
-        <p>Please log in to your SafeJet Exchange account to view and respond to the message.</p>
+        <p>Please log in to your NadiaPoint Exchange account to view and respond to the message.</p>
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -1065,7 +1065,7 @@ export class EmailTemplatesService {
       </div>
 
       <p>Thank you for your attention to this matter.</p>
-      <p>Best regards,<br>The SafeJet System</p>
+      <p>Best regards,<br>The NadiaPoint System</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -1105,8 +1105,8 @@ export class EmailTemplatesService {
       </div>
 
       <p>If you have any questions, please use the in-app messaging feature to communicate with the admin.</p>
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -1158,8 +1158,8 @@ export class EmailTemplatesService {
         `}
       </div>
 
-      <p>Thank you for using SafeJet Exchange!</p>
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -1229,10 +1229,10 @@ export class EmailTemplatesService {
       </div>
 
       <div style="margin: 20px 0;">
-        <p>Thank you for choosing SafeJet for your P2P trading needs!</p>
+        <p>Thank you for choosing NadiaPoint for your P2P trading needs!</p>
       </div>
 
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);
@@ -1270,10 +1270,10 @@ export class EmailTemplatesService {
       </div>
 
       <div style="margin: 20px 0;">
-        <p>Thank you for being a trusted seller on SafeJet Exchange!</p>
+        <p>Thank you for being a trusted seller on NadiaPoint Exchange!</p>
       </div>
 
-      <p>Best regards,<br>The SafeJet Team</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
     `;
 
     return baseTemplate(content, isDark);

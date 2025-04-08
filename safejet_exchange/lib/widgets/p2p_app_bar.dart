@@ -58,7 +58,7 @@ class P2PAppBar extends StatelessWidget implements PreferredSizeWidget {
               // Title with flex
               Expanded(
                 child: Text(
-                  title ?? 'SafeJet',
+                  title ?? 'NadiaPoint',
                   style: theme.textTheme.titleLarge?.copyWith(
                     color: isDark ? Colors.white : SafeJetColors.lightText,
                     fontWeight: FontWeight.bold,

@@ -110,7 +110,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     return MaterialApp(
-      title: 'SafeJet Exchange',
+      title: 'NadiaPoint Exchange',
       debugShowCheckedModeBanner: false,
       theme: themeProvider.theme,
       navigatorKey: navigatorKey,

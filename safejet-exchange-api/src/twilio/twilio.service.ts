@@ -19,7 +19,7 @@ export class TwilioService {
       ).toString();
 
       await this.client.messages.create({
-        body: `Your SafeJet verification code is: ${verificationCode}`,
+        body: `Your NadiaPoint verification code is: ${verificationCode}`,
         from: this.configService.get('TWILIO_PHONE_NUMBER'),
         to: phoneNumber,
       });

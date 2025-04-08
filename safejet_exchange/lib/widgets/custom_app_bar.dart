@@ -57,7 +57,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               // Title with flex to allow it to shrink
               Expanded(
                 child: Text(
-                  title ?? 'SafeJet',
+                  title ?? 'NadiaPoint',
                   style: theme.textTheme.titleLarge?.copyWith(
                     color: isDark ? Colors.white : SafeJetColors.lightText,
                     fontWeight: FontWeight.bold,

@@ -118,7 +118,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 bg-indigo-600 text-white">
-            <span className="text-xl font-semibold">SafeJet Admin</span>
+            <span className="text-xl font-semibold">NadiaPoint Admin</span>
             <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

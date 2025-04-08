@@ -115,7 +115,7 @@ export const baseTemplate = (content: string, isDark = true) => `
 <body>
     <div class="email-container">
         <div class="header">
-            <img src="https://safejet.com/logo.png" alt="SafeJet Exchange" class="logo">
+            <img src="https://safejet.com/logo.png" alt="NadiaPoint Exchange" class="logo">
         </div>
         
         <div class="content">
@@ -128,7 +128,7 @@ export const baseTemplate = (content: string, isDark = true) => `
                 <a href="#" class="social-link">Telegram</a>
                 <a href="#" class="social-link">Discord</a>
             </div>
-            <p>© ${new Date().getFullYear()} SafeJet Exchange. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} NadiaPoint Exchange. All rights reserved.</p>
             <p>If you didn't request this email, please ignore it.</p>
         </div>
     </div>

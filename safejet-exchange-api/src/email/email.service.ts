@@ -48,9 +48,9 @@ export class EmailService {
   async sendVerificationEmail(email: string, code: string) {
     try {
       await this.transporter.sendMail({
-        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        from: '"NadiaPoint Exchange" <noreply@safejet.com>',
         to: email,
-        subject: 'Verify Your Email - SafeJet Exchange',
+        subject: 'Verify Your Email - NadiaPoint Exchange',
         html: this.emailTemplatesService.verificationEmail(code),
       });
     } catch (error) {
@@ -60,9 +60,9 @@ export class EmailService {
 
   async sendWelcomeEmail(email: string, userName: string) {
     await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      from: '"NadiaPoint Exchange" <noreply@safejet.com>',
       to: email,
-      subject: 'Welcome to SafeJet Exchange - Start Your Trading Journey!',
+      subject: 'Welcome to NadiaPoint Exchange - Start Your Trading Journey!',
       html: this.emailTemplatesService.welcomeEmail(userName),
     });
   }
@@ -70,9 +70,9 @@ export class EmailService {
   async sendPasswordResetEmail(email: string, code: string) {
     try {
       const info = await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Reset Your Password - SafeJet Exchange',
+        subject: 'Reset Your Password - NadiaPoint Exchange',
         html: this.emailTemplatesService.passwordResetEmail(code),
       });
       console.log('Message sent: %s', info.messageId);
@@ -88,9 +88,9 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Password Changed Successfully - SafeJet Exchange',
+        subject: 'Password Changed Successfully - NadiaPoint Exchange',
         html: this.emailTemplatesService.passwordChangedEmail(userName),
       });
     } catch (error) {
@@ -100,27 +100,27 @@ export class EmailService {
 
   async send2FAEnabledEmail(email: string) {
     await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      from: '"NadiaPoint Exchange" <noreply@safejet.com>',
       to: email,
-      subject: '2FA Enabled - SafeJet Exchange',
+      subject: '2FA Enabled - NadiaPoint Exchange',
       html: this.emailTemplatesService.twoFactorEnabledEmail(),
     });
   }
 
   async send2FADisabledEmail(email: string) {
     await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      from: '"NadiaPoint Exchange" <noreply@safejet.com>',
       to: email,
-      subject: '2FA Disabled - SafeJet Exchange Security Alert',
+      subject: '2FA Disabled - NadiaPoint Exchange Security Alert',
       html: this.emailTemplatesService.twoFactorDisabledEmail(),
     });
   }
 
   async sendLoginNotificationEmail(email: string, loginInfo: LoginInfoDto) {
     await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      from: '"NadiaPoint Exchange" <noreply@safejet.com>',
       to: email,
-      subject: 'New Login Detected - SafeJet Exchange',
+      subject: 'New Login Detected - NadiaPoint Exchange',
       html: this.emailTemplatesService.loginNotificationEmail(loginInfo),
     });
   }
@@ -132,9 +132,9 @@ export class EmailService {
   ) {
     try {
       await this.transporter.sendMail({
-        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        from: '"NadiaPoint Exchange" <noreply@safejet.com>',
         to: email,
-        subject: `KYC Level ${newLevel} Achieved - SafeJet Exchange`,
+        subject: `KYC Level ${newLevel} Achieved - NadiaPoint Exchange`,
         html: this.emailTemplatesService.kycLevelUpgradeEmail(
           userName,
           newLevel,
@@ -152,9 +152,9 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Identity Verification Failed - SafeJet Exchange',
+        subject: 'Identity Verification Failed - NadiaPoint Exchange',
         html: this.emailTemplatesService.verificationFailedEmail(
           fullName,
           reason,
@@ -171,9 +171,9 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Identity Verification Successful - SafeJet Exchange',
+        subject: 'Identity Verification Successful - NadiaPoint Exchange',
         html: this.emailTemplatesService.verificationSuccessEmail(fullName),
       });
     } catch (error) {
@@ -191,8 +191,8 @@ export class EmailService {
     try {
       const subject =
         status === 'completed'
-          ? `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Successful - SafeJet Exchange`
-          : `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Failed - SafeJet Exchange`;
+          ? `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Successful - NadiaPoint Exchange`
+          : `${level === 'advanced' ? 'Advanced' : 'Identity'} Verification Failed - NadiaPoint Exchange`;
 
       const text =
         status === 'completed'
@@ -200,7 +200,7 @@ export class EmailService {
           : `Hello ${fullName}, unfortunately your ${level === 'advanced' ? 'advanced' : 'identity'} verification was not successful. ${rejectLabels ? `Reason: ${rejectLabels.join(', ')}` : ''}`;
 
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject,
         html: this.emailTemplatesService.verificationStatusEmail(
@@ -217,9 +217,9 @@ export class EmailService {
   async sendPaymentMethodAddedEmail(email: string, userName: string, methodName: string): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'New Payment Method Added - SafeJet Exchange',
+        subject: 'New Payment Method Added - NadiaPoint Exchange',
         html: this.emailTemplatesService.paymentMethodAddedEmail(userName, methodName),
       });
     } catch (error) {
@@ -230,9 +230,9 @@ export class EmailService {
   async sendPaymentMethodUpdatedEmail(email: string, userName: string, methodName: string): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Payment Method Updated - SafeJet Exchange',
+        subject: 'Payment Method Updated - NadiaPoint Exchange',
         html: this.emailTemplatesService.paymentMethodUpdatedEmail(userName, methodName),
       });
     } catch (error) {
@@ -243,9 +243,9 @@ export class EmailService {
   async sendPaymentMethodDeletedEmail(email: string, userName: string, methodName: string): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Payment Method Deleted - SafeJet Exchange',
+        subject: 'Payment Method Deleted - NadiaPoint Exchange',
         html: this.emailTemplatesService.paymentMethodDeletedEmail(userName, methodName),
       });
     } catch (error) {
@@ -256,9 +256,9 @@ export class EmailService {
   async sendDepositCreatedEmail(email: string, userName: string, amount: string, currency: string): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'New Deposit Received - SafeJet Exchange',
+        subject: 'New Deposit Received - NadiaPoint Exchange',
         html: this.emailTemplatesService.depositCreatedEmail(userName, amount, currency),
       });
     } catch (error) {
@@ -269,9 +269,9 @@ export class EmailService {
   async sendDepositConfirmedEmail(email: string, userName: string, amount: string, currency: string): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: 'Deposit Confirmed - SafeJet Exchange',
+        subject: 'Deposit Confirmed - NadiaPoint Exchange',
         html: this.emailTemplatesService.depositConfirmedEmail(userName, amount, currency),
       });
     } catch (error) {
@@ -289,9 +289,9 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: '"SafeJet Exchange" <noreply@safejet.com>',
+        from: '"NadiaPoint Exchange" <noreply@safejet.com>',
         to: email,
-        subject: 'Withdrawal Placed - SafeJet Exchange',
+        subject: 'Withdrawal Placed - NadiaPoint Exchange',
         html: this.emailTemplatesService.withdrawalNotificationEmail(userName, amount, currency),
       });
     } catch (error) {
@@ -312,7 +312,7 @@ export class EmailService {
     const template = await this.emailTemplatesService.getTransferConfirmationTemplate(data);
     
     await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      from: '"NadiaPoint Exchange" <noreply@safejet.com>',
       to: email,
       subject: 'Transfer Confirmation',
       html: template,
@@ -342,7 +342,7 @@ export class EmailService {
     });
 
     await this.transporter.sendMail({
-      from: '"SafeJet Exchange" <noreply@safejet.com>',
+      from: '"NadiaPoint Exchange" <noreply@safejet.com>',
       to: params.to,
       subject: 'Conversion Confirmation',
       html: template,
@@ -360,7 +360,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Created - Buy ${tokenSymbol}`,
         html: this.emailTemplatesService.p2pOrderCreatedBuyerEmail(
@@ -388,7 +388,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Created - Sell ${tokenSymbol}`,
         html: this.emailTemplatesService.p2pOrderCreatedSellerEmail(
@@ -416,7 +416,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Received - Buy ${tokenSymbol}`,
         html: this.emailTemplatesService.p2pOrderReceivedBuyerEmail(
@@ -444,7 +444,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Received - Sell ${tokenSymbol}`,
         html: this.emailTemplatesService.p2pOrderReceivedSellerEmail(
@@ -469,9 +469,9 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
-        subject: `New Message in P2P Order ${trackingId} - SafeJet Exchange`,
+        subject: `New Message in P2P Order ${trackingId} - NadiaPoint Exchange`,
         html: this.emailTemplatesService.p2pNewMessageEmail(
           userName,
           trackingId,
@@ -494,7 +494,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Marked as Paid - ${tokenSymbol}`,
         html: this.emailTemplatesService.p2pOrderPaidEmail(
@@ -523,7 +523,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Disputed - ${tokenSymbol}`,
         html: this.emailTemplatesService.p2pDisputeCreatedUserEmail(
@@ -554,7 +554,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `New P2P Dispute - Order #${trackingId}`,
         html: this.emailTemplatesService.p2pDisputeCreatedAdminEmail(
@@ -589,7 +589,7 @@ export class EmailService {
     try {
       // Send email to the user
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: params.userEmail,
         subject: `New Dispute Message - Order #${params.trackingId}`,
         html: this.emailTemplatesService.p2pDisputeMessageUserEmail(
@@ -603,7 +603,7 @@ export class EmailService {
 
       // Send email to admin
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: params.adminEmail,
         subject: `New Dispute Message - Order #${params.trackingId}`,
         html: this.emailTemplatesService.p2pDisputeMessageAdminEmail(
@@ -630,7 +630,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `Dispute Status Update - ${newStatus}`,
         html: this.emailTemplatesService.p2pDisputeStatusUpdateEmail(
@@ -662,7 +662,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Cancelled - #${trackingId}`,
         html: this.emailTemplatesService.p2pOrderCancelledEmail(
@@ -692,7 +692,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Completed - ${tokenSymbol} Received`,
         html: this.emailTemplatesService.p2pOrderCompletedBuyerEmail(
@@ -718,7 +718,7 @@ export class EmailService {
   ): Promise<void> {
     try {
       await this.transporter.sendMail({
-        from: `"SafeJet Exchange" <${this.configService.get('SMTP_USER')}>`,
+        from: `"NadiaPoint Exchange" <${this.configService.get('SMTP_USER')}>`,
         to: email,
         subject: `P2P Order Completed - ${tokenSymbol} Released`,
         html: this.emailTemplatesService.p2pOrderCompletedSellerEmail(

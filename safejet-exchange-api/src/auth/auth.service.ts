@@ -373,7 +373,7 @@ export class AuthService {
 
     // Generate secret
     const secret = speakeasy.generateSecret({
-      name: `SafeJet Exchange (${user.email})`,
+      name: `NadiaPoint Exchange (${user.email})`,
     });
 
     // Save secret temporarily
