@@ -35,8 +35,30 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
 
   String _formatNumber(dynamic value) {
     if (value == null) return '0';
-    final number = double.tryParse(value.toString()) ?? 0;
-    return _numberFormat.format(number);
+    
+    try {
+      print('Original value: $value'); // Debug log
+      
+      // Convert to double, handling string inputs
+      final number = double.tryParse(value.toString()) ?? 0;
+      print('Parsed number: $number'); // Debug log
+      
+      // Special handling for very small numbers to preserve precision
+      if (number != 0 && number.abs() < 0.01) {
+        // Use fixed decimal places for small numbers
+        final result = number.toStringAsFixed(8).replaceAll(RegExp(r'0+$'), '');
+        print('Small number result: $result'); // Debug log
+        return result;
+      }
+      
+      // For regular numbers, use number format
+      final result = _numberFormat.format(number);
+      print('Regular number result: $result'); // Debug log
+      return result;
+    } catch (e) {
+      print('Error formatting number: $e');
+      return value.toString();
+    }
   }
 
   Future<void> _loadDetails() async {
