@@ -33,6 +33,8 @@ import { PlatformSettings } from '../platform/entities/platform-settings.entity'
 import { AdminSettingsController } from './admin-settings.controller';
 import { AdminWithdrawalsController } from './admin-withdrawals.controller';
 import { Withdrawal } from '../wallet/entities/withdrawal.entity';
+import { AdminWallet } from '../wallet/entities/admin-wallet.entity';
+import { WalletKey } from '../wallet/entities/wallet-key.entity';
 
 @Module({
   imports: [
@@ -51,6 +53,8 @@ import { Withdrawal } from '../wallet/entities/withdrawal.entity';
       News,
       PlatformSettings,
       Withdrawal,
+      AdminWallet,
+      WalletKey,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],

@@ -1,19 +1,89 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards, Logger, BadRequestException, NotFoundException, UnauthorizedException, Request } from '@nestjs/common';
 import { AdminGuard } from '../auth/admin.guard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Withdrawal } from '../wallet/entities/withdrawal.entity';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
+import { AdminWallet } from '../wallet/entities/admin-wallet.entity';
+import { WalletKey } from '../wallet/entities/wallet-key.entity';
+import { Token } from '../wallet/entities/token.entity';
+import { KeyManagementService } from '../wallet/key-management.service';
+import { ethers } from 'ethers';
 import { Decimal } from 'decimal.js';
+import axios from 'axios';
+import * as bitcoin from 'bitcoinjs-lib';
+import { ECPairFactory } from 'ecpair';
+import * as ecc from 'tiny-secp256k1';
+import { ConfigService } from '@nestjs/config';
+import { Client } from 'xrpl';
+import * as bcrypt from 'bcrypt';
+import { Admin } from '../admin/entities/admin.entity';
+const TronWeb = require('tronweb');
+
+const ECPair = ECPairFactory(ecc);
+
+interface XrpAccountInfoResponse {
+  result: {
+    account_data: {
+      Balance: string;
+      [key: string]: any;
+    };
+    [key: string]: any;
+  };
+  status?: string;
+  type?: string;
+  error?: string;
+  error_message?: string;
+}
+
+interface XrpTxResponse {
+  result: {
+    meta: {
+      TransactionResult: string;
+      [key: string]: any;
+    };
+    hash: string;
+    [key: string]: any;
+  };
+}
+
+interface ProcessWithdrawalDto {
+  status: 'completed' | 'failed' | 'cancelled';
+  reason?: string;
+  password: string;
+  secretKey: string;
+}
+
+interface RequestWithAdmin extends Request {
+  admin: {
+    email: string;
+    sub: string;
+    type: string;
+    iat: number;
+    exp: number;
+  }
+}
 
 @Controller('admin/withdrawals')
 @UseGuards(AdminGuard)
 export class AdminWithdrawalsController {
+  private readonly logger = new Logger(AdminWithdrawalsController.name);
+
   constructor(
     @InjectRepository(Withdrawal)
     private withdrawalRepository: Repository<Withdrawal>,
     @InjectRepository(WalletBalance)
-    private walletBalanceRepository: Repository<WalletBalance>
+    private walletBalanceRepository: Repository<WalletBalance>,
+    @InjectRepository(AdminWallet)
+    private adminWalletRepository: Repository<AdminWallet>,
+    @InjectRepository(WalletKey)
+    private walletKeyRepository: Repository<WalletKey>,
+    @InjectRepository(Token)
+    private tokenRepository: Repository<Token>,
+    @InjectRepository(Admin)
+    private adminRepository: Repository<Admin>,
+    private keyManagementService: KeyManagementService,
+    private configService: ConfigService
   ) {}
 
   @Get()
@@ -31,7 +101,7 @@ export class AdminWithdrawalsController {
         .leftJoinAndSelect('withdrawal.token', 'token');
 
       if (search) {
-        query.andWhere('(withdrawal.txHash ILIKE :search OR withdrawal.userId ILIKE :search OR withdrawal.id ILIKE :search)', {
+        query.andWhere('(withdrawal.txHash ILIKE :search OR CAST(withdrawal.userId AS TEXT) ILIKE :search OR CAST(withdrawal.id AS TEXT) ILIKE :search OR user.email ILIKE :search)', {
           search: `%${search}%`
         });
       }
@@ -79,28 +149,71 @@ export class AdminWithdrawalsController {
   @Post(':id/process')
   async processWithdrawal(
     @Param('id') id: string,
-    @Body() data: { status: 'completed' | 'failed' | 'cancelled'; reason?: string }
+    @Body() data: ProcessWithdrawalDto,
+    @Request() req: RequestWithAdmin
   ) {
-    const withdrawal = await this.withdrawalRepository.findOne({
-      where: { id },
-      relations: ['user', 'token']
-    });
+    this.logger.debug(`Processing withdrawal ${id} with status ${data.status}`);
 
-    if (!withdrawal) {
-      throw new Error('Withdrawal not found');
+    // Get admin secret key from .env
+    const adminSecretKey = this.configService.get<string>('ADMIN_SECRET_KEY');
+    if (!adminSecretKey) {
+      throw new BadRequestException('Admin secret key not properly configured');
     }
 
-    // Update withdrawal status
-    withdrawal.status = data.status;
-    if (data.reason) {
-      withdrawal.metadata = {
-        ...withdrawal.metadata,
-        processingReason: data.reason
+    // Get admin from database using the authenticated admin's ID
+    const adminId = req.admin?.sub;
+    if (!adminId) {
+      throw new UnauthorizedException('Admin ID not found in token');
+    }
+
+    const admin = await this.adminRepository.findOne({ 
+      where: { id: adminId }
+    });
+    if (!admin) {
+      throw new BadRequestException('Admin account not found');
+    }
+
+    // Validate password using bcrypt
+    const isPasswordValid = await bcrypt.compare(data.password, admin.password);
+    if (!isPasswordValid) {
+      return {
+        success: false,
+        message: 'Invalid admin password'
       };
     }
 
-    // If failed or cancelled, refund the amount
+    // Validate secret key
+    if (data.secretKey !== adminSecretKey) {
+      return {
+        success: false,
+        message: 'Invalid secret key'
+      };
+    }
+
+    const withdrawal = await this.withdrawalRepository.findOne({
+      where: { id },
+      relations: ['token']
+    });
+
+    if (!withdrawal) {
+      throw new NotFoundException('Withdrawal not found');
+    }
+
+    if (withdrawal.status !== 'pending') {
+      throw new BadRequestException(`Cannot process withdrawal in ${withdrawal.status} status`);
+    }
+
+    // If cancelling or failing, just update status
     if (data.status === 'failed' || data.status === 'cancelled') {
+      withdrawal.status = data.status;
+      if (data.reason) {
+        withdrawal.metadata = {
+          ...withdrawal.metadata,
+          processingReason: data.reason
+        };
+      }
+
+      // Refund the amount back to user's balance
       const balance = await this.walletBalanceRepository.findOne({
         where: {
           userId: withdrawal.userId,
@@ -114,8 +227,493 @@ export class AdminWithdrawalsController {
         balance.balance = new Decimal(balance.balance).plus(totalAmount).toString();
         await this.walletBalanceRepository.save(balance);
       }
+
+      return this.withdrawalRepository.save(withdrawal);
     }
 
-    return this.withdrawalRepository.save(withdrawal);
+    // For completed status, we need to process the actual blockchain transaction
+    try {
+      // Find admin wallet for this blockchain/network
+      const adminWallet = await this.adminWalletRepository.findOne({
+        where: {
+          blockchain: withdrawal.token.blockchain,
+          network: withdrawal.network,
+          isActive: true
+        }
+      });
+
+      if (!adminWallet) {
+        throw new BadRequestException(`No active admin wallet found for ${withdrawal.token.blockchain}/${withdrawal.network}`);
+      }
+
+      // Get admin wallet's private key
+      const walletKey = await this.walletKeyRepository.findOne({
+        where: { id: adminWallet.keyId }
+      });
+
+      if (!walletKey) {
+        throw new BadRequestException('Admin wallet key not found');
+      }
+
+      // Get the decrypted private key
+      const privateKey = await this.keyManagementService.decryptPrivateKey(
+        walletKey.encryptedPrivateKey,
+        walletKey.userId
+      );
+
+      // Process the withdrawal based on blockchain type
+      let txHash: string;
+      
+      switch (withdrawal.token.blockchain) {
+        case 'ethereum':
+        case 'bsc':
+          txHash = await this.processEvmWithdrawal(
+            withdrawal,
+            privateKey,
+            adminWallet.address
+          );
+          break;
+          
+        case 'bitcoin':
+          txHash = await this.processBitcoinWithdrawal(
+            withdrawal,
+            privateKey,
+            adminWallet.address
+          );
+          break;
+          
+        case 'trx':
+          txHash = await this.processTronWithdrawal(
+            withdrawal,
+            privateKey,
+            adminWallet.address
+          );
+          break;
+          
+        case 'xrp':
+          txHash = await this.processXrpWithdrawal(
+            withdrawal,
+            privateKey,
+            adminWallet.address
+          );
+          break;
+          
+        default:
+          throw new BadRequestException(`Unsupported blockchain: ${withdrawal.token.blockchain}`);
+      }
+
+      // Update withdrawal status
+      withdrawal.status = 'completed';
+      withdrawal.txHash = txHash;
+      if (data.reason) {
+        withdrawal.metadata = {
+          ...withdrawal.metadata,
+          processingReason: data.reason
+        };
+      }
+
+      return this.withdrawalRepository.save(withdrawal);
+
+    } catch (error) {
+      this.logger.error(`Error processing withdrawal ${id}:`, error);
+      throw new BadRequestException(`Failed to process withdrawal: ${error.message}`);
+    }
+  }
+
+  private async processEvmWithdrawal(
+    withdrawal: Withdrawal,
+    privateKey: string,
+    adminAddress: string
+  ): Promise<string> {
+    this.logger.debug(`Processing EVM withdrawal for ${withdrawal.id}`);
+
+    // Get RPC URL based on blockchain and network
+    const rpcUrl = this.getRpcUrl(withdrawal.token.blockchain, withdrawal.network);
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    const wallet = new ethers.Wallet(privateKey, provider);
+
+    // Check admin wallet balance
+    const balance = await provider.getBalance(adminAddress);
+    
+    // For token transfers, we only need enough for gas
+    // For native transfers, we need enough for amount + gas
+    const isNativeToken = !withdrawal.token.contractAddress;
+    const amount = ethers.utils.parseUnits(withdrawal.amount, withdrawal.token.decimals);
+
+    if (isNativeToken) {
+      // For native token, check if we have enough balance
+      if (balance.lt(amount)) {
+        throw new BadRequestException('Insufficient balance in admin wallet');
+      }
+
+      // Send native token
+      const tx = await wallet.sendTransaction({
+        to: withdrawal.address,
+        value: amount,
+        gasLimit: 21000 // Standard gas limit for ETH transfers
+      });
+
+      return tx.hash;
+    } else {
+      // For tokens, we need the contract
+      const tokenContract = new ethers.Contract(
+        withdrawal.token.contractAddress,
+        [
+          'function transfer(address to, uint256 amount) returns (bool)',
+          'function balanceOf(address account) view returns (uint256)'
+        ],
+        wallet
+      );
+
+      // Check token balance
+      const tokenBalance = await tokenContract.balanceOf(adminAddress);
+      if (tokenBalance.lt(amount)) {
+        throw new BadRequestException('Insufficient token balance in admin wallet');
+      }
+
+      // Estimate gas for token transfer
+      const gasLimit = await tokenContract.estimateGas.transfer(withdrawal.address, amount);
+      
+      // Add 20% buffer to gas limit for safety
+      const safeGasLimit = gasLimit.mul(120).div(100);
+
+      // Send token
+      const tx = await tokenContract.transfer(withdrawal.address, amount, {
+        gasLimit: safeGasLimit
+      });
+
+      return tx.hash;
+    }
+  }
+
+  private getRpcUrl(blockchain: string, network: string): string {
+    // Map blockchain names to environment variable prefixes
+    const blockchainMap = {
+      ethereum: 'ETHEREUM',
+      bsc: 'BSC'
+    };
+
+    const prefix = blockchainMap[blockchain];
+    if (!prefix) {
+      throw new BadRequestException(`Unsupported blockchain: ${blockchain}`);
+    }
+
+    const envKey = `${prefix}_${network.toUpperCase()}_RPC`;
+    const url = process.env[envKey];
+
+    if (!url) {
+      throw new BadRequestException(`No RPC URL configured for ${blockchain}/${network}`);
+    }
+
+    return url;
+  }
+
+  private async processBitcoinWithdrawal(
+    withdrawal: Withdrawal,
+    privateKey: string,
+    adminAddress: string
+  ): Promise<string> {
+    this.logger.debug(`Processing Bitcoin withdrawal for ${withdrawal.id}`);
+
+    const network = withdrawal.network === 'mainnet' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
+    const networkPath = withdrawal.network === 'testnet' ? '/testnet' : '';
+
+    // Get UTXOs for the admin wallet
+    const utxosResponse = await axios.get(
+      `https://mempool.space${networkPath}/api/address/${adminAddress}/utxo`
+    );
+    const utxos = utxosResponse.data;
+
+    if (!utxos || utxos.length === 0) {
+      throw new BadRequestException('No UTXOs found in admin wallet');
+    }
+
+    // Calculate total available balance
+    const totalBalance = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
+    const amountToSend = Math.floor(parseFloat(withdrawal.amount) * 1e8); // Convert BTC to satoshis
+
+    // Estimate fee (using a conservative estimate of 250 bytes * current fee rate)
+    const feeResponse = await axios.get(
+      `https://mempool.space${networkPath}/api/v1/fees/recommended`
+    );
+    const feeRate = feeResponse.data.hourFee; // Use hourFee for medium priority
+    const estimatedFee = 250 * feeRate;
+
+    // Check if we have enough balance
+    if (totalBalance < amountToSend + estimatedFee) {
+      throw new BadRequestException('Insufficient balance in admin wallet');
+    }
+
+    // Create and sign transaction
+    const psbt = new bitcoin.Psbt({ network });
+    const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey, 'hex'), { network });
+
+    // Sort UTXOs by value (descending) and use the minimum needed
+    utxos.sort((a, b) => b.value - a.value);
+    let inputAmount = 0;
+    const inputUtxos = [];
+
+    for (const utxo of utxos) {
+      inputAmount += utxo.value;
+      inputUtxos.push(utxo);
+      if (inputAmount >= amountToSend + estimatedFee) break;
+    }
+
+    // Add inputs
+    for (const utxo of inputUtxos) {
+      const isSegwit = adminAddress.startsWith('bc1') || adminAddress.startsWith('tb1');
+      
+      if (isSegwit) {
+        psbt.addInput({
+          hash: utxo.txid,
+          index: utxo.vout,
+          witnessUtxo: {
+            script: bitcoin.address.toOutputScript(adminAddress, network),
+            value: utxo.value
+          }
+        });
+      } else {
+        const txHex = await this.getBitcoinTransactionHex(utxo.txid, withdrawal.network);
+        psbt.addInput({
+          hash: utxo.txid,
+          index: utxo.vout,
+          nonWitnessUtxo: Buffer.from(txHex, 'hex')
+        });
+      }
+    }
+
+    // Add recipient output
+    psbt.addOutput({
+      address: withdrawal.address,
+      value: amountToSend
+    });
+
+    // Add change output if needed
+    const changeAmount = inputAmount - amountToSend - estimatedFee;
+    if (changeAmount > 546) { // Dust threshold
+      psbt.addOutput({
+        address: adminAddress,
+        value: changeAmount
+      });
+    }
+
+    // Sign all inputs
+    inputUtxos.forEach((_, index) => {
+      psbt.signInput(index, keyPair);
+    });
+
+    // Finalize and broadcast
+    psbt.finalizeAllInputs();
+    const rawTx = psbt.extractTransaction().toHex();
+
+    // Broadcast transaction
+    const broadcastResponse = await axios.post(
+      `https://mempool.space${networkPath}/api/tx`,
+      rawTx
+    );
+
+    if (!broadcastResponse.data) {
+      throw new Error('Failed to broadcast Bitcoin transaction');
+    }
+
+    return broadcastResponse.data; // Returns the transaction hash
+  }
+
+  private async getBitcoinTransactionHex(txid: string, network: string): Promise<string> {
+    const networkPath = network === 'testnet' ? '/testnet' : '';
+    const response = await axios.get(
+      `https://mempool.space${networkPath}/api/tx/${txid}/hex`
+    );
+    return response.data;
+  }
+
+  private async processTronWithdrawal(
+    withdrawal: Withdrawal,
+    privateKey: string,
+    adminAddress: string
+  ): Promise<string> {
+    this.logger.debug(`Processing Tron withdrawal for ${withdrawal.id}`);
+
+    // Initialize TronWeb with network-specific configuration
+    const fullNode = withdrawal.network === 'mainnet' 
+      ? this.configService.get('TRON_MAINNET_RPC_URL')
+      : this.configService.get('TRON_TESTNET_RPC_URL');
+
+    const tronWeb = new TronWeb({
+      fullHost: fullNode,
+      headers: { 
+        "TRON-PRO-API-KEY": this.configService.get('TRON_API_KEY')
+      }
+    });
+
+    // Set the private key for signing transactions
+    tronWeb.setPrivateKey(privateKey);
+
+    try {
+      // Check admin wallet balance
+      const balance = await tronWeb.trx.getBalance(adminAddress);
+      const amountInSun = tronWeb.toSun(withdrawal.amount); // Convert TRX to SUN (1 TRX = 1,000,000 SUN)
+
+      if (!withdrawal.token.contractAddress) {
+        // Native TRX transfer
+        if (balance < amountInSun) {
+          throw new BadRequestException('Insufficient TRX balance in admin wallet');
+        }
+
+        // Create and send transaction
+        const transaction = await tronWeb.transactionBuilder.sendTrx(
+          withdrawal.address,
+          amountInSun,
+          adminAddress
+        );
+
+        const signedTx = await tronWeb.trx.sign(transaction);
+        const result = await tronWeb.trx.sendRawTransaction(signedTx);
+
+        if (!result.result) {
+          throw new Error('Failed to broadcast transaction');
+        }
+
+        // Wait for transaction confirmation
+        const confirmed = await this.waitForTronTransaction(result.txid, tronWeb);
+        if (!confirmed) {
+          throw new Error('Transaction failed to confirm');
+        }
+
+        return result.txid;
+      } else {
+        // Token transfer (TRC20)
+        // Check if we have enough TRX for fees
+        const minTrxForFees = tronWeb.toSun('10'); // Minimum 10 TRX for fees
+        if (balance < minTrxForFees) {
+          throw new BadRequestException('Insufficient TRX balance for fees');
+        }
+
+        // Get contract instance
+        const contract = await tronWeb.contract().at(withdrawal.token.contractAddress);
+        
+        // Check token balance
+        const tokenBalance = await contract.balanceOf(adminAddress).call();
+        const tokenAmount = tronWeb.toBigNumber(withdrawal.amount)
+          .multipliedBy(Math.pow(10, withdrawal.token.decimals))
+          .toFixed(0);
+
+        if (tokenBalance < tokenAmount) {
+          throw new BadRequestException('Insufficient token balance in admin wallet');
+        }
+
+        // Send token
+        const result = await contract.transfer(
+          withdrawal.address,
+          tokenAmount
+        ).send({
+          feeLimit: 100_000_000, // 100 TRX
+          callValue: 0,
+          shouldPollResponse: true
+        });
+
+        // Wait for transaction confirmation
+        const confirmed = await this.waitForTronTransaction(result, tronWeb);
+        if (!confirmed) {
+          throw new Error('Transaction failed to confirm');
+        }
+
+        return result;
+      }
+    } catch (error) {
+      this.logger.error('Tron withdrawal error:', error);
+      throw new BadRequestException(`Failed to process Tron withdrawal: ${error.message}`);
+    }
+  }
+
+  private async waitForTronTransaction(txId: string, tronWeb: any, maxAttempts = 20): Promise<boolean> {
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const [tx, txInfo] = await Promise.all([
+          tronWeb.trx.getTransaction(txId),
+          tronWeb.trx.getTransactionInfo(txId)
+        ]);
+
+        if (tx?.ret?.[0]?.contractRet === 'SUCCESS') {
+          return true;
+        }
+      } catch (error) {
+        this.logger.warn(`Error checking transaction ${txId}:`, error);
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+
+    return false;
+  }
+
+  private async processXrpWithdrawal(
+    withdrawal: Withdrawal,
+    privateKey: string,
+    adminAddress: string
+  ): Promise<string> {
+    this.logger.debug(`Processing XRP withdrawal for ${withdrawal.id}`);
+
+    // Initialize XRP client with network-specific configuration
+    const serverUrl = withdrawal.network === 'mainnet'
+      ? this.configService.get('XRP_MAINNET_RPC_URL', 'wss://xrplcluster.com')
+      : this.configService.get('XRP_TESTNET_RPC_URL', 'wss://s.altnet.rippletest.net:51233');
+
+    const client = new Client(serverUrl);
+
+    try {
+      await client.connect();
+
+      // Create wallet from private key (seed)
+      const xrpl = require('xrpl');
+      const wallet = xrpl.Wallet.fromSeed(privateKey);
+
+      // Check admin wallet balance
+      const accountInfo = await client.request({
+        command: 'account_info',
+        account: adminAddress,
+        ledger_index: 'validated'
+      }) as XrpAccountInfoResponse;
+
+      if (accountInfo.error) {
+        throw new Error(`Failed to get account info: ${accountInfo.error_message}`);
+      }
+
+      const balance = parseFloat(accountInfo.result.account_data.Balance) / 1000000; // Convert drops to XRP
+      const amountInXRP = parseFloat(withdrawal.amount);
+
+      // Check if we have enough balance (including 20 XRP reserve and 0.00001 XRP fee)
+      if (balance < amountInXRP + 20.00001) {
+        throw new BadRequestException('Insufficient XRP balance in admin wallet (including reserve)');
+      }
+
+      // Prepare transaction
+      const prepared = await client.autofill({
+        TransactionType: 'Payment',
+        Account: adminAddress,
+        Destination: withdrawal.address,
+        Amount: xrpl.xrpToDrops(withdrawal.amount), // Convert XRP to drops
+      });
+
+      // Sign transaction
+      const signed = wallet.sign(prepared);
+
+      // Submit transaction
+      const result = await client.submitAndWait(signed.tx_blob) as XrpTxResponse;
+
+      if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+        throw new Error(`Transaction failed: ${result.result.meta.TransactionResult}`);
+      }
+
+      await client.disconnect();
+
+      return result.result.hash;
+    } catch (error) {
+      if (client.isConnected()) {
+        await client.disconnect();
+      }
+      this.logger.error('XRP withdrawal error:', error);
+      throw new BadRequestException(`Failed to process XRP withdrawal: ${error.message}`);
+    }
   }
 } 

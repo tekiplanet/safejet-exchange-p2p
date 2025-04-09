@@ -80,7 +80,7 @@ import { Conversion } from './entities/conversion.entity';
     AdminWalletController,
     GasTankWalletController
   ],
-  exports: [WalletService, DepositTrackingService, AdminWalletService, GasTankWalletService],
+  exports: [WalletService, DepositTrackingService, AdminWalletService, GasTankWalletService, KeyManagementService],
 })
 export class WalletModule {
   constructor() {

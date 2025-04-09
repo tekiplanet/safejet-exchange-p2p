@@ -31,6 +31,7 @@ import {
 } from '@mui/material';
 import { Search as SearchIcon, Visibility as VisibilityIcon, PlayArrow as ProcessIcon } from '@mui/icons-material';
 import { LoadingButton } from '@mui/lab';
+import { useSnackbar } from 'notistack';
 
 interface Withdrawal {
     id: string;
@@ -80,6 +81,12 @@ interface Token {
     networkVersion: string;
 }
 
+interface ProcessConfirmationState {
+    password: string;
+    secretKey: string;
+    error: string;
+}
+
 export function WithdrawalManagement() {
     const router = useRouter();
     const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
@@ -100,6 +107,13 @@ export function WithdrawalManagement() {
     const [processingWithdrawalId, setProcessingWithdrawalId] = useState<string | null>(null);
     const [processingStatus, setProcessingStatus] = useState<'completed' | 'failed' | 'cancelled'>('completed');
     const [processingReason, setProcessingReason] = useState('');
+    const [processConfirmation, setProcessConfirmation] = useState<ProcessConfirmationState>({
+        password: '',
+        secretKey: '',
+        error: ''
+    });
+    const [showProcessConfirmation, setShowProcessConfirmation] = useState(false);
+    const { enqueueSnackbar } = useSnackbar();
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
 
@@ -156,7 +170,6 @@ export function WithdrawalManagement() {
                         router.push('/login');
                         throw new Error('Session expired');
                     }
-                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 return response;
             } catch (error) {
@@ -284,8 +297,8 @@ export function WithdrawalManagement() {
     };
 
     const handleProcessClick = (event: React.MouseEvent<HTMLElement>, withdrawalId: string) => {
-        setAnchorEl(event.currentTarget);
         setProcessingWithdrawalId(withdrawalId);
+        setShowProcessConfirmation(true);
     };
 
     const handleClosePopover = () => {
@@ -295,25 +308,69 @@ export function WithdrawalManagement() {
         setProcessingReason('');
     };
 
+    const handleCloseProcessConfirmation = () => {
+        setShowProcessConfirmation(false);
+        setProcessConfirmation({
+            password: '',
+            secretKey: '',
+            error: ''
+        });
+    };
+
     const handleProcessWithdrawal = async () => {
-        if (!processingWithdrawalId) return;
-        
-        setProcessingWithdrawal(processingWithdrawalId);
+        if (!processConfirmation.password || !processConfirmation.secretKey) {
+            setProcessConfirmation(prev => ({
+                ...prev,
+                error: 'Please fill in both password and secret key'
+            }));
+            return;
+        }
+
         try {
-            await fetchWithRetry(
+            setProcessingWithdrawal(processingWithdrawalId);
+            const withdrawal = withdrawals.find(w => w.id === processingWithdrawalId);
+            if (!withdrawal) {
+                throw new Error('Withdrawal not found');
+            }
+
+            const metadata = typeof withdrawal.metadata === 'string' 
+                ? JSON.parse(withdrawal.metadata) 
+                : withdrawal.metadata;
+
+            const response = await fetchWithRetry(
                 `/admin/withdrawals/${processingWithdrawalId}/process`,
-                { 
+                {
                     method: 'POST',
-                    body: JSON.stringify({ 
-                        status: processingStatus,
-                        reason: processingReason 
+                    body: JSON.stringify({
+                        status: 'completed',
+                        password: processConfirmation.password,
+                        secretKey: processConfirmation.secretKey,
+                        amount: metadata.receiveAmount
                     })
                 }
             );
-            await fetchWithdrawals();
+
+            const data = await response.json();
+            if (!data.success) {
+                setProcessConfirmation(prev => ({
+                    ...prev,
+                    error: data.message
+                }));
+                return;
+            }
+
+            enqueueSnackbar('Withdrawal processed successfully', { variant: 'success' });
+            handleCloseProcessConfirmation();
             handleClosePopover();
+            fetchWithdrawals();
         } catch (error) {
-            console.error('Error processing withdrawal:', error);
+            console.error('Process withdrawal error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to process withdrawal';
+            
+            setProcessConfirmation(prev => ({
+                ...prev,
+                error: errorMessage
+            }));
         } finally {
             setProcessingWithdrawal(null);
         }
@@ -583,6 +640,19 @@ export function WithdrawalManagement() {
                                 </div>
                                 <div>
                                     <Typography variant="caption" color="textSecondary">
+                                        Receive Amount
+                                    </Typography>
+                                    <Typography>
+                                        {formatAmount(selectedWithdrawal.metadata?.receiveAmount || '0')}
+                                        {selectedWithdrawal.metadata?.token && (
+                                            <span className="ml-1 text-gray-500">
+                                                {selectedWithdrawal.metadata.token.symbol}
+                                            </span>
+                                        )}
+                                    </Typography>
+                                </div>
+                                <div>
+                                    <Typography variant="caption" color="textSecondary">
                                         Status
                                     </Typography>
                                     <div>
@@ -663,61 +733,66 @@ export function WithdrawalManagement() {
                 </DialogActions>
             </Dialog>
 
-            {/* Process Withdrawal Popover */}
-            <Popover
-                open={Boolean(anchorEl)}
-                anchorEl={anchorEl}
-                onClose={handleClosePopover}
-                anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                }}
-                transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                }}
+            {/* Process Confirmation Modal */}
+            <Dialog
+                open={showProcessConfirmation}
+                onClose={handleCloseProcessConfirmation}
+                maxWidth="sm"
+                fullWidth
             >
-                <div className="p-4 space-y-4">
-                    <Typography variant="subtitle2">Process Withdrawal</Typography>
-                    <FormControl fullWidth size="small">
-                        <InputLabel>Status</InputLabel>
-                        <Select
-                            value={processingStatus}
-                            onChange={(e) => setProcessingStatus(e.target.value as typeof processingStatus)}
-                            label="Status"
-                        >
-                            <MenuItem value="completed">Complete</MenuItem>
-                            <MenuItem value="failed">Failed</MenuItem>
-                            <MenuItem value="cancelled">Cancelled</MenuItem>
-                        </Select>
-                    </FormControl>
-                    {(processingStatus === 'failed' || processingStatus === 'cancelled') && (
+                <DialogTitle>
+                    Confirm Withdrawal Processing
+                </DialogTitle>
+                <DialogContent>
+                    <div className="space-y-4 mt-4">
+                        <Typography variant="body2" color="textSecondary">
+                            Please enter your password and the secret key to process this withdrawal.
+                        </Typography>
                         <TextField
                             fullWidth
-                            size="small"
-                            label="Reason"
-                            value={processingReason}
-                            onChange={(e) => setProcessingReason(e.target.value)}
-                            multiline
-                            rows={2}
+                            type="password"
+                            label="Admin Password"
+                            value={processConfirmation.password}
+                            onChange={(e) => setProcessConfirmation(prev => ({
+                                ...prev,
+                                password: e.target.value,
+                                error: ''
+                            }))}
+                            margin="dense"
                         />
-                    )}
-                    <div className="flex justify-end gap-2">
-                        <Button size="small" onClick={handleClosePopover}>
-                            Cancel
-                        </Button>
-                        <LoadingButton
-                            size="small"
-                            loading={Boolean(processingWithdrawal)}
-                            onClick={handleProcessWithdrawal}
-                            variant="contained"
-                            color="success"
-                        >
-                            Confirm
-                        </LoadingButton>
+                        <TextField
+                            fullWidth
+                            type="password"
+                            label="Secret Key"
+                            value={processConfirmation.secretKey}
+                            onChange={(e) => setProcessConfirmation(prev => ({
+                                ...prev,
+                                secretKey: e.target.value,
+                                error: ''
+                            }))}
+                            margin="dense"
+                        />
+                        {processConfirmation.error && (
+                            <Alert severity="error" className="mt-2">
+                                {processConfirmation.error}
+                            </Alert>
+                        )}
                     </div>
-                </div>
-            </Popover>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseProcessConfirmation}>
+                        Cancel
+                    </Button>
+                    <LoadingButton
+                        loading={Boolean(processingWithdrawal)}
+                        onClick={handleProcessWithdrawal}
+                        variant="contained"
+                        color="success"
+                    >
+                        Confirm Processing
+                    </LoadingButton>
+                </DialogActions>
+            </Dialog>
         </div>
     );
 } 
