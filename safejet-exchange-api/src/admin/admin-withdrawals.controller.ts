@@ -312,7 +312,11 @@ export class AdminWithdrawalsController {
         };
       }
 
-      return this.withdrawalRepository.save(withdrawal);
+      const savedWithdrawal = await this.withdrawalRepository.save(withdrawal);
+      return {
+        success: true,
+        data: savedWithdrawal
+      };
 
     } catch (error) {
       this.logger.error(`Error processing withdrawal ${id}:`, error);
@@ -326,6 +330,12 @@ export class AdminWithdrawalsController {
     adminAddress: string
   ): Promise<string> {
     this.logger.debug(`Processing EVM withdrawal for ${withdrawal.id}`);
+    this.logger.debug(`Withdrawal details: ${JSON.stringify({
+      amount: withdrawal.amount,
+      fee: withdrawal.fee,
+      metadata: withdrawal.metadata,
+      address: withdrawal.address
+    })}`);
 
     // Get RPC URL based on blockchain and network
     const rpcUrl = this.getRpcUrl(withdrawal.token.blockchain, withdrawal.network);
@@ -338,13 +348,27 @@ export class AdminWithdrawalsController {
     // For token transfers, we only need enough for gas
     // For native transfers, we need enough for amount + gas
     const isNativeToken = !withdrawal.token.contractAddress;
-    const amount = ethers.utils.parseUnits(withdrawal.amount, withdrawal.token.decimals);
+    
+    // Use receiveAmount from metadata instead of the full amount
+    const receiveAmount = withdrawal.metadata?.receiveAmount;
+    if (!receiveAmount) {
+      throw new BadRequestException('Receive amount not found in withdrawal metadata');
+    }
+
+    this.logger.debug(`Using receive amount: ${receiveAmount} (original amount: ${withdrawal.amount})`);
+    const amount = ethers.utils.parseUnits(receiveAmount.toString(), withdrawal.token.decimals);
 
     if (isNativeToken) {
       // For native token, check if we have enough balance
       if (balance.lt(amount)) {
         throw new BadRequestException('Insufficient balance in admin wallet');
       }
+
+      this.logger.debug(`Sending native token transaction: ${JSON.stringify({
+        to: withdrawal.address,
+        value: ethers.utils.formatUnits(amount, withdrawal.token.decimals),
+        from: adminAddress
+      })}`);
 
       // Send native token
       const tx = await wallet.sendTransaction({
@@ -353,6 +377,7 @@ export class AdminWithdrawalsController {
         gasLimit: 21000 // Standard gas limit for ETH transfers
       });
 
+      this.logger.debug(`Transaction sent with hash: ${tx.hash}`);
       return tx.hash;
     } else {
       // For tokens, we need the contract
@@ -371,6 +396,13 @@ export class AdminWithdrawalsController {
         throw new BadRequestException('Insufficient token balance in admin wallet');
       }
 
+      this.logger.debug(`Sending token transaction: ${JSON.stringify({
+        token: withdrawal.token.contractAddress,
+        to: withdrawal.address,
+        amount: ethers.utils.formatUnits(amount, withdrawal.token.decimals),
+        from: adminAddress
+      })}`);
+
       // Estimate gas for token transfer
       const gasLimit = await tokenContract.estimateGas.transfer(withdrawal.address, amount);
       
@@ -382,6 +414,7 @@ export class AdminWithdrawalsController {
         gasLimit: safeGasLimit
       });
 
+      this.logger.debug(`Transaction sent with hash: ${tx.hash}`);
       return tx.hash;
     }
   }
@@ -414,6 +447,13 @@ export class AdminWithdrawalsController {
     adminAddress: string
   ): Promise<string> {
     this.logger.debug(`Processing Bitcoin withdrawal for ${withdrawal.id}`);
+    
+    // Get receiveAmount from metadata
+    const receiveAmount = withdrawal.metadata?.receiveAmount;
+    if (!receiveAmount) {
+      throw new BadRequestException('Receive amount not found in withdrawal metadata');
+    }
+    this.logger.debug(`Using receive amount: ${receiveAmount} (original amount: ${withdrawal.amount})`);
 
     const network = withdrawal.network === 'mainnet' ? bitcoin.networks.bitcoin : bitcoin.networks.testnet;
     const networkPath = withdrawal.network === 'testnet' ? '/testnet' : '';
@@ -430,7 +470,7 @@ export class AdminWithdrawalsController {
 
     // Calculate total available balance
     const totalBalance = utxos.reduce((sum, utxo) => sum + utxo.value, 0);
-    const amountToSend = Math.floor(parseFloat(withdrawal.amount) * 1e8); // Convert BTC to satoshis
+    const amountToSend = Math.floor(parseFloat(receiveAmount) * 1e8); // Convert BTC to satoshis using receiveAmount
 
     // Estimate fee (using a conservative estimate of 250 bytes * current fee rate)
     const feeResponse = await axios.get(
@@ -534,32 +574,54 @@ export class AdminWithdrawalsController {
   ): Promise<string> {
     this.logger.debug(`Processing Tron withdrawal for ${withdrawal.id}`);
 
+    // Get receiveAmount from metadata
+    const receiveAmount = withdrawal.metadata?.receiveAmount;
+    if (!receiveAmount) {
+      throw new BadRequestException('Receive amount not found in withdrawal metadata');
+    }
+    this.logger.debug(`Using receive amount: ${receiveAmount} (original amount: ${withdrawal.amount})`);
+
     // Initialize TronWeb with network-specific configuration
     const fullNode = withdrawal.network === 'mainnet' 
-      ? this.configService.get('TRON_MAINNET_RPC_URL')
-      : this.configService.get('TRON_TESTNET_RPC_URL');
+      ? process.env.TRON_MAINNET_API
+      : process.env.TRON_TESTNET_API;
 
-    const tronWeb = new TronWeb({
-      fullHost: fullNode,
-      headers: { 
-        "TRON-PRO-API-KEY": this.configService.get('TRON_API_KEY')
-      }
-    });
+    this.logger.debug(`Using TRON ${withdrawal.network} node: ${fullNode}`);
+    
+    if (!fullNode) {
+      throw new BadRequestException(`No TRON RPC URL configured for ${withdrawal.network}`);
+    }
 
-    // Set the private key for signing transactions
-    tronWeb.setPrivateKey(privateKey);
+    const tronApiKey = process.env.TRON_API_KEY;
+    if (!tronApiKey) {
+      throw new BadRequestException('TRON API key not configured');
+    }
 
     try {
+      const tronWeb = new TronWeb({
+        fullHost: fullNode,
+        headers: { 
+          "TRON-PRO-API-KEY": tronApiKey
+        }
+      });
+
+      // Set the private key for signing transactions
+      tronWeb.setPrivateKey(privateKey);
+
       // Check admin wallet balance
       const balance = await tronWeb.trx.getBalance(adminAddress);
-      const amountInSun = tronWeb.toSun(withdrawal.amount); // Convert TRX to SUN (1 TRX = 1,000,000 SUN)
+      this.logger.debug(`Admin wallet balance: ${balance} SUN`);
+      
+      const amountInSun = tronWeb.toSun(receiveAmount); // Convert TRX to SUN using receiveAmount
+      this.logger.debug(`Amount to send in SUN: ${amountInSun}`);
 
       if (!withdrawal.token.contractAddress) {
         // Native TRX transfer
         if (balance < amountInSun) {
-          throw new BadRequestException('Insufficient TRX balance in admin wallet');
+          throw new BadRequestException(`Insufficient TRX balance in admin wallet. Required: ${amountInSun}, Available: ${balance}`);
         }
 
+        this.logger.debug(`Creating native TRX transaction to ${withdrawal.address}`);
         // Create and send transaction
         const transaction = await tronWeb.transactionBuilder.sendTrx(
           withdrawal.address,
@@ -567,12 +629,17 @@ export class AdminWithdrawalsController {
           adminAddress
         );
 
+        this.logger.debug('Signing transaction...');
         const signedTx = await tronWeb.trx.sign(transaction);
+        
+        this.logger.debug('Broadcasting transaction...');
         const result = await tronWeb.trx.sendRawTransaction(signedTx);
 
         if (!result.result) {
-          throw new Error('Failed to broadcast transaction');
+          throw new Error(`Failed to broadcast transaction: ${JSON.stringify(result)}`);
         }
+
+        this.logger.debug(`Transaction broadcast successful, txID: ${result.txid}`);
 
         // Wait for transaction confirmation
         const confirmed = await this.waitForTronTransaction(result.txid, tronWeb);
@@ -584,45 +651,108 @@ export class AdminWithdrawalsController {
       } else {
         // Token transfer (TRC20)
         // Check if we have enough TRX for fees
-        const minTrxForFees = tronWeb.toSun('10'); // Minimum 10 TRX for fees
+        const minTrxForFees = tronWeb.toSun('40'); // Minimum 40 TRX for fees
         if (balance < minTrxForFees) {
-          throw new BadRequestException('Insufficient TRX balance for fees');
+          throw new BadRequestException(`Insufficient TRX balance for fees. Required: ${minTrxForFees}, Available: ${balance}`);
+        }
+
+        this.logger.debug(`Getting TRC20 contract at ${withdrawal.token.contractAddress}`);
+        // Validate contract address format
+        if (!tronWeb.isAddress(withdrawal.token.contractAddress)) {
+          throw new Error(`Invalid TRC20 contract address format: ${withdrawal.token.contractAddress}`);
         }
 
         // Get contract instance
-        const contract = await tronWeb.contract().at(withdrawal.token.contractAddress);
+        let contract;
+        try {
+          this.logger.debug('Attempting to get contract instance...');
+          
+          // Try to validate if the address is a contract
+          const addressType = await tronWeb.trx.getUnconfirmedAccount(withdrawal.token.contractAddress);
+          this.logger.debug('Address type:', addressType);
+          if (!addressType || !addressType.type || addressType.type !== 'Contract') {
+            throw new Error(`Address ${withdrawal.token.contractAddress} is not a contract`);
+          }
+
+          contract = await tronWeb.contract().at(withdrawal.token.contractAddress);
+          this.logger.debug('Contract response:', contract);
+          
+          if (!contract) {
+            throw new Error('Contract instance is null');
+          }
+
+          // Validate if contract has required methods
+          if (typeof contract.balanceOf !== 'function' || typeof contract.transfer !== 'function') {
+            throw new Error('Contract does not implement required TRC20 methods');
+          }
+
+          this.logger.debug('Successfully got contract instance with required methods');
+        } catch (error) {
+          this.logger.error('Error getting contract:', error);
+          this.logger.error('Contract address:', withdrawal.token.contractAddress);
+          this.logger.error('Network:', withdrawal.network);
+          throw new Error(`Failed to get TRC20 contract: ${error.message || 'Contract initialization failed'}`);
+        }
         
         // Check token balance
-        const tokenBalance = await contract.balanceOf(adminAddress).call();
-        const tokenAmount = tronWeb.toBigNumber(withdrawal.amount)
-          .multipliedBy(Math.pow(10, withdrawal.token.decimals))
-          .toFixed(0);
+        let tokenBalance;
+        try {
+          tokenBalance = await contract.balanceOf(adminAddress).call();
+          this.logger.debug(`Raw token balance: ${tokenBalance}`);
+        } catch (error) {
+          this.logger.error('Error getting token balance:', error);
+          throw new Error(`Failed to get token balance: ${error.message}`);
+        }
+
+        let tokenAmount;
+        try {
+          tokenAmount = tronWeb.toBigNumber(receiveAmount)
+            .multipliedBy(Math.pow(10, withdrawal.token.decimals))
+            .toFixed(0);
+          this.logger.debug(`Calculated token amount: ${tokenAmount} (decimals: ${withdrawal.token.decimals})`);
+        } catch (error) {
+          this.logger.error('Error calculating token amount:', error);
+          throw new Error(`Failed to calculate token amount: ${error.message}`);
+        }
+
+        this.logger.debug(`Token balance check - Required: ${tokenAmount}, Available: ${tokenBalance}`);
 
         if (tokenBalance < tokenAmount) {
-          throw new BadRequestException('Insufficient token balance in admin wallet');
+          throw new BadRequestException(`Insufficient token balance in admin wallet. Required: ${tokenAmount}, Available: ${tokenBalance}`);
         }
 
+        this.logger.debug(`Sending TRC20 token transaction to ${withdrawal.address}`);
         // Send token
-        const result = await contract.transfer(
-          withdrawal.address,
-          tokenAmount
-        ).send({
-          feeLimit: 100_000_000, // 100 TRX
-          callValue: 0,
-          shouldPollResponse: true
-        });
+        try {
+          const transferParams = {
+            feeLimit: 40_000_000, // 40 TRX
+            callValue: 0,
+            shouldPollResponse: false  // Don't wait for confirmation
+          };
+          this.logger.debug(`Transfer parameters: ${JSON.stringify(transferParams)}`);
+          
+          this.logger.debug('Initiating transfer...');
+          const txId = await contract.transfer(
+            withdrawal.address,
+            tokenAmount
+          ).send(transferParams);
 
-        // Wait for transaction confirmation
-        const confirmed = await this.waitForTronTransaction(result, tronWeb);
-        if (!confirmed) {
-          throw new Error('Transaction failed to confirm');
+          this.logger.debug(`Token transfer initiated, txID: ${txId}`);
+          return txId;
+        } catch (error) {
+          this.logger.error('Error in token transfer:', error);
+          if (error.transaction) {
+            this.logger.error('Transaction details:', error.transaction);
+          }
+          throw new Error(`Token transfer failed: ${error.message || 'Unknown error in transfer'}`);
         }
-
-        return result;
       }
     } catch (error) {
       this.logger.error('Tron withdrawal error:', error);
-      throw new BadRequestException(`Failed to process Tron withdrawal: ${error.message}`);
+      if (error instanceof Error) {
+        throw new BadRequestException(`Failed to process Tron withdrawal: ${error.message}`);
+      }
+      throw new BadRequestException('Failed to process Tron withdrawal: Unknown error');
     }
   }
 
@@ -654,6 +784,13 @@ export class AdminWithdrawalsController {
   ): Promise<string> {
     this.logger.debug(`Processing XRP withdrawal for ${withdrawal.id}`);
 
+    // Get receiveAmount from metadata
+    const receiveAmount = withdrawal.metadata?.receiveAmount;
+    if (!receiveAmount) {
+      throw new BadRequestException('Receive amount not found in withdrawal metadata');
+    }
+    this.logger.debug(`Using receive amount: ${receiveAmount} (original amount: ${withdrawal.amount})`);
+
     // Initialize XRP client with network-specific configuration
     const serverUrl = withdrawal.network === 'mainnet'
       ? this.configService.get('XRP_MAINNET_RPC_URL', 'wss://xrplcluster.com')
@@ -680,7 +817,7 @@ export class AdminWithdrawalsController {
       }
 
       const balance = parseFloat(accountInfo.result.account_data.Balance) / 1000000; // Convert drops to XRP
-      const amountInXRP = parseFloat(withdrawal.amount);
+      const amountInXRP = parseFloat(receiveAmount); // Use receiveAmount
 
       // Check if we have enough balance (including 20 XRP reserve and 0.00001 XRP fee)
       if (balance < amountInXRP + 20.00001) {
@@ -692,7 +829,7 @@ export class AdminWithdrawalsController {
         TransactionType: 'Payment',
         Account: adminAddress,
         Destination: withdrawal.address,
-        Amount: xrpl.xrpToDrops(withdrawal.amount), // Convert XRP to drops
+        Amount: xrpl.xrpToDrops(receiveAmount), // Use receiveAmount
       });
 
       // Sign transaction

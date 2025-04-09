@@ -350,11 +350,16 @@ export function WithdrawalManagement() {
                 }
             );
 
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to process withdrawal');
+            }
+
             const data = await response.json();
             if (!data.success) {
                 setProcessConfirmation(prev => ({
                     ...prev,
-                    error: data.message
+                    error: data.message || 'Failed to process withdrawal'
                 }));
                 return;
             }
@@ -371,6 +376,7 @@ export function WithdrawalManagement() {
                 ...prev,
                 error: errorMessage
             }));
+            enqueueSnackbar(errorMessage, { variant: 'error' });
         } finally {
             setProcessingWithdrawal(null);
         }
