@@ -15,6 +15,7 @@ import '../../models/coin.dart';
 import 'withdraw_screen.dart';
 import 'transfer_screen.dart';
 import 'convert_screen.dart';
+import 'transaction_history_screen.dart';
 
 class AssetDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> asset;
@@ -256,7 +257,12 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
               color: isDark ? Colors.white : Colors.black,
             ),
             onPressed: () {
-              // TODO: Navigate to transaction history
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TransactionHistoryScreen(),
+                ),
+              );
             },
           ),
         ],

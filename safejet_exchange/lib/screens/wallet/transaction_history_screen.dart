@@ -244,28 +244,101 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                             )
                           : RefreshIndicator(
                               onRefresh: _loadTransactions,
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                padding: const EdgeInsets.all(16),
-                                itemCount: _transactions.length + (_hasMore ? 1 : 0),
-                                itemBuilder: (context, index) {
-                                  if (index == _transactions.length) {
-                                    return const Padding(
-                                      padding: EdgeInsets.all(16.0),
-                                      child: Center(
-                                        child: CircularProgressIndicator(),
+                              child: _transactions.isEmpty
+                                  ? Center(
+                                      child: FadeInUp(
+                                        duration: const Duration(milliseconds: 600),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(24),
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Container(
+                                                width: 80,
+                                                height: 80,
+                                                decoration: BoxDecoration(
+                                                  color: isDark 
+                                                      ? SafeJetColors.primaryAccent.withOpacity(0.1)
+                                                      : SafeJetColors.lightCardBackground,
+                                                  borderRadius: BorderRadius.circular(24),
+                                                  border: Border.all(
+                                                    color: isDark
+                                                        ? SafeJetColors.primaryAccent.withOpacity(0.2)
+                                                        : SafeJetColors.lightCardBorder,
+                                                  ),
+                                                ),
+                                                child: Icon(
+                                                  Icons.receipt_long_rounded,
+                                                  size: 32,
+                                                  color: isDark 
+                                                      ? SafeJetColors.primaryAccent
+                                                      : SafeJetColors.primary,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 24),
+                                              Text(
+                                                'No Transactions Yet',
+                                                style: theme.textTheme.titleLarge?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Your transaction history will appear here\nonce you start making transactions.',
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  color: isDark 
+                                                      ? Colors.grey[400]
+                                                      : SafeJetColors.lightTextSecondary,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 32),
+                                              ElevatedButton.icon(
+                                                onPressed: _loadTransactions,
+                                                icon: const Icon(Icons.refresh_rounded),
+                                                label: const Text('Refresh'),
+                                                style: ElevatedButton.styleFrom(
+                                                  padding: const EdgeInsets.symmetric(
+                                                    horizontal: 24,
+                                                    vertical: 12,
+                                                  ),
+                                                  backgroundColor: isDark 
+                                                      ? SafeJetColors.primaryAccent
+                                                      : SafeJetColors.primary,
+                                                  foregroundColor: Colors.white,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                    );
-                                  }
+                                    )
+                                  : ListView.builder(
+                                      controller: _scrollController,
+                                      padding: const EdgeInsets.all(16),
+                                      itemCount: _transactions.length + (_hasMore ? 1 : 0),
+                                      itemBuilder: (context, index) {
+                                        if (index == _transactions.length) {
+                                          return const Padding(
+                                            padding: EdgeInsets.all(16.0),
+                                            child: Center(
+                                              child: CircularProgressIndicator(),
+                                            ),
+                                          );
+                                        }
 
-                                  final transaction = _transactions[index];
-                                  return FadeInDown(
-                                    duration: const Duration(milliseconds: 600),
-                                    delay: Duration(milliseconds: 100 * index),
-                                    child: _buildTransactionItem(transaction, isDark, theme),
-                                  );
-                                },
-                              ),
+                                        final transaction = _transactions[index];
+                                        return FadeInDown(
+                                          duration: const Duration(milliseconds: 600),
+                                          delay: Duration(milliseconds: 100 * index),
+                                          child: _buildTransactionItem(transaction, isDark, theme),
+                                        );
+                                      },
+                                    ),
                             ),
                 ),
               ],
