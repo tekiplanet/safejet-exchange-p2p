@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { baseTemplate } from './templates/base.template';
 import { LoginInfoDto } from '../auth/dto/login-info.dto';
 import { format } from 'date-fns';
+import { Decimal } from 'decimal.js';
 
 @Injectable()
 export class EmailTemplatesService {
@@ -521,6 +522,106 @@ export class EmailTemplatesService {
     `;
 
     return baseTemplate(content, isDark);
+  }
+
+  withdrawalProcessedEmail(userName: string, amount: string, currency: string, status: string, txHash: string | null = null, isDark = true) {
+    // Format the amount to have proper decimal places and thousand separators
+    const formattedAmount = this.formatAmount(amount);
+
+    const statusColor = status === 'completed' ? '#00c853' : 
+                       status === 'failed' ? '#d32f2f' : 
+                       status === 'cancelled' ? '#ff5722' : '#ff9800';
+    const statusEmoji = status === 'completed' ? '✅' : 
+                       status === 'failed' ? '❌' : 
+                       status === 'cancelled' ? '🚫' : '⏳';
+    
+    const content = `
+      <h1>Withdrawal ${status.charAt(0).toUpperCase() + status.slice(1)} ${statusEmoji}</h1>
+      <p>Hello ${userName},</p>
+      
+      <div style="margin: 20px 0;">
+        <p>Your withdrawal request has been processed:</p>
+        <div style="background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; padding: 15px; border-radius: 8px; margin: 10px 0;">
+          <h3 style="color: #ffc300; margin: 0;">${formattedAmount} ${currency}</h3>
+          <p style="margin: 5px 0; color: ${statusColor}; font-weight: bold;">Status: ${status.charAt(0).toUpperCase() + status.slice(1)}</p>
+          ${txHash ? `<p style="margin: 5px 0;">Transaction Hash: ${txHash}</p>` : ''}
+        </div>
+      </div>
+
+      ${this.getWithdrawalStatusMessage(status)}
+
+      <p>Thank you for using NadiaPoint Exchange!</p>
+      <p>Best regards,<br>The NadiaPoint Team</p>
+    `;
+    
+    return baseTemplate(content, isDark);
+  }
+
+  private formatAmount(amount: string): string {
+    try {
+      // Convert to Decimal for precise handling
+      const decimal = new Decimal(amount);
+      
+      // Format with up to 8 decimal places, trimming trailing zeros
+      let formatted = decimal.toFixed(8);
+      
+      // Remove trailing zeros after decimal point
+      formatted = formatted.replace(/\.?0+$/, '');
+      
+      // Add thousand separators
+      const parts = formatted.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      
+      return parts.join('.');
+    } catch (error) {
+      console.error('Error formatting amount:', error);
+      return amount; // Return original amount if formatting fails
+    }
+  }
+
+  private getWithdrawalStatusMessage(status: string): string {
+    switch (status.toLowerCase()) {
+        case 'completed':
+            return `
+                <div style="margin: 20px 0;">
+                    <h2 style="color: #ffc300;">Transaction Complete! 🎉</h2>
+                    <p>Your withdrawal has been successfully processed and sent to your wallet.</p>
+                    <p>Please allow some time for the transaction to be confirmed on the blockchain.</p>
+                </div>
+            `;
+        case 'failed':
+            return `
+                <div style="margin: 20px 0;">
+                    <h2 style="color: #ffc300;">Transaction Failed ⚠️</h2>
+                    <p>Unfortunately, your withdrawal could not be processed. This could be due to:</p>
+                    <ul>
+                        <li>Network congestion or technical issues</li>
+                        <li>Insufficient blockchain network fees</li>
+                        <li>Invalid withdrawal address</li>
+                    </ul>
+                    <p>Please contact our support team for assistance.</p>
+                </div>
+            `;
+        case 'cancelled':
+            return `
+                <div style="margin: 20px 0;">
+                    <h2 style="color: #ffc300;">Withdrawal Cancelled 🚫</h2>
+                    <p>Your withdrawal request has been cancelled by the administrator.</p>
+                    <p>The funds have been returned to your account balance.</p>
+                    <p>If you did not request this cancellation or have any questions, please contact our support team.</p>
+                </div>
+            `;
+        case 'processing':
+            return `
+                <div style="margin: 20px 0;">
+                    <h2 style="color: #ffc300;">Processing Your Withdrawal 🔄</h2>
+                    <p>Your withdrawal is being processed. You will receive another email once it's completed.</p>
+                    <p>This process typically takes a few minutes but may take longer during periods of high network congestion.</p>
+                </div>
+            `;
+        default:
+            return '';
+    }
   }
 
   private compile(templateName: string, data: any): string {

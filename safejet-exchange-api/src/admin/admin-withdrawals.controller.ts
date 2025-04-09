@@ -18,6 +18,7 @@ import { ConfigService } from '@nestjs/config';
 import { Client } from 'xrpl';
 import * as bcrypt from 'bcrypt';
 import { Admin } from '../admin/entities/admin.entity';
+import { EmailService } from '../email/email.service';
 const TronWeb = require('tronweb');
 
 const ECPair = ECPairFactory(ecc);
@@ -83,7 +84,8 @@ export class AdminWithdrawalsController {
     @InjectRepository(Admin)
     private adminRepository: Repository<Admin>,
     private keyManagementService: KeyManagementService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   @Get()
@@ -192,7 +194,7 @@ export class AdminWithdrawalsController {
 
     const withdrawal = await this.withdrawalRepository.findOne({
       where: { id },
-      relations: ['token']
+      relations: ['token', 'user']
     });
 
     if (!withdrawal) {
@@ -205,30 +207,85 @@ export class AdminWithdrawalsController {
 
     // If cancelling or failing, just update status
     if (data.status === 'failed' || data.status === 'cancelled') {
-      withdrawal.status = data.status;
-      if (data.reason) {
-        withdrawal.metadata = {
-          ...withdrawal.metadata,
-          processingReason: data.reason
-        };
-      }
+      this.logger.debug(`Cancelling/failing withdrawal ${id}. Current status: ${withdrawal.status}`);
+      
+      try {
+        // Start transaction for refund process
+        const result = await this.withdrawalRepository.manager.transaction(async (transactionalEntityManager) => {
+          // Update withdrawal status
+          withdrawal.status = data.status;
+          if (data.reason) {
+            withdrawal.metadata = {
+              ...withdrawal.metadata,
+              processingReason: data.reason
+            };
+          }
 
-      // Refund the amount back to user's balance
-      const balance = await this.walletBalanceRepository.findOne({
-        where: {
-          userId: withdrawal.userId,
-          baseSymbol: withdrawal.token.baseSymbol,
-          type: 'funding'
+          this.logger.debug(`Finding balance for user ${withdrawal.userId} and token ${withdrawal.token.baseSymbol}`);
+          
+          // Refund the amount back to user's balance
+          const balance = await transactionalEntityManager.findOne(WalletBalance, {
+            where: {
+              userId: withdrawal.userId,
+              baseSymbol: withdrawal.token.baseSymbol,
+              type: 'funding'
+            },
+            lock: { mode: 'pessimistic_write' }
+          });
+
+          if (!balance) {
+            this.logger.error(`No balance found for user ${withdrawal.userId} and token ${withdrawal.token.baseSymbol}`);
+            throw new Error('User balance not found');
+          }
+
+          // Only refund the withdrawal amount, not including fees
+          const refundAmount = new Decimal(withdrawal.amount);
+          const newBalance = new Decimal(balance.balance).plus(refundAmount);
+          
+          this.logger.debug(`Refunding amount: ${refundAmount.toString()} to balance: ${balance.balance}. New balance will be: ${newBalance.toString()}`);
+
+          balance.balance = newBalance.toString();
+          
+          // Save both withdrawal and balance updates
+          const [updatedWithdrawal, updatedBalance] = await Promise.all([
+            transactionalEntityManager.save(Withdrawal, withdrawal),
+            transactionalEntityManager.save(WalletBalance, balance)
+          ]);
+
+          this.logger.debug(`Successfully updated withdrawal status and refunded balance. New balance: ${updatedBalance.balance}`);
+
+          return updatedWithdrawal;
+        });
+
+        // Send email notification after successful database updates
+        if (withdrawal.user?.email) {
+          try {
+            await this.emailService.sendWithdrawalProcessedEmail(
+              withdrawal.user.email,
+              withdrawal.user.fullName || 'Valued Customer',
+              withdrawal,
+              data.status
+            );
+            this.logger.debug(`Sent ${data.status} email notification to ${withdrawal.user.email}`);
+          } catch (emailError) {
+            this.logger.error(`Failed to send email notification: ${emailError.message}`, emailError.stack);
+            // Don't throw error here, as the main operation succeeded
+          }
         }
-      });
 
-      if (balance) {
-        const totalAmount = new Decimal(withdrawal.amount).plus(new Decimal(withdrawal.fee));
-        balance.balance = new Decimal(balance.balance).plus(totalAmount).toString();
-        await this.walletBalanceRepository.save(balance);
+        return {
+          success: true,
+          data: result
+        };
+
+      } catch (error) {
+        this.logger.error(`Error in cancellation/failure process for withdrawal ${id}:`, error);
+        this.logger.error(`Error details: ${error.message}`);
+        if (error.stack) {
+          this.logger.error(`Stack trace: ${error.stack}`);
+        }
+        throw new BadRequestException(`Failed to process withdrawal: ${error.message}`);
       }
-
-      return this.withdrawalRepository.save(withdrawal);
     }
 
     // For completed status, we need to process the actual blockchain transaction
@@ -313,6 +370,18 @@ export class AdminWithdrawalsController {
       }
 
       const savedWithdrawal = await this.withdrawalRepository.save(withdrawal);
+
+      // Send completion email notification
+      if (withdrawal.user?.email) {
+        await this.emailService.sendWithdrawalProcessedEmail(
+          withdrawal.user.email,
+          withdrawal.user.fullName || 'Valued Customer',
+          withdrawal,
+          'completed',
+          txHash
+        );
+      }
+
       return {
         success: true,
         data: savedWithdrawal

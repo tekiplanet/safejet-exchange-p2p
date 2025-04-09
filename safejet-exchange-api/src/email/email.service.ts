@@ -299,6 +299,28 @@ export class EmailService {
     }
   }
 
+  async sendWithdrawalProcessedEmail(
+    email: string,
+    userName: string,
+    withdrawal: Withdrawal,
+    status: 'completed' | 'failed' | 'processing' | 'cancelled',
+    txHash?: string
+  ) {
+    const amount = withdrawal.amount;
+    const currency = withdrawal.metadata.token.symbol;
+
+    try {
+      await this.transporter.sendMail({
+        from: '"NadiaPoint Exchange" <noreply@safejet.com>',
+        to: email,
+        subject: `Withdrawal ${status.charAt(0).toUpperCase() + status.slice(1)} - NadiaPoint Exchange`,
+        html: this.emailTemplatesService.withdrawalProcessedEmail(userName, amount, currency, status, txHash || null),
+      });
+    } catch (error) {
+      console.error('Withdrawal processed email error:', error);
+    }
+  }
+
   async sendTransferConfirmation(
     email: string,
     data: {

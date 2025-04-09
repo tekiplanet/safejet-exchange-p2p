@@ -29,7 +29,7 @@ import {
     Button,
     Popover,
 } from '@mui/material';
-import { Search as SearchIcon, Visibility as VisibilityIcon, PlayArrow as ProcessIcon } from '@mui/icons-material';
+import { Search as SearchIcon, Visibility as VisibilityIcon, PlayArrow as ProcessIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import { LoadingButton } from '@mui/lab';
 import { useSnackbar } from 'notistack';
 
@@ -85,6 +85,7 @@ interface ProcessConfirmationState {
     password: string;
     secretKey: string;
     error: string;
+    reason?: string;
 }
 
 export function WithdrawalManagement() {
@@ -113,6 +114,8 @@ export function WithdrawalManagement() {
         error: ''
     });
     const [showProcessConfirmation, setShowProcessConfirmation] = useState(false);
+    const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
+    const [cancellingWithdrawal, setCancellingWithdrawal] = useState<string | null>(null);
     const { enqueueSnackbar } = useSnackbar();
 
     const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
@@ -382,6 +385,86 @@ export function WithdrawalManagement() {
         }
     };
 
+    const handleCancelClick = (event: React.MouseEvent<HTMLElement>, withdrawalId: string) => {
+        setProcessingWithdrawalId(withdrawalId);
+        setShowCancelConfirmation(true);
+    };
+
+    const handleCloseCancelConfirmation = () => {
+        setShowCancelConfirmation(false);
+        setProcessConfirmation({
+            password: '',
+            secretKey: '',
+            error: '',
+            reason: ''
+        });
+    };
+
+    const handleCancelWithdrawal = async () => {
+        if (!processConfirmation.password || !processConfirmation.secretKey) {
+            setProcessConfirmation(prev => ({
+                ...prev,
+                error: 'Please fill in both password and secret key'
+            }));
+            return;
+        }
+
+        try {
+            setCancellingWithdrawal(processingWithdrawalId);
+            const withdrawal = withdrawals.find(w => w.id === processingWithdrawalId);
+            if (!withdrawal) {
+                throw new Error('Withdrawal not found');
+            }
+
+            if (withdrawal.status !== 'pending') {
+                throw new Error(`Cannot cancel withdrawal in ${withdrawal.status} status`);
+            }
+
+            const response = await fetchWithRetry(
+                `/admin/withdrawals/${processingWithdrawalId}/process`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        status: 'cancelled',
+                        password: processConfirmation.password,
+                        secretKey: processConfirmation.secretKey,
+                        reason: processConfirmation.reason
+                    })
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to cancel withdrawal');
+            }
+
+            const data = await response.json();
+            if (!data.success) {
+                setProcessConfirmation(prev => ({
+                    ...prev,
+                    error: data.message || 'Failed to cancel withdrawal'
+                }));
+                return;
+            }
+
+            enqueueSnackbar('Withdrawal cancelled successfully', { variant: 'success' });
+            handleCloseCancelConfirmation();
+            handleClosePopover();
+            fetchWithdrawals();
+        } catch (error) {
+            console.error('Cancel withdrawal error:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to cancel withdrawal';
+            
+            setProcessConfirmation(prev => ({
+                ...prev,
+                error: errorMessage
+            }));
+            enqueueSnackbar(errorMessage, { variant: 'error' });
+        } finally {
+            setCancellingWithdrawal(null);
+        }
+    };
+
     const getUserDetailsUrl = (userId: string) => `/dashboard/users/details?id=${userId}`;
 
     return (
@@ -541,19 +624,34 @@ export function WithdrawalManagement() {
                                             <TableCell align="right">
                                                 <div className="flex justify-end gap-2">
                                                     {withdrawal.status === 'pending' && (
-                                                        <Tooltip title="Process Withdrawal">
-                                                            <LoadingButton
-                                                                size="small"
-                                                                loading={processingWithdrawal === withdrawal.id}
-                                                                onClick={(e) => handleProcessClick(e, withdrawal.id)}
-                                                                startIcon={<ProcessIcon />}
-                                                                loadingPosition="start"
-                                                                variant="contained"
-                                                                color="success"
-                                                            >
-                                                                Process
-                                                            </LoadingButton>
-                                                        </Tooltip>
+                                                        <>
+                                                            <Tooltip title="Process Withdrawal">
+                                                                <LoadingButton
+                                                                    size="small"
+                                                                    loading={processingWithdrawal === withdrawal.id}
+                                                                    onClick={(e) => handleProcessClick(e, withdrawal.id)}
+                                                                    startIcon={<ProcessIcon />}
+                                                                    loadingPosition="start"
+                                                                    variant="contained"
+                                                                    color="success"
+                                                                >
+                                                                    Process
+                                                                </LoadingButton>
+                                                            </Tooltip>
+                                                            <Tooltip title="Cancel Withdrawal">
+                                                                <LoadingButton
+                                                                    size="small"
+                                                                    loading={cancellingWithdrawal === withdrawal.id}
+                                                                    onClick={(e) => handleCancelClick(e, withdrawal.id)}
+                                                                    startIcon={<CancelIcon />}
+                                                                    loadingPosition="start"
+                                                                    variant="contained"
+                                                                    color="error"
+                                                                >
+                                                                    Cancel
+                                                                </LoadingButton>
+                                                            </Tooltip>
+                                                        </>
                                                     )}
                                                     <Tooltip title="View Details">
                                                         <IconButton 
@@ -724,16 +822,28 @@ export function WithdrawalManagement() {
                 </DialogContent>
                 <DialogActions>
                     {selectedWithdrawal?.status === 'pending' && (
-                        <LoadingButton
-                            loading={processingWithdrawal === selectedWithdrawal.id}
-                            onClick={(e) => handleProcessClick(e, selectedWithdrawal.id)}
-                            startIcon={<ProcessIcon />}
-                            loadingPosition="start"
-                            variant="contained"
-                            color="success"
-                        >
-                            Process Withdrawal
-                        </LoadingButton>
+                        <>
+                            <LoadingButton
+                                loading={processingWithdrawal === selectedWithdrawal.id}
+                                onClick={(e) => handleProcessClick(e, selectedWithdrawal.id)}
+                                startIcon={<ProcessIcon />}
+                                loadingPosition="start"
+                                variant="contained"
+                                color="success"
+                            >
+                                Process Withdrawal
+                            </LoadingButton>
+                            <LoadingButton
+                                loading={cancellingWithdrawal === selectedWithdrawal.id}
+                                onClick={(e) => handleCancelClick(e, selectedWithdrawal.id)}
+                                startIcon={<CancelIcon />}
+                                loadingPosition="start"
+                                variant="contained"
+                                color="error"
+                            >
+                                Cancel Withdrawal
+                            </LoadingButton>
+                        </>
                     )}
                     <Button onClick={handleCloseDetails}>Close</Button>
                 </DialogActions>
@@ -796,6 +906,80 @@ export function WithdrawalManagement() {
                         color="success"
                     >
                         Confirm Processing
+                    </LoadingButton>
+                </DialogActions>
+            </Dialog>
+
+            {/* Cancel Confirmation Modal */}
+            <Dialog
+                open={showCancelConfirmation}
+                onClose={handleCloseCancelConfirmation}
+                maxWidth="sm"
+                fullWidth
+            >
+                <DialogTitle>
+                    Confirm Withdrawal Cancellation
+                </DialogTitle>
+                <DialogContent>
+                    <div className="space-y-4 mt-4">
+                        <Typography variant="body2" color="textSecondary">
+                            Please enter your password, secret key, and a reason for cancellation.
+                        </Typography>
+                        <TextField
+                            fullWidth
+                            type="password"
+                            label="Admin Password"
+                            value={processConfirmation.password}
+                            onChange={(e) => setProcessConfirmation(prev => ({
+                                ...prev,
+                                password: e.target.value,
+                                error: ''
+                            }))}
+                            margin="dense"
+                        />
+                        <TextField
+                            fullWidth
+                            type="password"
+                            label="Secret Key"
+                            value={processConfirmation.secretKey}
+                            onChange={(e) => setProcessConfirmation(prev => ({
+                                ...prev,
+                                secretKey: e.target.value,
+                                error: ''
+                            }))}
+                            margin="dense"
+                        />
+                        <TextField
+                            fullWidth
+                            multiline
+                            rows={3}
+                            label="Cancellation Reason"
+                            value={processConfirmation.reason || ''}
+                            onChange={(e) => setProcessConfirmation(prev => ({
+                                ...prev,
+                                reason: e.target.value,
+                                error: ''
+                            }))}
+                            margin="dense"
+                        />
+                        {processConfirmation.error && (
+                            <Alert severity="error" className="mt-2">
+                                {processConfirmation.error}
+                            </Alert>
+                        )}
+                    </div>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseCancelConfirmation}>
+                        Back
+                    </Button>
+                    <LoadingButton
+                        loading={Boolean(cancellingWithdrawal)}
+                        onClick={handleCancelWithdrawal}
+                        variant="contained"
+                        color="error"
+                    >
+                        Confirm Cancellation
                     </LoadingButton>
                 </DialogActions>
             </Dialog>
