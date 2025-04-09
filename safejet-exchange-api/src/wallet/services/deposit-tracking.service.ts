@@ -4504,7 +4504,7 @@ private async getBitcoinTransaction(provider: any, txid: string) {
         // Check minimum balance and calculate amount to sweep
         const DROPS_PER_XRP = 1000000;
         const minBalanceDrops = parseFloat(this.MINIMUM_NATIVE_BALANCE['xrp'] || '20') * DROPS_PER_XRP;
-        const feeDrops = 12;  // Standard XRP transaction fee
+        const feeDrops = 12;
 
         if (parseFloat(balance) <= minBalanceDrops) {
             this.logToFile(`[sweepXrpNative] Balance too low to sweep. Balance: ${balance} drops, Min: ${minBalanceDrops} drops`);
@@ -4541,16 +4541,15 @@ private async getBitcoinTransaction(provider: any, txid: string) {
             throw new Error('Private key is undefined or null');
         }
 
-        this.logToFile(`[sweepXrpNative] Private key type: ${typeof privateKey}`);
-        this.logToFile(`[sweepXrpNative] Private key length: ${privateKey.length}`);
-        this.logToFile(`[sweepXrpNative] Private key format check - hex: ${!!privateKey.match(/^[0-9A-Fa-f]+$/i)}`);
+        this.logToFile(`[sweepXrpNative] Seed type: ${typeof privateKey}`);
+        this.logToFile(`[sweepXrpNative] Seed length: ${privateKey.length}`);
 
         const xrpl = require('xrpl');
         
         try {
-            // Create wallet using the XRPL library
-            this.logToFile(`[sweepXrpNative] Creating wallet with seed`);
-            const xrplWallet = xrpl.Wallet.fromSeed(privateKey);  // Now this should work since we're passing a proper seed
+            // Create wallet from seed
+            this.logToFile(`[sweepXrpNative] Creating wallet from seed`);
+            const xrplWallet = xrpl.Wallet.fromSeed(privateKey);
             this.logToFile(`[sweepXrpNative] Created wallet with address: ${xrplWallet.address}`);
 
             if (xrplWallet.address !== wallet.address) {

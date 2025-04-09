@@ -783,6 +783,9 @@ export class AdminWithdrawalsController {
     adminAddress: string
   ): Promise<string> {
     this.logger.debug(`Processing XRP withdrawal for ${withdrawal.id}`);
+    this.logger.debug(`XRP Decryption - Private key type: ${typeof privateKey}`);
+    this.logger.debug(`XRP Decryption - Private key length: ${privateKey.length}`);
+    this.logger.debug(`XRP Decryption - Private key first few chars: ${privateKey.substring(0, 5)}...`);
 
     // Get receiveAmount from metadata
     const receiveAmount = withdrawal.metadata?.receiveAmount;
@@ -803,7 +806,9 @@ export class AdminWithdrawalsController {
 
       // Create wallet from private key (seed)
       const xrpl = require('xrpl');
+      this.logger.debug('XRP Decryption - About to create wallet from seed');
       const wallet = xrpl.Wallet.fromSeed(privateKey);
+      this.logger.debug(`XRP Decryption - Created wallet with address: ${wallet.address}`);
 
       // Check admin wallet balance
       const accountInfo = await client.request({
