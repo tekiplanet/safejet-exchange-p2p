@@ -4,6 +4,7 @@ import {
     AccountBalanceWallet as WalletIcon,
     LocalGasStation as GasStationIcon,
     ContactSupport as ContactIcon,
+    Settings as EnvironmentIcon,
     ArrowForward as ArrowForwardIcon 
 } from '@mui/icons-material';
 
@@ -28,6 +29,12 @@ export function Settings() {
             description: 'Manage platform contact information and support details',
             icon: <ContactIcon />,
             href: '/dashboard/settings/contact'
+        },
+        {
+            title: 'Environment Settings',
+            description: 'Configure system environment variables and API keys',
+            icon: <EnvironmentIcon />,
+            href: '/dashboard/settings/environment'
         },
     ];
 
