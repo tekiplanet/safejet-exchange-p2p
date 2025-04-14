@@ -152,7 +152,7 @@ export default function UserDetails() {
     const [walletBalances, setWalletBalances] = useState<WalletBalances>({});
     const [walletSummary, setWalletSummary] = useState<WalletSummary>({ totalSpot: 0, totalFunding: 0 });
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://encrypted.nadiapoint.com/api';
 
     const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
         const token = localStorage.getItem('adminToken');

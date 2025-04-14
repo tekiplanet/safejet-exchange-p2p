@@ -118,7 +118,7 @@ export function WithdrawalManagement() {
     const [cancellingWithdrawal, setCancellingWithdrawal] = useState<string | null>(null);
     const { enqueueSnackbar } = useSnackbar();
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://encrypted.nadiapoint.com/api';
 
     const formatAmount = (amount: string): string => {
         try {

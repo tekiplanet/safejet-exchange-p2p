@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards, Logger, Query, Post, Body, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Logger, Query, Post, Body, NotFoundException, BadRequestException, UnauthorizedException, Request } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WalletBalance } from '../wallet/entities/wallet-balance.entity';
@@ -7,6 +7,11 @@ import { Token } from '../wallet/entities/token.entity';
 import { In } from 'typeorm';
 import { Wallet } from '../wallet/entities/wallet.entity';
 import { Decimal } from 'decimal.js';
+import { AdminWallet } from '../wallet/entities/admin-wallet.entity';
+import { WalletKey } from '../wallet/entities/wallet-key.entity';
+import { KeyManagementService } from '../wallet/key-management.service';
+import { Admin } from '../admin/entities/admin.entity';
+import * as bcrypt from 'bcrypt';
 
 @Controller('admin/wallet-balances')
 @UseGuards(AdminGuard)
@@ -20,6 +25,13 @@ export class AdminWalletController {
         private tokenRepository: Repository<Token>,
         @InjectRepository(Wallet)
         private walletRepository: Repository<Wallet>,
+        @InjectRepository(AdminWallet)
+        private adminWalletRepository: Repository<AdminWallet>,
+        @InjectRepository(WalletKey)
+        private walletKeyRepository: Repository<WalletKey>,
+        @InjectRepository(Admin)
+        private adminRepository: Repository<Admin>,
+        private keyManagementService: KeyManagementService,
     ) {}
 
     @Get('summary/:userId')
@@ -426,5 +438,70 @@ export class AdminWalletController {
             newBalance: balance.balance,
             newFrozen: balance.frozen
         };
+    }
+
+    @Post('decrypt-key/:walletId')
+    async getDecryptedPrivateKey(
+        @Param('walletId') walletId: string,
+        @Body() body: { adminPassword: string; adminSecretKey: string },
+        @Request() req: any
+    ): Promise<{ privateKey: string }> {
+        this.logger.debug(`Attempting to decrypt private key for admin wallet: ${walletId}`);
+
+        // Get admin from database using the authenticated admin's ID
+        const adminId = req.admin?.sub;
+        if (!adminId) {
+            throw new UnauthorizedException('Admin ID not found in token');
+        }
+
+        const admin = await this.adminRepository.findOne({ 
+            where: { id: adminId }
+        });
+
+        if (!admin) {
+            throw new UnauthorizedException('Admin account not found');
+        }
+
+        // Validate password using bcrypt
+        const isPasswordValid = await bcrypt.compare(body.adminPassword, admin.password);
+        if (!isPasswordValid) {
+            throw new UnauthorizedException('Invalid master password');
+        }
+
+        // Verify admin secret key
+        if (!body.adminSecretKey || body.adminSecretKey !== process.env.ADMIN_SECRET_KEY) {
+            throw new UnauthorizedException('Invalid secret key');
+        }
+
+        // Find the admin wallet
+        const adminWallet = await this.adminWalletRepository.findOne({
+            where: { id: walletId }
+        });
+
+        if (!adminWallet) {
+            throw new NotFoundException('Admin wallet not found');
+        }
+
+        // Find the wallet key
+        const walletKey = await this.walletKeyRepository.findOne({
+            where: { id: adminWallet.keyId }
+        });
+
+        if (!walletKey) {
+            throw new NotFoundException('Wallet key not found');
+        }
+
+        try {
+            // Use the wallet's userId for decryption
+            const privateKey = await this.keyManagementService.decryptPrivateKey(
+                walletKey.encryptedPrivateKey,
+                walletKey.userId // Use the wallet's userId instead of the secret key
+            );
+
+            return { privateKey };
+        } catch (error) {
+            this.logger.error('Failed to decrypt private key:', error);
+            throw new BadRequestException('Failed to decrypt private key');
+        }
     }
 } 

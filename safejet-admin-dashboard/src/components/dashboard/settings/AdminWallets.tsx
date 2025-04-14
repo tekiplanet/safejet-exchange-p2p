@@ -17,7 +17,8 @@ import {
     Snackbar,
     Alert as MuiAlert,
 } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, ContentCopy as ContentCopyIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, ContentCopy as ContentCopyIcon, LockOpen as LockOpenIcon } from '@mui/icons-material';
+import { DecryptWalletDialog } from './DecryptWalletDialog';
 
 interface AdminWallet {
     id: string;
@@ -46,8 +47,10 @@ export function AdminWallets() {
         message: '',
         severity: 'success'
     });
+    const [selectedWallet, setSelectedWallet] = useState<AdminWallet | null>(null);
+    const [decryptDialogOpen, setDecryptDialogOpen] = useState(false);
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://admin.ctradesglobal.com/api';
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://encrypted.nadiapoint.com/api';
 
     const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
         const token = localStorage.getItem('adminToken');
@@ -187,6 +190,16 @@ export function AdminWallets() {
         }
     };
 
+    const handleDecryptClick = (wallet: AdminWallet) => {
+        setSelectedWallet(wallet);
+        setDecryptDialogOpen(true);
+    };
+
+    const handleDecryptDialogClose = () => {
+        setSelectedWallet(null);
+        setDecryptDialogOpen(false);
+    };
+
     useEffect(() => {
         fetchWallets();
         scanMissingWallets();
@@ -262,9 +275,7 @@ export function AdminWallets() {
                                 <TableCell>Blockchain</TableCell>
                                 <TableCell>Network</TableCell>
                                 <TableCell>Address</TableCell>
-                                <TableCell>Type</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell>Created At</TableCell>
+                                <TableCell>Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
@@ -273,35 +284,27 @@ export function AdminWallets() {
                                     <TableCell>{wallet.blockchain}</TableCell>
                                     <TableCell>{wallet.network}</TableCell>
                                     <TableCell>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ 
-                                                maxWidth: '200px', 
-                                                overflow: 'hidden', 
-                                                textOverflow: 'ellipsis' 
-                                            }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
                                                 {wallet.address}
-                                            </span>
-                                            <IconButton 
+                                            </Typography>
+                                            <IconButton
                                                 size="small"
                                                 onClick={() => copyToClipboard(wallet.address)}
-                                                aria-label="copy address"
                                             >
                                                 <ContentCopyIcon fontSize="small" />
                                             </IconButton>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{wallet.type}</TableCell>
-                                    <TableCell>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                            wallet.isActive 
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-red-100 text-red-800'
-                                        }`}>
-                                            {wallet.isActive ? 'Active' : 'Inactive'}
-                                        </span>
+                                        </Box>
                                     </TableCell>
                                     <TableCell>
-                                        {new Date(wallet.createdAt).toLocaleDateString()}
+                                        <Button
+                                            variant="outlined"
+                                            size="small"
+                                            onClick={() => handleDecryptClick(wallet)}
+                                            startIcon={<LockOpenIcon />}
+                                        >
+                                            Decrypt
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -324,6 +327,16 @@ export function AdminWallets() {
                     {snackbar.message}
                 </MuiAlert>
             </Snackbar>
+
+            {selectedWallet && (
+                <DecryptWalletDialog
+                    open={decryptDialogOpen}
+                    onClose={handleDecryptDialogClose}
+                    walletId={selectedWallet.id}
+                    blockchain={selectedWallet.blockchain}
+                    network={selectedWallet.network}
+                />
+            )}
         </div>
     );
 } 
