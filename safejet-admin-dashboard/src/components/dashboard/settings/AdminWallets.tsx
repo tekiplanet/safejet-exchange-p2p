@@ -50,7 +50,7 @@ export function AdminWallets() {
     const [selectedWallet, setSelectedWallet] = useState<AdminWallet | null>(null);
     const [decryptDialogOpen, setDecryptDialogOpen] = useState(false);
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://encrypted.nadiapoint.com/api';
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://encrypted.nadiapoint.com/api';
 
     const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
         const token = localStorage.getItem('adminToken');
